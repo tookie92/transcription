@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileText, Lightbulb, FileSpreadsheet, Sparkles } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useState } from 'react';
+import { ExportDialog } from './ExportDialog';
 
 export default function TranscriptionManager() {
   const { currentInterview } = useTranscriptionStore();
@@ -92,13 +93,18 @@ export default function TranscriptionManager() {
                     </>
                   )}
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-[#3D7C6F] border-[#3D7C6F]"
-                >
-                  Export
-                </Button>
+              <ExportDialog 
+                interview={currentInterview}
+                trigger={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-[#3D7C6F] border-[#3D7C6F]"
+                  >
+                    Export
+                  </Button>
+                }
+              />
               </div>
             </div>
 
