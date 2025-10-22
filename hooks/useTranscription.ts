@@ -16,7 +16,7 @@ export function useTranscription() {
     addInterview,
   } = useTranscriptionStore();
 
-  const transcribe = async (file: File, title?: string): Promise<Interview> => {
+  const transcribe = async (file: File, title?: string, topic?: string): Promise<Interview> => {
     setIsTranscribing(true);
     setTranscriptionError(null);
 
@@ -40,10 +40,12 @@ export function useTranscription() {
       const interview: Interview = {
         id: crypto.randomUUID(),
         title: title || `Interview ${new Date().toLocaleDateString()}`,
+        topic: topic,
         transcription: data.text,
         segments: data.segments,
         duration: data.duration,
         insights: [],
+        isAnalyzing: false,
         createdAt: new Date().toISOString(),
         audioUrl: URL.createObjectURL(file),
       };
@@ -52,8 +54,8 @@ export function useTranscription() {
       addInterview(interview);
 
       return interview;
-    } catch (err ) {
-      setTranscriptionError(err as string || 'Transcription failed');
+    } catch (err) {
+      setTranscriptionError(err as string || 'Transcription failed.');
       throw err;
     } finally {
       setIsTranscribing(false);

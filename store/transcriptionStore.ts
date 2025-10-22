@@ -11,10 +11,12 @@ export interface TranscriptionSegment {
 export interface Interview {
   id: string;
   title: string;
+  topic?: string;
   transcription: string;
   segments: TranscriptionSegment[];
   duration: number;
   insights: Insight[];
+  isAnalyzing?: boolean;
   createdAt: string;
   audioUrl?: string;
 }

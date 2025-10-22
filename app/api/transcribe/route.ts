@@ -1,31 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { VerboseTranscription } from '@/types';
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
-
-// Define proper types for Groq response
-interface TranscriptionSegment {
-  id: number;
-  seek: number;
-  start: number;
-  end: number;
-  text: string;
-  tokens: number[];
-  temperature: number;
-  avg_logprob: number;
-  compression_ratio: number;
-  no_speech_prob: number;
-}
-
-interface VerboseTranscription {
-  text: string;
-  task: string;
-  language: string;
-  duration: number;
-  segments: TranscriptionSegment[];
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,8 +35,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Transcription error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Transcription failed';
     return NextResponse.json(
-      { error: error || 'Transcription failed' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
