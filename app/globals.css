@@ -4,6 +4,9 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+   --color-myBackground: #e5ecd6;
+  --color-myGreen: #5dc696;
+  --color-myGreen-500: #3f8161;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
