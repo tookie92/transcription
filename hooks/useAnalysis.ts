@@ -1,20 +1,20 @@
-import { useTranscriptionStore, TranscriptionSegment } from '@/store/transcriptionStore';
-import { AnalysisResponse } from '@/types';
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+import { Insight, SimpleSegment } from "@/types";
 
 export function useAnalysis() {
-  const { updateInterview } = useTranscriptionStore();
+  const createInsights = useMutation(api.insights.createInsights);
 
   const analyzeInterview = async (
     interviewId: string,
+    projectId: string,
     transcription: string,
     topic?: string,
-    segments?: TranscriptionSegment[]
+    segments?: SimpleSegment[]
   ) => {
-    // Set analyzing state
-    updateInterview(interviewId, { isAnalyzing: true });
-
     try {
-      console.log('🔍 Starting analysis...', { interviewId, topic });
+      console.log('🔍 Starting analysis...', { interviewId, projectId, topic });
       
       const response = await fetch('/api/analyze', {
         method: 'POST',
@@ -28,35 +28,34 @@ export function useAnalysis() {
         }),
       });
 
-      console.log('📡 Response status:', response.status);
-      console.log('📡 Response headers:', response.headers);
-
-      // Check if response is JSON
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('❌ Not JSON response:', text);
-        throw new Error(`Expected JSON but got ${contentType}. Check if /api/analyze route exists.`);
-      }
-
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Analysis failed');
       }
 
-      const data: AnalysisResponse = await response.json();
+      const data = await response.json();
       console.log('✅ Analysis complete:', data);
 
-      // Update interview with insights
-      updateInterview(interviewId, {
-        insights: data.insights,
-        isAnalyzing: false,
-      });
+      // Filtrer les insights pour garder seulement les champs attendus par Convex
+      const filteredInsights = data.insights.map((insight: Insight) => ({
+        type: insight.type,
+        text: insight.text,
+        timestamp: insight.timestamp,
+        // Supprimer createdAt, id, et autres champs non attendus
+      }));
+
+      // Stocker les insights dans Convex
+      if (filteredInsights && filteredInsights.length > 0) {
+        await createInsights({
+          interviewId: interviewId as Id<"interviews">,
+          projectId: projectId as Id<"projects">,
+          insights: filteredInsights,
+        });
+      }
 
       return data.insights;
     } catch (error) {
       console.error('💥 Analysis error:', error);
-      updateInterview(interviewId, { isAnalyzing: false });
       if (error instanceof Error) {
         throw error;
       }

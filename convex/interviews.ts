@@ -20,6 +20,15 @@ export const createInterview = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
+    // Vérifier que l'utilisateur a accès au projet
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new Error("Project not found");
+    
+    const hasAccess = project.members.some(member => 
+      member.userId === identity.subject
+    );
+    if (!hasAccess) throw new Error("No access to project");
+
     const interviewId = await ctx.db.insert("interviews", {
       ...args,
       status: "completed",
@@ -30,12 +39,25 @@ export const createInterview = mutation({
   },
 });
 
+
 // Récupérer les interviews d'un projet
 export const getProjectInterviews = query({
   args: {
     projectId: v.id("projects"),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return []; // ← Vérification d'auth
+
+    // Vérifier aussi que l'user a accès au projet
+    const project = await ctx.db.get(args.projectId);
+    if (!project) return [];
+    
+    const hasAccess = project.members.some(member => 
+      member.userId === identity.subject
+    );
+    if (!hasAccess) return [];
+
     const interviews = await ctx.db
       .query("interviews")
       .filter(q => q.eq(q.field("projectId"), args.projectId))

@@ -1,4 +1,4 @@
-import { Interview } from '@/store/transcriptionStore';
+
 import { useExport } from '@/hooks/useExport';
 import {
   Dialog,
@@ -11,8 +11,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { FileDown, FileText, Download } from 'lucide-react';
 
+import { ExportInterview } from '@/types';
+
 interface ExportDialogProps {
-  interview: Interview;
+  interview: ExportInterview; // ← Changer ici
   trigger?: React.ReactNode;
 }
 

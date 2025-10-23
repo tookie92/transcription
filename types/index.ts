@@ -189,3 +189,25 @@ export interface ConvexAffinityMap {
   updatedAt: number;
   createdBy: string;
 }
+
+// Ajoute cette interface pour l'export
+export interface ExportInterview {
+  id: string;
+  title: string;
+  topic?: string;
+  transcription: string;
+  segments: SimpleSegment[];
+  duration: number;
+  insights: ExportInsight[];
+  isAnalyzing?: boolean;
+  createdAt: string;
+}
+
+export interface ExportInsight {
+  id: string;
+  type: 'pain-point' | 'quote' | 'insight' | 'follow-up' | 'custom';
+  text: string;
+  timestamp: number;
+  segmentId?: number;
+  createdAt: string;
+}

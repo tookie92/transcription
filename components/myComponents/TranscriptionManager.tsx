@@ -1,6 +1,8 @@
 'use client';
 
-import { useTranscriptionStore } from '@/store/transcriptionStore';
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useCurrentProject } from '@/hooks/useCurrentProject';
 import { useAnalysis } from '@/hooks/useAnalysis';
 import { Card, CardContent, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,25 +10,47 @@ import { FileText, Lightbulb, FileSpreadsheet, Sparkles } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useState } from 'react';
 import { ExportDialog } from './ExportDialog';
+import { ExportInterview, Interview as StoreInterview } from '@/types'; // ← Import du type
+import { Id } from "@/convex/_generated/dataModel";
 
 export default function TranscriptionManager() {
-  const { currentInterview } = useTranscriptionStore();
   const { analyzeInterview } = useAnalysis();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+   const { currentProjectId, currentInterviewId, setCurrentInterview } = useCurrentProject();
+   
+
+  // Récupérer les interviews du projet actuel
+ const interviews = useQuery(api.interviews.getProjectInterviews, 
+    currentProjectId ? { projectId: currentProjectId as Id<"projects"> } : "skip"
+  );
+
+  // Récupérer les insights pour chaque interview
+  const currentInterview = currentInterviewId 
+    ? interviews?.find(i => i._id === currentInterviewId)
+    : null;
+
+
+  // test
+  
+
+  const insights = useQuery(api.insights.getByInterview, 
+    currentInterview?._id ? { interviewId: currentInterview._id } : "skip"
+  );
 
   const handleAnalyze = async () => {
-    if (!currentInterview) return;
+    if (!currentInterview || !currentProjectId) return;
 
     setIsAnalyzing(true);
     setAnalysisError(null);
 
     try {
       await analyzeInterview(
-        currentInterview.id,
+        currentInterview._id,
+        currentProjectId,
         currentInterview.transcription,
         currentInterview.topic,
-        currentInterview.segments
+        currentInterview.segments // ← Type SimpleSegment[] déjà correct
       );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Analysis failed';
@@ -35,6 +59,58 @@ export default function TranscriptionManager() {
       setIsAnalyzing(false);
     }
   };
+
+
+  // Si pas d'interview sélectionnée, afficher la liste
+  if (currentProjectId && !currentInterview) {
+    return (
+      <Card className="bg-white rounded-2xl shadow-lg p-8 w-1/2">
+        <CardContent>
+          <h3 className="text-lg font-semibold mb-4">Select an Interview</h3>
+          <div className="space-y-2">
+            {interviews?.map(interview => (
+              <Button
+                key={interview._id}
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => setCurrentInterview(interview._id)}
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                {interview.title}
+              </Button>
+            ))}
+            {interviews?.length === 0 && (
+              <p className="text-gray-500 text-center py-8">
+                No interviews in this project yet
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Adapter l'interface pour utiliser les données Convex
+ // Adapter l'interface pour utiliser les données Convex
+ // Adapter l'interface pour utiliser les données Convex
+  const interviewForExport: ExportInterview | null = currentInterview ? {
+    id: currentInterview._id,
+    title: currentInterview.title,
+    topic: currentInterview.topic,
+    transcription: currentInterview.transcription,
+    segments: currentInterview.segments,
+    duration: currentInterview.duration,
+    insights: insights?.map(insight => ({
+      id: insight._id,
+      type: insight.type,
+      text: insight.text,
+      timestamp: insight.timestamp,
+      segmentId: undefined,
+      createdAt: new Date(insight.createdAt).toISOString(),
+    })) || [],
+    isAnalyzing: false,
+    createdAt: new Date(currentInterview.createdAt).toISOString(),
+  } : null;
 
   return (
     <Card className="bg-white rounded-2xl max-h-[500px] shadow-lg p-8 w-1/2">
@@ -47,10 +123,9 @@ export default function TranscriptionManager() {
         {!currentInterview ? (
           <div className="flex items-center justify-center h-64 text-gray-400">
             <div className="text-center">
-              <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <p>Upload audio or record to start transcription</p>
+              <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
+              <p>No interviews yet</p>
+              <p className="text-xs mt-1">Upload audio to start transcription</p>
             </div>
           </div>
         ) : (
@@ -58,10 +133,16 @@ export default function TranscriptionManager() {
             {/* Metadata Header */}
             <div className="flex items-center justify-between pb-4 border-b">
               <div className="flex items-center gap-3">
+                <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCurrentInterview(null)}
+                className="mr-2"
+              >
+                ← Back
+              </Button>
                 <div className="w-10 h-10 bg-[#3D7C6F] bg-opacity-10 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-[#3D7C6F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
+                  <FileText className="w-5 h-5 text-[#3D7C6F]" />
                 </div>
                 <div>
                   <h3 className="font-medium text-gray-900">{currentInterview.title}</h3>
@@ -77,11 +158,11 @@ export default function TranscriptionManager() {
               <div className="flex gap-2">
                 <Button
                   onClick={handleAnalyze}
-                  disabled={isAnalyzing || currentInterview.isAnalyzing}
+                  disabled={isAnalyzing}
                   className="flex items-center gap-2 bg-[#3D7C6F] hover:bg-[#2d5f54]"
                   size="sm"
                 >
-                  {isAnalyzing || currentInterview.isAnalyzing ? (
+                  {isAnalyzing ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                       Analyzing...
@@ -93,18 +174,20 @@ export default function TranscriptionManager() {
                     </>
                   )}
                 </Button>
-              <ExportDialog 
-                interview={currentInterview}
-                trigger={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-[#3D7C6F] border-[#3D7C6F]"
-                  >
-                    Export
-                  </Button>
-                }
-              />
+                {interviewForExport && (
+                  <ExportDialog 
+                    interview={interviewForExport}
+                    trigger={
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-[#3D7C6F] border-[#3D7C6F]"
+                      >
+                        Export
+                      </Button>
+                    }
+                  />
+                )}
               </div>
             </div>
 
@@ -124,9 +207,9 @@ export default function TranscriptionManager() {
                 <TabsTrigger value="insights" className="flex items-center gap-2">
                   <Lightbulb className="w-4 h-4" />
                   Insights
-                  {currentInterview.insights.length > 0 && (
+                  {insights && insights.length > 0 && (
                     <span className="ml-1 px-1.5 py-0.5 text-xs bg-blue-500 text-white rounded-full">
-                      {currentInterview.insights.length}
+                      {insights.length}
                     </span>
                   )}
                 </TabsTrigger>
@@ -158,16 +241,16 @@ export default function TranscriptionManager() {
               {/* Tab 2: Insights */}
               <TabsContent value="insights" className="mt-4">
                 <div className="space-y-4 max-h-[200px] overflow-y-auto pr-2">
-                  {currentInterview.insights.length === 0 ? (
+                  {!insights || insights.length === 0 ? (
                     <div className="text-center py-12 text-gray-400">
                       <Lightbulb className="w-12 h-12 mx-auto mb-3 opacity-50" />
                       <p className="text-sm">No insights yet</p>
-                      <p className="text-xs mt-1">Click {`"Analyze"`} to extract insights automatically</p>
+                      <p className="text-xs mt-1">Click {"Analyze"} to extract insights automatically</p>
                     </div>
                   ) : (
-                    currentInterview.insights.map((insight) => (
+                    insights.map((insight) => (
                       <div
-                        key={insight.id}
+                        key={insight._id}
                         className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
                       >
                         <div className="flex items-start justify-between mb-2">
@@ -218,35 +301,10 @@ export default function TranscriptionManager() {
                       </div>
                       <div>
                         <p className="text-gray-500">Insights</p>
-                        <p className="font-medium text-gray-900">{currentInterview.insights.length}</p>
+                        <p className="font-medium text-gray-900">{insights?.length || 0}</p>
                       </div>
                     </div>
                   </div>
-
-                  <div className="p-4 border border-gray-200 rounded-lg">
-                    <h4 className="font-medium text-gray-900 mb-2">Full Transcription</h4>
-                    <p className="text-sm text-gray-700 leading-relaxed">
-                      {currentInterview.transcription}
-                    </p>
-                  </div>
-
-                  {currentInterview.insights.length > 0 && (
-                    <div className="p-4 border border-gray-200 rounded-lg">
-                      <h4 className="font-medium text-gray-900 mb-3">Insights Breakdown</h4>
-                      <div className="space-y-2">
-                        {['pain-point', 'quote', 'insight', 'follow-up'].map((type) => {
-                          const count = currentInterview.insights.filter(i => i.type === type).length;
-                          if (count === 0) return null;
-                          return (
-                            <div key={type} className="flex justify-between items-center text-sm">
-                              <span className="text-gray-600 capitalize">{type.replace('-', ' ')}</span>
-                              <span className="font-medium text-gray-900">{count}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </TabsContent>
             </Tabs>

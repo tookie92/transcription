@@ -54,7 +54,10 @@ const ButtonFooter = () => {
                         <DropdownMenuItem onClick={() => openUserProfile()}>
                             Manage Account
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => signOut()}>
+                        <DropdownMenuItem onClick={() => {
+                            signOut()
+                            window.location.reload()
+                        }}>
                             Sign Out
                         </DropdownMenuItem>
                     </DropdownMenuContent>

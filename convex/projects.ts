@@ -33,7 +33,7 @@ export const createProject = mutation({
 export const getUserProjects = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
+    if (!identity) return []; // ← Retourne vide si pas authentifié
 
     const projects = await ctx.db
       .query("projects")

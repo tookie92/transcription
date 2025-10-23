@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as insights from "../insights.js";
 import type * as interviews from "../interviews.js";
 import type * as projects from "../projects.js";
 
@@ -26,6 +27,7 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  insights: typeof insights;
   interviews: typeof interviews;
   projects: typeof projects;
 }>;

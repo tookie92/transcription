@@ -1,10 +1,11 @@
 import { Interview } from '@/store/transcriptionStore';
+import { ExportInterview } from '@/types';
 import jsPDF from 'jspdf';
 
 export function useExport() {
   
   // Export as Markdown
-  const exportAsMarkdown = (interview: Interview) => {
+  const exportAsMarkdown = (interview: ExportInterview) => {
     const markdown = generateMarkdown(interview);
     const blob = new Blob([markdown], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
@@ -18,7 +19,7 @@ export function useExport() {
   };
 
   // Export as PDF
-  const exportAsPDF = (interview: Interview) => {
+  const exportAsPDF = (interview: ExportInterview) => {
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
@@ -172,7 +173,7 @@ export function useExport() {
   };
 
   // Generate Markdown content
-  const generateMarkdown = (interview: Interview): string => {
+  const generateMarkdown = (interview: ExportInterview): string => {
     let markdown = `# ${interview.title}\n\n`;
     
     // Metadata
