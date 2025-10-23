@@ -11,6 +11,15 @@ import { CreateProjectDialog } from './CreatProjectDialog'
 const ButtonFooter = () => {
     const {user} = useUser()
     const {signOut, openUserProfile} = useClerk()
+
+     const handleSignOut = async () => {
+    try {
+      await signOut();
+      console.log("✅ Signed out successfully");
+    } catch (error) {
+      console.error("❌ Sign out failed:", error);
+    }
+  };
   return (
     <div>
         <SignedOut>
@@ -54,10 +63,7 @@ const ButtonFooter = () => {
                         <DropdownMenuItem onClick={() => openUserProfile()}>
                             Manage Account
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => {
-                            signOut()
-                            window.location.reload()
-                        }}>
+                        <DropdownMenuItem onClick={() => handleSignOut()}>
                             Sign Out
                         </DropdownMenuItem>
                     </DropdownMenuContent>

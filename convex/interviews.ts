@@ -47,17 +47,28 @@ export const getProjectInterviews = query({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return []; // ← Vérification d'auth
+    if (!identity) {
+      console.log("🚫 No user identity - cannot access interviews");
+      return [];
+    }
 
-    // Vérifier aussi que l'user a accès au projet
+    // Vérifier que l'user a accès au projet
     const project = await ctx.db.get(args.projectId);
-    if (!project) return [];
+    if (!project) {
+      console.log("❌ Project not found:", args.projectId);
+      return [];
+    }
     
     const hasAccess = project.members.some(member => 
       member.userId === identity.subject
-    );
-    if (!hasAccess) return [];
+    ) || project.isPublic || project.ownerId === identity.subject;
 
+    if (!hasAccess) {
+      console.log("🚫 User has no access to project:", identity.subject, args.projectId);
+      return [];
+    }
+
+    console.log("✅ User has access, fetching interviews...");
     const interviews = await ctx.db
       .query("interviews")
       .filter(q => q.eq(q.field("projectId"), args.projectId))
