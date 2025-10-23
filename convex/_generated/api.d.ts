@@ -8,6 +8,9 @@
  * @module
  */
 
+import type * as interviews from "../interviews.js";
+import type * as projects from "../projects.js";
+
 import type {
   ApiFromModules,
   FilterApi,
@@ -22,7 +25,10 @@ import type {
  * const myFunctionReference = api.myModule.myFunction;
  * ```
  */
-declare const fullApi: ApiFromModules<{}>;
+declare const fullApi: ApiFromModules<{
+  interviews: typeof interviews;
+  projects: typeof projects;
+}>;
 declare const fullApiWithMounts: typeof fullApi;
 
 export declare const api: FilterApi<
