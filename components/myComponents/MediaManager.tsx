@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/select";
 import { Id } from '@/convex/_generated/dataModel';
 
+import { toast } from "sonner"; 
+
 function MediaManager() {
   const { transcribe, isTranscribing, error } = useTranscription();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -26,6 +28,7 @@ function MediaManager() {
   const [title, setTitle] = useState('');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // const [recentlyCreated, setRecentlyCreated] = useState(false);
 
   // Convex
   const createInterview = useMutation(api.interviews.createInterview);
@@ -46,16 +49,16 @@ function MediaManager() {
 
 
 
- const handleTranscribe = async () => {
+const handleTranscribe = async () => {
   if (!selectedFile || !currentProjectId) return;
+
+  const toastId = toast.loading("Transcribing audio...");
 
   try {
     const interviewTitle = title || `Interview ${new Date().toLocaleDateString()}`;
     
-    // Utiliser la transcription existante mais stocker dans Convex
     const interview = await transcribe(selectedFile, interviewTitle, topic || undefined);
     
-    // Filtrer les segments pour Convex
     const convexSegments = interview.segments.map(segment => ({
       id: segment.id,
       start: segment.start,
@@ -63,20 +66,40 @@ function MediaManager() {
       text: segment.text,
     }));
 
-    // Maintenant stocker dans Convex
+    toast.loading("Saving interview to project...", { id: toastId });
+
     await createInterview({
       projectId: currentProjectId as Id<"projects">,
       title: interview.title,
       topic: interview.topic,
       transcription: interview.transcription,
-      segments: convexSegments, // ← Segments filtrés
+      segments: convexSegments,
       duration: interview.duration,
     });
 
-    // Reset form
+    // ✅ SUPPRIME LA REDIRECTION - Garde l'user sur place
+    toast.success("Interview created successfully!", { 
+      id: toastId,
+      duration: 3000,
+    });
+
+    // Reset le formulaire MAIS garde l'audio pour référence
+    // handleReset(); ← On ne reset plus automatiquement
+    
+    toast.success("Interview ready! You can now analyze it.", {
+      id: toastId,
+      duration: 3000,
+    });
+
+    // Reset le formulaire mais garde un bouton de navigation
     handleReset();
     
   } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : "Transcription failed";
+    toast.error(`Transcription failed: ${errorMessage}`, { 
+      id: toastId,
+      duration: 4000,
+    });
     console.error('Transcription failed:', err);
   }
 };
@@ -181,13 +204,17 @@ function MediaManager() {
                   'Transcribe & Save'
                 )}
               </Button>
-              <Button 
-                onClick={handleReset}
-                variant="outline"
-                disabled={isTranscribing}
-              >
-                Reset
-              </Button>
+              {/* À la place du bouton Reset simple */}
+              
+               
+                <Button
+                  onClick={handleReset}
+                  variant="outline"
+                >
+                  New Interview
+                </Button>
+
+                
             </div>
           </div>
         ) : (

@@ -1,0 +1,359 @@
+"use client";
+
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FileText, Lightbulb, FileSpreadsheet, Sparkles, ArrowLeft, Play, Download } from "lucide-react";
+import { useAnalysis } from "@/hooks/useAnalysis";
+import { ExportDialog } from "./ExportDialog";
+import { useState } from "react";
+import { ExportInterview } from "@/types";
+import { Id } from "@/convex/_generated/dataModel";
+
+interface InterviewContentProps {
+  projectId: Id<"projects">;
+  interviewId: Id<"interviews">;
+}
+
+export function InterviewContent({ projectId, interviewId }: InterviewContentProps) {
+  const router = useRouter();
+  const { analyzeInterview } = useAnalysis();
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  // Récupérer les données
+  const project = useQuery(api.projects.getById, { projectId });
+  const interview = useQuery(api.interviews.getById, { interviewId });
+  const insights = useQuery(api.insights.getByInterview, { interviewId });
+  const projectInterviews = useQuery(api.interviews.getProjectInterviews, { projectId });
+
+  if (!interview || !project) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center gap-4 mb-6">
+          <Button variant="outline" onClick={() => router.push(`/project/${projectId}`)}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Project
+          </Button>
+          <h1 className="text-2xl font-bold">Interview not found</h1>
+        </div>
+      </div>
+    );
+  }
+
+  // Préparer les données pour l'export
+  const interviewForExport: ExportInterview = {
+    id: interview._id,
+    title: interview.title,
+    topic: interview.topic,
+    transcription: interview.transcription,
+    segments: interview.segments,
+    duration: interview.duration,
+    insights: insights?.map(insight => ({
+      id: insight._id,
+      type: insight.type,
+      text: insight.text,
+      timestamp: insight.timestamp,
+      segmentId: undefined,
+      createdAt: new Date(insight.createdAt).toISOString(),
+    })) || [],
+    isAnalyzing: false,
+    createdAt: new Date(interview.createdAt).toISOString(),
+  };
+
+  const handleAnalyze = async () => {
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+
+    try {
+      await analyzeInterview(
+        interview._id,
+        projectId,
+        interview.transcription,
+        interview.topic,
+        interview.segments
+      );
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Analysis failed';
+      setAnalysisError(errorMessage);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // Trouver l'index actuel pour la navigation
+  const currentIndex = projectInterviews?.findIndex(i => i._id === interviewId) || 0;
+  const hasPrevious = currentIndex > 0;
+  const hasNext = currentIndex < (projectInterviews?.length || 0) - 1;
+  const previousInterview = hasPrevious ? projectInterviews?.[currentIndex - 1] : null;
+  const nextInterview = hasNext ? projectInterviews?.[currentIndex + 1] : null;
+
+  return (
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header avec navigation */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={() => router.push(`/project/${projectId}`)}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Project
+          </Button>
+          
+          {/* Navigation entre interviews */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!hasPrevious}
+              onClick={() => router.push(`/project/${projectId}/interview/${previousInterview?._id}`)}
+            >
+              ← Previous
+            </Button>
+            
+            <span className="text-sm text-gray-500 px-2">
+              {currentIndex + 1} of {projectInterviews?.length}
+            </span>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!hasNext}
+              onClick={() => router.push(`/project/${projectId}/interview/${nextInterview?._id}`)}
+            >
+              Next →
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            onClick={handleAnalyze}
+            disabled={isAnalyzing}
+            className="flex items-center gap-2 bg-[#3D7C6F] hover:bg-[#2d5f54]"
+          >
+            {isAnalyzing ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                Analyze
+              </>
+            )}
+          </Button>
+          
+          <ExportDialog 
+            interview={interviewForExport}
+            trigger={
+              <Button variant="outline" className="gap-2">
+                <Download className="w-4 h-4" />
+                Export
+              </Button>
+            }
+          />
+        </div>
+      </div>
+
+      {/* Interview Header */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-start justify-between">
+            <div className="space-y-2">
+              <h1 className="text-3xl font-bold">{interview.title}</h1>
+              {interview.topic && (
+                <p className="text-lg text-gray-600">{interview.topic}</p>
+              )}
+              <div className="flex items-center gap-4 text-sm text-gray-500">
+                <span>
+                  <Play className="w-4 h-4 inline mr-1" />
+                  {Math.floor(interview.duration / 60)}:
+                  {String(Math.floor(interview.duration % 60)).padStart(2, '0')} min
+                </span>
+                <span>
+                  <FileText className="w-4 h-4 inline mr-1" />
+                  {interview.segments.length} segments
+                </span>
+                <span>
+                  {new Date(interview.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+            </div>
+            
+            <Badge variant={interview.status === 'completed' ? 'default' : 'secondary'}>
+              {interview.status}
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      {analysisError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-600 text-sm">{analysisError}</p>
+        </div>
+      )}
+
+      {/* Content Tabs */}
+      <Tabs defaultValue="transcription" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="transcription" className="flex items-center gap-2">
+            <FileText className="w-4 h-4" />
+            Transcription
+          </TabsTrigger>
+          <TabsTrigger value="insights" className="flex items-center gap-2">
+            <Lightbulb className="w-4 h-4" />
+            Insights
+            {insights && insights.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-xs bg-blue-500 text-white rounded-full">
+                {insights.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="summary" className="flex items-center gap-2">
+            <FileSpreadsheet className="w-4 h-4" />
+            Summary
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Transcription Tab */}
+        <TabsContent value="transcription">
+          <Card>
+            <CardHeader>
+              <CardTitle>Full Transcription</CardTitle>
+              <CardDescription>
+                Complete interview transcription with timestamps
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                {interview.segments.map((segment) => (
+                  <div key={segment.id} className="group hover:bg-gray-50 p-4 rounded-lg transition-colors">
+                    <div className="flex gap-4">
+                      <span className="text-sm text-gray-400 font-mono mt-1 min-w-[80px] flex-shrink-0">
+                        {Math.floor(segment.start / 60)}:
+                        {String(Math.floor(segment.start % 60)).padStart(2, '0')}
+                      </span>
+                      <p className="text-gray-700 leading-relaxed flex-1">
+                        {segment.text}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Insights Tab */}
+        <TabsContent value="insights">
+          <Card>
+            <CardHeader>
+              <CardTitle>Interview Insights</CardTitle>
+              <CardDescription>
+                Key findings extracted from the interview
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!insights || insights.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <Lightbulb className="w-16 h-16 mx-auto mb-3 opacity-50" />
+                  <p className="text-lg mb-2">No insights yet</p>
+                  <p className="text-sm mb-4">Analyze this interview to extract insights automatically</p>
+                  <Button onClick={handleAnalyze} disabled={isAnalyzing}>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Analyze Interview
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {insights.map((insight) => (
+                    <Card key={insight._id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <Badge variant={
+                            insight.type === 'pain-point' ? 'destructive' :
+                            insight.type === 'quote' ? 'default' :
+                            insight.type === 'insight' ? 'secondary' : 'outline'
+                          }>
+                            {insight.type}
+                          </Badge>
+                          <span className="text-sm text-gray-400 font-mono">
+                            {Math.floor(insight.timestamp / 60)}:
+                            {String(Math.floor(insight.timestamp % 60)).padStart(2, '0')}
+                          </span>
+                        </div>
+                        <p className="text-gray-700">{insight.text}</p>
+                        <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
+                          <span>Source: {insight.source}</span>
+                          <span>{new Date(insight.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Summary Tab */}
+        <TabsContent value="summary">
+          <div className="grid gap-6">
+            {/* Statistics */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Interview Statistics</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-[#3D7C6F]">
+                      {Math.floor(interview.duration / 60)}m {Math.floor(interview.duration % 60)}s
+                    </div>
+                    <div className="text-sm text-gray-500">Duration</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-[#3D7C6F]">
+                      {interview.segments.length}
+                    </div>
+                    <div className="text-sm text-gray-500">Segments</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-[#3D7C6F]">
+                      {interview.transcription.split(' ').length}
+                    </div>
+                    <div className="text-sm text-gray-500">Words</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-[#3D7C6F]">
+                      {insights?.length || 0}
+                    </div>
+                    <div className="text-sm text-gray-500">Insights</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Full Text */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Complete Transcription Text</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="prose max-w-none">
+                  <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                    {interview.transcription}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

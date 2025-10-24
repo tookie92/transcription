@@ -15,6 +15,7 @@ import ButtonFooter from "../myComponents/ButtonFooter"
 import { useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { Folder } from "lucide-react"
+import Link from "next/link"
 
 export function AppSidebar() {
     const projects = useQuery(api.projects.getUserProjects)
@@ -32,13 +33,13 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {projects?.map((project) => (
-                <SidebarMenuItem key={project._id}>
-                  <SidebarMenuButton asChild>
-                    <a href={`/project/${project._id}`} className="flex items-center gap-2">
-                      <Folder className="w-4 h-4" />
-                      <span className="truncate">{project.name}</span>
-                    </a>
-                  </SidebarMenuButton>
+               <SidebarMenuItem key={project._id}>
+                <SidebarMenuButton asChild>
+                    <Link href={`/project/${project._id}`} className="flex items-center gap-2">
+                    <Folder className="w-4 h-4" />
+                    <span className="truncate">{project.name}</span>
+                    </Link>
+                </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
               {projects?.length === 0 && (

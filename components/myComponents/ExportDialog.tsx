@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { FileDown, FileText, Download } from 'lucide-react';
 
 import { ExportInterview } from '@/types';
+import { toast } from 'sonner';
 
 interface ExportDialogProps {
   interview: ExportInterview; // ← Changer ici
@@ -20,6 +21,19 @@ interface ExportDialogProps {
 
 export function ExportDialog({ interview, trigger }: ExportDialogProps) {
   const { exportAsMarkdown, exportAsPDF } = useExport();
+
+   const handleExportPDF = () => {
+    toast.info("Generating PDF...");
+    exportAsPDF(interview);
+    toast.success("PDF downloaded successfully!");
+  };
+
+  const handleExportMarkdown = () => {
+    toast.info("Generating Markdown...");
+    exportAsMarkdown(interview);
+    toast.success("Markdown downloaded successfully!");
+  };
+
 
   return (
     <Dialog>
@@ -41,7 +55,7 @@ export function ExportDialog({ interview, trigger }: ExportDialogProps) {
         <div className="space-y-3 py-4">
           {/* PDF Export */}
           <Button
-            onClick={() => exportAsPDF(interview)}
+            onClick={handleExportPDF} // ← CHANGÉ
             className="w-full justify-start gap-3 h-auto py-4"
             variant="outline"
           >
@@ -58,7 +72,7 @@ export function ExportDialog({ interview, trigger }: ExportDialogProps) {
 
           {/* Markdown Export */}
           <Button
-            onClick={() => exportAsMarkdown(interview)}
+            onClick={handleExportMarkdown} // ← CHANGÉ
             className="w-full justify-start gap-3 h-auto py-4"
             variant="outline"
           >

@@ -77,3 +77,27 @@ export const getProjectInterviews = query({
     return interviews;
   },
 });
+
+// Récupérer une interview par son ID
+export const getById = query({
+  args: {
+    interviewId: v.id("interviews"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const interview = await ctx.db.get(args.interviewId);
+    if (!interview) return null;
+
+    // Vérifier que l'user a accès au projet parent
+    const project = await ctx.db.get(interview.projectId);
+    if (!project) return null;
+
+    const hasAccess = project.members.some(member => 
+      member.userId === identity.subject
+    ) || project.isPublic || project.ownerId === identity.subject;
+
+    return hasAccess ? interview : null;
+  },
+});

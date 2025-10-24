@@ -67,6 +67,28 @@ export const getUserProjects = query({
 });
 
 
+// Récupérer un projet par son ID
+export const getById = query({
+  args: {
+    projectId: v.id("projects"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const project = await ctx.db.get(args.projectId);
+    if (!project) return null;
+
+    // Vérifier les permissions
+    const hasAccess = project.members.some(member => 
+      member.userId === identity.subject
+    ) || project.isPublic || project.ownerId === identity.subject;
+
+    return hasAccess ? project : null;
+  },
+});
+
+
 // Dans la mutation d'invitation
 export const inviteToProject = mutation({
   args: {

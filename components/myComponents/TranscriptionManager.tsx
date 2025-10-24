@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { ExportDialog } from './ExportDialog';
 import { ExportInterview, Interview as StoreInterview } from '@/types'; // ← Import du type
 import { Id } from "@/convex/_generated/dataModel";
+import { toast } from "sonner";
 
 export default function TranscriptionManager() {
   const { analyzeInterview } = useAnalysis();
@@ -38,27 +39,40 @@ export default function TranscriptionManager() {
     currentInterview?._id ? { interviewId: currentInterview._id } : "skip"
   );
 
-  const handleAnalyze = async () => {
-    if (!currentInterview || !currentProjectId) return;
+ const handleAnalyze = async () => {
+  if (!currentInterview || !currentProjectId) return;
 
-    setIsAnalyzing(true);
-    setAnalysisError(null);
+  const toastId = toast.loading("Analyzing interview for insights..."); // ← NOUVEAU
+  
+  setIsAnalyzing(true);
+  setAnalysisError(null);
 
-    try {
-      await analyzeInterview(
-        currentInterview._id,
-        currentProjectId,
-        currentInterview.transcription,
-        currentInterview.topic,
-        currentInterview.segments // ← Type SimpleSegment[] déjà correct
-      );
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Analysis failed';
-      setAnalysisError(errorMessage);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
+  try {
+    await analyzeInterview(
+      currentInterview._id,
+      currentProjectId,
+      currentInterview.transcription,
+      currentInterview.topic,
+      currentInterview.segments
+    );
+    
+    toast.success("Analysis complete! Insights extracted.", { // ← NOUVEAU
+      id: toastId,
+      duration: 3000,
+    });
+    
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Analysis failed';
+    setAnalysisError(errorMessage);
+    
+    toast.error(`Analysis failed: ${errorMessage}`, { // ← NOUVEAU
+      id: toastId,
+      duration: 4000,
+    });
+  } finally {
+    setIsAnalyzing(false);
+  }
+};
 
 
   // Si pas d'interview sélectionnée, afficher la liste
