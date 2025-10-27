@@ -40,6 +40,22 @@ export const createInsights = mutation({
   },
 });
 
+// Ajoute cette query à la fin du fichier
+export const getByProject = query({
+  args: {
+    projectId: v.id("projects"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+
+    return await ctx.db
+      .query("insights")
+      .filter(q => q.eq(q.field("projectId"), args.projectId))
+      .collect();
+  },
+});
+
 // Récupérer les insights d'une interview
 export const getByInterview = query({
   args: {

@@ -40,40 +40,41 @@ export default defineSchema({
     createdAt: v.number(),
   }),
 
+
   // Table Insights
-  insights: defineTable({
-    interviewId: v.id("interviews"),
-    projectId: v.id("projects"),
-    type: v.union(
-      v.literal("pain-point"),
-      v.literal("quote"),
-      v.literal("insight"), 
-      v.literal("follow-up"),
-      v.literal("custom")
-    ),
-    text: v.string(),
-    timestamp: v.number(),
-    source: v.union(v.literal("ai"), v.literal("manual")),
-    createdBy: v.string(), // Clerk user ID
-    tags: v.optional(v.array(v.string())),
-    priority: v.optional(v.union(
-      v.literal("low"),
-      v.literal("medium"), 
-      v.literal("high")
-    )),
-    createdAt: v.number(),
-  }),
+insights: defineTable({
+  interviewId: v.optional(v.id("interviews")), // ← Rendre optionnel
+  projectId: v.id("projects"),
+  type: v.union(
+    v.literal("pain-point"),
+    v.literal("quote"),
+    v.literal("insight"), 
+    v.literal("follow-up"),
+    v.literal("custom")
+  ),
+  text: v.string(),
+  timestamp: v.number(),
+  source: v.union(v.literal("ai"), v.literal("manual")),
+  createdBy: v.string(),
+  tags: v.optional(v.array(v.string())),
+  priority: v.optional(v.union(
+    v.literal("low"),
+    v.literal("medium"), 
+    v.literal("high")
+  )),
+  createdAt: v.number(),
+}),
 
   // Table Affinity Maps
   affinityMaps: defineTable({
     projectId: v.id("projects"),
-    name: v.string(),
+    name: v.string(),                    // Nom de la map entière
     description: v.optional(v.string()),
     version: v.number(),
     isCurrent: v.boolean(),
     groups: v.array(v.object({
       id: v.string(),
-      name: v.string(),
+      title: v.string(),                 // ← CHANGÉ: 'title' au lieu de 'name'
       color: v.string(),
       position: v.object({
         x: v.number(),
@@ -81,8 +82,8 @@ export default defineSchema({
       }),
       insightIds: v.array(v.id("insights")),
     })),
-    createdBy: v.string(), // Clerk user ID
+    createdBy: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
   }),
-});
+  });

@@ -54,10 +54,11 @@ export interface Interview {
   status: 'uploading' | 'transcribing' | 'completed' | 'analyzing' | 'ready';
 }
 
+
 // Insight types
 export interface Insight {
   id: string;
-  interviewId: string;
+  interviewId?: string; // ← Rendre optionnel
   projectId: string;
   type: 'pain-point' | 'quote' | 'insight' | 'follow-up' | 'custom';
   text: string;
@@ -68,6 +69,7 @@ export interface Insight {
   tags?: string[];
   priority?: 'low' | 'medium' | 'high';
 }
+
 
 // Affinity Map types
 export interface AffinityMap {
@@ -85,7 +87,7 @@ export interface AffinityMap {
 
 export interface AffinityGroup {
   id: string;
-  name: string;
+  title: string;    // ← CORRECT : 'title'
   color: string;
   position: { x: number; y: number };
   insightIds: string[];
@@ -163,9 +165,10 @@ export interface ConvexInterview {
   createdAt: number;
 }
 
+// Convex-specific types
 export interface ConvexInsight {
   _id: string;
-  interviewId: string;
+  interviewId?: string; // ← Rendre optionnel ici aussi
   projectId: string;
   type: 'pain-point' | 'quote' | 'insight' | 'follow-up' | 'custom';
   text: string;
@@ -210,4 +213,41 @@ export interface ExportInsight {
   timestamp: number;
   segmentId?: number;
   createdAt: string;
+}
+
+
+// Ajoute/Corrige ces interfaces
+export interface AffinityGroup {
+  id: string;
+  title: string;  // ← Doit être 'title' pas 'name'
+  color: string;
+  position: { x: number; y: number };
+  insightIds: string[];
+}
+
+export interface AffinityMap {
+  id: string;
+  projectId: string;
+  name: string;
+  description?: string;
+  version: number;
+  isCurrent: boolean;
+  groups: AffinityGroup[];
+  createdAt: number;
+  updatedAt: number;
+  createdBy: string;
+}
+
+// Pour Convex
+export interface ConvexAffinityMap {
+  _id: string;
+  projectId: string;
+  name: string;
+  description?: string;
+  version: number;
+  isCurrent: boolean;
+  groups: AffinityGroup[];
+  createdAt: number;
+  updatedAt: number;
+  createdBy: string;
 }
