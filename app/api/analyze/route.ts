@@ -9,7 +9,11 @@ const groq = new Groq({
 export async function POST(request: NextRequest) {
   try {
     const body: AnalysisRequest = await request.json();
-    const { transcription, topic, segments } = body;
+    const { 
+      transcription,
+       topic, 
+      // segments 
+    } = body;
 
     if (!transcription) {
       return NextResponse.json(

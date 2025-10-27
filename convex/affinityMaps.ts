@@ -1,4 +1,3 @@
-import { Id } from "./_generated/dataModel";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
@@ -159,38 +158,7 @@ export const moveGroup = mutation({
   },
 });
 
-// export const addInsightToGroup = mutation({
-//   args: {
-//     mapId: v.id("affinityMaps"),
-//     groupId: v.string(),
-//     insightId: v.id("insights"),
-//   },
-//   handler: async (ctx, args) => {
-//     const identity = await ctx.auth.getUserIdentity();
-//     if (!identity) throw new Error("Not authenticated");
 
-//     const map = await ctx.db.get(args.mapId);
-//     if (!map) throw new Error("Affinity map not found");
-
-//     const updatedGroups = map.groups.map(group => {
-//       if (group.id === args.groupId) {
-//         // Éviter les doublons
-//         if (!group.insightIds.includes(args.insightId)) {
-//           return {
-//             ...group,
-//             insightIds: [...group.insightIds, args.insightId]
-//           };
-//         }
-//       }
-//       return group;
-//     });
-
-//     await ctx.db.patch(args.mapId, {
-//       groups: updatedGroups,
-//       updatedAt: Date.now(),
-//     });
-//   },
-// });
 export const addInsightToGroup = mutation({
   args: {
     mapId: v.id("affinityMaps"),

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 
 import { Id } from "@/convex/_generated/dataModel";
-import { AffinityGroup, Insight } from "@/types";
+import {  Insight } from "@/types";
 import { toast } from "sonner";
 import AffinityCanvas from "./AffinityCanvas";
 
@@ -78,22 +78,7 @@ const handleInsightRemoveFromGroup = async (insightId: string, groupId: string) 
 
 
   // Ajouter cette mutation pour les insights indépendants
-const createIndependentInsight = useMutation(api.affinityMaps.createIndependentInsight);
 
-const handleIndependentInsightCreate = async (position: { x: number; y: number }) => {
-  if (!affinityMap) return;
-  
-  try {
-    await createIndependentInsight({
-      mapId: affinityMap._id,
-      position,
-      text: "New insight...", // L'user éditera après
-      type: "insight" as const
-    });
-  } catch (error) {
-    console.error("Failed to create independent insight:", error);
-  }
-};
 
   // État local
   const [isSilentMode, setIsSilentMode] = useState(true);
@@ -179,21 +164,7 @@ const handleManualInsightCreate = async (text: string, type: Insight['type']) =>
   }
 };
 
-const reorderInsights = useMutation(api.affinityMaps.reorderInsights);
 
-const handleInsightReorder = async (groupId: string, insightIds: string[]) => {
-  if (!affinityMap) return;
-  
-  try {
-    await reorderInsights({
-      mapId: affinityMap._id,
-      groupId,
-      insightIds: insightIds as Id<"insights">[]
-    });
-  } catch (error) {
-    console.error("Failed to reorder insights:", error);
-  }
-};
 
 
 
@@ -281,43 +252,10 @@ const insights = insightsData?.map(insight => ({
           onInsightRemoveFromGroup={handleInsightRemoveFromGroup}
           onGroupDelete={handleGroupDelete}
           onGroupTitleUpdate={handleGroupTitleUpdate}
-          // onIndependentInsightCreate={handleIndependentInsightCreate}
           onManualInsightCreate={handleManualInsightCreate}
         />
 
-        {/* Insights Panel */}
-        {/* <div className="absolute right-4 top-4 w-80 bg-white rounded-lg shadow-lg border z-20">
-          <div className="p-4 border-b">
-            <h3 className="font-semibold">Available Insights</h3>
-            <p className="text-sm text-gray-500">
-              {insightsData?.length || 0} insights to organize
-            </p>
-          </div>
-          <div className="p-2 max-h-96 overflow-y-auto">
-            {insightsData?.map(insight => (
-              <div 
-                key={insight._id}
-                className="p-3 mb-2 bg-white border rounded-lg cursor-move hover:shadow-md"
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('text/plain', insight._id);
-                }}
-              >
-                <div className="flex justify-between items-start mb-1">
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    insight.type === 'pain-point' ? 'bg-red-100 text-red-800' :
-                    insight.type === 'quote' ? 'bg-blue-100 text-blue-800' :
-                    insight.type === 'insight' ? 'bg-purple-100 text-purple-800' :
-                    'bg-green-100 text-green-800'
-                  }`}>
-                    {insight.type}
-                  </span>
-                </div>
-                <p className="text-sm">{insight.text}</p>
-              </div>
-            ))}
-          </div>
-        </div> */}
+       
       </div>
 
       {/* Status Bar */}

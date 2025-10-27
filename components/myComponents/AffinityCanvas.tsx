@@ -1,10 +1,10 @@
 "use client";
 
 import { useRef, useEffect, useState, useCallback } from "react";
-import { gsap } from "gsap";
+import { motion, useMotionValue, useTransform, PanInfo } from "framer-motion";
 import { Move, Trash2, Plus, GripVertical } from "lucide-react";
+import clsx from "clsx";
 
-// Types simplifiés pour l'exemple
 interface AffinityGroup {
   id: string;
   title: string;
@@ -48,36 +48,21 @@ export default function AffinityCanvas({
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   
-  // Drag des groupes - SIMPLIFIÉ avec translate
-  const [draggedGroup, setDraggedGroup] = useState<{
-    id: string;
-    startX: number;
-    startY: number;
-    offsetX: number;
-    offsetY: number;
-  } | null>(null);
-  
   const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
-  
-  // Drag des insights
   const [draggedInsight, setDraggedInsight] = useState<string | null>(null);
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
   
-  // UI
   const [newInsightText, setNewInsightText] = useState("");
   const [newInsightType, setNewInsightType] = useState<Insight['type']>('insight');
   const [showAddInsight, setShowAddInsight] = useState(false);
 
-  // Insights disponibles
   const usedInsightIds = new Set(groups.flatMap(group => group.insightIds));
   const availableInsights = insights.filter(insight => !usedInsightIds.has(insight.id));
 
   // ==================== ZOOM & PAN ====================
   const handleWheel = useCallback((e: WheelEvent) => {
-    // Vérifier si on scroll dans un groupe
     const target = e.target as HTMLElement;
     if (target.closest('.group-insights-container')) {
-      // Laisser le scroll natif se faire
       return;
     }
     
@@ -112,98 +97,14 @@ export default function AffinityCanvas({
     setIsPanning(false);
   };
 
-  // ==================== DRAG GROUPE - FRAME STYLE ====================
-  const startGroupDrag = (e: React.MouseEvent, groupId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const group = groups.find(g => g.id === groupId);
-    if (!group) return;
-
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    // Calculer l'offset entre le clic et la position du groupe
-    const groupScreenX = group.position.x * scale + position.x;
-    const groupScreenY = group.position.y * scale + position.y;
-    
-    setDraggedGroup({
-      id: groupId,
-      startX: group.position.x,
-      startY: group.position.y,
-      offsetX: e.clientX - rect.left - groupScreenX,
-      offsetY: e.clientY - rect.top - groupScreenY
-    });
-  };
-
-  // Gérer le mouvement du groupe
-  useEffect(() => {
-    if (!draggedGroup) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!canvasRef.current) return;
-      
-      const rect = canvasRef.current.getBoundingClientRect();
-      
-      // Calculer la nouvelle position en coordonnées canvas
-      const newX = (e.clientX - rect.left - position.x - draggedGroup.offsetX) / scale;
-      const newY = (e.clientY - rect.top - position.y - draggedGroup.offsetY) / scale;
-      
-      // Appliquer immédiatement via transform pour smoothness
-      const groupEl = document.getElementById(`group-${draggedGroup.id}`);
-      if (groupEl) {
-        const deltaX = newX - draggedGroup.startX;
-        const deltaY = newY - draggedGroup.startY;
-        groupEl.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-      }
-    };
-
-    const handleMouseUp = () => {
-      if (draggedGroup) {
-        const groupEl = document.getElementById(`group-${draggedGroup.id}`);
-        if (groupEl) {
-          const transform = groupEl.style.transform;
-          const match = transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
-          
-          if (match) {
-            const deltaX = parseFloat(match[1]);
-            const deltaY = parseFloat(match[2]);
-            
-            const finalX = draggedGroup.startX + deltaX;
-            const finalY = draggedGroup.startY + deltaY;
-            
-            // Reset transform et sauvegarder la position
-            groupEl.style.transform = '';
-            onGroupMove(draggedGroup.id, { x: finalX, y: finalY });
-          }
-        }
-      }
-      setDraggedGroup(null);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [draggedGroup, scale, position, onGroupMove]);
-
   // ==================== DRAG INSIGHT ====================
   const handleInsightDragStart = (e: React.DragEvent, insightId: string) => {
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', insightId);
     setDraggedInsight(insightId);
-
-    // Animation sortie
-    const el = e.currentTarget as HTMLElement;
-    gsap.to(el, { opacity: 0.5, scale: 0.95, duration: 0.2 });
   };
 
-  const handleInsightDragEnd = (e: React.DragEvent) => {
-    const el = e.currentTarget as HTMLElement;
-    gsap.to(el, { opacity: 1, scale: 1, duration: 0.2 });
+  const handleInsightDragEnd = () => {
     setDraggedInsight(null);
     setDragOverGroup(null);
   };
@@ -216,7 +117,6 @@ export default function AffinityCanvas({
   };
 
   const handleGroupDragLeave = (e: React.DragEvent) => {
-    // Vérifier qu'on sort vraiment du groupe
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const x = e.clientX;
     const y = e.clientY;
@@ -239,27 +139,11 @@ export default function AffinityCanvas({
 
   // ==================== ACTIONS ====================
   const handleDeleteGroup = (groupId: string) => {
-    const groupEl = document.getElementById(`group-${groupId}`);
-    if (groupEl) {
-      gsap.to(groupEl, {
-        opacity: 0,
-        scale: 0.8,
-        duration: 0.2,
-        onComplete: () => onGroupDelete?.(groupId)
-      });
-    }
+    onGroupDelete?.(groupId);
   };
 
   const handleRemoveInsight = (insightId: string, groupId: string) => {
-    const insightEl = document.querySelector(`[data-insight="${insightId}"]`);
-    if (insightEl) {
-      gsap.to(insightEl, {
-        opacity: 0,
-        x: -20,
-        duration: 0.2,
-        onComplete: () => onInsightRemoveFromGroup?.(insightId, groupId)
-      });
-    }
+    onInsightRemoveFromGroup?.(insightId, groupId);
   };
 
   const handleAddManualInsight = () => {
@@ -354,139 +238,33 @@ export default function AffinityCanvas({
             }}
           />
 
-          {/* Groups - FRAME STYLE avec pointer-events */}
+          {/* Groups avec Framer Motion */}
           {groups.map((group) => (
-            <div
+            <DraggableGroup
               key={group.id}
-              id={`group-${group.id}`}
-              className="absolute bg-white rounded-xl shadow-lg border-2 transition-shadow hover:shadow-xl pointer-events-auto"
-              style={{
-                left: `${group.position.x}px`,
-                top: `${group.position.y}px`,
-                borderColor: dragOverGroup === group.id ? '#3B82F6' : group.color,
-                minWidth: '300px',
-                maxWidth: '350px',
-              }}
-              onMouseEnter={() => setHoveredGroup(group.id)}
-              onMouseLeave={() => setHoveredGroup(null)}
-              onDragOver={(e) => handleGroupDragOver(e, group.id)}
+              group={group}
+              insights={insights}
+              scale={scale}
+              isHovered={hoveredGroup === group.id}
+              isDragOver={dragOverGroup === group.id}
+              onHover={setHoveredGroup}
+              onMove={onGroupMove}
+              onDelete={handleDeleteGroup}
+              onTitleUpdate={handleTitleBlur}
+              onRemoveInsight={handleRemoveInsight}
+              onDragOver={handleGroupDragOver}
               onDragLeave={handleGroupDragLeave}
-              onDrop={(e) => handleGroupDrop(e, group.id)}
-            >
-              {/* Header avec drag handle */}
-              <div 
-                className="flex items-center gap-2 px-3 py-2 border-b"
-                style={{ 
-                  backgroundColor: `${group.color}15`,
-                  borderColor: group.color 
-                }}
-              >
-                {/* Drag Handle */}
-                <button
-                  className="cursor-move p-1 rounded hover:bg-black/5 transition-colors flex-shrink-0"
-                  onMouseDown={(e) => startGroupDrag(e, group.id)}
-                  title="Drag to move"
-                >
-                  <GripVertical size={16} style={{ color: group.color }} />
-                </button>
-
-                {/* Title - editable */}
-                <h3
-                  className="flex-1 font-semibold text-sm outline-none px-1 rounded min-w-0"
-                  contentEditable
-                  suppressContentEditableWarning
-                  style={{ color: group.color }}
-                  onBlur={(e) => handleTitleBlur(group.id, e.currentTarget.textContent || '')}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      e.currentTarget.blur();
-                    }
-                  }}
-                >
-                  {group.title}
-                </h3>
-
-                {/* Delete button */}
-                <button
-                  onClick={() => handleDeleteGroup(group.id)}
-                  className={`p-1 rounded hover:bg-red-50 text-red-500 transition-all flex-shrink-0 ${
-                    hoveredGroup === group.id ? 'opacity-100' : 'opacity-0'
-                  }`}
-                  title="Delete group"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-
-              {/* Insights Container - avec scroll isolé */}
-              <div 
-                className="group-insights-container p-3 space-y-2 max-h-80 overflow-y-auto overflow-x-hidden"
-                onWheel={(e) => {
-                  // Empêcher la propagation du scroll au canvas
-                  e.stopPropagation();
-                }}
-              >
-                {group.insightIds.map((insightId) => {
-                  const insight = insights.find(i => i.id === insightId);
-                  if (!insight) return null;
-
-                  return (
-                    <div
-                      key={insightId}
-                      data-insight={insightId}
-                      draggable
-                      onDragStart={(e) => handleInsightDragStart(e, insightId)}
-                      onDragEnd={handleInsightDragEnd}
-                      className="group/insight bg-yellow-50 border-l-4 border-yellow-400 rounded-r p-3 cursor-move hover:shadow-md transition-all"
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
-                          insight.type === 'pain-point' ? 'bg-red-100 text-red-700' :
-                          insight.type === 'quote' ? 'bg-blue-100 text-blue-700' :
-                          insight.type === 'insight' ? 'bg-purple-100 text-purple-700' :
-                          'bg-green-100 text-green-700'
-                        }`}>
-                          {insight.type}
-                        </span>
-                        <button
-                          onClick={() => handleRemoveInsight(insightId, group.id)}
-                          className="opacity-0 group-hover/insight:opacity-100 text-gray-400 hover:text-red-500 transition-all flex-shrink-0"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                      <p className="text-sm text-gray-800 leading-snug line-clamp-3">
-                        {insight.text}
-                      </p>
-                    </div>
-                  );
-                })}
-
-                {/* Empty state */}
-                {group.insightIds.length === 0 && (
-                  <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-all ${
-                    dragOverGroup === group.id
-                      ? 'border-blue-400 bg-blue-50'
-                      : 'border-gray-300 bg-gray-50'
-                  }`}>
-                    <p className={`text-sm ${
-                      dragOverGroup === group.id ? 'text-blue-600 font-medium' : 'text-gray-400'
-                    }`}>
-                      {dragOverGroup === group.id ? '✨ Drop here!' : 'Drag insights here'}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+              onDrop={handleGroupDrop}
+              onInsightDragStart={handleInsightDragStart}
+              onInsightDragEnd={handleInsightDragEnd}
+            />
           ))}
         </div>
       </div>
 
       {/* Insights Panel */}
       <div className="absolute right-4 top-4 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-20 overflow-hidden">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+        <div className="p-4 border-b border-gray-200 bg-linear-to-r from-blue-50 to-purple-50">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-gray-900">Available Insights</h3>
             <span className="text-sm bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-medium">
@@ -496,13 +274,12 @@ export default function AffinityCanvas({
           
           <button
             onClick={() => setShowAddInsight(!showAddInsight)}
-            className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-2.5 px-4 rounded-lg text-sm font-medium hover:from-blue-600 hover:to-blue-700 transition-all flex items-center justify-center gap-2 shadow-sm"
+            className="w-full bg-linear-to-r from-blue-500 to-blue-600 text-white py-2.5 px-4 rounded-lg text-sm font-medium hover:from-blue-600 hover:to-blue-700 transition-all flex items-center justify-center gap-2 shadow-sm"
           >
             <Plus size={16} />
             Add New Insight
           </button>
 
-          {/* Add Insight Form */}
           {showAddInsight && (
             <div className="mt-3 p-3 bg-white rounded-lg border border-gray-200 space-y-2">
               <select
@@ -544,15 +321,16 @@ export default function AffinityCanvas({
           )}
         </div>
 
-        {/* Insights List */}
         <div className="p-3 max-h-[500px] overflow-y-auto space-y-2">
           {availableInsights.map(insight => (
-            <div
+            <motion.div
               key={insight.id}
               draggable
-              onDragStart={(e) => handleInsightDragStart(e, insight.id)}
+              onDragStart={(e) => handleInsightDragStart(e as unknown as React.DragEvent, insight.id)}
               onDragEnd={handleInsightDragEnd}
-              className="bg-white border border-gray-200 rounded-lg p-3 cursor-move hover:shadow-md hover:border-blue-300 transition-all group"
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileDrag={{ scale: 0.95, rotate: 2, opacity: 0.8 }}
+              className="bg-white border border-gray-200 rounded-lg p-3 cursor-move hover:shadow-md hover:border-blue-300 transition-all"
             >
               <div className="flex items-start justify-between mb-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -563,15 +341,14 @@ export default function AffinityCanvas({
                 }`}>
                   {insight.type}
                 </span>
-                <GripVertical size={14} className="text-gray-400 group-hover:text-gray-600" />
+                <GripVertical size={14} className="text-gray-400" />
               </div>
               <p className="text-sm text-gray-700 leading-snug line-clamp-2">
                 {insight.text}
               </p>
-            </div>
+            </motion.div>
           ))}
 
-          {/* Empty State */}
           {availableInsights.length === 0 && (
             <div className="text-center py-12">
               <div className="text-4xl mb-3">🎉</div>
@@ -582,13 +359,226 @@ export default function AffinityCanvas({
         </div>
       </div>
 
-      {/* Drag Indicator */}
       {draggedInsight && (
-        <div className="fixed top-6 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-50 flex items-center gap-2">
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed top-6 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-50 flex items-center gap-2"
+        >
           <Move size={14} />
           Drag to organize insight
-        </div>
+        </motion.div>
       )}
     </div>
+  );
+}
+
+// ==================== DRAGGABLE GROUP COMPONENT ====================
+interface DraggableGroupProps {
+  group: AffinityGroup;
+  insights: Insight[];
+  scale: number;
+  isHovered: boolean;
+  isDragOver: boolean;
+  onHover: (id: string | null) => void;
+  onMove: (groupId: string, position: { x: number; y: number }) => void;
+  onDelete: (groupId: string) => void;
+  onTitleUpdate: (groupId: string, title: string) => void;
+  onRemoveInsight: (insightId: string, groupId: string) => void;
+  onDragOver: (e: React.DragEvent, groupId: string) => void;
+  onDragLeave: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent, groupId: string) => void;
+  onInsightDragStart: (e: React.DragEvent, insightId: string) => void;
+  onInsightDragEnd: () => void;
+}
+
+function DraggableGroup({
+  group,
+  insights,
+  scale,
+  isHovered,
+  isDragOver,
+  onHover,
+  onMove,
+  onDelete,
+  onTitleUpdate,
+  onRemoveInsight,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onInsightDragStart,
+  onInsightDragEnd
+}: DraggableGroupProps) {
+  const [isDragging, setIsDragging] = useState(false);
+  const x = useMotionValue(group.position.x);
+  const y = useMotionValue(group.position.y);
+  
+  // Animations subtiles basées sur la vélocité
+  const rotateX = useTransform(y, [-100, 0, 100], [2, 0, -2]);
+  const rotateY = useTransform(x, [-100, 0, 100], [-2, 0, 2]);
+
+  useEffect(() => {
+    x.set(group.position.x);
+    y.set(group.position.y);
+  }, [group.position.x, group.position.y, x, y]);
+
+  const handleDragStart = () => {
+    setIsDragging(true);
+  };
+
+  const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    setIsDragging(false);
+    
+    const finalX = group.position.x + info.offset.x / scale;
+    const finalY = group.position.y + info.offset.y / scale;
+    
+    onMove(group.id, { x: finalX, y: finalY });
+  };
+
+  return (
+    <motion.div
+      drag
+      dragMomentum={false}
+      dragElastic={0}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      style={{ 
+        x, 
+        y,
+        rotateX: isDragging ? rotateX : 0,
+        rotateY: isDragging ? rotateY : 0,
+      }}
+      whileHover={{ scale: 1.02 }}
+      whileDrag={{ 
+        scale: 1.05,
+        boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+        zIndex: 50,
+      }}
+      transition={{ 
+        type: "spring", 
+        stiffness: 300, 
+        damping: 30 
+      }}
+      className={clsx("absolute bg-white rounded-xl shadow-lg border-2 min-w-80 max-w-96 pointer-events-auto cursor-grab active:cursor-grabbing", 
+        isDragOver ? "border-[#3B82F6]":`border-[${group.color}]`
+      )}
+      
+      onMouseEnter={() => onHover(group.id)}
+      onMouseLeave={() => onHover(null)}
+      onDragOver={(e) => onDragOver(e, group.id)}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => onDrop(e, group.id)}
+    >
+      {/* Header */}
+      <div 
+        className="flex items-center gap-2 px-3 py-2 border-b cursor-grab active:cursor-grabbing"
+        style={{ 
+          backgroundColor: `${group.color}15`,
+          borderColor: group.color 
+        }}
+      >
+        <GripVertical size={16} style={{ color: group.color }} className="shrink-0" />
+
+        <h3
+          className="flex-1 font-semibold text-sm outline-none px-1 rounded min-w-0"
+          contentEditable
+          suppressContentEditableWarning
+          style={{ color: group.color }}
+          onBlur={(e) => onTitleUpdate(group.id, e.currentTarget.textContent || '')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {group.title}
+        </h3>
+
+        <motion.button
+          whileHover={{ scale: 1.1, rotate: 90 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(group.id);
+          }}
+          className={`p-1 rounded hover:bg-red-50 text-red-500 transition-all shrink-0 ${
+            isHovered ? 'opacity-100' : 'opacity-0'
+          }`}
+          title="Delete group"
+        >
+          <Trash2 size={14} />
+        </motion.button>
+      </div>
+
+      {/* Insights Container */}
+      <div 
+        className="group-insights-container p-3 space-y-2 max-h-80 overflow-y-auto overflow-x-hidden"
+        onWheel={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {group.insightIds.map((insightId) => {
+          const insight = insights.find(i => i.id === insightId);
+          if (!insight) return null;
+
+          return (
+            <motion.div
+              key={insightId}
+              data-insight={insightId}
+              draggable
+              onDragStart={(e) => onInsightDragStart(e as unknown as React.DragEvent, insightId)}
+              onDragEnd={onInsightDragEnd}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              whileHover={{ scale: 1.02, x: 4 }}
+              whileDrag={{ scale: 0.95, rotate: 3, opacity: 0.7 }}
+              className="group/insight bg-yellow-50 border-l-4 border-yellow-400 rounded-r p-3 cursor-move hover:shadow-md transition-all"
+            >
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                  insight.type === 'pain-point' ? 'bg-red-100 text-red-700' :
+                  insight.type === 'quote' ? 'bg-blue-100 text-blue-700' :
+                  insight.type === 'insight' ? 'bg-purple-100 text-purple-700' :
+                  'bg-green-100 text-green-700'
+                }`}>
+                  {insight.type}
+                </span>
+                <motion.button
+                  whileHover={{ scale: 1.2, rotate: 90 }}
+                  whileTap={{ scale: 0.8 }}
+                  onClick={() => onRemoveInsight(insightId, group.id)}
+                  className="opacity-0 group-hover/insight:opacity-100 text-gray-400 hover:text-red-500 transition-all shrink-0"
+                >
+                  <Trash2 size={12} />
+                </motion.button>
+              </div>
+              <p className="text-sm text-gray-800 leading-snug line-clamp-3">
+                {insight.text}
+              </p>
+            </motion.div>
+          );
+        })}
+
+        {group.insightIds.length === 0 && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className={`border-2 border-dashed rounded-lg p-6 text-center transition-all ${
+              isDragOver
+                ? 'border-blue-400 bg-blue-50'
+                : 'border-gray-300 bg-gray-50'
+            }`}
+          >
+            <p className={`text-sm ${
+              isDragOver ? 'text-blue-600 font-medium' : 'text-gray-400'
+            }`}>
+              {isDragOver ? '✨ Drop here!' : 'Drag insights here'}
+            </p>
+          </motion.div>
+        )}
+      </div>
+    </motion.div>
   );
 }
