@@ -416,3 +416,32 @@ export const updateGroupTitle = mutation({
     });
   },
 });
+
+// Dans affinityMaps.ts - juste AJOUTER ça :
+export const updateGroups = mutation({
+  args: {
+    mapId: v.id("affinityMaps"),
+    groups: v.array(v.object({
+      id: v.string(),
+      title: v.string(),
+      color: v.string(),
+      position: v.object({        // ← MÊME STRUCTURE QUE DÉJÀ DÉFINIE
+        x: v.number(),           // ← EXACTEMENT COMME DANS TON SCHEMA
+        y: v.number(),           // ← EXACTEMENT COMME DANS TON SCHEMA
+      }),
+      insightIds: v.array(v.id("insights")),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const map = await ctx.db.get(args.mapId);
+    if (!map) throw new Error("Affinity map not found");
+
+    await ctx.db.patch(args.mapId, {
+      groups: args.groups,
+      updatedAt: Date.now(),
+    });
+  },
+});
