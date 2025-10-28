@@ -55,6 +55,7 @@ export default function AffinityCanvas({
   const [newInsightText, setNewInsightText] = useState("");
   const [newInsightType, setNewInsightType] = useState<Insight['type']>('insight');
   const [showAddInsight, setShowAddInsight] = useState(false);
+  const [isDraggingInsight, setIsDraggingInsight] = useState<string | null>(null);
 
   const usedInsightIds = new Set(groups.flatMap(group => group.insightIds));
   const availableInsights = insights.filter(insight => !usedInsightIds.has(insight.id));
@@ -102,11 +103,13 @@ export default function AffinityCanvas({
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', insightId);
     setDraggedInsight(insightId);
+    setIsDraggingInsight(insightId);
   };
 
   const handleInsightDragEnd = () => {
     setDraggedInsight(null);
     setDragOverGroup(null);
+    setIsDraggingInsight(null);
   };
 
   const handleGroupDragOver = (e: React.DragEvent, groupId: string) => {
@@ -329,7 +332,11 @@ export default function AffinityCanvas({
               onDragStart={(e) => handleInsightDragStart(e as unknown as React.DragEvent, insight.id)}
               onDragEnd={handleInsightDragEnd}
               whileHover={{ scale: 1.02, y: -2 }}
-              whileDrag={{ scale: 0.95, rotate: 2, opacity: 0.8 }}
+              animate={{
+                opacity: isDraggingInsight === insight.id ? 0.7 : 1,
+                scale: isDraggingInsight === insight.id ? 0.95 : 1,
+                rotate: isDraggingInsight === insight.id ? 2 : 0
+              }}
               className="bg-white border border-gray-200 rounded-lg p-3 cursor-move hover:shadow-md hover:border-blue-300 transition-all"
             >
               <div className="flex items-start justify-between mb-2">
