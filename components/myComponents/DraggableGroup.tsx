@@ -26,9 +26,11 @@ interface DraggableGroupProps {
   scale: number;
   isHovered: boolean;
   isDragOver: boolean;
+  isSelected: boolean; // 🆕 SI le groupe est sélectionné
   onHover: (id: string | null) => void;
   onMove: (groupId: string, position: { x: number; y: number }) => void;
   onDelete: (groupId: string) => void;
+  onSelect: (groupId: string, e: React.MouseEvent) => void; // 🆕 Gestion de la sélection
   onTitleUpdate: (groupId: string, title: string) => void;
   onRemoveInsight: (insightId: string, groupId: string) => void;
   onDragOver: (e: React.DragEvent, groupId: string) => void;
@@ -36,6 +38,7 @@ interface DraggableGroupProps {
   onDrop: (e: React.DragEvent, groupId: string) => void;
   onInsightDragStart: (e: React.DragEvent, insightId: string) => void;
   onInsightDragEnd: () => void;
+  selectedGroupsCount?: number; 
 }
 
 function DraggableGroup({
@@ -44,16 +47,19 @@ function DraggableGroup({
   scale,
   isHovered,
   isDragOver,
+  isSelected, // 🆕 Récupère la prop
   onHover,
   onMove,
   onDelete,
+  onSelect, // 🆕 Récupère la prop
   onTitleUpdate,
   onRemoveInsight,
   onDragOver,
   onDragLeave,
   onDrop,
   onInsightDragStart,
-  onInsightDragEnd
+  onInsightDragEnd,
+  selectedGroupsCount
 }: DraggableGroupProps) {
   const [draggedInsightId, setDraggedInsightId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -106,79 +112,123 @@ function DraggableGroup({
     e.stopPropagation();
   }, []);
 
+  //=================== Nouveau State ====================
+    // 🖱️ Gestion du clic sur le groupe
+  const handleGroupClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelect(group.id, e); // 🆕 Appelle la fonction de sélection parente
+  }, [onSelect, group.id]);
+
+  // 🎨 Style de bordure pour la sélection
+  const getBorderStyle = useCallback(() => {
+    if (isDragOver) return "#3B82F6"; // Bleu pour drop zone
+    if (isSelected) return "#F59E0B"; // Orange pour sélectionné
+    return group.color; // Couleur normale du groupe
+  }, [isDragOver, isSelected, group.color]);
+
+  // 🎨 Style d'ombre pour la sélection
+  const getBoxShadow = useCallback(() => {
+    if (isSelected) {
+      return "0 0 0 3px rgba(245, 158, 11, 0.5), 0 10px 25px -5px rgba(0, 0, 0, 0.1)";
+    }
+    return "0 4px 6px -1px rgba(0, 0, 0, 0.1)";
+  }, [isSelected]);
+
 
 
 
 
   return (
     <motion.div
-      drag
-      dragMomentum={false}
-      dragElastic={0}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      style={{ 
-        x, 
-        y,
-        rotateX: isDragging ? rotateX : 0,
-        rotateY: isDragging ? rotateY : 0,
-        borderColor: isDragOver ? "#3B82F6" : group.color
-      }}
-      whileHover={{ scale: 1.02 }}
-      whileDrag={{ 
-        scale: 1.05,
-        boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-        zIndex: 50,
-      }}
-      transition={{ 
-        type: "spring", 
-        stiffness: 300, 
-        damping: 30 
-      }}
-      className={clsx(
-        "absolute bg-white rounded-xl shadow-lg border-2 min-w-80 max-w-96 pointer-events-auto cursor-grab active:cursor-grabbing",
-        isDragOver && "border-blue-500"
-      )}
-      onMouseEnter={() => onHover(group.id)}
-      onMouseLeave={() => onHover(null)}
-      onDragOver={(e) => onDragOver(e, group.id)}
-      onDragLeave={onDragLeave}
-      onDrop={(e) => onDrop(e, group.id)}
-    >
+    drag
+    dragMomentum={false}
+    dragElastic={0}
+    onDragStart={handleDragStart}
+    onDragEnd={handleDragEnd}
+    onClick={handleGroupClick} // 🆕 Gestion du clic
+    style={{ 
+      x, 
+      y,
+      rotateX: isDragging ? rotateX : 0,
+      rotateY: isDragging ? rotateY : 0,
+      borderColor: getBorderStyle(), // 🆕 Utilise la fonction de style
+      boxShadow: getBoxShadow(), // 🆕 Ombre pour la sélection
+    }}
+    whileHover={{ 
+      scale: isSelected ? 1.02 : 1.05, // 🆕 Animation différente si sélectionné
+      boxShadow: isSelected 
+        ? "0 0 0 3px rgba(245, 158, 11, 0.7), 0 20px 40px -10px rgba(0, 0, 0, 0.2)" 
+        : "0 10px 25px -5px rgba(0, 0, 0, 0.1)"
+    }}
+    whileDrag={{ 
+      scale: 1.05,
+      boxShadow: isSelected 
+        ? "0 0 0 3px rgba(245, 158, 11, 0.8), 0 25px 50px -12px rgba(0, 0, 0, 0.25)" 
+        : "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+      zIndex: 50,
+    }}
+    transition={{ 
+      type: "spring", 
+      stiffness: 300, 
+      damping: 30 
+    }}
+    className={clsx(
+      "absolute bg-white rounded-xl border-2 min-w-80 max-w-96 pointer-events-auto cursor-grab active:cursor-grabbing",
+      isSelected && "ring-2 ring-orange-400 ring-opacity-50", // 🆕 Classe Tailwind pour la sélection
+      isDragOver && "border-blue-500"
+    )}
+    onMouseEnter={() => onHover(group.id)}
+    onMouseLeave={() => onHover(null)}
+    onDragOver={(e) => onDragOver(e, group.id)}
+    onDragLeave={onDragLeave}
+    onDrop={(e) => onDrop(e, group.id)}
+  >
       {/* Header */}
-      <div 
-        className="flex items-center gap-2 px-3 py-2 border-b cursor-grab active:cursor-grabbing"
-        style={{ 
-          backgroundColor: `${group.color}15`,
-          borderColor: group.color 
-        }}
-      >
-        <GripVertical size={16} style={{ color: group.color }} className="shrink-0" />
+<div 
+  className="flex items-center gap-2 px-3 py-2 border-b cursor-grab active:cursor-grabbing relative"
+  style={{ 
+    backgroundColor: `${group.color}15`,
+    borderColor: group.color 
+  }}
+>
+  {/* 🆕 INDICATEUR DE SÉLECTION (point orange) */}
+  {isSelected && (
+    <div className="absolute -left-2 -top-2 w-3 h-3 bg-orange-500 rounded-full border-2 border-white shadow-sm" />
+  )}
+  
+  <GripVertical size={16} style={{ color: group.color }} className="shrink-0" />
 
-        <h3
-          className="flex-1 font-semibold text-sm outline-none px-1 rounded min-w-0"
-          contentEditable
-          suppressContentEditableWarning
-          style={{ color: group.color }}
-          onBlur={handleTitleBlur}
-          onKeyDown={handleTitleKeyDown}
-          onMouseDown={handleMouseDown}
-        >
-          {group.title}
-        </h3>
+  <h3
+    className="flex-1 font-semibold text-sm outline-none px-1 rounded min-w-0"
+    contentEditable
+    suppressContentEditableWarning
+    style={{ color: group.color }}
+    onBlur={handleTitleBlur}
+    onKeyDown={handleTitleKeyDown}
+    onMouseDown={handleMouseDown}
+  >
+    {group.title}
+  </h3>
 
-        <motion.button
-          whileHover={{ scale: 1.1, rotate: 90 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={handleDeleteClick}
-          className={`p-1 rounded hover:bg-red-50 text-red-500 transition-all shrink-0 ${
-            isHovered ? 'opacity-100' : 'opacity-0'
-          }`}
-          title="Delete group"
-        >
-          <Trash2 size={14} />
-        </motion.button>
-      </div>
+  {/* 🆕 BADGE NOMBRE DE GROUPES SÉLECTIONNÉS (si plusieurs) */}
+  {isSelected && (
+    <span className="text-xs bg-orange-500 text-white px-1.5 py-0.5 rounded-full font-medium">
+      {selectedGroupsCount} {/* Tu devras passer cette prop depuis le parent */}
+    </span>
+  )}
+
+  <motion.button
+    whileHover={{ scale: 1.1, rotate: 90 }}
+    whileTap={{ scale: 0.9 }}
+    onClick={handleDeleteClick}
+    className={`p-1 rounded hover:bg-red-50 text-red-500 transition-all shrink-0 ${
+      (isHovered || isSelected) ? 'opacity-100' : 'opacity-0' // 🆕 Toujours visible si sélectionné
+    }`}
+    title="Delete group"
+  >
+    <Trash2 size={14} />
+  </motion.button>
+</div>
 
       {/* Insights Container */}
       <div 

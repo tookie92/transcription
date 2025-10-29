@@ -63,6 +63,307 @@ export default function AffinityCanvas({
   return insights.filter(insight => !usedInsightIds.has(insight.id));
 }, [groups, insights]);
 
+
+// ==================== MULTISELECTION STATES ====================
+
+// 📦 Groupes actuellement sélectionnés (Ctrl+Clic)
+const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
+const [isMovingWithArrows, setIsMovingWithArrows] = useState(false);
+
+
+// 🎯 Groupe "anchor" pour les sélections avec Shift+Clic
+const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null);
+
+// 🖱️ Track si on est en train de faire une sélection rectangulaire
+const [isSelecting, setIsSelecting] = useState(false);
+const [selectionBox, setSelectionBox] = useState<{ start: { x: number; y: number }; end: { x: number; y: number } } | null>(null);
+
+// ==================== ESC KEY ====================
+
+// 🚫 ESC : Annule la sélection
+const handleEscapeKey = useCallback((e: KeyboardEvent) => {
+  if (e.key === 'Escape' && selectedGroups.size > 0) {
+    e.preventDefault();
+    setSelectedGroups(new Set()); // Vide complètement la sélection
+    setSelectionAnchor(null);
+  }
+}, [selectedGroups]);
+
+// ==================== ARROW KEYS ====================
+
+// 🎯 FLÈCHES : Déplace les groupes sélectionnés
+const handleArrowKeys = useCallback((e: KeyboardEvent) => {
+  // Vérifie qu'on a des groupes sélectionnés et qu'on est pas en train de taper dans un input
+  const isTypingInInput = e.target instanceof HTMLInputElement || 
+                         e.target instanceof HTMLTextAreaElement;
+  
+  if (selectedGroups.size === 0 || isTypingInInput) return;
+
+  // 📏 Distance de déplacement (pixels)
+  const moveDistance = e.shiftKey ? 20 : 5; // 🎪 SHIFT + flèche = déplacement plus grand
+  
+  let deltaX = 0;
+  let deltaY = 0;
+
+  switch (e.key) {
+    case 'ArrowUp':
+      deltaY = -moveDistance;
+      break;
+    case 'ArrowDown':
+      deltaY = moveDistance;
+      break;
+    case 'ArrowLeft':
+      deltaX = -moveDistance;
+      break;
+    case 'ArrowRight':
+      deltaX = moveDistance;
+      break;
+    default:
+      return; // Pas une flèche, on sort
+  }
+
+  e.preventDefault(); // 🚫 Empêche le scroll de la page
+
+  // 🎪 Animation feedback
+  setIsMovingWithArrows(true);
+  setTimeout(() => setIsMovingWithArrows(false), 150);
+
+  // 🚀 Déplace tous les groupes sélectionnés
+  selectedGroups.forEach(groupId => {
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+      onGroupMove(groupId, {
+        x: group.position.x + deltaX,
+        y: group.position.y + deltaY
+      });
+    }
+  });
+}, [selectedGroups, groups, onGroupMove]);
+
+
+
+// ==================== SELECTION HANDLERS ====================
+
+// 🖱️ Quand on clique sur un groupe
+const handleGroupClick = useCallback((groupId: string, e: React.MouseEvent) => {
+  e.stopPropagation();
+  
+  // 🎪 SHIFT + CLIC : Sélection range (comme fichiers dans l'explorateur)
+  if (e.shiftKey && selectionAnchor) {
+    const groupIds = groups.map(g => g.id);
+    const anchorIndex = groupIds.indexOf(selectionAnchor);
+    const targetIndex = groupIds.indexOf(groupId);
+    
+    if (anchorIndex !== -1 && targetIndex !== -1) {
+      const start = Math.min(anchorIndex, targetIndex);
+      const end = Math.max(anchorIndex, targetIndex);
+      const newSelection = new Set(groupIds.slice(start, end + 1));
+      setSelectedGroups(newSelection);
+      return;
+    }
+  }
+  
+  // 🎪 CTRL/CMD + CLIC : Ajouter/retirer de la sélection
+  if (e.ctrlKey || e.metaKey) {
+    setSelectedGroups(prev => {
+      const newSelection = new Set(prev);
+      if (newSelection.has(groupId)) {
+        newSelection.delete(groupId); // Dé-sélectionne si déjà sélectionné
+      } else {
+        newSelection.add(groupId); // Ajoute à la sélection
+      }
+      return newSelection;
+    });
+    setSelectionAnchor(groupId);
+  } 
+  // 🎪 CLIC SIMPLE : Sélectionne uniquement ce groupe
+  else {
+    setSelectedGroups(new Set([groupId]));
+    setSelectionAnchor(groupId);
+  }
+}, [groups, selectionAnchor]);
+
+// 🖱️ Quand on clique sur le canvas vide : efface la sélection
+const handleCanvasClick = useCallback((e: React.MouseEvent) => {
+  if (e.target === canvasRef.current) {
+    setSelectedGroups(new Set());
+    setSelectionAnchor(null);
+  }
+}, []);
+
+// 🎪 SELECTION RECTANGULAIRE (drag pour sélectionner plusieurs groupes)
+const handleCanvasMouseDownForSelection = useCallback((e: React.MouseEvent) => {
+  if (e.button === 0 && e.target === canvasRef.current && !e.ctrlKey && !e.metaKey) {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    const startX = (e.clientX - rect.left - position.x) / scale;
+    const startY = (e.clientY - rect.top - position.y) / scale;
+    
+    setIsSelecting(true);
+    setSelectionBox({ start: { x: startX, y: startY }, end: { x: startX, y: startY } });
+  }
+}, [position.x, position.y, scale]);
+
+const handleCanvasMouseMoveForSelection = useCallback((e: React.MouseEvent) => {
+  if (isSelecting && selectionBox) {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    const endX = (e.clientX - rect.left - position.x) / scale;
+    const endY = (e.clientY - rect.top - position.y) / scale;
+    
+    setSelectionBox(prev => prev ? { ...prev, end: { x: endX, y: endY } } : null);
+    
+    // 🎯 Sélectionne les groupes dans la boîte de sélection
+    const selected = groups.filter(group => {
+      const groupX = group.position.x;
+      const groupY = group.position.y;
+      const minX = Math.min(selectionBox.start.x, endX);
+      const maxX = Math.max(selectionBox.start.x, endX);
+      const minY = Math.min(selectionBox.start.y, endY);
+      const maxY = Math.max(selectionBox.start.y, endY);
+      
+      return groupX >= minX && groupX <= maxX && groupY >= minY && groupY <= maxY;
+    });
+    
+    setSelectedGroups(new Set(selected.map(g => g.id)));
+  }
+}, [isSelecting, selectionBox, groups, position.x, position.y, scale]);
+
+const handleCanvasMouseUpForSelection = useCallback(() => {
+  setIsSelecting(false);
+  setSelectionBox(null);
+}, []);
+
+
+
+// ==================== MULTIPLE GROUP DRAG ====================
+
+// 🚀 Quand on déplace un groupe, déplace aussi les autres sélectionnés
+const handleGroupMove = useCallback((groupId: string, newPosition: { x: number; y: number }) => {
+  const draggedGroup = groups.find(g => g.id === groupId);
+  if (!draggedGroup) return;
+
+  const deltaX = newPosition.x - draggedGroup.position.x;
+  const deltaY = newPosition.y - draggedGroup.position.y;
+
+  // 🎪 DRAG MULTIPLE : Si le groupe dragué est sélectionné ET qu'il y a d'autres groupes sélectionnés
+  if (selectedGroups.has(groupId) && selectedGroups.size > 1) {
+    // 🚀 Crée un batch de mouvements pour éviter les re-rendus multiples
+    const updates: Array<{ groupId: string; position: { x: number; y: number } }> = [];
+    
+    selectedGroups.forEach(selectedGroupId => {
+      const group = groups.find(g => g.id === selectedGroupId);
+      if (group && selectedGroupId !== groupId) { // On exclut le groupe déjà déplacé
+        updates.push({
+          groupId: selectedGroupId,
+          position: {
+            x: group.position.x + deltaX,
+            y: group.position.y + deltaY
+          }
+        });
+      }
+    });
+    
+    // 🎪 Applique tous les mouvements en une fois
+    updates.forEach(update => {
+      onGroupMove(update.groupId, update.position);
+    });
+  }
+  
+  // 🎪 Toujours déplacer le groupe principal (celui qu'on drag)
+  onGroupMove(groupId, newPosition);
+}, [groups, selectedGroups, onGroupMove]);
+
+// ==================== SELECTION ACTIONS ====================
+
+// 🗑️ Supprimer tous les groupes sélectionnés
+const deleteSelectedGroups = useCallback(() => {
+  selectedGroups.forEach(groupId => onGroupDelete?.(groupId));
+  setSelectedGroups(new Set()); // Vide la sélection après suppression
+}, [selectedGroups, onGroupDelete]);
+
+// 🎨 Changer la couleur de tous les groupes sélectionnés
+const changeSelectedGroupsColor = useCallback((color: string) => {
+  // Implémentation pour changer la couleur des groupes sélectionnés
+  selectedGroups.forEach(groupId => {
+    // Tu peux ajouter une mutation pour update group color
+  });
+}, [selectedGroups]);
+
+// 📋 Copier les groupes sélectionnés (pour dupliquer)
+const duplicateSelectedGroups = useCallback(() => {
+  selectedGroups.forEach(groupId => {
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+      onGroupCreate({ 
+        x: group.position.x + 20, 
+        y: group.position.y + 20 
+      });
+    }
+  });
+}, [selectedGroups, groups, onGroupCreate]);
+
+// ==================== KEYBOARD SHORTCUTS ====================
+
+// ==================== KEYBOARD SHORTCUTS ====================
+
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    // 🚫 ESC : Annule la sélection
+    handleEscapeKey(e);
+    
+    // 🎯 FLÈCHES : Déplace la sélection
+    handleArrowKeys(e);
+    
+    // 🗑️ SUPPR/DELETE : Supprime les groupes sélectionnés
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedGroups.size > 0) {
+      e.preventDefault();
+      deleteSelectedGroups();
+    }
+    
+    // ⎈ CTRL+A : Sélectionne tous les groupes
+    if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+      e.preventDefault();
+      setSelectedGroups(new Set(groups.map(g => g.id)));
+    }
+    
+    // ⎈ CTRL+D : Désélectionne tout
+    if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+      e.preventDefault();
+      setSelectedGroups(new Set());
+    }
+  };
+
+  document.addEventListener('keydown', handleKeyDown);
+  return () => document.removeEventListener('keydown', handleKeyDown);
+}, [selectedGroups, groups, deleteSelectedGroups, handleEscapeKey, handleArrowKeys]);
+
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    // 🗑️ SUPPR/DELETE : Supprime les groupes sélectionnés
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedGroups.size > 0) {
+      e.preventDefault();
+      deleteSelectedGroups();
+    }
+    
+    // ⎈ CTRL+A : Sélectionne tous les groupes
+    if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+      e.preventDefault();
+      setSelectedGroups(new Set(groups.map(g => g.id)));
+    }
+    
+    // ⎈ CTRL+D : Désélectionne tout
+    if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+      e.preventDefault();
+      setSelectedGroups(new Set());
+    }
+  };
+
+  document.addEventListener('keydown', handleKeyDown);
+  return () => document.removeEventListener('keydown', handleKeyDown);
+}, [selectedGroups, groups, deleteSelectedGroups]);
+
+
+// ==================== end Neuen Sta ====================
+
   // ==================== ZOOM & PAN ====================
   const handleWheel = useCallback((e: WheelEvent) => {
     const target = e.target as HTMLElement;
@@ -168,6 +469,33 @@ export default function AffinityCanvas({
 
   return (
     <div className="h-full relative bg-gray-50 overflow-hidden">
+      {/* 🎪 INDICATEUR RACCOURCIS CLAVIER */}
+      {selectedGroups.size > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg z-50 flex items-center gap-4"
+        >
+          <div className="flex items-center gap-2">
+            <kbd className="px-2 py-1 bg-gray-700 rounded text-xs">ESC</kbd>
+            <span className="text-gray-300">Annuler</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <kbd className="px-2 py-1 bg-gray-700 rounded text-xs">←↑↓→</kbd>
+            <span className="text-gray-300">Déplacer</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <kbd className="px-2 py-1 bg-gray-700 rounded text-xs">Shift</kbd>
+            <span className="text-gray-300">+</span>
+            <kbd className="px-2 py-1 bg-gray-700 rounded text-xs">←↑↓→</kbd>
+            <span className="text-gray-300">Grand déplacement</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <kbd className="px-2 py-1 bg-gray-700 rounded text-xs">Suppr</kbd>
+            <span className="text-gray-300">Supprimer</span>
+          </div>
+        </motion.div>
+      )}
       {/* Toolbar */}
       <div className="absolute top-4 left-4 z-30 flex gap-2">
         <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1">
@@ -209,11 +537,28 @@ export default function AffinityCanvas({
       <div
         ref={canvasRef}
         className="absolute inset-0"
-        style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
-        onMouseDown={handleCanvasMouseDown}
-        onMouseMove={handleCanvasMouseMove}
-        onMouseUp={handleCanvasMouseUp}
-        onMouseLeave={handleCanvasMouseUp}
+        style={{ cursor: isPanning ? 'grabbing' : (isSelecting ? 'crosshair' : 'grab') }}
+        onMouseDown={(e) => {
+          handleCanvasMouseDown(e); // Pan existant
+          handleCanvasMouseDownForSelection(e); // Nouveau: sélection rectangulaire
+          handleCanvasClick(e); // Nouveau: clic canvas
+        }}
+        onMouseMove={(e) => {
+          handleCanvasMouseMove(e); // Pan existant  
+          handleCanvasMouseMoveForSelection(e); // Nouveau: sélection rectangulaire
+        }}
+        onMouseUp={() => {
+          handleCanvasMouseUp(); // Pan existant
+          handleCanvasMouseUpForSelection(); // Nouveau: sélection rectangulaire
+        }}
+        onMouseLeave={() => {
+          handleCanvasMouseUp(); // Pan existant
+          handleCanvasMouseUpForSelection(); // Nouveau: sélection rectangulaire
+        }}
+        // onMouseDown={handleCanvasMouseDown}
+        // onMouseMove={handleCanvasMouseMove}
+        // onMouseUp={handleCanvasMouseUp}
+        // onMouseLeave={handleCanvasMouseUp}
         onDoubleClick={(e) => {
           if (e.target === canvasRef.current || (e.target as HTMLElement).closest('.canvas-content')) {
             const rect = canvasRef.current!.getBoundingClientRect();
@@ -247,22 +592,25 @@ export default function AffinityCanvas({
           {/* Groups avec Framer Motion */}
           {groups.map((group) => (
             <DraggableGroup
-              key={group.id}
-              group={group}
-              insights={insights}
-              scale={scale}
-              isHovered={hoveredGroup === group.id}
-              isDragOver={dragOverGroup === group.id}
               onHover={setHoveredGroup}
-              onMove={onGroupMove}
-              onDelete={handleDeleteGroup}
-              onTitleUpdate={handleTitleBlur}
-              onRemoveInsight={handleRemoveInsight}
-              onDragOver={handleGroupDragOver}
-              onDragLeave={handleGroupDragLeave}
-              onDrop={handleGroupDrop}
-              onInsightDragStart={handleInsightDragStart}
-              onInsightDragEnd={handleInsightDragEnd}
+             key={group.id}
+            group={group}
+            insights={insights}
+            scale={scale}
+            isHovered={hoveredGroup === group.id}
+            isDragOver={dragOverGroup === group.id}
+            isSelected={selectedGroups.has(group.id)}
+            onSelect={handleGroupClick}
+            onMove={handleGroupMove}
+            onDelete={handleDeleteGroup}
+            onTitleUpdate={handleTitleBlur}
+            onRemoveInsight={handleRemoveInsight}
+            onDragOver={handleGroupDragOver}
+            onDragLeave={handleGroupDragLeave}
+            onDrop={handleGroupDrop}
+            onInsightDragStart={handleInsightDragStart}
+            onInsightDragEnd={handleInsightDragEnd}
+            selectedGroupsCount={selectedGroups.size} 
             />
           ))}
         </div>
