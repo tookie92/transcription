@@ -76,6 +76,79 @@ function DraggableGroup({
     y.set(group.position.y);
   }, [group.position.x, group.position.y, x, y]);
 
+
+
+  // my handles
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+const [originalTitle, setOriginalTitle] = useState(group.title);
+
+
+
+const handleTitleClick = useCallback((e: React.MouseEvent) => {
+  e.stopPropagation();
+  setOriginalTitle(group.title);
+  setIsEditingTitle(true);
+  
+  // 🎪 Focus avec sélection intelligente
+  setTimeout(() => {
+    const element = e.currentTarget as HTMLHeadingElement;
+    element.focus();
+    
+    // Pour les titres courts, sélectionne tout
+    // Pour les titres longs, place le curseur à la fin
+    if (group.title.length < 30) {
+      document.execCommand('selectAll', false);
+    } else {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      range.collapse(false); // Place à la fin
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+  }, 10);
+}, [group.title]);
+
+const handleTitleBlur = useCallback((e: React.FocusEvent<HTMLHeadingElement>) => {
+  setIsEditingTitle(false);
+  const newTitle = e.currentTarget.textContent?.trim() || '';
+  
+  // 🎯 GESTION DES TITRES VIDES OU IDENTIQUES
+  if (!newTitle) {
+    // Titre vide → Restaure l'original
+    e.currentTarget.textContent = originalTitle;
+  } else if (newTitle === originalTitle) {
+    // Titre identique → Ne fait rien
+    return;
+  } else {
+    // Nouveau titre valide → Sauvegarde
+    onTitleUpdate(group.id, newTitle);
+  }
+}, [onTitleUpdate, group.id, originalTitle]);
+
+const handleTitleKeyDown = useCallback((e: React.KeyboardEvent<HTMLHeadingElement>) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    e.currentTarget.blur();
+  }
+  
+  if (e.key === 'Escape') {
+    e.currentTarget.textContent = originalTitle;
+    setIsEditingTitle(false);
+    // 🎪 Force le blur pour sortir du mode édition
+    (e.currentTarget as HTMLElement).blur();
+  }
+}, [originalTitle]);
+
+// 🆕 Met à jour originalTitle quand le titre du groupe change
+useEffect(() => {
+  if (!isEditingTitle) {
+    setOriginalTitle(group.title);
+  }
+}, [group.title, isEditingTitle]);
+
+  // end my handle
+
   const handleDragStart = useCallback(() => {
     setIsDragging(true);
   }, []);
@@ -93,21 +166,22 @@ function DraggableGroup({
     return () => onRemoveInsight(insightId, group.id);
   }, [onRemoveInsight, group.id]);
 
-  const handleTitleBlur = useCallback((e: React.FocusEvent<HTMLHeadingElement>) => {
-    onTitleUpdate(group.id, e.currentTarget.textContent || '');
-  }, [onTitleUpdate, group.id]);
+  // const handleTitleBlur = useCallback((e: React.FocusEvent<HTMLHeadingElement>) => {
+  //   onTitleUpdate(group.id, e.currentTarget.textContent || '');
+  // }, [onTitleUpdate, group.id]);
 
-  const handleTitleKeyDown = useCallback((e: React.KeyboardEvent<HTMLHeadingElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      e.currentTarget.blur();
-    }
-  }, []);
+  // const handleTitleKeyDown = useCallback((e: React.KeyboardEvent<HTMLHeadingElement>) => {
+  //   if (e.key === 'Enter') {
+  //     e.preventDefault();
+  //     e.currentTarget.blur();
+  //   }
+  // }, []);
 
-  const handleDeleteClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    onDelete(group.id);
-  }, [onDelete, group.id]);
+ const handleDeleteClick = useCallback((e: React.MouseEvent) => {
+  e.stopPropagation(); // 🚫 EMPÊCHE le clic de remonter au groupe
+  e.preventDefault(); // 🚫 Évite tout comportement par défaut
+  onDelete(group.id);
+}, [onDelete, group.id]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -185,51 +259,40 @@ function DraggableGroup({
     onDrop={(e) => onDrop(e, group.id)}
   >
       {/* Header */}
-<div 
-  className="flex items-center gap-2 px-3 py-2 border-b cursor-grab active:cursor-grabbing relative"
-  style={{ 
-    backgroundColor: `${group.color}15`,
-    borderColor: group.color 
-  }}
->
-  {/* 🆕 INDICATEUR DE SÉLECTION (point orange) */}
-  {isSelected && (
-    <div className="absolute -left-2 -top-2 w-3 h-3 bg-orange-500 rounded-full border-2 border-white shadow-sm" />
-  )}
-  
-  <GripVertical size={16} style={{ color: group.color }} className="shrink-0" />
+      <div 
+        className="flex items-center gap-2 px-3 py-2 border-b"
+        style={{ 
+          backgroundColor: `${group.color}15`,
+          borderColor: group.color 
+        }}
+      >
+        <GripVertical size={16} style={{ color: group.color }} className="shrink-0" />
 
-  <h3
-    className="flex-1 font-semibold text-sm outline-none px-1 rounded min-w-0"
-    contentEditable
-    suppressContentEditableWarning
-    style={{ color: group.color }}
-    onBlur={handleTitleBlur}
-    onKeyDown={handleTitleKeyDown}
-    onMouseDown={handleMouseDown}
-  >
-    {group.title}
-  </h3>
+        <h3
+          className="flex-1 font-semibold text-sm outline-none px-1 rounded min-w-0 cursor-text"
+          contentEditable
+          suppressContentEditableWarning
+          style={{ color: group.color }}
+          onClick={handleTitleClick} // 🆕 Gestion spécifique du clic
+          onBlur={handleTitleBlur}
+          onKeyDown={handleTitleKeyDown}
+          onMouseDown={handleMouseDown}
+        >
+          {group.title}
+        </h3>
 
-  {/* 🆕 BADGE NOMBRE DE GROUPES SÉLECTIONNÉS (si plusieurs) */}
-  {isSelected && (
-    <span className="text-xs bg-orange-500 text-white px-1.5 py-0.5 rounded-full font-medium">
-      {selectedGroupsCount} {/* Tu devras passer cette prop depuis le parent */}
-    </span>
-  )}
-
-  <motion.button
-    whileHover={{ scale: 1.1, rotate: 90 }}
-    whileTap={{ scale: 0.9 }}
-    onClick={handleDeleteClick}
-    className={`p-1 rounded hover:bg-red-50 text-red-500 transition-all shrink-0 ${
-      (isHovered || isSelected) ? 'opacity-100' : 'opacity-0' // 🆕 Toujours visible si sélectionné
-    }`}
-    title="Delete group"
-  >
-    <Trash2 size={14} />
-  </motion.button>
-</div>
+        <motion.button
+          whileHover={{ scale: 1.1, rotate: 90 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={handleDeleteClick}
+          className={`p-1 rounded hover:bg-red-50 text-red-500 transition-all shrink-0 ${
+            (isHovered || isSelected) ? 'opacity-100' : 'opacity-0'
+          }`}
+          title="Delete group"
+        >
+          <Trash2 size={14} />
+        </motion.button>
+      </div>
 
       {/* Insights Container */}
       <div 
