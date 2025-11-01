@@ -4,13 +4,14 @@ import { useEffect, useState, useCallback, memo } from "react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import { GripVertical, Trash2 } from "lucide-react";
+import { Id } from "@/convex/_generated/dataModel";
 
 interface AffinityGroup {
   id: string;
   title: string;
   color: string;
   position: { x: number; y: number };
-  insightIds: string[];
+  insightIds: Id<"insights">[]; // ← Même changement
 }
 
 interface Insight {

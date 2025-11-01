@@ -2,8 +2,9 @@
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import DraggableGroup from "./DraggableGroup";
-import { GripVertical, Move, Plus } from "lucide-react";
+import { GripVertical, Move, Plus, Redo2, Undo2 } from "lucide-react";
 import { motion, } from "framer-motion";
+import { Id } from "@/convex/_generated/dataModel";
 
 
 interface AffinityGroup {
@@ -11,11 +12,11 @@ interface AffinityGroup {
   title: string;
   color: string;
   position: { x: number; y: number };
-  insightIds: string[];
+  insightIds: Id<"insights">[];
 }
 
 interface Insight {
-  id: string;
+  id: string; // ← Laisser en string pour l'UI
   type: 'pain-point' | 'quote' | 'insight' | 'follow-up' | 'custom';
   text: string;
   timestamp: number;
@@ -31,6 +32,7 @@ interface AffinityCanvasProps {
   onGroupDelete?: (groupId: string) => void;
   onManualInsightCreate: (text: string, type: Insight['type']) => void;
   onGroupTitleUpdate?: (groupId: string, title: string) => void;
+  onGroupsReplace?: (groups: AffinityGroup[]) => void;
 }
 
 export default function AffinityCanvas({ 
@@ -42,7 +44,8 @@ export default function AffinityCanvas({
   onInsightRemoveFromGroup,
   onGroupDelete,
   onManualInsightCreate,
-  onGroupTitleUpdate
+  onGroupTitleUpdate,
+  onGroupsReplace
 }: AffinityCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -60,8 +63,88 @@ export default function AffinityCanvas({
 
   const availableInsights = useMemo(() => {
   const usedInsightIds = new Set(groups.flatMap(group => group.insightIds));
-  return insights.filter(insight => !usedInsightIds.has(insight.id));
+  return insights.filter(insight => !usedInsightIds.has(insight.id as Id<"insights">));
 }, [groups, insights]);
+
+// ==================== UNDO/REDO STATES ====================
+
+// 📚 Historique des états de groupes (pour undo/redo)
+const [history, setHistory] = useState<{ groups: AffinityGroup[]; timestamp: number }[]>([]);
+
+// 🎯 Index actuel dans l'historique
+const [historyIndex, setHistoryIndex] = useState(-1);
+
+// 🔄 Track les modifications pour éviter les sauvegardes inutiles
+const [lastActionTime, setLastActionTime] = useState(0);
+
+
+
+// ==================== HISTORY MANAGEMENT ====================
+
+// 💾 Sauvegarde l'état actuel dans l'historique
+const saveToHistory = useCallback((newGroups: AffinityGroup[], action: string = "modification") => {
+  const now = Date.now();
+  
+  // 🎪 Évite les sauvegardes trop rapprochées (pendant le drag par exemple)
+  if (now - lastActionTime < 500 && action === "drag") {
+    return;
+  }
+
+  setLastActionTime(now);
+
+  // 🎯 Crée une copie profonde des groupes
+  const groupsSnapshot = JSON.parse(JSON.stringify(newGroups));
+  
+  setHistory(prev => {
+    // 🗑️ Supprime les états "futurs" si on a fait undo puis une nouvelle action
+    const newHistory = prev.slice(0, historyIndex + 1);
+    
+    // 💾 Ajoute le nouvel état
+    newHistory.push({ 
+      groups: groupsSnapshot, 
+      timestamp: now 
+    });
+    
+    // 📏 Limite l'historique à 50 états maximum (évite la surcharge mémoire)
+    if (newHistory.length > 50) {
+      newHistory.shift(); // Supprime le plus ancien
+    }
+    
+    return newHistory;
+  });
+  
+  setHistoryIndex(prev => Math.min(prev + 1, 49)); // Met à jour l'index
+}, [historyIndex, lastActionTime]);
+
+// ==================== UNDO/REDO ACTIONS ====================
+// 🔄 MODIFIER LES FONCTIONS UNDO/REDO
+const undo = useCallback(() => {
+  if (historyIndex > 0) {
+    const newIndex = historyIndex - 1;
+    const previousState = history[newIndex];
+    
+    if (previousState && onGroupsReplace) {
+      console.log("🔄 UNDO - Restoring", previousState.groups.length, "groups");
+      onGroupsReplace(previousState.groups);
+    }
+    setHistoryIndex(newIndex);
+  }
+}, [historyIndex, history, onGroupsReplace]);
+
+const redo = useCallback(() => {
+  if (historyIndex < history.length - 1) {
+    const newIndex = historyIndex + 1;
+    const nextState = history[newIndex];
+    
+    if (nextState && onGroupsReplace) {
+      console.log("🔄 REDO - Restoring", nextState.groups.length, "groups");
+      onGroupsReplace(nextState.groups);
+    }
+    setHistoryIndex(newIndex);
+  }
+}, [historyIndex, history.length, history, onGroupsReplace]);
+
+
 
 
 // ==================== MULTISELECTION STATES ====================
@@ -236,7 +319,7 @@ const handleCanvasMouseUpForSelection = useCallback(() => {
 
 // ==================== MULTIPLE GROUP DRAG ====================
 
-// 🚀 Quand on déplace un groupe, déplace aussi les autres sélectionnés
+// 🔄 MODIFIER handleGroupMove pour sauvegarder
 const handleGroupMove = useCallback((groupId: string, newPosition: { x: number; y: number }) => {
   const draggedGroup = groups.find(g => g.id === groupId);
   if (!draggedGroup) return;
@@ -244,14 +327,13 @@ const handleGroupMove = useCallback((groupId: string, newPosition: { x: number; 
   const deltaX = newPosition.x - draggedGroup.position.x;
   const deltaY = newPosition.y - draggedGroup.position.y;
 
-  // 🎪 DRAG MULTIPLE : Si le groupe dragué est sélectionné ET qu'il y a d'autres groupes sélectionnés
+  // 🎪 DRAG MULTIPLE
   if (selectedGroups.has(groupId) && selectedGroups.size > 1) {
-    // 🚀 Crée un batch de mouvements pour éviter les re-rendus multiples
     const updates: Array<{ groupId: string; position: { x: number; y: number } }> = [];
     
     selectedGroups.forEach(selectedGroupId => {
       const group = groups.find(g => g.id === selectedGroupId);
-      if (group && selectedGroupId !== groupId) { // On exclut le groupe déjà déplacé
+      if (group && selectedGroupId !== groupId) {
         updates.push({
           groupId: selectedGroupId,
           position: {
@@ -262,15 +344,39 @@ const handleGroupMove = useCallback((groupId: string, newPosition: { x: number; 
       }
     });
     
-    // 🎪 Applique tous les mouvements en une fois
+    // 🚀 Applique tous les mouvements
     updates.forEach(update => {
       onGroupMove(update.groupId, update.position);
     });
   }
   
-  // 🎪 Toujours déplacer le groupe principal (celui qu'on drag)
+  // 🚀 Déplace le groupe principal
   onGroupMove(groupId, newPosition);
-}, [groups, selectedGroups, onGroupMove]);
+  
+  // 💾 SAUVEGARDE DANS L'HISTORIQUE après le drag
+  setTimeout(() => {
+    saveToHistory(groups, "drag");
+  }, 100);
+}, [groups, selectedGroups, onGroupMove, saveToHistory]);
+
+// 🔄 MODIFIER handleGroupCreate pour sauvegarder
+const handleGroupCreate = useCallback((position: { x: number; y: number }) => {
+  onGroupCreate(position);
+  
+  // 💾 SAUVEGARDE après un court délai
+  setTimeout(() => {
+    saveToHistory(groups, "create_group");
+  }, 100);
+}, [onGroupCreate, groups, saveToHistory]);
+
+// 🔄 MODIFIER handleDeleteGroup pour sauvegarder
+const handleDeleteGroup = useCallback((groupId: string) => {
+  // 💾 SAUVEGARDE AVANT la suppression
+  saveToHistory(groups, "delete_group");
+  
+  onGroupDelete?.(groupId);
+}, [onGroupDelete, groups, saveToHistory]);
+
 
 // ==================== SELECTION ACTIONS ====================
 
@@ -280,30 +386,12 @@ const deleteSelectedGroups = useCallback(() => {
   setSelectedGroups(new Set()); // Vide la sélection après suppression
 }, [selectedGroups, onGroupDelete]);
 
-// 🎨 Changer la couleur de tous les groupes sélectionnés
-const changeSelectedGroupsColor = useCallback((color: string) => {
-  // Implémentation pour changer la couleur des groupes sélectionnés
-  selectedGroups.forEach(groupId => {
-    // Tu peux ajouter une mutation pour update group color
-  });
-}, [selectedGroups]);
 
-// 📋 Copier les groupes sélectionnés (pour dupliquer)
-const duplicateSelectedGroups = useCallback(() => {
-  selectedGroups.forEach(groupId => {
-    const group = groups.find(g => g.id === groupId);
-    if (group) {
-      onGroupCreate({ 
-        x: group.position.x + 20, 
-        y: group.position.y + 20 
-      });
-    }
-  });
-}, [selectedGroups, groups, onGroupCreate]);
+
 
 // ==================== KEYBOARD SHORTCUTS ====================
 
-// ==================== KEYBOARD SHORTCUTS ====================
+
 
 useEffect(() => {
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -317,6 +405,26 @@ useEffect(() => {
     if ((e.key === 'Delete' || e.key === 'Backspace') && selectedGroups.size > 0) {
       e.preventDefault();
       deleteSelectedGroups();
+    }
+
+    const isTypingInInput = e.target instanceof HTMLInputElement || 
+                           e.target instanceof HTMLTextAreaElement;
+    
+    if (isTypingInInput) return;
+
+     // ↩️ UNDO : Ctrl+Z
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      undo();
+      return;
+    }
+    
+    // ↪️ REDO : Ctrl+Shift+Z ou Ctrl+Y
+    if (((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) || 
+        ((e.ctrlKey || e.metaKey) && e.key === 'y')) {
+      e.preventDefault();
+      redo();
+      return;
     }
     
     // ⎈ CTRL+A : Sélectionne tous les groupes
@@ -336,30 +444,37 @@ useEffect(() => {
   return () => document.removeEventListener('keydown', handleKeyDown);
 }, [selectedGroups, groups, deleteSelectedGroups, handleEscapeKey, handleArrowKeys]);
 
+// 💾 SAUVEGARDE QUAND LES GROUPES CHANGENT (sauf pendant undo/redo)
 useEffect(() => {
-  const handleKeyDown = (e: KeyboardEvent) => {
-    // 🗑️ SUPPR/DELETE : Supprime les groupes sélectionnés
-    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedGroups.size > 0) {
-      e.preventDefault();
-      deleteSelectedGroups();
+  if (history.length > 0 && historyIndex >= 0) {
+    const currentState = history[historyIndex];
+    // Vérifie si les groupes ont vraiment changé
+    if (currentState && JSON.stringify(currentState.groups) !== JSON.stringify(groups)) {
+      saveToHistory(groups, "groups_change");
     }
-    
-    // ⎈ CTRL+A : Sélectionne tous les groupes
-    if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
-      e.preventDefault();
-      setSelectedGroups(new Set(groups.map(g => g.id)));
-    }
-    
-    // ⎈ CTRL+D : Désélectionne tout
-    if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
-      e.preventDefault();
-      setSelectedGroups(new Set());
-    }
-  };
+  }
+}, [groups, history, historyIndex, saveToHistory]);
 
-  document.addEventListener('keydown', handleKeyDown);
-  return () => document.removeEventListener('keydown', handleKeyDown);
-}, [selectedGroups, groups, deleteSelectedGroups]);
+// 💾 INITIALISE L'HISTORIQUE quand les groupes changent
+useEffect(() => {
+  if (groups.length > 0 && history.length === 0) {
+    console.log("💾 Initializing history with", groups.length, "groups");
+    saveToHistory(groups, "initial");
+    setHistoryIndex(0);
+  }
+}, [groups, history.length, saveToHistory]);
+
+// 💾 SAUVEGARDE AUTOMATIQUE quand les groupes changent significativement
+useEffect(() => {
+  if (history.length > 0 && historyIndex >= 0) {
+    const currentState = history[historyIndex];
+    // Vérifie si les groupes ont vraiment changé (évite les sauvegardes en boucle)
+    if (currentState && JSON.stringify(currentState.groups) !== JSON.stringify(groups)) {
+      console.log("💾 Auto-saving history - groups changed");
+      saveToHistory(groups, "auto_save");
+    }
+  }
+}, [groups, history, historyIndex, saveToHistory]);
 
 
 // ==================== end Neuen Sta ====================
@@ -445,9 +560,12 @@ useEffect(() => {
   };
 
   // ==================== ACTIONS ====================
-  const handleDeleteGroup = (groupId: string) => {
-    onGroupDelete?.(groupId);
-  };
+ const handleDeleteGroupCallback = useCallback((groupId: string) => {
+  // 💾 SAUVEGARDE AVANT la suppression
+  saveToHistory(groups, "delete_group");
+  
+  onGroupDelete?.(groupId);
+}, [onGroupDelete, groups, saveToHistory]);
 
   const handleRemoveInsight = (insightId: string, groupId: string) => {
     onInsightRemoveFromGroup?.(insightId, groupId);
@@ -498,6 +616,25 @@ useEffect(() => {
       )}
       {/* Toolbar */}
       <div className="absolute top-4 left-4 z-30 flex gap-2">
+        {/* 🎪 UNDO/REDO BUTTONS */}
+        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1">
+          <button 
+            onClick={undo}
+            disabled={historyIndex <= 0}
+            className="w-8 h-8 rounded hover:bg-gray-100 flex items-center justify-center text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo2 size={16} />
+          </button>
+          <button 
+            onClick={redo}
+            disabled={historyIndex >= history.length - 1}
+            className="w-8 h-8 rounded hover:bg-gray-100 flex items-center justify-center text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Redo (Ctrl+Shift+Z)"
+          >
+            <Redo2 size={16} />
+          </button>
+        </div>
         <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1">
           <button 
             onClick={() => setScale(s => Math.min(3, s + 0.1))}
@@ -602,7 +739,7 @@ useEffect(() => {
             isSelected={selectedGroups.has(group.id)}
             onSelect={handleGroupClick}
             onMove={handleGroupMove}
-            onDelete={handleDeleteGroup}
+            onDelete={handleDeleteGroupCallback}
             onTitleUpdate={handleTitleBlur}
             onRemoveInsight={handleRemoveInsight}
             onDragOver={handleGroupDragOver}

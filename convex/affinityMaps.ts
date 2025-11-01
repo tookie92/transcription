@@ -445,3 +445,26 @@ export const updateGroups = mutation({
     });
   },
 });
+
+// 🆕 AJOUTER CETTE MUTATION
+export const replaceAllGroups = mutation({
+  args: {
+    mapId: v.id("affinityMaps"),
+    groups: v.array(v.object({
+      id: v.string(),
+      title: v.string(),
+      color: v.string(),
+      position: v.object({ x: v.number(), y: v.number() }),
+      insightIds: v.array(v.id("insights")),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    await ctx.db.patch(args.mapId, {
+      groups: args.groups,
+      updatedAt: Date.now(),
+    });
+  },
+});

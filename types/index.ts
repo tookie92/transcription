@@ -1,5 +1,7 @@
 // types/index.ts
 
+import { Id } from "@/convex/_generated/dataModel";
+
 // Transcription types
 export interface TranscriptionSegment {
   id: number;
@@ -90,7 +92,7 @@ export interface AffinityGroup {
   title: string;    // ← CORRECT : 'title'
   color: string;
   position: { x: number; y: number };
-  insightIds: string[];
+  insightIds: Id<"insights">[];
 }
 
 // API Request/Response types
@@ -222,7 +224,7 @@ export interface AffinityGroup {
   title: string;  // ← Doit être 'title' pas 'name'
   color: string;
   position: { x: number; y: number };
-  insightIds: string[];
+  insightIds: Id<"insights">[];
 }
 
 export interface AffinityMap {

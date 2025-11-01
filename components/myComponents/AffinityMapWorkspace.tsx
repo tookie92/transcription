@@ -6,9 +6,10 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 
 import { Id } from "@/convex/_generated/dataModel";
-import {  Insight } from "@/types";
+import {  AffinityGroup, Insight } from "@/types";
 import { toast } from "sonner";
 import AffinityCanvas from "./AffinityCanvas";
+
 
 interface AffinityMapWorkspaceProps {
   projectId: Id<"projects">;
@@ -72,6 +73,24 @@ const handleInsightRemoveFromGroup = async (insightId: string, groupId: string) 
     });
   } catch (error) {
     console.error("Failed to remove insight from group:", error);
+  }
+};
+
+// 🆕 AJOUTER CETTE MUTATION
+const replaceAllGroups = useMutation(api.affinityMaps.replaceAllGroups);
+
+// 🆕 HANDLER POUR UNDO/REDO
+const handleGroupsReplace = async (newGroups: AffinityGroup[]) => {
+  if (!affinityMap) return;
+  
+  try {
+    await replaceAllGroups({
+      mapId: affinityMap._id,
+      groups: newGroups
+    });
+  } catch (error) {
+    console.error("Failed to replace groups:", error);
+    toast.error("Failed to undo/redo");
   }
 };
 
@@ -171,7 +190,7 @@ const handleManualInsightCreate = async (text: string, type: Insight['type']) =>
   // Adapter les données pour le canvas - CORRIGÉ
   const groups = affinityMap?.groups || [];
 const insights = insightsData?.map(insight => ({
-  id: insight._id,
+  id: insight._id, // ← Déjà Id<"insights">
   interviewId: insight.interviewId, // ← Peut être undefined maintenant
   projectId: insight.projectId,
   type: insight.type,
@@ -253,6 +272,8 @@ const insights = insightsData?.map(insight => ({
           onGroupDelete={handleGroupDelete}
           onGroupTitleUpdate={handleGroupTitleUpdate}
           onManualInsightCreate={handleManualInsightCreate}
+          onGroupsReplace={handleGroupsReplace}
+
         />
 
        
