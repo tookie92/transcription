@@ -5,6 +5,13 @@ import DraggableGroup from "./DraggableGroup";
 import { GripVertical, Move, Plus, Redo2, Undo2 } from "lucide-react";
 import { motion, } from "framer-motion";
 import { Id } from "@/convex/_generated/dataModel";
+import ConnectionsLayer from "./ConnectionLayer";
+import { useAffinityToasts } from "@/hooks/useAffinityToasts";
+import { toast } from "sonner";
+import { GroupConnection } from "@/types";
+import { Button } from "../ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
+
 
 
 interface AffinityGroup {
@@ -33,6 +40,11 @@ interface AffinityCanvasProps {
   onManualInsightCreate: (text: string, type: Insight['type']) => void;
   onGroupTitleUpdate?: (groupId: string, title: string) => void;
   onGroupsReplace?: (groups: AffinityGroup[]) => void;
+
+    connections?: GroupConnection[];
+  onConnectionCreate?: (sourceId: string, targetId: string, type: GroupConnection['type']) => void;
+  onConnectionDelete?: (connectionId: Id<"groupConnections">) => void;
+  onConnectionUpdate?: (connectionId: Id<"groupConnections">, updates: Partial<GroupConnection>) => void;
 }
 
 export default function AffinityCanvas({ 
@@ -45,7 +57,11 @@ export default function AffinityCanvas({
   onGroupDelete,
   onManualInsightCreate,
   onGroupTitleUpdate,
-  onGroupsReplace
+  onGroupsReplace,
+  connections = [], // 🆕 Valeur par défaut
+  onConnectionCreate,
+  onConnectionDelete,
+  onConnectionUpdate
 }: AffinityCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -65,6 +81,158 @@ export default function AffinityCanvas({
   const usedInsightIds = new Set(groups.flatMap(group => group.insightIds));
   return insights.filter(insight => !usedInsightIds.has(insight.id as Id<"insights">));
 }, [groups, insights]);
+
+
+ // 🆕 INITIALISER LES TOASTS
+  const {
+    notifyConnectionCreated,
+    notifyConnectionCreationStarted,
+    notifyConnectionCreationCancelled,
+    notifyConnectionDeleted,
+    notifyConnectionError,
+  } = useAffinityToasts();
+
+
+  
+
+ 
+
+  // 🗑️ MODIFIER LA SUPPRESSION DE CONNECTION
+  
+
+  // 🖱️ MODIFIER LE CLIC SUR UNE CONNECTION
+ // 🖱️ MODIFIER LE CLIC SUR UNE CONNECTION POUR INCLURE L'OPTION DELETE
+
+
+
+
+
+  // end toasts
+const [selectedConnection, setSelectedConnection] = useState<GroupConnection | null>(null);
+
+// 🖱️ MODIFIER LA SUPPRESSION DE CONNECTION POUR UTILISER LE BON HANDLER
+const handleConnectionDelete = useCallback((connectionId: Id<"groupConnections">) => {
+  const connection = connections.find(c => c.id === connectionId);
+  
+  // 🎯 OUVRE UN MODAL DE CONFIRMATION AVEC TOAST
+  const shouldDelete = window.confirm(
+    `Delete connection "${connection?.label || connection?.type}"?\n\n` +
+    `From: ${groups.find(g => g.id === connection?.sourceGroupId)?.title}\n` +
+    `To: ${groups.find(g => g.id === connection?.targetGroupId)?.title}`
+  );
+  
+  if (shouldDelete) {
+    onConnectionDelete?.(connectionId);
+    notifyConnectionDeleted(connection?.label);
+  }
+}, [connections, groups, onConnectionDelete, notifyConnectionDeleted]);
+
+
+// 🖱️ MODIFIER LE CLIC SUR UNE CONNECTION POUR OUVRIR LE DIALOG
+const handleConnectionClick = useCallback((connection: GroupConnection) => {
+  console.log("🔗 Connection clicked:", connection);
+  setSelectedConnection(connection);
+}, []);
+
+// 🆕 HANDLER POUR FERMER LE DIALOG
+const handleCloseConnectionDialog = useCallback(() => {
+  setSelectedConnection(null);
+}, []);
+
+// 🆕 HANDLER POUR SUPPRIMER DEPUIS LE DIALOG
+const handleDeleteFromDialog = useCallback(() => {
+  if (selectedConnection) {
+    handleConnectionDelete(selectedConnection.id);
+    setSelectedConnection(null);
+  }
+}, [selectedConnection, handleConnectionDelete]);
+
+// 🆕 HANDLER POUR ÉDITER DEPUIS LE DIALOG
+const handleEditFromDialog = useCallback(() => {
+  if (selectedConnection) {
+    // TODO: Ouvrir le modal d'édition des connections
+    console.log("Edit connection:", selectedConnection.id);
+    // On pourrait ouvrir un autre dialog d'édition ici
+    handleCloseConnectionDialog();
+  }
+}, [selectedConnection, handleCloseConnectionDialog]);
+
+
+ // 🆕 STATE POUR LA POSITION DE LA SOURIS (pour la connection temporaire)
+  const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+const [editingTitle, setEditingTitle] = useState("");
+
+// 🆕 HANDLERS POUR LE CONTEXT MENU
+const handleRenameRequest = useCallback((groupId: string) => {
+  const group = groups.find(g => g.id === groupId);
+  if (group) {
+    setEditingGroupId(groupId);
+    setEditingTitle(group.title);
+  }
+}, [groups]);
+
+const handleTitleEditSave = useCallback(() => {
+  if (editingGroupId && editingTitle.trim()) {
+    onGroupTitleUpdate?.(editingGroupId, editingTitle.trim());
+  }
+  setEditingGroupId(null);
+  setEditingTitle("");
+}, [editingGroupId, editingTitle, onGroupTitleUpdate]);
+
+const handleTitleEditCancel = useCallback(() => {
+  setEditingGroupId(null);
+  setEditingTitle("");
+}, []);
+
+// 🆕 HANDLER POUR LA CRÉATION DE CONNECTION DEPUIS LE MENU
+const handleCreateConnectionFromGroup = useCallback((groupId: string) => {
+  setConnectionMode('related'); // Mode par défaut
+  setConnectionStart(groupId);
+  console.log(`🔗 Connection started from context menu: ${groupId}`);
+}, []);
+
+
+
+
+  
+
+
+  // 🆕 STATES POUR LE MODE CONNECTION
+  const [connectionMode, setConnectionMode] = useState<GroupConnection['type'] | null>(null);
+  const [connectionStart, setConnectionStart] = useState<string | null>(null);
+
+
+
+   // 🖱️ MODIFIER LE HANDLER DE CRÉATION POUR ÊTRE PLUS INTELLIGENT
+ // Simplifier le handler de création
+const handleGroupConnectionStart = useCallback((groupId: string) => {
+  if (connectionMode && connectionStart && connectionStart !== groupId) {
+    // Créer la connection directement
+    onConnectionCreate?.(connectionStart, groupId, connectionMode);
+    setConnectionStart(null);
+    setConnectionMode(null);
+  } else if (connectionMode && !connectionStart) {
+    // Premier clic : mémoriser le groupe de départ
+    setConnectionStart(groupId);
+    toast.info(`Click another group to connect with ${groups.find(g => g.id === groupId)?.title}`);
+  }
+}, [connectionMode, connectionStart, groups, onConnectionCreate]);
+
+  // 🖱️ HANDLER POUR DÉMARRER UNE CONNECTION
+  // const handleGroupConnectionStart = useCallback((groupId: string) => {
+  //   if (connectionMode && !connectionStart) {
+  //     // 🎯 Premier clic : mémorise le groupe de départ
+  //     setConnectionStart(groupId);
+  //     console.log(`🔗 Connection started from group: ${groupId}`);
+  //   } else if (connectionMode && connectionStart && connectionStart !== groupId) {
+  //     // 🎯 Deuxième clic : crée la connection
+  //     console.log(`🔗 Creating connection: ${connectionStart} → ${groupId} (${connectionMode})`);
+  //     onConnectionCreate?.(connectionStart, groupId, connectionMode);
+  //     setConnectionStart(null);
+  //     setConnectionMode(null);
+  //   }
+  // }, [connectionMode, connectionStart, onConnectionCreate]);
 
 // ==================== UNDO/REDO STATES ====================
 
@@ -225,6 +393,23 @@ const handleArrowKeys = useCallback((e: KeyboardEvent) => {
 
 
 
+// ============== Theme Groups ==============
+
+ // 🖱️ HANDLER POUR TRACKER LA SOURIS DURANT LA CRÉATION
+ 
+  const handleCanvasMouseMoveForConnection = useCallback((e: React.MouseEvent) => {
+    if (connectionMode && connectionStart) {
+      const rect = canvasRef.current!.getBoundingClientRect();
+      const x = (e.clientX - rect.left - position.x) / scale;
+      const y = (e.clientY - rect.top - position.y) / scale;
+      setMousePosition({ x, y });
+    }
+  }, [connectionMode, connectionStart, position.x, position.y, scale]);
+
+  
+
+
+
 // ==================== SELECTION HANDLERS ====================
 
 // 🖱️ Quand on clique sur un groupe
@@ -267,12 +452,20 @@ const handleGroupClick = useCallback((groupId: string, e: React.MouseEvent) => {
 }, [groups, selectionAnchor]);
 
 // 🖱️ Quand on clique sur le canvas vide : efface la sélection
-const handleCanvasClick = useCallback((e: React.MouseEvent) => {
-  if (e.target === canvasRef.current) {
-    setSelectedGroups(new Set());
-    setSelectionAnchor(null);
-  }
-}, []);
+// 🖱️ MODIFIER handleCanvasClick POUR ANNULER LES CONNECTIONS
+  const handleCanvasClick = useCallback((e: React.MouseEvent) => {
+    if (e.target === canvasRef.current) {
+      setSelectedGroups(new Set());
+      setSelectionAnchor(null);
+      
+      // 🚫 Annule la création de connection si on clique sur le canvas
+      if (connectionStart) {
+        console.log("❌ Connection cancelled");
+        setConnectionStart(null);
+        setConnectionMode(null);
+      }
+    }
+  }, [connectionStart]);
 
 // 🎪 SELECTION RECTANGULAIRE (drag pour sélectionner plusieurs groupes)
 const handleCanvasMouseDownForSelection = useCallback((e: React.MouseEvent) => {
@@ -315,11 +508,24 @@ const handleCanvasMouseUpForSelection = useCallback(() => {
   setSelectionBox(null);
 }, []);
 
+   // 🚫 MODIFIER L'ANNULATION DE CRÉATION
+  const cancelConnectionCreation = useCallback(() => {
+    if (connectionStart) {
+      console.log("❌ Connection creation cancelled");
+      setConnectionStart(null);
+      setConnectionMode(null);
+      setMousePosition(null);
+      notifyConnectionCreationCancelled();
+    }
+  }, [connectionStart, notifyConnectionCreationCancelled]);
 
+
+  
 
 // ==================== MULTIPLE GROUP DRAG ====================
 
 // 🔄 MODIFIER handleGroupMove pour sauvegarder
+// Dans handleGroupMove, s'assurer qu'il n'y a pas de division par scale
 const handleGroupMove = useCallback((groupId: string, newPosition: { x: number; y: number }) => {
   const draggedGroup = groups.find(g => g.id === groupId);
   if (!draggedGroup) return;
@@ -327,7 +533,7 @@ const handleGroupMove = useCallback((groupId: string, newPosition: { x: number; 
   const deltaX = newPosition.x - draggedGroup.position.x;
   const deltaY = newPosition.y - draggedGroup.position.y;
 
-  // 🎪 DRAG MULTIPLE
+  // Drag multiple
   if (selectedGroups.has(groupId) && selectedGroups.size > 1) {
     const updates: Array<{ groupId: string; position: { x: number; y: number } }> = [];
     
@@ -344,16 +550,16 @@ const handleGroupMove = useCallback((groupId: string, newPosition: { x: number; 
       }
     });
     
-    // 🚀 Applique tous les mouvements
+    // Appliquer tous les mouvements
     updates.forEach(update => {
       onGroupMove(update.groupId, update.position);
     });
   }
   
-  // 🚀 Déplace le groupe principal
+  // Déplacer le groupe principal
   onGroupMove(groupId, newPosition);
   
-  // 💾 SAUVEGARDE DANS L'HISTORIQUE après le drag
+  // Sauvegarder dans l'historique
   setTimeout(() => {
     saveToHistory(groups, "drag");
   }, 100);
@@ -377,6 +583,34 @@ const handleDeleteGroup = useCallback((groupId: string) => {
   onGroupDelete?.(groupId);
 }, [onGroupDelete, groups, saveToHistory]);
 
+// ici
+ // 🖱️ MODIFIER LE HANDLER DE MOUVEMENT SOURIS PRINCIPAL
+  // const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
+  //   // Pan existant
+  //   if (isPanning && e.buttons === 1) {
+  //     setPosition(prev => ({
+  //       x: prev.x + e.movementX,
+  //       y: prev.y + e.movementY
+  //     }));
+  //   }
+    
+  //   // 🆕 Tracking souris pour les connections
+  //   handleCanvasMouseMoveForConnection(e);
+    
+  //   // Sélection rectangulaire existante
+  //   handleCanvasMouseMoveForSelection(e);
+  // }, [isPanning, handleCanvasMouseMoveForConnection, handleCanvasMouseMoveForSelection]);
+
+  // 🖱️ MODIFIER LE HANDLER DE CLIC CANVAS
+  // const handleCanvasClick = useCallback((e: React.MouseEvent) => {
+  //   if (e.target === canvasRef.current) {
+  //     setSelectedGroups(new Set());
+  //     setSelectionAnchor(null);
+      
+  //     // 🚫 Annule la création de connection si on clique sur le canvas vide
+  //     cancelConnectionCreation();
+  //   }
+  // }, [cancelConnectionCreation]);
 
 // ==================== SELECTION ACTIONS ====================
 
@@ -437,6 +671,24 @@ useEffect(() => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
       e.preventDefault();
       setSelectedGroups(new Set());
+    }
+
+     // 🚫 ESC : Annule aussi la création de connection
+      if (e.key === 'Escape' && connectionStart) {
+        e.preventDefault();
+        cancelConnectionCreation();
+      }
+
+        // 🎯 ENTER pour sauvegarder l'édition
+    if (editingGroupId && e.key === 'Enter') {
+      e.preventDefault();
+      handleTitleEditSave();
+    }
+    
+    // 🎯 ESC pour annuler l'édition
+    if (editingGroupId && e.key === 'Escape') {
+      e.preventDefault();
+      handleTitleEditCancel();
     }
   };
 
@@ -504,18 +756,38 @@ useEffect(() => {
     }
   };
 
-  const handleCanvasMouseMove = (e: React.MouseEvent) => {
-    if (isPanning && e.buttons === 1) {
-      setPosition(prev => ({
-        x: prev.x + e.movementX,
-        y: prev.y + e.movementY
-      }));
-    }
-  };
+  // Nouveau state ConnectionsLayer
+  
 
-  const handleCanvasMouseUp = () => {
-    setIsPanning(false);
-  };
+  //Fin State ConnectionsLayer
+
+ // 2. LE HANDLER EST UTILISÉ DANS handleCanvasMouseMove :
+  // 🖱️ MODIFIER LE HANDLER DE MOUVEMENT POUR BIEN TRACKER
+// Dans handleCanvasMouseMove, vérifier le calcul
+const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
+  if (isPanning && e.buttons === 1) {
+    setPosition(prev => ({
+      x: prev.x + e.movementX,
+      y: prev.y + e.movementY
+    }));
+  }
+  
+  // 🆕 CALCUL EXACT DES COORDONNÉES SOURIS
+  if (connectionMode && connectionStart) {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    // Coordonnées absolues dans le SVG
+    const x = (e.clientX - rect.left);
+    const y = (e.clientY - rect.top);
+    setMousePosition({ x, y });
+  }
+  
+  handleCanvasMouseMoveForSelection(e);
+}, [isPanning, connectionMode, connectionStart, handleCanvasMouseMoveForSelection]);
+
+
+    const handleCanvasMouseUp = () => {
+      setIsPanning(false);
+    };
 
   // ==================== DRAG INSIGHT ====================
   const handleInsightDragStart = (e: React.DragEvent, insightId: string) => {
@@ -586,7 +858,46 @@ useEffect(() => {
   };
 
   return (
-    <div className="h-full relative bg-gray-50 overflow-hidden">
+   <div className="h-full relative bg-gray-50 overflow-hidden">
+
+
+      {/* 🆕 MODAL D'ÉDITION DE TITRE */}
+      {editingGroupId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-96 shadow-2xl">
+            <h3 className="text-lg font-semibold mb-4">Renommer le groupe</h3>
+            
+            <input
+              type="text"
+              value={editingTitle}
+              onChange={(e) => setEditingTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleTitleEditSave();
+                if (e.key === 'Escape') handleTitleEditCancel();
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
+              placeholder="Nom du groupe..."
+              autoFocus
+            />
+            
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={handleTitleEditCancel}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleTitleEditSave}
+                disabled={!editingTitle.trim()}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                Sauvegarder
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* 🎪 INDICATEUR RACCOURCIS CLAVIER */}
       {selectedGroups.size > 0 && (
         <motion.div 
@@ -616,6 +927,59 @@ useEffect(() => {
       )}
       {/* Toolbar */}
       <div className="absolute top-4 left-4 z-30 flex gap-2">
+      {/* Connection Tools - Version simplifiée */}
+<div className="bg-white rounded-lg shadow-lg border border-gray-200 p-2">
+  <div className="text-xs text-gray-600 mb-1">Create Connection:</div>
+  <div className="flex gap-1">
+    {[
+      { type: 'related' as const, icon: '🔗', label: 'Related' },
+      { type: 'hierarchy' as const, icon: '📊', label: 'Hierarchy' },
+      { type: 'dependency' as const, icon: '⚡', label: 'Dependency' },
+      { type: 'contradiction' as const, icon: '⚠️', label: 'Contradiction' },
+    ].map(({ type, icon, label }) => (
+      <button
+        key={type}
+        onClick={() => {
+          const newMode = connectionMode === type ? null : type;
+          setConnectionMode(newMode);
+          setConnectionStart(null);
+          
+          if (newMode) {
+            toast.info(`Click two groups to create ${label} connection`);
+          }
+        }}
+        className={`w-8 h-8 rounded flex items-center justify-center text-sm ${
+          connectionMode === type 
+            ? 'bg-blue-100 text-blue-700 border border-blue-300' 
+            : 'hover:bg-gray-100 text-gray-700 border border-transparent'
+        }`}
+        title={`${label} Connection`}
+      >
+        {icon}
+      </button>
+    ))}
+    
+    {connectionStart && (
+      <button
+        onClick={() => {
+          setConnectionStart(null);
+          setConnectionMode(null);
+          toast.info("Connection cancelled");
+        }}
+        className="w-8 h-8 rounded flex items-center justify-center bg-red-100 text-red-700 border border-red-300"
+        title="Cancel"
+      >
+        ✕
+      </button>
+    )}
+  </div>
+  
+  {connectionStart && (
+    <div className="text-xs text-blue-600 mt-1">
+      Now click another group to connect...
+    </div>
+  )}
+</div>
         {/* 🎪 UNDO/REDO BUTTONS */}
         <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1">
           <button 
@@ -674,7 +1038,7 @@ useEffect(() => {
       <div
         ref={canvasRef}
         className="absolute inset-0"
-        style={{ cursor: isPanning ? 'grabbing' : (isSelecting ? 'crosshair' : 'grab') }}
+         style={{ cursor: isPanning ? 'grabbing' : (isSelecting ? 'crosshair' : (connectionMode ? 'crosshair' : 'grab')) }}
         onMouseDown={(e) => {
           handleCanvasMouseDown(e); // Pan existant
           handleCanvasMouseDownForSelection(e); // Nouveau: sélection rectangulaire
@@ -726,6 +1090,9 @@ useEffect(() => {
             }}
           />
 
+        
+
+
           {/* Groups avec Framer Motion */}
           {groups.map((group) => (
             <DraggableGroup
@@ -737,7 +1104,14 @@ useEffect(() => {
             isHovered={hoveredGroup === group.id}
             isDragOver={dragOverGroup === group.id}
             isSelected={selectedGroups.has(group.id)}
-            onSelect={handleGroupClick}
+            onSelect={(groupId, e) => {
+                // 🎯 Gère les clics normaux ET les connections
+                if (connectionMode) {
+                  handleGroupConnectionStart(groupId);
+                } else {
+                  handleGroupClick(groupId, e);
+                }
+              }}
             onMove={handleGroupMove}
             onDelete={handleDeleteGroupCallback}
             onTitleUpdate={handleTitleBlur}
@@ -748,10 +1122,20 @@ useEffect(() => {
             onInsightDragStart={handleInsightDragStart}
             onInsightDragEnd={handleInsightDragEnd}
             selectedGroupsCount={selectedGroups.size} 
+              // 🆕 NOUVELLES PROPS
+            onRenameRequest={handleRenameRequest}
+            onCreateConnectionFromGroup={handleCreateConnectionFromGroup}
             />
           ))}
         </div>
       </div>
+
+       {/* 🔗 LAYER DES CONNECTIONS AVEC MODE CRÉATION */}
+        <ConnectionsLayer
+          groups={groups}
+          connections={connections}
+          onConnectionClick={handleConnectionClick} // Seulement pour ouvrir le modal
+        />
 
       {/* Insights Panel */}
       <div className="absolute right-4 top-4 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-20 overflow-hidden">
@@ -853,6 +1237,138 @@ useEffect(() => {
           )}
         </div>
       </div>
+
+      {/* 🆕 DIALOG SHADCN POUR LES DÉTAILS DE CONNECTION */}
+    <Dialog open={!!selectedConnection} onOpenChange={handleCloseConnectionDialog}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <div className={`w-3 h-3 rounded-full ${
+              selectedConnection?.type === 'related' ? 'bg-purple-500' :
+              selectedConnection?.type === 'hierarchy' ? 'bg-blue-500' :
+              selectedConnection?.type === 'dependency' ? 'bg-green-500' :
+              'bg-red-500'
+            }`} />
+            Connection Details
+          </DialogTitle>
+          <DialogDescription>
+            View and manage connection between groups
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {/* TYPE DE CONNECTION */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">Connection Type</span>
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${
+                selectedConnection?.type === 'related' ? 'bg-purple-500' :
+                selectedConnection?.type === 'hierarchy' ? 'bg-blue-500' :
+                selectedConnection?.type === 'dependency' ? 'bg-green-500' :
+                'bg-red-500'
+              }`} />
+              <span className="text-sm capitalize px-2 py-1 rounded bg-gray-100">
+                {selectedConnection?.type}
+              </span>
+            </div>
+          </div>
+
+          {/* GROUPES CONNECTÉS */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <span className="text-sm font-medium text-gray-600">From Group</span>
+              <div className="p-3 border rounded-lg bg-gray-50">
+                <div className="flex items-center gap-2 mb-1">
+                  <div 
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: groups.find(g => g.id === selectedConnection?.sourceGroupId)?.color }}
+                  />
+                  <span className="text-sm font-medium">
+                    {groups.find(g => g.id === selectedConnection?.sourceGroupId)?.title}
+                  </span>
+                </div>
+                <span className="text-xs text-gray-500">
+                  {groups.find(g => g.id === selectedConnection?.sourceGroupId)?.insightIds.length} insights
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-sm font-medium text-gray-600">To Group</span>
+              <div className="p-3 border rounded-lg bg-gray-50">
+                <div className="flex items-center gap-2 mb-1">
+                  <div 
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: groups.find(g => g.id === selectedConnection?.targetGroupId)?.color }}
+                  />
+                  <span className="text-sm font-medium">
+                    {groups.find(g => g.id === selectedConnection?.targetGroupId)?.title}
+                  </span>
+                </div>
+                <span className="text-xs text-gray-500">
+                  {groups.find(g => g.id === selectedConnection?.targetGroupId)?.insightIds.length} insights
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* LABEL (si présent) */}
+          {selectedConnection?.label && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Custom Label</span>
+              <span className="text-sm text-gray-700 bg-yellow-50 px-2 py-1 rounded border">
+                {selectedConnection.label}
+              </span>
+            </div>
+          )}
+
+          {/* STRENGTH (si présent) */}
+          {selectedConnection?.strength && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Connection Strength</span>
+              <div className="flex items-center gap-1">
+                {[...Array(5)].map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-3 h-3 rounded-full ${
+                      i < (selectedConnection?.strength || 0)
+                        ? 'bg-yellow-500'
+                        : 'bg-gray-200'
+                    }`}
+                  />
+                ))}
+                <span className="text-xs text-gray-500 ml-2">
+                  {selectedConnection.strength}/5
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2 justify-end pt-4 border-t">
+          <Button
+            variant="outline"
+            onClick={handleCloseConnectionDialog}
+            className="flex-1"
+          >
+            Close
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleDeleteFromDialog}
+            className="flex-1"
+          >
+            Delete Connection
+          </Button>
+          <Button
+            onClick={handleEditFromDialog}
+            className="flex-1"
+          >
+            Edit Connection
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
 
       {draggedInsight && (
         <motion.div 

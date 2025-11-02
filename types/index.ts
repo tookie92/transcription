@@ -89,7 +89,7 @@ export interface AffinityMap {
 
 export interface AffinityGroup {
   id: string;
-  title: string;    // ← CORRECT : 'title'
+  title: string;
   color: string;
   position: { x: number; y: number };
   insightIds: Id<"insights">[];
@@ -252,4 +252,28 @@ export interface ConvexAffinityMap {
   createdAt: number;
   updatedAt: number;
   createdBy: string;
+}
+
+// 🆕 TYPES POUR LES CONNECTIONS (version unifiée)
+export interface GroupConnection {
+  id: Id<"groupConnections">;
+  sourceGroupId: string;
+  targetGroupId: string;
+  type: 'related' | 'hierarchy' | 'dependency' | 'contradiction';
+  label?: string;
+  strength?: number;
+}
+
+// Pour Convex
+export interface ConvexGroupConnection {
+  _id: Id<"groupConnections">;
+  mapId: Id<"affinityMaps">;
+  sourceGroupId: string;
+  targetGroupId: string;
+  type: 'related' | 'hierarchy' | 'dependency' | 'contradiction';
+  label?: string;
+  strength?: number;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
 }

@@ -86,4 +86,32 @@ insights: defineTable({
     createdAt: v.number(),
     updatedAt: v.number(),
   }),
-  });
+
+
+  // Table Group Connections
+// 🆕 NOUVELLE TABLE POUR LES CONNECTIONS
+  groupConnections: defineTable({
+    mapId: v.id("affinityMaps"),          // Map parente
+    sourceGroupId: v.string(),            // ID du groupe source
+    targetGroupId: v.string(),            // ID du groupe cible
+    type: v.union(
+      v.literal("related"),
+      v.literal("hierarchy"), 
+      v.literal("dependency"),
+      v.literal("contradiction")
+    ),
+    label: v.optional(v.string()),        // Label optionnel
+    strength: v.optional(v.number()),     // Force 1-5
+    createdBy: v.string(),                // User ID
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+  .index("by_map", ["mapId"])
+  .index("by_source_group", ["sourceGroupId"])
+  .index("by_target_group", ["targetGroupId"]),
+
+  
+});
+  
+
+  
