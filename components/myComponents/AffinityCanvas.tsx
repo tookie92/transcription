@@ -21,6 +21,39 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+
+// 🆕 AJOUTER CES CONSTANTES POUR LES TYPES DE RELATIONS
+export const CONNECTION_TYPES = [
+  {
+    value: 'related' as const,
+    label: 'Related',
+    icon: '🔗',
+    description: 'These groups are related or connected',
+    color: '#8B5CF6'
+  },
+  {
+    value: 'hierarchy' as const,
+    label: 'Hierarchy', 
+    icon: '📊',
+    description: 'Parent-child or ranking relationship',
+    color: '#3B82F6'
+  },
+  {
+    value: 'dependency' as const,
+    label: 'Dependency',
+    icon: '⚡', 
+    description: 'One group depends on another',
+    color: '#10B981'
+  },
+  {
+    value: 'contradiction' as const,
+    label: 'Contradiction',
+    icon: '⚠️',
+    description: 'These groups contradict or conflict',
+    color: '#EF4444'
+  }
+] as const;
 
 interface AffinityGroup {
   id: string;
@@ -93,6 +126,7 @@ export default function AffinityCanvas({
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
+  const [selectedConnectionType, setSelectedConnectionType] = useState<GroupConnection['type']>('related');
 
   // 📚 Historique des états de groupes (pour undo/redo)
   const [history, setHistory] = useState<{ groups: AffinityGroup[]; timestamp: number }[]>([]);
@@ -121,6 +155,21 @@ export default function AffinityCanvas({
   } = useAffinityToasts();
 
   // ==================== HANDLERS CONNECTIONS ====================
+
+  // 🆕 METTRE À JOUR LE BOUTON DE CONNECTION POUR UTILISER LE SELECT
+const handleConnectionModeToggle = (type: GroupConnection['type']) => {
+  const newMode = connectionMode === type ? null : type;
+  setConnectionMode(newMode);
+  setConnectionStart(null);
+  setMousePosition(null);
+  
+  if (newMode) {
+    toast.info(`Creating ${CONNECTION_TYPES.find(t => t.value === newMode)?.label} Connection`, {
+      description: "Click on a group to start, then another to connect",
+      duration: 3000
+    });
+  }
+};
 
   // 🖱️ HANDLER POUR LA SUPPRESSION DE CONNECTION
   const handleConnectionDelete = useCallback((connectionId: Id<"groupConnections">) => {
@@ -606,43 +655,95 @@ export default function AffinityCanvas({
       {/* Toolbar */}
       <div className="absolute top-4 left-4 z-30 flex gap-2">
         {/* Connection Tools */}
-        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1 items-center">
+        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-2 flex flex-col gap-2 min-w-48">
+          {/* INDICATEUR DE STATUT */}
           {connectionStart && (
-            <div className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded mr-1">
-              Connecting...
+            <div className="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded border border-blue-200 flex items-center justify-between">
+              <span>Connecting...</span>
+              <button
+                onClick={cancelConnectionCreation}
+                className="text-blue-500 hover:text-blue-700 text-xs"
+              >
+                ✕ Cancel
+              </button>
             </div>
           )}
           
-          <button
-            onClick={() => {
-              const newMode = connectionMode === 'related' ? null : 'related';
-              setConnectionMode(newMode);
-              setConnectionStart(null);
-              setMousePosition(null);
-            }}
-            className={`w-8 h-8 rounded flex items-center justify-center transition-all group relative ${
-              connectionMode === 'related' 
-                ? 'bg-purple-100 text-purple-700 border-2 border-purple-500' 
-                : 'hover:bg-gray-100 text-gray-700 border-2 border-transparent'
-            }`}
-            title="Related Connection (Click two groups to connect)"
-          >
-            🔗
-            <div className="absolute bottom-full mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
-              Related Connection
-              <div className="text-gray-400">Click two groups to connect</div>
-            </div>
-          </button>
-          
-          {connectionStart && (
-            <button
-              onClick={cancelConnectionCreation}
-              className="w-8 h-8 rounded flex items-center justify-center bg-red-100 text-red-700 border-2 border-red-500 hover:bg-red-200 transition-all"
-              title="Cancel Connection (ESC)"
+          {/* SELECT POUR CHOISIR LE TYPE DE RELATION */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-gray-600 block">
+              Connection Type
+            </label>
+            <Select
+              value={selectedConnectionType}
+              onValueChange={(value: GroupConnection['type']) => {
+                setSelectedConnectionType(value);
+                // Optionnel: activer automatiquement le mode
+                // handleConnectionModeToggle(value);
+              }}
             >
-              ✕
-            </button>
-          )}
+              <SelectTrigger className="w-full h-8 text-sm">
+                <SelectValue placeholder="Select connection type" />
+              </SelectTrigger>
+              <SelectContent>
+                {CONNECTION_TYPES.map((type) => (
+                  <SelectItem 
+                    key={type.value} 
+                    value={type.value}
+                    className="flex items-center gap-2"
+                  >
+                    <span>{type.icon}</span>
+                    <span>{type.label}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* BOUTON POUR DÉMARRER LA CONNECTION */}
+          <Button
+            variant={connectionMode === selectedConnectionType ? "default" : "outline"}
+            size="sm"
+            onClick={() => handleConnectionModeToggle(selectedConnectionType)}
+            className="w-full justify-start gap-2"
+            style={
+              connectionMode === selectedConnectionType 
+                ? { 
+                    backgroundColor: CONNECTION_TYPES.find(t => t.value === selectedConnectionType)?.color,
+                    borderColor: CONNECTION_TYPES.find(t => t.value === selectedConnectionType)?.color
+                  }
+                : {}
+            }
+          >
+            <span>
+              {CONNECTION_TYPES.find(t => t.value === selectedConnectionType)?.icon}
+            </span>
+            <span>
+              {connectionMode === selectedConnectionType ? 'Connecting...' : 'Start Connection'}
+            </span>
+          </Button>
+
+          {/* INDICATEUR VISUEL DES TYPES */}
+          <div className="grid grid-cols-2 gap-1 pt-1 border-t">
+            {CONNECTION_TYPES.map((type) => (
+              <div
+                key={type.value}
+                className={`flex items-center gap-1 p-1 rounded text-xs cursor-pointer transition-all ${
+                  selectedConnectionType === type.value 
+                    ? 'bg-gray-100 font-medium' 
+                    : 'text-gray-500 hover:bg-gray-50'
+                }`}
+                onClick={() => setSelectedConnectionType(type.value)}
+                title={type.description}
+              >
+                <div 
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: type.color }}
+                />
+                <span>{type.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Undo/Redo Buttons */}
@@ -731,7 +832,7 @@ export default function AffinityCanvas({
         >
           {/* Grid background */}
           <div 
-            className="absolute inset-0"
+            className="absolute inset-0 z-0"
             style={{
               backgroundImage: `
                 linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px),
@@ -745,6 +846,7 @@ export default function AffinityCanvas({
           <ConnectionsLayer
             groups={groups}
             connections={connections}
+            // position={position}
             scale={scale}
             connectionMode={connectionMode}
             connectionStart={connectionStart}

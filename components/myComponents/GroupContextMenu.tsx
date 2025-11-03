@@ -31,7 +31,7 @@ export function GroupContextMenu({
   onAnalyze,
 }: GroupContextMenuProps) {
   return (
-    <ContextMenu>
+    <ContextMenu >
       <ContextMenuTrigger asChild>
         {children}
       </ContextMenuTrigger>
