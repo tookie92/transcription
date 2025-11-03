@@ -22,9 +22,9 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const insightsData = useQuery(api.insights.getByProject, { projectId });
   const affinityMap = useQuery(api.affinityMaps.getCurrent, { projectId });
   
-  // Connections Convex
+  // 🆕 CONNECTIONS CONVEX
   const connectionsData = useQuery(api.connections.getByMap, {
-    mapId: affinityMap?._id || "" as Id<"affinityMaps">
+    mapId: affinityMap?._id as Id<"affinityMaps"> || "" as Id<"affinityMaps">
   });
 
   // Mutations existantes
@@ -38,211 +38,165 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const replaceAllGroups = useMutation(api.affinityMaps.replaceAllGroups);
   const createManualInsight = useMutation(api.affinityMaps.createManualInsight);
 
-  // Mutations pour les connections
+  // 🆕 MUTATIONS POUR LES CONNECTIONS
   const createConnection = useMutation(api.connections.createConnection);
   const deleteConnection = useMutation(api.connections.deleteConnection);
   const updateConnection = useMutation(api.connections.updateConnection);
 
+  // État local
   const [isSilentMode, setIsSilentMode] = useState(true);
 
-  // Adaptateur des données connections
+  // 🆕 ADAPTER LES DONNÉES CONNECTIONS POUR L'UI
   const connections: GroupConnection[] = connectionsData?.map(conn => ({
     id: conn._id,
+    mapId: conn.mapId,
     sourceGroupId: conn.sourceGroupId,
     targetGroupId: conn.targetGroupId,
     type: conn.type,
     label: conn.label,
     strength: conn.strength,
+    createdBy: conn.createdBy,
+    createdAt: conn.createdAt,
+    updatedAt: conn.updatedAt,
   })) || [];
 
-  // 🎯 HANDLERS OBLIGATOIRES POUR DraggableGroup
-  const handleGroupMove = async (groupId: string, position: { x: number; y: number }) => {
-    if (!affinityMap) return;
-    try {
-      await moveGroup({
-        mapId: affinityMap._id,
-        groupId,
-        position
+  
+// 🆕 HANDLER POUR CRÉER UNE CONNECTION (version corrigée)
+const handleConnectionCreate = useCallback(async (
+  sourceId: string, 
+  targetId: string, 
+  type: GroupConnection['type']
+) => {
+  if (!affinityMap) {
+    toast.error("No affinity map found");
+    return;
+  }
+
+  // 🎯 Vérifier que ce n'est pas la même source et target
+  if (sourceId === targetId) {
+    toast.error("Cannot connect a group to itself", {
+      description: "Please select a different group to connect to"
+    });
+    return;
+  }
+
+  try {
+    await createConnection({
+      mapId: affinityMap._id,
+      sourceGroupId: sourceId,
+      targetGroupId: targetId,
+      type: type,
+    });
+
+    // 🎯 Récupérer les titres et couleurs pour le toast
+    const sourceGroup = affinityMap.groups.find(g => g.id === sourceId);
+    const targetGroup = affinityMap.groups.find(g => g.id === targetId);
+    
+    const typeConfig = {
+      'related': { icon: '🔗', description: 'Related connection' },
+      'hierarchy': { icon: '📊', description: 'Hierarchy connection' },
+      'dependency': { icon: '⚡', description: 'Dependency connection' },
+      'contradiction': { icon: '⚠️', description: 'Contradiction connection' },
+    }[type];
+
+    toast.success(`${typeConfig.icon} Connection created`, {
+      description: `${sourceGroup?.title} → ${targetGroup?.title}\n${typeConfig.description}`,
+      duration: 4000,
+    });
+
+  } catch (error: unknown) {
+    console.error("Failed to create connection:", error);
+    
+    // 🎯 TOASTS D'ERREUR SPÉCIFIQUES (sans any)
+    let errorMessage = "Failed to create connection";
+    
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    
+    if (errorMessage.includes("already exists")) {
+      toast.error("Connection already exists", {
+        description: "These groups are already connected. Try a different connection type.",
+        duration: 5000,
+        action: {
+          label: "View",
+          onClick: () => {
+            // TODO: Scroll vers la connection existante
+            console.log("Show existing connection");
+          },
+        },
       });
-    } catch (error) {
-      console.error("Failed to move group:", error);
-    }
-  };
-
-  const handleGroupDelete = async (groupId: string) => {
-    if (!affinityMap) return;
-    try {
-      await removeGroup({
-        mapId: affinityMap._id,
-        groupId
+    } else if (errorMessage.includes("not found")) {
+      toast.error("Group not found", {
+        description: "One of the groups no longer exists in this map.",
+        duration: 4000,
       });
-    } catch (error) {
-      console.error("Failed to delete group:", error);
-    }
-  };
-
-  const handleGroupTitleUpdate = async (groupId: string, title: string) => {
-    if (!affinityMap) return;
-    try {
-      await updateGroupTitle({
-        mapId: affinityMap._id,
-        groupId,
-        title
+    } else if (errorMessage.includes("too many connections")) {
+      toast.error("Too many connections", {
+        description: "This group has reached the maximum number of connections (10).",
+        duration: 4000,
       });
-    } catch (error) {
-      console.error("Failed to update group title:", error);
-    }
-  };
-
-  const handleInsightRemoveFromGroup = async (insightId: string, groupId: string) => {
-    if (!affinityMap) return;
-    try {
-      await removeInsightFromGroup({
-        mapId: affinityMap._id,
-        groupId,
-        insightId: insightId as Id<"insights">
+    } else if (errorMessage.includes("Cannot connect a group to itself")) {
+      toast.error("Cannot connect to itself", {
+        description: "Please select a different group to connect to.",
+        duration: 4000,
       });
-    } catch (error) {
-      console.error("Failed to remove insight from group:", error);
-    }
-  };
-
-  const handleInsightDrop = async (insightId: string, groupId: string) => {
-    if (!affinityMap) return;
-    try {
-      await addInsightToGroup({
-        mapId: affinityMap._id,
-        groupId,
-        insightId: insightId as Id<"insights">
+    } else {
+      toast.error("Connection failed", {
+        description: errorMessage,
+        duration: 4000,
       });
-    } catch (error) {
-      console.error("Failed to add insight to group:", error);
     }
-  };
+  }
+}, [affinityMap, createConnection]);
 
-  const handleGroupsReplace = async (newGroups: AffinityGroup[]) => {
-    if (!affinityMap) return;
-    try {
-      await replaceAllGroups({
-        mapId: affinityMap._id,
-        groups: newGroups
-      });
-    } catch (error) {
-      console.error("Failed to replace groups:", error);
-      toast.error("Failed to undo/redo");
+// 🆕 CORRECTION DU HANDLER DELETE POUR UTILISER LE BON TYPE
+const handleConnectionDelete = useCallback(async (connectionId: Id<"groupConnections">) => {
+  try {
+    await deleteConnection({ connectionId });
+    toast.success("Connection deleted");
+  } catch (error: unknown) {
+    console.error("Failed to delete connection:", error);
+    
+    let errorMessage = "Failed to delete connection";
+    if (error instanceof Error) {
+      errorMessage = error.message;
     }
-  };
+    
+    toast.error("Delete failed", {
+      description: errorMessage,
+    });
+  }
+}, [deleteConnection]);
 
-  // 🎯 HANDLERS DRAG & DROP OBLIGATOIRES
-  const handleGroupDragOver = useCallback((e: React.DragEvent, groupId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = 'move';
-    // Note: setDragOverGroup est géré dans AffinityCanvas
-  }, []);
-
-  const handleGroupDragLeave = useCallback((e: React.DragEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const x = e.clientX;
-    const y = e.clientY;
-    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-      // Note: setDragOverGroup est géré dans AffinityCanvas
-    }
-  }, []);
-
-  const handleGroupDrop = useCallback((e: React.DragEvent, groupId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const insightId = e.dataTransfer.getData('text/plain');
-    if (insightId) {
-      handleInsightDrop(insightId, groupId);
-    }
-    // Note: setDragOverGroup/setDraggedInsight sont gérés dans AffinityCanvas
-  }, [handleInsightDrop]);
-
-  const handleInsightDragStart = useCallback((e: React.DragEvent, insightId: string) => {
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', insightId);
-    // Note: setDraggedInsight est géré dans AffinityCanvas
-  }, []);
-
-  const handleInsightDragEnd = useCallback(() => {
-    // Note: setDraggedInsight/setDragOverGroup sont gérés dans AffinityCanvas
-  }, []);
-
-  // 🎯 HANDLERS CONNECTIONS
-  const handleConnectionCreate = useCallback(async (
-    sourceId: string, 
-    targetId: string, 
-    type: GroupConnection['type']
-  ) => {
-    if (!affinityMap) {
-      toast.error("No affinity map found");
-      return;
-    }
-
-    try {
-      await createConnection({
-        mapId: affinityMap._id,
-        sourceGroupId: sourceId,
-        targetGroupId: targetId,
-        type: type,
-      });
-
-      const sourceGroup = affinityMap.groups.find(g => g.id === sourceId);
-      const targetGroup = affinityMap.groups.find(g => g.id === targetId);
-      
-      toast.success("Connection created", {
-        description: `${sourceGroup?.title} → ${targetGroup?.title}`,
-      });
-
-    } catch (error: unknown) {
-      console.error("Failed to create connection:", error);
-      let errorMessage = "Failed to create connection";
-      if (error instanceof Error) {
-        errorMessage = error.message;
+// 🆕 CORRECTION DU HANDLER UPDATE POUR UTILISER LE BON TYPE
+const handleConnectionUpdate = useCallback(async (
+  connectionId: Id<"groupConnections">,
+  updates: Partial<GroupConnection>
+) => {
+  try {
+    await updateConnection({
+      connectionId,
+      updates: {
+        type: updates.type,
+        label: updates.label,
+        strength: updates.strength,
       }
-      toast.error("Connection failed", { description: errorMessage });
+    });
+    toast.success("Connection updated");
+  } catch (error: unknown) {
+    console.error("Failed to update connection:", error);
+    
+    let errorMessage = "Failed to update connection";
+    if (error instanceof Error) {
+      errorMessage = error.message;
     }
-  }, [affinityMap, createConnection]);
-
-  const handleConnectionDelete = useCallback(async (connectionId: Id<"groupConnections">) => {
-    try {
-      await deleteConnection({ connectionId });
-      toast.success("Connection deleted");
-    } catch (error: unknown) {
-      console.error("Failed to delete connection:", error);
-      let errorMessage = "Failed to delete connection";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-      toast.error("Delete failed", { description: errorMessage });
-    }
-  }, [deleteConnection]);
-
-  const handleConnectionUpdate = useCallback(async (
-    connectionId: Id<"groupConnections">,
-    updates: Partial<GroupConnection>
-  ) => {
-    try {
-      await updateConnection({
-        connectionId,
-        updates: {
-          type: updates.type,
-          label: updates.label,
-          strength: updates.strength,
-        }
-      });
-      toast.success("Connection updated");
-    } catch (error: unknown) {
-      console.error("Failed to update connection:", error);
-      let errorMessage = "Failed to update connection";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-      toast.error("Update failed", { description: errorMessage });
-    }
-  }, [updateConnection]);
+    
+    toast.error("Update failed", {
+      description: errorMessage,
+    });
+  }
+}, [updateConnection]);
 
   // Créer une map automatiquement si elle n'existe pas
   useEffect(() => {
@@ -255,9 +209,10 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     }
   }, [project, affinityMap, projectId, createAffinityMap]);
 
-  // Handlers création
+  // Handlers existants pour le canvas (inchangés)
   const handleGroupCreate = async (position: { x: number; y: number }) => {
     if (!affinityMap) return;
+    
     try {
       await addGroup({
         mapId: affinityMap._id,
@@ -270,8 +225,37 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     }
   };
 
+  const handleGroupMove = async (groupId: string, position: { x: number; y: number }) => {
+    if (!affinityMap) return;
+    
+    try {
+      await moveGroup({
+        mapId: affinityMap._id,
+        groupId,
+        position
+      });
+    } catch (error) {
+      console.error("Failed to move group:", error);
+    }
+  };
+
+  const handleInsightDrop = async (insightId: string, groupId: string) => {
+    if (!affinityMap) return;
+    
+    try {
+      await addInsightToGroup({
+        mapId: affinityMap._id,
+        groupId,
+        insightId: insightId as Id<"insights">
+      });
+    } catch (error) {
+      console.error("Failed to add insight to group:", error);
+    }
+  };
+
   const handleManualInsightCreate = async (text: string, type: Insight['type']) => {
     if (!project) return;
+    
     try {
       await createManualInsight({
         projectId: projectId as Id<"projects">,
@@ -282,6 +266,61 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     } catch (error) {
       console.error("Failed to create manual insight:", error);
       toast.error("Failed to create insight");
+    }
+  };
+
+  const handleGroupTitleUpdate = async (groupId: string, title: string) => {
+    if (!affinityMap) return;
+    
+    try {
+      await updateGroupTitle({
+        mapId: affinityMap._id,
+        groupId,
+        title
+      });
+    } catch (error) {
+      console.error("Failed to update group title:", error);
+    }
+  };
+
+  const handleGroupDelete = async (groupId: string) => {
+    if (!affinityMap) return;
+    
+    try {
+      await removeGroup({
+        mapId: affinityMap._id,
+        groupId
+      });
+    } catch (error) {
+      console.error("Failed to delete group:", error);
+    }
+  };
+
+  const handleInsightRemoveFromGroup = async (insightId: string, groupId: string) => {
+    if (!affinityMap) return;
+    
+    try {
+      await removeInsightFromGroup({
+        mapId: affinityMap._id,
+        groupId,
+        insightId: insightId as Id<"insights">
+      });
+    } catch (error) {
+      console.error("Failed to remove insight from group:", error);
+    }
+  };
+
+  const handleGroupsReplace = async (newGroups: AffinityGroup[]) => {
+    if (!affinityMap) return;
+    
+    try {
+      await replaceAllGroups({
+        mapId: affinityMap._id,
+        groups: newGroups
+      });
+    } catch (error) {
+      console.error("Failed to replace groups:", error);
+      toast.error("Failed to undo/redo");
     }
   };
 
@@ -339,6 +378,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
 
         {/* Toolbar */}
         <div className="flex items-center gap-3">
+          {/* Silent Mode Toggle */}
           <button
             onClick={() => setIsSilentMode(!isSilentMode)}
             className={`px-3 py-2 rounded-lg border ${
@@ -350,33 +390,27 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
             {isSilentMode ? '🔇 Silent Mode' : '💬 Discussion Mode'}
           </button>
 
+          {/* Export */}
           <button className="px-3 py-2 border rounded-lg hover:bg-gray-50">
             Export
           </button>
         </div>
       </header>
 
-      {/* Main Workspace */}
+      {/* Main Workspace avec le Canvas */}
       <div className="flex-1 relative bg-white overflow-hidden">
         <AffinityCanvas
           groups={groups}
           insights={insights}
-          // 🎯 HANDLERS OBLIGATOIRES
           onGroupMove={handleGroupMove}
           onGroupCreate={handleGroupCreate}
-          onGroupDelete={handleGroupDelete}
-          onGroupTitleUpdate={handleGroupTitleUpdate}
           onInsightDrop={handleInsightDrop}
           onInsightRemoveFromGroup={handleInsightRemoveFromGroup}
+          onGroupDelete={handleGroupDelete}
+          onGroupTitleUpdate={handleGroupTitleUpdate}
           onManualInsightCreate={handleManualInsightCreate}
           onGroupsReplace={handleGroupsReplace}
-          // 🎯 HANDLERS DRAG & DROP OBLIGATOIRES
-          onDragOver={handleGroupDragOver}
-          onDragLeave={handleGroupDragLeave}
-          onDrop={handleGroupDrop}
-          onInsightDragStart={handleInsightDragStart}
-          onInsightDragEnd={handleInsightDragEnd}
-          // 🎯 HANDLERS CONNECTIONS
+          // 🆕 INTÉGRATION DES CONNECTIONS CONVEX
           connections={connections}
           onConnectionCreate={handleConnectionCreate}
           onConnectionDelete={handleConnectionDelete}
