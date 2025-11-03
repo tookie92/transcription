@@ -7,6 +7,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { Id } from "@/convex/_generated/dataModel";
 import { Edit, Trash2, Link, Copy, ScanEye } from "lucide-react";
 
 interface GroupContextMenuProps {
@@ -14,9 +15,9 @@ interface GroupContextMenuProps {
   groupTitle: string;
   children: React.ReactNode;
   onRename: (groupId: string) => void;
-  onDelete: (groupId: string) => void;
-  onDuplicate?: (groupId: string) => void;
-  onCreateConnection?: (groupId: string) => void;
+  onDelete: (groupId: Id<"groupConnections">) => void;
+  onDuplicate?: (groupId: string) => void; // 🆕 PROP MANQUANTE
+  onCreateConnection?: (groupId: string) => void; // 🆕 PROP MANQUANTE
   onAnalyze?: (groupId: string) => void;
 }
 
@@ -26,8 +27,8 @@ export function GroupContextMenu({
   children,
   onRename,
   onDelete,
-  onDuplicate,
-  onCreateConnection,
+  onDuplicate, // 🆕 AJOUTER
+  onCreateConnection, // 🆕 AJOUTER
   onAnalyze,
 }: GroupContextMenuProps) {
   return (
@@ -50,7 +51,7 @@ export function GroupContextMenu({
           Renommer le groupe
         </ContextMenuItem>
         
-        {onDuplicate && (
+        {onDuplicate && ( // 🆕 CONDITION POUR AFFICHER
           <ContextMenuItem 
             onClick={() => onDuplicate(groupId)}
             className="flex items-center gap-2 cursor-pointer"
@@ -60,7 +61,7 @@ export function GroupContextMenu({
           </ContextMenuItem>
         )}
         
-        {onCreateConnection && (
+        {onCreateConnection && ( // 🆕 CONDITION POUR AFFICHER
           <ContextMenuItem 
             onClick={() => onCreateConnection(groupId)}
             className="flex items-center gap-2 cursor-pointer"
@@ -87,7 +88,7 @@ export function GroupContextMenu({
         
         {/* Actions dangereuses */}
         <ContextMenuItem 
-          onClick={() => onDelete(groupId)}
+          onClick={() => onDelete(groupId as Id<"groupConnections">)}
           className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
         >
           <Trash2 size={14} />

@@ -1,9 +1,9 @@
 "use client";
-import { PanInfo, useMotionValue, useTransform } from "framer-motion";
+import { PanInfo, useMotionValue } from "framer-motion";
 import { useEffect, useState, useCallback, memo } from "react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
-import { GripVertical, Group, Trash2 } from "lucide-react";
+import { GripVertical, Trash2 } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import { GroupContextMenu } from "./GroupContextMenu";
 
@@ -12,7 +12,7 @@ interface AffinityGroup {
   title: string;
   color: string;
   position: { x: number; y: number };
-  insightIds: Id<"insights">[]; // ← Même changement
+  insightIds: Id<"insights">[];
 }
 
 interface Insight {
@@ -28,20 +28,19 @@ interface DraggableGroupProps {
   scale: number;
   isHovered: boolean;
   isDragOver: boolean;
-  isSelected: boolean; // 🆕 SI le groupe est sélectionné
+  isSelected: boolean;
   onHover: (id: string | null) => void;
   onMove: (groupId: string, position: { x: number; y: number }) => void;
-  onDelete: (groupId: string) => void;
-  onSelect: (groupId: string, e: React.MouseEvent) => void; // 🆕 Gestion de la sélection
-  onTitleUpdate?: (groupId: string, title: string) => void;
-  onRemoveInsight: (insightId: string, groupId: string) => void;
-  onDragOver: (e: React.DragEvent, groupId: string) => void;
-  onDragLeave: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent, groupId: string) => void;
-  onInsightDragStart: (e: React.DragEvent, insightId: string) => void;
-  onInsightDragEnd: () => void;
+  onDelete: (groupId: Id<"groupConnections">) => void; // 🆕 OBLIGATOIRE
+  onSelect: (groupId: string, e: React.MouseEvent) => void;
+  onTitleUpdate: (groupId: string, title: string) => void; // 🆕 OBLIGATOIRE
+  onRemoveInsight: (insightId: string, groupId: string) => void; // 🆕 OBLIGATOIRE
+  onDragOver: (e: React.DragEvent, groupId: string) => void; // 🆕 OBLIGATOIRE
+  onDragLeave: (e: React.DragEvent) => void; // 🆕 OBLIGATOIRE
+  onDrop: (e: React.DragEvent, groupId: string) => void; // 🆕 OBLIGATOIRE
+  onInsightDragStart: (e: React.DragEvent, insightId: string) => void; // 🆕 OBLIGATOIRE
+  onInsightDragEnd: () => void; // 🆕 OBLIGATOIRE
   selectedGroupsCount?: number;
-  // 🆕 NOUVELLES PROPS POUR LE CONTEXT MENU
   onRenameRequest?: (groupId: string) => void;
   onDuplicateGroup?: (groupId: string) => void;
   onCreateConnectionFromGroup?: (groupId: string) => void;
@@ -53,11 +52,11 @@ function DraggableGroup({
   scale,
   isHovered,
   isDragOver,
-  isSelected, // 🆕 Récupère la prop
+  isSelected,
   onHover,
   onMove,
   onDelete,
-  onSelect, // 🆕 Récupère la prop
+  onSelect,
   onTitleUpdate,
   onRemoveInsight,
   onDragOver,
@@ -66,7 +65,6 @@ function DraggableGroup({
   onInsightDragStart,
   onInsightDragEnd,
   selectedGroupsCount,
-   // 🆕 Nouvelles props
   onRenameRequest,
   onDuplicateGroup,
   onCreateConnectionFromGroup,
@@ -74,100 +72,23 @@ function DraggableGroup({
 
   const [draggedInsightId, setDraggedInsightId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [isEditing, setIsEditing] = useState(false); // 🆕 Pour l'édition manuelle
+  
   const x = useMotionValue(group.position.x);
   const y = useMotionValue(group.position.y);
-  
-
 
   useEffect(() => {
     x.set(group.position.x);
     y.set(group.position.y);
   }, [group.position.x, group.position.y, x, y]);
 
-
-
-  // my handles
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-const [originalTitle, setOriginalTitle] = useState(group.title);
-
-
-
-const handleTitleClick = useCallback((e: React.MouseEvent) => {
-  e.stopPropagation();
-  setOriginalTitle(group.title);
-  setIsEditingTitle(true);
-  
-  // 🎪 Focus avec sélection intelligente
-  setTimeout(() => {
-    const element = e.currentTarget as HTMLHeadingElement;
-    element.focus();
-    
-    // Pour les titres courts, sélectionne tout
-    // Pour les titres longs, place le curseur à la fin
-    if (group.title.length < 30) {
-      document.execCommand('selectAll', false);
-    } else {
-      const range = document.createRange();
-      range.selectNodeContents(element);
-      range.collapse(false); // Place à la fin
-      const selection = window.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-    }
-  }, 10);
-}, [group.title]);
-
-const handleTitleBlur = useCallback((e: React.FocusEvent<HTMLHeadingElement>) => {
-    setIsEditingTitle(false);
-    const newTitle = e.currentTarget.textContent?.trim() || '';
-    
-    if (!newTitle) {
-      e.currentTarget.textContent = originalTitle;
-    } else if (newTitle === originalTitle) {
-      return;
-    } else {
-      // ✅ Vérifier si onTitleUpdate existe avant de l'appeler
-      onTitleUpdate?.(group.id, newTitle);
-    }
-  }, [onTitleUpdate, group.id, originalTitle]);
-
-const handleTitleKeyDown = useCallback((e: React.KeyboardEvent<HTMLHeadingElement>) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    e.currentTarget.blur();
-  }
-  
-  if (e.key === 'Escape') {
-    e.currentTarget.textContent = originalTitle;
-    setIsEditingTitle(false);
-    // 🎪 Force le blur pour sortir du mode édition
-    (e.currentTarget as HTMLElement).blur();
-  }
-}, [originalTitle]);
-
-// 🆕 Met à jour originalTitle quand le titre du groupe change
-useEffect(() => {
-  if (!isEditingTitle) {
-    setOriginalTitle(group.title);
-  }
-}, [group.title, isEditingTitle]);
-
-  // end my handle
-
-    // 🖱️ HANDLER DRAG SIMPLIFIÉ ET CORRIGÉ
   const handleDragStart = useCallback(() => {
     setIsDragging(true);
   }, []);
 
- const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+  const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     setIsDragging(false);
-    
-    // 🆕 CORRECTION : Calcul direct sans division par l'échelle
-    // Framer Motion donne déjà le déplacement correct
     const finalX = group.position.x + info.offset.x;
     const finalY = group.position.y + info.offset.y;
-    
     onMove(group.id, { x: finalX, y: finalY });
   }, [group.position.x, group.position.y, group.id, onMove]);
 
@@ -175,78 +96,30 @@ useEffect(() => {
     return () => onRemoveInsight(insightId, group.id);
   }, [onRemoveInsight, group.id]);
 
-  // const handleTitleBlur = useCallback((e: React.FocusEvent<HTMLHeadingElement>) => {
-  //   onTitleUpdate(group.id, e.currentTarget.textContent || '');
-  // }, [onTitleUpdate, group.id]);
-
-  // const handleTitleKeyDown = useCallback((e: React.KeyboardEvent<HTMLHeadingElement>) => {
-  //   if (e.key === 'Enter') {
-  //     e.preventDefault();
-  //     e.currentTarget.blur();
-  //   }
-  // }, []);
-
-   // 🆕 HANDLER POUR LE CONTEXT MENU
-  const handleRename = useCallback(() => {
-    onRenameRequest?.(group.id);
-  }, [onRenameRequest, group.id]);
-
   const handleDelete = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    onDelete(group.id);
+    onDelete(group.id as Id<"groupConnections">);
   }, [onDelete, group.id]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-  }, []);
-
- const handleDeleteClick = useCallback((e: React.MouseEvent) => {
-  e.stopPropagation(); // 🚫 EMPÊCHE le clic de remonter au groupe
-  e.preventDefault(); // 🚫 Évite tout comportement par défaut
-  onDelete(group.id);
-}, [onDelete, group.id]);
-
-   // 🆕 ÉDITION MANUELLE (optionnelle - si tu veux garder double-clic)
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     onRenameRequest?.(group.id);
   }, [onRenameRequest, group.id]);
 
-  //=================== Nouveau State ====================
-    // 🖱️ Gestion du clic sur le groupe
   const handleGroupClick = useCallback((e: React.MouseEvent) => {
-  e.stopPropagation();
-  
-  // 🎯 Si on est en mode connection, priorité à la création de connection
-  if (onSelect) {
+    e.stopPropagation();
     onSelect(group.id, e);
-  }
-}, [onSelect, group.id]);
+  }, [onSelect, group.id]);
 
-  // 🎨 Style de bordure pour la sélection
-  const getBorderStyle = useCallback(() => {
-    if (isDragOver) return "#3B82F6"; // Bleu pour drop zone
-    if (isSelected) return "#F59E0B"; // Orange pour sélectionné
-    return group.color; // Couleur normale du groupe
-  }, [isDragOver, isSelected, group.color]);
-
-  // 🎨 Style d'ombre pour la sélection
-  const getBoxShadow = useCallback(() => {
-    if (isSelected) {
-      return "0 0 0 3px rgba(245, 158, 11, 0.5), 0 10px 25px -5px rgba(0, 0, 0, 0.1)";
-    }
-    return "0 4px 6px -1px rgba(0, 0, 0, 0.1)";
-  }, [isSelected]);
-
-
-
-
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+  }, []);
 
   return (
     <GroupContextMenu
       groupId={group.id}
       groupTitle={group.title}
-      onRename={handleRename}
+      onRename={() => onRenameRequest?.(group.id)}
       onDelete={onDelete}
       onDuplicate={onDuplicateGroup}
       onCreateConnection={onCreateConnectionFromGroup}
@@ -261,7 +134,7 @@ useEffect(() => {
         style={{ 
           x, 
           y,
-          // 🆕 SUPPRIMER les rotations problématiques
+          zIndex: isDragging ? 100 : 20
         }}
         whileHover={{ scale: 1.02 }}
         whileDrag={{ 
@@ -284,11 +157,10 @@ useEffect(() => {
         onDragOver={(e) => onDragOver(e, group.id)}
         onDragLeave={onDragLeave}
         onDrop={(e) => onDrop(e, group.id)}
-        onClick={(e) => onSelect(group.id, e)}
+        onClick={handleGroupClick}
       >
         
-         {/* Header SIMPLIFIÉ - Plus d'édition inline */}
-       {/* Header */}
+        {/* Header */}
         <div 
           className="flex items-center gap-2 px-3 py-2 border-b cursor-grab active:cursor-grabbing relative"
           style={{ 
@@ -328,7 +200,6 @@ useEffect(() => {
             <Trash2 size={14} />
           </motion.button>
         </div>
-
 
         {/* Insights Container */}
         <div 
@@ -403,18 +274,4 @@ useEffect(() => {
   );
 }
 
-export default memo(DraggableGroup, (prevProps, nextProps) => {
-  return (
-    prevProps.group.id === nextProps.group.id &&
-    prevProps.group.title === nextProps.group.title &&
-    prevProps.group.color === nextProps.group.color &&
-    prevProps.group.position.x === nextProps.group.position.x &&
-    prevProps.group.position.y === nextProps.group.position.y &&
-    prevProps.group.insightIds.length === nextProps.group.insightIds.length &&
-    prevProps.group.insightIds.every((id, index) => id === nextProps.group.insightIds[index]) &&
-    prevProps.insights === nextProps.insights &&
-    prevProps.scale === nextProps.scale &&
-    prevProps.isHovered === nextProps.isHovered &&
-    prevProps.isDragOver === nextProps.isDragOver
-  );
-});
+export default memo(DraggableGroup);
