@@ -9,6 +9,7 @@
  */
 
 import type * as affinityMaps from "../affinityMaps.js";
+import type * as analytics from "../analytics.js";
 import type * as connections from "../connections.js";
 import type * as insights from "../insights.js";
 import type * as interviews from "../interviews.js";
@@ -30,6 +31,7 @@ import type {
  */
 declare const fullApi: ApiFromModules<{
   affinityMaps: typeof affinityMaps;
+  analytics: typeof analytics;
   connections: typeof connections;
   insights: typeof insights;
   interviews: typeof interviews;

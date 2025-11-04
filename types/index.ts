@@ -277,3 +277,4 @@ export interface ConvexGroupConnection {
   createdAt: number;
   updatedAt: number;
 }
+

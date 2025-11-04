@@ -9,7 +9,6 @@ interface ConnectionsLayerProps {
   groups: AffinityGroup[];
   connections: GroupConnection[];
   scale: number;
-  // 🗑️ SUPPRIMER position - plus besoin
   connectionMode?: GroupConnection['type'] | null;
   connectionStart?: string | null;
   mousePosition?: { x: number; y: number } | null;
@@ -28,81 +27,126 @@ export default function ConnectionsLayer({
   onConnectionDelete
 }: ConnectionsLayerProps) {
   
-  // 🎨 COULEURS PAR TYPE DE CONNECTION
- const getConnectionConfig = (type: GroupConnection['type']) => {
-  const config = CONNECTION_TYPES.find(t => t.value === type);
-  return config || CONNECTION_TYPES[0]; // Fallback to 'related'
-};
-
-  // 🎨 STYLE DES LIGNES
-  const getConnectionStyle = (type: GroupConnection['type'], strength?: number) => {
-    const config = getConnectionConfig(type);
-    const strokeWidth = strength ? Math.max(2, strength * 1.5) : 2;
-    
-    return {
-      stroke: config.color,
-      strokeWidth: strokeWidth / scale,
-      strokeDasharray: type === 'dependency' ? '5,5' : 'none',
-      opacity: strength ? 0.6 + (strength * 0.1) : 0.8
-    };
+  const getConnectionConfig = (type: GroupConnection['type']) => {
+    const config = CONNECTION_TYPES.find(t => t.value === type);
+    return config || CONNECTION_TYPES[0];
   };
 
-  // 📐 CALCUL DU CHEMIN ENTRE DEUX GROUPES (SIMPLE)
+  // 📐 CALCUL EXACT DES POINTS SUR LES BORDS
   const calculateConnectionPath = (source: AffinityGroup, target: AffinityGroup) => {
-    const startX = source.position.x + 150;
-    const startY = source.position.y + 50;
-    const endX = target.position.x + 150;
-    const endY = target.position.y + 50;
+    const GROUP_WIDTH = 300;
+    const GROUP_HEIGHT = 100;
     
-    return `M ${startX} ${startY} L ${endX} ${endY}`;
+    const sourceCenterX = source.position.x + GROUP_WIDTH / 2;
+    const sourceCenterY = source.position.y + GROUP_HEIGHT / 2;
+    const targetCenterX = target.position.x + GROUP_WIDTH / 2;
+    const targetCenterY = target.position.y + GROUP_HEIGHT / 2;
+    
+    const dx = targetCenterX - sourceCenterX;
+    const dy = targetCenterY - sourceCenterY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (distance === 0) return '';
+    
+    const dirX = dx / distance;
+    const dirY = dy / distance;
+    
+    // Fonction pour trouver le point exact sur le bord
+    const getBorderPoint = (centerX: number, centerY: number, directionX: number, directionY: number) => {
+      const halfWidth = GROUP_WIDTH / 2;
+      const halfHeight = GROUP_HEIGHT / 2;
+      
+      // Calculer les distances jusqu'aux bords dans chaque direction
+      const tRight = (halfWidth) / Math.max(directionX, 0.001);
+      const tLeft = (-halfWidth) / Math.min(directionX, -0.001);
+      const tBottom = (halfHeight) / Math.max(directionY, 0.001);
+      const tTop = (-halfHeight) / Math.min(directionY, -0.001);
+      
+      // Prendre le plus petit t positif
+      const t = Math.min(
+        directionX > 0 ? tRight : Infinity,
+        directionX < 0 ? tLeft : Infinity,
+        directionY > 0 ? tBottom : Infinity,
+        directionY < 0 ? tTop : Infinity
+      );
+      
+      return {
+        x: centerX + directionX * t,
+        y: centerY + directionY * t
+      };
+    };
+    
+    const sourceBorder = getBorderPoint(sourceCenterX, sourceCenterY, dirX, dirY);
+    const targetBorder = getBorderPoint(targetCenterX, targetCenterY, -dirX, -dirY);
+    
+    return `M ${sourceBorder.x} ${sourceBorder.y} L ${targetBorder.x} ${targetBorder.y}`;
   };
 
-  // 🎯 TROUVER UN GROUPE PAR SON ID
   const findGroup = (groupId: string) => {
     return groups.find(g => g.id === groupId);
   };
 
-  // 🎯 CONNECTION TEMPORAIRE
   const renderTemporaryConnection = () => {
     if (!connectionMode || !connectionStart || !mousePosition) return null;
 
     const startGroup = findGroup(connectionStart);
     if (!startGroup) return null;
 
-    const startX = startGroup.position.x + 150;
-    const startY = startGroup.position.y + 50;
+    const GROUP_WIDTH = 300;
+    const GROUP_HEIGHT = 100;
+    const startCenterX = startGroup.position.x + GROUP_WIDTH / 2;
+    const startCenterY = startGroup.position.y + GROUP_HEIGHT / 2;
     
+    const dx = mousePosition.x - startCenterX;
+    const dy = mousePosition.y - startCenterY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    let startBorderX = startCenterX;
+    let startBorderY = startCenterY;
+    
+    if (distance > 0) {
+      const dirX = dx / distance;
+      const dirY = dy / distance;
+      
+      const halfWidth = GROUP_WIDTH / 2;
+      const halfHeight = GROUP_HEIGHT / 2;
+      
+      // Même calcul que pour les connections permanentes
+      const tRight = (halfWidth) / Math.max(dirX, 0.001);
+      const tLeft = (-halfWidth) / Math.min(dirX, -0.001);
+      const tBottom = (halfHeight) / Math.max(dirY, 0.001);
+      const tTop = (-halfHeight) / Math.min(dirY, -0.001);
+      
+      const t = Math.min(
+        dirX > 0 ? tRight : Infinity,
+        dirX < 0 ? tLeft : Infinity,
+        dirY > 0 ? tBottom : Infinity,
+        dirY < 0 ? tTop : Infinity
+      );
+      
+      startBorderX = startCenterX + dirX * t;
+      startBorderY = startCenterY + dirY * t;
+    }
+
     const config = getConnectionConfig(connectionMode);
-    const tempPath = `M ${startX} ${startY} L ${mousePosition.x} ${mousePosition.y}`;
+    const tempPath = `M ${startBorderX} ${startBorderY} L ${mousePosition.x} ${mousePosition.y}`;
 
     return (
       <g>
-        {/* LIGNE TEMPORAIRE */}
-        <motion.path
+        <path
           d={tempPath}
-          {...getConnectionStyle(connectionMode)}
+          stroke={config.color}
+          strokeWidth={4 / scale}
           strokeDasharray="4,4"
           opacity={0.6}
           fill="none"
         />
-        
-        {/* POINTS VISUELS */}
-        <circle cx={startX} cy={startY} r={6 / scale} fill={config.color} opacity={0.8} />
+        <circle cx={startBorderX} cy={startBorderY} r={6 / scale} fill={config.color} opacity={0.8} />
         <circle cx={mousePosition.x} cy={mousePosition.y} r={4 / scale} fill={config.color} opacity={0.6} />
       </g>
     );
   };
 
-  // 🎪 DEBUG: Afficher les informations de débogage
-  console.log("🔗 ConnectionsLayer Debug:", {
-    connectionsCount: connections.length,
-    groupsCount: groups.length,
-    connectionMode,
-    connectionStart,
-    mousePosition
-  });
-
-  // 🎪 RENDU DES CONNECTIONS
   return (
     <svg 
       className="absolute inset-0 pointer-events-none"
@@ -112,62 +156,51 @@ export default function ConnectionsLayer({
         height: '100%'
       }}
     >
-      {/* ==================== LIGNES DE CONNECTION ==================== */}
       {connections.map(connection => {
         const sourceGroup = findGroup(connection.sourceGroupId);
         const targetGroup = findGroup(connection.targetGroupId);
         
-        if (!sourceGroup || !targetGroup) {
-          console.log("❌ Connection invalide:", connection);
-          return null;
-        }
-
-        console.log("✅ Rendering connection:", {
-          source: sourceGroup.title,
-          target: targetGroup.title,
-          type: connection.type
-        });
+        if (!sourceGroup || !targetGroup) return null;
 
         const config = getConnectionConfig(connection.type);
         const pathData = calculateConnectionPath(sourceGroup, targetGroup);
 
+        const strokeWidth = 3 / scale;
+        const opacity = 0.7;
+        const strokeDasharray = connection.type === 'dependency' ? '5,5' : 'none';
+
         return (
           <g key={connection.id}>
-            {/* LIGNE PRINCIPALE */}
-            <motion.path
+            {/* Zone cliquable */}
+            <path
               d={pathData}
-              initial={{ pathLength: 0, opacity: 0 }}
-              animate={{ pathLength: 1, opacity: 1 }}
-              transition={{ duration: 0.5 }}
-              {...getConnectionStyle(connection.type, connection.strength)}
               fill="none"
-              className="cursor-pointer pointer-events-auto hover:stroke-opacity-100 transition-all"
+              stroke="transparent"
+              strokeWidth={15 / scale}
+              className="cursor-pointer pointer-events-auto"
               onClick={(e) => {
                 e.stopPropagation();
                 onConnectionClick?.(connection);
               }}
             />
             
-            {/* POINT DE DÉPART */}
-            <circle
-              cx={sourceGroup.position.x + 150}
-              cy={sourceGroup.position.y + 50}
-              r={4 / scale}
-              fill={config.color}
-            />
-            
-            {/* POINT D'ARRIVÉE */}
-            <circle
-              cx={targetGroup.position.x + 150}
-              cy={targetGroup.position.y + 50}
-              r={4 / scale}
-              fill={config.color}
+            {/* Ligne visible */}
+            <motion.path
+              d={pathData}
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: 1, opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              fill="none"
+              stroke={config.color}
+              strokeWidth={strokeWidth}
+              strokeDasharray={strokeDasharray}
+              opacity={opacity}
+              className="pointer-events-none"
             />
           </g>
         );
       })}
 
-      {/* ==================== CONNECTION TEMPORAIRE ==================== */}
       {renderTemporaryConnection()}
     </svg>
   );

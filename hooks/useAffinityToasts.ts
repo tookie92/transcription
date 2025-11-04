@@ -1,6 +1,7 @@
 "use client";
 
 import { toast } from "sonner";
+import { GroupConnection } from "@/types";
 
 export function useAffinityToasts() {
   const notifyInsightAdded = (groupTitle: string) => {
@@ -27,53 +28,74 @@ export function useAffinityToasts() {
     });
   };
 
-    // 🆕 TOASTS POUR LES CONNECTIONS
   const notifyConnectionCreated = (
     sourceTitle: string, 
     targetTitle: string, 
-    connectionType: string
+    type: GroupConnection['type']
   ) => {
-    const typeEmoji = {
-      'related': '🔗',
-      'hierarchy': '📊', 
-      'dependency': '⚡',
-      'contradiction': '⚠️'
-    }[connectionType] || '🔗';
+    const typeConfig = {
+      'related': { icon: '🔗', description: 'Related connection created' },
+      'hierarchy': { icon: '📊', description: 'Hierarchy connection created' },
+      'dependency': { icon: '⚡', description: 'Dependency connection created' },
+      'contradiction': { icon: '⚠️', description: 'Contradiction connection created' },
+    }[type];
 
-    toast.success(`${typeEmoji} Connection created`, {
+    toast.success(`${typeConfig.icon} Connection Created`, {
       description: `${sourceTitle} → ${targetTitle}`,
-      duration: 3000,
-      action: {
-        label: "View",
-        onClick: () => console.log("View connection"),
-      },
-    });
-  };
-
-  const notifyConnectionCreationStarted = (groupTitle: string) => {
-    toast.info("Creating connection...", {
-      description: `Click another group to connect with "${groupTitle}"`,
       duration: 4000,
     });
   };
 
-  const notifyConnectionCreationCancelled = () => {
-    toast.info("Connection cancelled", {
-      duration: 1500,
+  const notifyConnectionCreationStarted = (type: GroupConnection['type']) => {
+    const typeConfig = {
+      'related': { icon: '🔗', label: 'Related' },
+      'hierarchy': { icon: '📊', label: 'Hierarchy' },
+      'dependency': { icon: '⚡', label: 'Dependency' },
+      'contradiction': { icon: '⚠️', label: 'Contradiction' },
+    }[type];
+
+    toast.info(`Creating ${typeConfig.label} Connection`, {
+      description: "Click on another group to connect",
+      duration: 3000,
     });
   };
 
-  const notifyConnectionDeleted = (connectionLabel?: string) => {
-    toast.info("Connection deleted", {
-      description: connectionLabel ? `"${connectionLabel}" removed` : undefined,
+  const notifyConnectionCreationCancelled = () => {
+    toast.info("Connection Creation Cancelled", {
+      description: "No connection was created",
       duration: 2000,
     });
   };
 
-  const notifyConnectionError = (error: string) => {
-    toast.error("Connection failed", {
-      description: error,
+  const notifyConnectionDeleted = (label?: string) => {
+    toast.success("Connection Deleted", {
+      description: label ? `"${label}" connection removed` : "Connection removed",
       duration: 3000,
+    });
+  };
+
+  const notifyConnectionError = (error: string) => {
+    toast.error("Connection Error", {
+      description: error,
+      duration: 5000,
+    });
+  };
+
+  const notifyAnalyticsReady = (insights: string[]) => {
+    toast.success("Pattern Analysis Complete", {
+      description: `${insights.length} insights detected`,
+      duration: 5000,
+      action: {
+        label: "View",
+        onClick: () => console.log("View analytics"),
+      },
+    });
+  };
+
+  const notifyExportReady = (format: string) => {
+    toast.success(`Export Ready`, {
+      description: `Your affinity map has been exported as ${format}`,
+      duration: 4000,
     });
   };
 
@@ -83,10 +105,12 @@ export function useAffinityToasts() {
     notifyGroupDeleted,
     notifyGroupCreated,
     // 🆕 Nouveaux toasts
-    notifyConnectionCreated,
+     notifyConnectionCreated,
     notifyConnectionCreationStarted,
     notifyConnectionCreationCancelled,
     notifyConnectionDeleted,
     notifyConnectionError,
+    notifyAnalyticsReady,
+    notifyExportReady,
   };
 }

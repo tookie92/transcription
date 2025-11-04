@@ -22,6 +22,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { ConnectionEditModal } from "./ConnectionEditModal";
+import { ConnectionAnalytics } from "./ConnectionAnalytics";
 
 // 🆕 AJOUTER CES CONSTANTES POUR LES TYPES DE RELATIONS
 export const CONNECTION_TYPES = [
@@ -135,8 +137,17 @@ export default function AffinityCanvas({
 
   // 📦 Groupes actuellement sélectionnés (Ctrl+Clic, Shift+Clic, sélection rectangulaire)
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
-  const [isMovingWithArrows, setIsMovingWithArrows] = useState(false);
   const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showConnectionModal, setShowConnectionModal] = useState(false);
+  const [editingConnection, setEditingConnection] = useState<GroupConnection | null>(null);
+  const [isMovingWithArrows, setIsMovingWithArrows] = useState(false);
+  const [connectionsVisible, setConnectionsVisible] = useState(false);
+  const [showConnectionTools, setShowConnectionTools] = useState(false);
+  const arrowMoveDistance = 10;
+
+  // not used yet
+  const [presentationMode, setPresentationMode] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionBox, setSelectionBox] = useState<{ start: { x: number; y: number }; end: { x: number; y: number } } | null>(null);
 
@@ -155,6 +166,17 @@ export default function AffinityCanvas({
   } = useAffinityToasts();
 
   // ==================== HANDLERS CONNECTIONS ====================
+
+// HANDLER POUR SAUVEGARDER LES MODIFICATIONS
+const handleConnectionUpdate = useCallback((
+  connectionId: Id<"groupConnections">, 
+  updates: Partial<GroupConnection>
+) => {
+  console.log("🔄 Updating connection:", connectionId, updates);
+  onConnectionUpdate?.(connectionId, updates);
+  setShowConnectionModal(false);
+  setEditingConnection(null);
+}, [onConnectionUpdate]);
 
   // 🆕 METTRE À JOUR LE BOUTON DE CONNECTION POUR UTILISER LE SELECT
 const handleConnectionModeToggle = (type: GroupConnection['type']) => {
@@ -190,12 +212,15 @@ const handleConnectionModeToggle = (type: GroupConnection['type']) => {
   // 🖱️ HANDLER POUR LE CLIC SUR UNE CONNECTION
   const handleConnectionClick = useCallback((connection: GroupConnection) => {
     console.log("🔗 Connection clicked:", connection);
-    setSelectedConnection(connection);
+    setEditingConnection(connection);
+    setShowConnectionModal(true);
   }, []);
 
   // 🆕 HANDLER POUR FERMER LE MODAL
+   // Ajouter le handler pour fermer le modal :
   const handleCloseConnectionModal = useCallback(() => {
-    setSelectedConnection(null);
+    setShowConnectionModal(false);
+    setEditingConnection(null);
   }, []);
 
   // 🆕 HANDLER POUR SUPPRIMER DEPUIS LE MODAL
@@ -216,6 +241,8 @@ const handleConnectionModeToggle = (type: GroupConnection['type']) => {
       setSelectedConnection(null);
     }
   }, [selectedConnection]);
+
+
 
   // 🎨 CONFIGURATION DES TYPES DE CONNECTION
   const getConnectionConfig = (type: GroupConnection['type']) => {
@@ -476,58 +503,131 @@ const handleConnectionModeToggle = (type: GroupConnection['type']) => {
     setIsPanning(false);
   };
 
+  // ==================== HANDLERS KeyDown====================
+  // 🎮 HANDLER POUR LE CLAVIER - AJOUTER APRÈS LES AUTRES HANDLERS
+const handleKeyDown = useCallback((e: KeyboardEvent) => {
+  const isTypingInInput = e.target instanceof HTMLInputElement || 
+                         e.target instanceof HTMLTextAreaElement;
+  
+  if (isTypingInInput) return;
+
+  // MOUVEMENT AVEC FLÈCHES
+  if (selectedGroups.size > 0 && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+    e.preventDefault();
+    setIsMovingWithArrows(true);
+
+    const moveDelta = e.shiftKey ? arrowMoveDistance * 3 : arrowMoveDistance;
+    
+    selectedGroups.forEach(groupId => {
+      const group = groups.find(g => g.id === groupId);
+      if (group) {
+        let newX = group.position.x;
+        let newY = group.position.y;
+
+        switch (e.key) {
+          case 'ArrowUp':
+            newY -= moveDelta;
+            break;
+          case 'ArrowDown':
+            newY += moveDelta;
+            break;
+          case 'ArrowLeft':
+            newX -= moveDelta;
+            break;
+          case 'ArrowRight':
+            newX += moveDelta;
+            break;
+        }
+
+        onGroupMove(groupId, { x: newX, y: newY });
+      }
+    });
+
+    setTimeout(() => setIsMovingWithArrows(false), 100);
+  }
+
+  // ESC - Annule sélection et création de connection
+  if (e.key === 'Escape') {
+    if (selectedGroups.size > 0) {
+      e.preventDefault();
+      setSelectedGroups(new Set());
+      setSelectionAnchor(null);
+    }
+    if (connectionStart) {
+      e.preventDefault();
+      cancelConnectionCreation();
+    }
+    if (editingGroupId) {
+      e.preventDefault();
+      handleTitleEditCancel();
+    }
+  }
+
+  // UNDO/REDO
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+    e.preventDefault();
+    undo();
+  }
+  if (((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) || 
+      ((e.ctrlKey || e.metaKey) && e.key === 'y')) {
+    e.preventDefault();
+    redo();
+  }
+
+  // SELECTION
+  if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+    e.preventDefault();
+    setSelectedGroups(new Set(groups.map(g => g.id)));
+  }
+}, [
+  selectedGroups, 
+  groups, 
+  onGroupMove, 
+  connectionStart, 
+  editingGroupId, 
+  cancelConnectionCreation, 
+  handleTitleEditCancel, 
+  undo, 
+  redo
+]);
+
   // ==================== KEYBOARD SHORTCUTS ====================
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isTypingInInput = e.target instanceof HTMLInputElement || 
-                             e.target instanceof HTMLTextAreaElement;
-      
-      if (isTypingInInput) return;
+ useEffect(() => {
+  const handleKeyDownWrapper = (e: KeyboardEvent) => {
+    handleKeyDown(e);
+  };
 
-      // ESC - Annule sélection et création de connection
-      if (e.key === 'Escape') {
-        if (selectedGroups.size > 0) {
-          e.preventDefault();
-          setSelectedGroups(new Set());
-          setSelectionAnchor(null);
-        }
-        if (connectionStart) {
-          e.preventDefault();
-          cancelConnectionCreation();
-        }
-        if (editingGroupId) {
-          e.preventDefault();
-          handleTitleEditCancel();
-        }
-      }
-
-      // UNDO/REDO
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-      }
-      if (((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) || 
-          ((e.ctrlKey || e.metaKey) && e.key === 'y')) {
-        e.preventDefault();
-        redo();
-      }
-
-      // SELECTION
-      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
-        e.preventDefault();
-        setSelectedGroups(new Set(groups.map(g => g.id)));
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedGroups, connectionStart, editingGroupId, groups, cancelConnectionCreation, handleTitleEditCancel, undo, redo]);
+  document.addEventListener('keydown', handleKeyDownWrapper);
+  return () => document.removeEventListener('keydown', handleKeyDownWrapper);
+}, [handleKeyDown]);
 
   // ==================== RENDER ====================
 
   return (
     <div className="h-full relative bg-gray-50 overflow-hidden">
+
+       {/* 🆕 MODAL D'ÉDITION DES CONNECTIONS */}
+         <ConnectionEditModal
+          connection={editingConnection}
+          isOpen={showConnectionModal}
+          onClose={handleCloseConnectionModal}
+          onSave={handleConnectionUpdate}
+          onDelete={handleConnectionDelete}
+          sourceGroupTitle={groups.find(g => g.id === editingConnection?.sourceGroupId)?.title}
+          targetGroupTitle={groups.find(g => g.id === editingConnection?.targetGroupId)?.title}
+        />
+
+
+      {/* 🆕 PANEL ANALYTIQUES */}
+      {showAnalytics && (
+        <div className="absolute top-20 right-4 w-1/2 bg-white rounded-xl shadow-xl border border-gray-200 z-30 max-h-[80vh] overflow-y-auto">
+          <ConnectionAnalytics 
+            groups={groups} 
+            connections={connections} 
+          />
+        </div>
+      )}
       {/* 🆕 MODAL DE DÉTAILS DE CONNECTION AVEC SHADCN/UI */}
       <Dialog open={!!selectedConnection} onOpenChange={(open) => !open && handleCloseConnectionModal()}>
         <DialogContent className="sm:max-w-md">
@@ -654,97 +754,117 @@ const handleConnectionModeToggle = (type: GroupConnection['type']) => {
 
       {/* Toolbar */}
       <div className="absolute top-4 left-4 z-30 flex gap-2">
+         {/* Bouton Analytics - AJOUTER */}
+        <Button
+          onClick={() => setShowAnalytics(!showAnalytics)}
+          className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+            showAnalytics 
+              ? 'bg-purple-500 text-white border-purple-500' 
+              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+          }`}
+        >
+          {showAnalytics ? '📊 Hide Analytics' : '📊 Show Analytics'}
+        </Button>
         {/* Connection Tools */}
-        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-2 flex flex-col gap-2 min-w-48">
+        <div className="  flex flex-col gap-2 min-w-12">
           {/* INDICATEUR DE STATUT */}
-          {connectionStart && (
-            <div className="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded border border-blue-200 flex items-center justify-between">
-              <span>Connecting...</span>
+        <>
+          {/* BOUTON PRINCIPAL FLOTTANT */}
+          {!connectionStart && (
+            <div className="relative">
               <button
-                onClick={cancelConnectionCreation}
-                className="text-blue-500 hover:text-blue-700 text-xs"
+                onClick={() => setShowConnectionTools(!showConnectionTools)}
+                className={`
+                  w-12 h-12 rounded-full shadow-lg border backdrop-blur-sm transition-all duration-300
+                  flex items-center justify-center text-lg
+                  ${showConnectionTools
+                    ? 'bg-blue-500 text-white border-blue-600 rotate-45'
+                    : 'bg-white/90 text-gray-600 border-gray-300/50 hover:bg-white'
+                  }
+                `}
+                title="Connection tools"
               >
-                ✕ Cancel
+                {showConnectionTools ? '✕' : '🔗'}
               </button>
+
+              {/* MENU DÉROULANT ÉLÉGANT */}
+              {showConnectionTools && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  className="absolute top-14 left-0 bg-white/90 backdrop-blur-sm rounded-xl shadow-xl border border-gray-200/50 p-3 space-y-3 min-w-96 z-40"
+                >
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold text-gray-700">Create Connection</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {CONNECTION_TYPES.map((type) => (
+                        <button
+                          key={type.value}
+                          onClick={() => {
+                            setSelectedConnectionType(type.value);
+                            handleConnectionModeToggle(type.value);
+                            setShowConnectionTools(false);
+                          }}
+                          className="flex flex-col items-center gap-1 p-3 rounded-lg border border-gray-200/60 hover:border-gray-300 hover:bg-white transition-all group"
+                        >
+                          <span className="text-2xl">{type.icon}</span>
+                          <span className="text-xs font-medium text-gray-700">{type.label}</span>
+                          <span className="text-xs text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {type.description}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-gray-200/50 pt-3">
+                    <button
+                      onClick={() => setConnectionsVisible(!connectionsVisible)}
+                      className="flex items-center justify-between w-full p-2 rounded-lg hover:bg-gray-50/50 transition-colors"
+                    >
+                      <span className="text-sm font-medium text-gray-700">
+                        {connectionsVisible ? 'Hide' : 'Show'} Connections
+                      </span>
+                      <div className={`
+                        w-8 h-4 rounded-full transition-colors relative
+                        ${connectionsVisible ? 'bg-green-500' : 'bg-gray-400'}
+                      `}>
+                        <div className={`
+                          absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform
+                          ${connectionsVisible ? 'translate-x-4' : 'translate-x-0.5'}
+                        `} />
+                      </div>
+                    </button>
+                  </div>
+                </motion.div>
+              )}
             </div>
           )}
-          
-          {/* SELECT POUR CHOISIR LE TYPE DE RELATION */}
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-gray-600 block">
-              Connection Type
-            </label>
-            <Select
-              value={selectedConnectionType}
-              onValueChange={(value: GroupConnection['type']) => {
-                setSelectedConnectionType(value);
-                // Optionnel: activer automatiquement le mode
-                // handleConnectionModeToggle(value);
-              }}
-            >
-              <SelectTrigger className="w-full h-8 text-sm">
-                <SelectValue placeholder="Select connection type" />
-              </SelectTrigger>
-              <SelectContent>
-                {CONNECTION_TYPES.map((type) => (
-                  <SelectItem 
-                    key={type.value} 
-                    value={type.value}
-                    className="flex items-center gap-2"
-                  >
-                    <span>{type.icon}</span>
-                    <span>{type.label}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
 
-          {/* BOUTON POUR DÉMARRER LA CONNECTION */}
-          <Button
-            variant={connectionMode === selectedConnectionType ? "default" : "outline"}
-            size="sm"
-            onClick={() => handleConnectionModeToggle(selectedConnectionType)}
-            className="w-full justify-start gap-2"
-            style={
-              connectionMode === selectedConnectionType 
-                ? { 
-                    backgroundColor: CONNECTION_TYPES.find(t => t.value === selectedConnectionType)?.color,
-                    borderColor: CONNECTION_TYPES.find(t => t.value === selectedConnectionType)?.color
-                  }
-                : {}
-            }
-          >
-            <span>
-              {CONNECTION_TYPES.find(t => t.value === selectedConnectionType)?.icon}
-            </span>
-            <span>
-              {connectionMode === selectedConnectionType ? 'Connecting...' : 'Start Connection'}
-            </span>
-          </Button>
-
-          {/* INDICATEUR VISUEL DES TYPES */}
-          <div className="grid grid-cols-2 gap-1 pt-1 border-t">
-            {CONNECTION_TYPES.map((type) => (
-              <div
-                key={type.value}
-                className={`flex items-center gap-1 p-1 rounded text-xs cursor-pointer transition-all ${
-                  selectedConnectionType === type.value 
-                    ? 'bg-gray-100 font-medium' 
-                    : 'text-gray-500 hover:bg-gray-50'
-                }`}
-                onClick={() => setSelectedConnectionType(type.value)}
-                title={type.description}
-              >
-                <div 
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: type.color }}
-                />
-                <span>{type.label}</span>
+          {/* INDICATEUR CONNECTION EN COURS */}
+          {connectionStart && (
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-blue-200/50 p-4 space-y-3 min-w-56">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse" />
+                <div>
+                  <p className="text-sm font-semibold text-blue-700">Creating Connection</p>
+                  <p className="text-xs text-blue-600">Click on another group to connect</p>
+                </div>
               </div>
-            ))}
-          </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={cancelConnectionCreation}
+                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </>
         </div>
+
+
 
         {/* Undo/Redo Buttons */}
         <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1">
@@ -843,6 +963,7 @@ const handleConnectionModeToggle = (type: GroupConnection['type']) => {
           />
 
           {/* 🔗 LAYER DES CONNECTIONS */}
+          {connectionsVisible && (
           <ConnectionsLayer
             groups={groups}
             connections={connections}
@@ -854,7 +975,7 @@ const handleConnectionModeToggle = (type: GroupConnection['type']) => {
             onConnectionClick={handleConnectionClick}
             onConnectionDelete={handleConnectionDelete}
           />
-
+            )}
           {/* Groups avec Framer Motion */}
           {groups.map((group) => (
             <DraggableGroup
@@ -919,6 +1040,8 @@ const handleConnectionModeToggle = (type: GroupConnection['type']) => {
           ))}
         </div>
       </div>
+      
+     
 
       {/* Insights Panel */}
       <div className="absolute right-4 top-4 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-20 overflow-hidden">

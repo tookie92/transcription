@@ -110,6 +110,88 @@ insights: defineTable({
   .index("by_source_group", ["sourceGroupId"])
   .index("by_target_group", ["targetGroupId"]),
 
+
+   // 🆕 NOUVELLE TABLE POUR LES ANALYTIQUES
+  analytics: defineTable({
+    mapId: v.id("affinityMaps"),
+    type: v.union(
+      v.literal("connection_metrics"),
+      v.literal("cluster_analysis"),
+      v.literal("pattern_insights")
+    ),
+    data: v.any(), // Données JSON flexibles pour les différents types d'analytics
+    generatedAt: v.number(),
+    generatedBy: v.string(),
+    version: v.string(),
+  })
+  .index("by_map", ["mapId"])
+  .index("by_map_type", ["mapId", "type"]),
+
+
+    // 🆕 TABLE POUR LES SNAPSHOTS D'EXPORT
+  exports: defineTable({
+    mapId: v.id("affinityMaps"),
+    format: v.union(
+      v.literal("json"),
+      v.literal("csv"), 
+      v.literal("pdf"),
+      v.literal("png")
+    ),
+    data: v.any(),
+    generatedAt: v.number(),
+    generatedBy: v.string(),
+    fileName: v.string(),
+    fileSize: v.number(),
+  })
+  .index("by_map", ["mapId"])
+  .index("by_created_at", ["generatedAt"]),
+
+
+
+  // 🆕 TABLE POUR LES ANALYTIQUES
+  affinityAnalytics: defineTable({
+    mapId: v.id("affinityMaps"),
+    metrics: v.object({
+      totalConnections: v.number(),
+      connectedGroups: v.number(),
+      connectionRate: v.number(),
+      typeDistribution: v.object({
+        related: v.number(),
+        hierarchy: v.number(),
+        dependency: v.number(),
+        contradiction: v.number(),
+      }),
+      averageStrength: v.number(),
+      density: v.number(),
+    }),
+    clusters: v.array(v.object({
+      groupIds: v.array(v.string()),
+      size: v.number(),
+      connectionCount: v.number(),
+      centroid: v.object({
+        x: v.number(),
+        y: v.number(),
+      }),
+    })),
+    recommendations: v.array(v.object({
+      sourceGroupId: v.string(),
+      targetGroupId: v.string(),
+      score: v.number(),
+      reason: v.string(),
+      suggestedType: v.union(
+        v.literal("related"),
+        v.literal("hierarchy"),
+        v.literal("dependency"),
+        v.literal("contradiction")
+      ),
+    })),
+    generatedAt: v.number(),
+    expiresAt: v.number(),
+  })
+  .index("by_map", ["mapId"])
+  .index("by_expires", ["expiresAt"]),
+
+
   
 });
   
