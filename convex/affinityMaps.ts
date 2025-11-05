@@ -425,11 +425,8 @@ export const updateGroups = mutation({
       id: v.string(),
       title: v.string(),
       color: v.string(),
-      position: v.object({        // ← MÊME STRUCTURE QUE DÉJÀ DÉFINIE
-        x: v.number(),           // ← EXACTEMENT COMME DANS TON SCHEMA
-        y: v.number(),           // ← EXACTEMENT COMME DANS TON SCHEMA
-      }),
-      insightIds: v.array(v.id("insights")),
+      position: v.object({ x: v.number(), y: v.number() }),
+      insightIds: v.array(v.string()), // ← CHANGÉ: string[] 
     })),
   },
   handler: async (ctx, args) => {
@@ -455,7 +452,7 @@ export const replaceAllGroups = mutation({
       title: v.string(),
       color: v.string(),
       position: v.object({ x: v.number(), y: v.number() }),
-      insightIds: v.array(v.id("insights")),
+      insightIds: v.array(v.string()), // ← CHANGÉ: string[] au lieu de v.id("insights")
     })),
   },
   handler: async (ctx, args) => {

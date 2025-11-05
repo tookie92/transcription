@@ -1,7 +1,5 @@
 // types/index.ts
 
-import { Id } from "@/convex/_generated/dataModel";
-
 // Transcription types
 export interface TranscriptionSegment {
   id: number;
@@ -56,11 +54,10 @@ export interface Interview {
   status: 'uploading' | 'transcribing' | 'completed' | 'analyzing' | 'ready';
 }
 
-
 // Insight types
 export interface Insight {
   id: string;
-  interviewId?: string; // ← Rendre optionnel
+  interviewId?: string;
   projectId: string;
   type: 'pain-point' | 'quote' | 'insight' | 'follow-up' | 'custom';
   text: string;
@@ -72,8 +69,7 @@ export interface Insight {
   priority?: 'low' | 'medium' | 'high';
 }
 
-
-// Affinity Map types
+// Affinity Map types - SIMPLIFIÉS
 export interface AffinityMap {
   id: string;
   projectId: string;
@@ -92,7 +88,7 @@ export interface AffinityGroup {
   title: string;
   color: string;
   position: { x: number; y: number };
-  insightIds: Id<"insights">[];
+  insightIds: string[]; // ← CHANGÉ: string[] au lieu de Id<"insights">[]
 }
 
 // API Request/Response types
@@ -121,7 +117,7 @@ export interface InsightResponse {
   timestamp: number;
 }
 
-// Store types (pour compatibilité avec ton store existant)
+// Store types
 export interface StoreInterview {
   id: string;
   title: string;
@@ -167,10 +163,9 @@ export interface ConvexInterview {
   createdAt: number;
 }
 
-// Convex-specific types
 export interface ConvexInsight {
   _id: string;
-  interviewId?: string; // ← Rendre optionnel ici aussi
+  interviewId?: string;
   projectId: string;
   type: 'pain-point' | 'quote' | 'insight' | 'follow-up' | 'custom';
   text: string;
@@ -195,7 +190,7 @@ export interface ConvexAffinityMap {
   createdBy: string;
 }
 
-// Ajoute cette interface pour l'export
+// Export types
 export interface ExportInterview {
   id: string;
   title: string;
@@ -217,64 +212,4 @@ export interface ExportInsight {
   createdAt: string;
 }
 
-
-// Ajoute/Corrige ces interfaces
-export interface AffinityGroup {
-  id: string;
-  title: string;  // ← Doit être 'title' pas 'name'
-  color: string;
-  position: { x: number; y: number };
-  insightIds: Id<"insights">[];
-}
-
-export interface AffinityMap {
-  id: string;
-  projectId: string;
-  name: string;
-  description?: string;
-  version: number;
-  isCurrent: boolean;
-  groups: AffinityGroup[];
-  createdAt: number;
-  updatedAt: number;
-  createdBy: string;
-}
-
-// Pour Convex
-export interface ConvexAffinityMap {
-  _id: string;
-  projectId: string;
-  name: string;
-  description?: string;
-  version: number;
-  isCurrent: boolean;
-  groups: AffinityGroup[];
-  createdAt: number;
-  updatedAt: number;
-  createdBy: string;
-}
-
-// 🆕 TYPES POUR LES CONNECTIONS (version unifiée)
-export interface GroupConnection {
-  id: Id<"groupConnections">;
-  sourceGroupId: string;
-  targetGroupId: string;
-  type: 'related' | 'hierarchy' | 'dependency' | 'contradiction';
-  label?: string;
-  strength?: number;
-}
-
-// Pour Convex
-export interface ConvexGroupConnection {
-  _id: Id<"groupConnections">;
-  mapId: Id<"affinityMaps">;
-  sourceGroupId: string;
-  targetGroupId: string;
-  type: 'related' | 'hierarchy' | 'dependency' | 'contradiction';
-  label?: string;
-  strength?: number;
-  createdBy: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
+// 🗑️ SUPPRIMER tous les types liés aux connections

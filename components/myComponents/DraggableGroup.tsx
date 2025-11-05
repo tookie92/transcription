@@ -3,8 +3,7 @@ import { PanInfo, useMotionValue, useTransform } from "framer-motion";
 import { useEffect, useState, useCallback, memo } from "react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
-import { GripVertical, Group, Trash2 } from "lucide-react";
-import { Id } from "@/convex/_generated/dataModel";
+import { GripVertical, Trash2 } from "lucide-react";
 import { GroupContextMenu } from "./GroupContextMenu";
 
 interface AffinityGroup {
@@ -12,7 +11,7 @@ interface AffinityGroup {
   title: string;
   color: string;
   position: { x: number; y: number };
-  insightIds: Id<"insights">[]; // ← Même changement
+  insightIds: string[]; // ← string[] ici aussi
 }
 
 interface Insight {
@@ -28,23 +27,19 @@ interface DraggableGroupProps {
   scale: number;
   isHovered: boolean;
   isDragOver: boolean;
-  isSelected: boolean; // 🆕 SI le groupe est sélectionné
+  isSelected: boolean;
   onHover: (id: string | null) => void;
   onMove: (groupId: string, position: { x: number; y: number }) => void;
   onDelete: (groupId: string) => void;
-  onSelect: (groupId: string, e: React.MouseEvent) => void; // 🆕 Gestion de la sélection
+  onSelect: (groupId: string, e: React.MouseEvent) => void;
   onTitleUpdate?: (groupId: string, title: string) => void;
-  onRemoveInsight: (insightId: string, groupId: string) => void;
+  onRemoveInsight?: (insightId: string, groupId: string) => void; // ← Rendre optionnel
   onDragOver: (e: React.DragEvent, groupId: string) => void;
   onDragLeave: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent, groupId: string) => void;
   onInsightDragStart: (e: React.DragEvent, insightId: string) => void;
   onInsightDragEnd: () => void;
   selectedGroupsCount?: number;
-  // 🆕 NOUVELLES PROPS POUR LE CONTEXT MENU
-  onRenameRequest?: (groupId: string) => void;
-  onDuplicateGroup?: (groupId: string) => void;
-  onCreateConnectionFromGroup?: (groupId: string) => void;
 }
 
 function DraggableGroup({
@@ -53,32 +48,29 @@ function DraggableGroup({
   scale,
   isHovered,
   isDragOver,
-  isSelected, // 🆕 Récupère la prop
+  isSelected,
   onHover,
   onMove,
   onDelete,
-  onSelect, // 🆕 Récupère la prop
+  onSelect,
   onTitleUpdate,
-  onRemoveInsight,
+  onRemoveInsight, // ← Maintenant optionnel
   onDragOver,
   onDragLeave,
   onDrop,
   onInsightDragStart,
   onInsightDragEnd,
   selectedGroupsCount,
-   // 🆕 Nouvelles props
-  onRenameRequest,
-  onDuplicateGroup,
-  onCreateConnectionFromGroup,
 }: DraggableGroupProps) {
 
   const [draggedInsightId, setDraggedInsightId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [isEditing, setIsEditing] = useState(false); // 🆕 Pour l'édition manuelle
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [originalTitle, setOriginalTitle] = useState(group.title);
+  
   const x = useMotionValue(group.position.x);
   const y = useMotionValue(group.position.y);
   
-  // Animations subtiles basées sur la vélocité
   const rotateX = useTransform(y, [-100, 0, 100], [2, 0, -2]);
   const rotateY = useTransform(x, [-100, 0, 100], [-2, 0, 2]);
 
@@ -87,77 +79,6 @@ function DraggableGroup({
     y.set(group.position.y);
   }, [group.position.x, group.position.y, x, y]);
 
-
-
-  // my handles
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-const [originalTitle, setOriginalTitle] = useState(group.title);
-
-
-
-const handleTitleClick = useCallback((e: React.MouseEvent) => {
-  e.stopPropagation();
-  setOriginalTitle(group.title);
-  setIsEditingTitle(true);
-  
-  // 🎪 Focus avec sélection intelligente
-  setTimeout(() => {
-    const element = e.currentTarget as HTMLHeadingElement;
-    element.focus();
-    
-    // Pour les titres courts, sélectionne tout
-    // Pour les titres longs, place le curseur à la fin
-    if (group.title.length < 30) {
-      document.execCommand('selectAll', false);
-    } else {
-      const range = document.createRange();
-      range.selectNodeContents(element);
-      range.collapse(false); // Place à la fin
-      const selection = window.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-    }
-  }, 10);
-}, [group.title]);
-
-const handleTitleBlur = useCallback((e: React.FocusEvent<HTMLHeadingElement>) => {
-    setIsEditingTitle(false);
-    const newTitle = e.currentTarget.textContent?.trim() || '';
-    
-    if (!newTitle) {
-      e.currentTarget.textContent = originalTitle;
-    } else if (newTitle === originalTitle) {
-      return;
-    } else {
-      // ✅ Vérifier si onTitleUpdate existe avant de l'appeler
-      onTitleUpdate?.(group.id, newTitle);
-    }
-  }, [onTitleUpdate, group.id, originalTitle]);
-
-const handleTitleKeyDown = useCallback((e: React.KeyboardEvent<HTMLHeadingElement>) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    e.currentTarget.blur();
-  }
-  
-  if (e.key === 'Escape') {
-    e.currentTarget.textContent = originalTitle;
-    setIsEditingTitle(false);
-    // 🎪 Force le blur pour sortir du mode édition
-    (e.currentTarget as HTMLElement).blur();
-  }
-}, [originalTitle]);
-
-// 🆕 Met à jour originalTitle quand le titre du groupe change
-useEffect(() => {
-  if (!isEditingTitle) {
-    setOriginalTitle(group.title);
-  }
-}, [group.title, isEditingTitle]);
-
-  // end my handle
-
-   // 🖱️ HANDLERS SIMPLIFIÉS - PLUS DE CONFLIT DE CLIC
   const handleDragStart = useCallback(() => {
     setIsDragging(true);
   }, []);
@@ -171,25 +92,68 @@ useEffect(() => {
     onMove(group.id, { x: finalX, y: finalY });
   }, [group.position.x, group.position.y, group.id, scale, onMove]);
 
+  // 🛠️ CORRECTION : Vérifier si onRemoveInsight existe
   const handleRemoveInsightClick = useCallback((insightId: string) => {
-    return () => onRemoveInsight(insightId, group.id);
+    return () => {
+      if (onRemoveInsight) {
+        onRemoveInsight(insightId, group.id);
+      }
+    };
   }, [onRemoveInsight, group.id]);
 
-  // const handleTitleBlur = useCallback((e: React.FocusEvent<HTMLHeadingElement>) => {
-  //   onTitleUpdate(group.id, e.currentTarget.textContent || '');
-  // }, [onTitleUpdate, group.id]);
+  const handleTitleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setOriginalTitle(group.title);
+    setIsEditingTitle(true);
+    
+    setTimeout(() => {
+      const element = e.currentTarget as HTMLHeadingElement;
+      element.focus();
+      
+      if (group.title.length < 30) {
+        document.execCommand('selectAll', false);
+      } else {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.collapse(false);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      }
+    }, 10);
+  }, [group.title]);
 
-  // const handleTitleKeyDown = useCallback((e: React.KeyboardEvent<HTMLHeadingElement>) => {
-  //   if (e.key === 'Enter') {
-  //     e.preventDefault();
-  //     e.currentTarget.blur();
-  //   }
-  // }, []);
+  const handleTitleBlur = useCallback((e: React.FocusEvent<HTMLHeadingElement>) => {
+    setIsEditingTitle(false);
+    const newTitle = e.currentTarget.textContent?.trim() || '';
+    
+    if (!newTitle) {
+      e.currentTarget.textContent = originalTitle;
+    } else if (newTitle === originalTitle) {
+      return;
+    } else {
+      onTitleUpdate?.(group.id, newTitle);
+    }
+  }, [onTitleUpdate, group.id, originalTitle]);
 
-   // 🆕 HANDLER POUR LE CONTEXT MENU
-  const handleRename = useCallback(() => {
-    onRenameRequest?.(group.id);
-  }, [onRenameRequest, group.id]);
+  const handleTitleKeyDown = useCallback((e: React.KeyboardEvent<HTMLHeadingElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.currentTarget.blur();
+    }
+    
+    if (e.key === 'Escape') {
+      e.currentTarget.textContent = originalTitle;
+      setIsEditingTitle(false);
+      (e.currentTarget as HTMLElement).blur();
+    }
+  }, [originalTitle]);
+
+  useEffect(() => {
+    if (!isEditingTitle) {
+      setOriginalTitle(group.title);
+    }
+  }, [group.title, isEditingTitle]);
 
   const handleDelete = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -200,71 +164,36 @@ useEffect(() => {
     e.stopPropagation();
   }, []);
 
- const handleDeleteClick = useCallback((e: React.MouseEvent) => {
-  e.stopPropagation(); // 🚫 EMPÊCHE le clic de remonter au groupe
-  e.preventDefault(); // 🚫 Évite tout comportement par défaut
-  onDelete(group.id);
-}, [onDelete, group.id]);
-
-   // 🆕 ÉDITION MANUELLE (optionnelle - si tu veux garder double-clic)
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    onRenameRequest?.(group.id);
-  }, [onRenameRequest, group.id]);
-
-  //=================== Nouveau State ====================
-    // 🖱️ Gestion du clic sur le groupe
-  const handleGroupClick = useCallback((e: React.MouseEvent) => {
-  e.stopPropagation();
-  
-  // 🎯 Si on est en mode connection, priorité à la création de connection
-  if (onSelect) {
-    onSelect(group.id, e);
-  }
-}, [onSelect, group.id]);
-
-  // 🎨 Style de bordure pour la sélection
   const getBorderStyle = useCallback(() => {
-    if (isDragOver) return "#3B82F6"; // Bleu pour drop zone
-    if (isSelected) return "#F59E0B"; // Orange pour sélectionné
-    return group.color; // Couleur normale du groupe
+    if (isDragOver) return "#3B82F6";
+    if (isSelected) return "#F59E0B";
+    return group.color;
   }, [isDragOver, isSelected, group.color]);
-
-  // 🎨 Style d'ombre pour la sélection
-  const getBoxShadow = useCallback(() => {
-    if (isSelected) {
-      return "0 0 0 3px rgba(245, 158, 11, 0.5), 0 10px 25px -5px rgba(0, 0, 0, 0.1)";
-    }
-    return "0 4px 6px -1px rgba(0, 0, 0, 0.1)";
-  }, [isSelected]);
-
-
-
-
 
   return (
     <GroupContextMenu
       groupId={group.id}
       groupTitle={group.title}
-      onRename={handleRename}
+      onRename={(groupId) => {
+        const element = document.querySelector(`[data-group-id="${groupId}"] h3`);
+        if (element) {
+          (element as HTMLElement).click();
+        }
+      }}
       onDelete={onDelete}
-      onDuplicate={onDuplicateGroup}
-      onCreateConnection={onCreateConnectionFromGroup}
     >
       <motion.div
-         drag
+        drag
         dragMomentum={false}
         dragElastic={0}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
-        onDoubleClick={handleDoubleClick} // 🆕 Double-clic pour renommer
-        // onClick={handleGroupClick} // 🆕 Gestion du clic
-         style={{ 
+        style={{ 
           x, 
           y,
           rotateX: isDragging ? rotateX : 0,
           rotateY: isDragging ? rotateY : 0,
-          borderColor: isDragOver ? "#3B82F6" : group.color
+          borderColor: getBorderStyle()
         }}
         whileHover={{ scale: 1.02 }}
         whileDrag={{ 
@@ -287,10 +216,11 @@ useEffect(() => {
         onDragOver={(e) => onDragOver(e, group.id)}
         onDragLeave={onDragLeave}
         onDrop={(e) => onDrop(e, group.id)}
-        onClick={(e) => onSelect(group.id, e)} // 🎯 Clic normal pour sélection
-    >
+        onClick={(e) => onSelect(group.id, e)}
+        data-group-id={group.id}
+      >
         
-         {/* Header SIMPLIFIÉ - Plus d'édition inline */}
+        {/* Header */}
         <div 
           className="flex items-center gap-2 px-3 py-2 border-b cursor-grab active:cursor-grabbing relative"
           style={{ 
@@ -298,30 +228,31 @@ useEffect(() => {
             borderColor: group.color 
           }}
         >
-          {/* Indicateur de sélection */}
           {isSelected && (
             <div className="absolute -left-2 -top-2 w-3 h-3 bg-orange-500 rounded-full border-2 border-white shadow-sm" />
           )}
           
           <GripVertical size={16} style={{ color: group.color }} className="shrink-0" />
 
-          {/* TITRE SIMPLE - Plus contentEditable */}
           <h3
-            className="flex-1 font-semibold text-sm px-1 min-w-0 select-none"
+            contentEditable={isEditingTitle}
+            suppressContentEditableWarning
+            onBlur={handleTitleBlur}
+            onKeyDown={handleTitleKeyDown}
+            onClick={handleTitleClick}
+            className="flex-1 font-semibold text-sm px-1 min-w-0 outline-none cursor-text select-text"
             style={{ color: group.color }}
             onMouseDown={handleMouseDown}
           >
             {group.title}
           </h3>
 
-          {/* Badge sélection (optionnel) */}
           {isSelected && selectedGroupsCount && selectedGroupsCount > 1 && (
             <span className="text-xs bg-orange-500 text-white px-1.5 py-0.5 rounded-full font-medium">
               {selectedGroupsCount}
             </span>
           )}
 
-          {/* Bouton delete - toujours visible si sélectionné */}
           <motion.button
             whileHover={{ scale: 1.1, rotate: 90 }}
             whileTap={{ scale: 0.9 }}
@@ -334,7 +265,6 @@ useEffect(() => {
             <Trash2 size={14} />
           </motion.button>
         </div>
-
 
         {/* Insights Container */}
         <div 
@@ -370,14 +300,17 @@ useEffect(() => {
                   }`}>
                     {insight.type}
                   </span>
-                  <motion.button
-                    whileHover={{ scale: 1.2, rotate: 90 }}
-                    whileTap={{ scale: 0.8 }}
-                    onClick={handleRemoveInsightClick(insightId)}
-                    className="opacity-0 group-hover/insight:opacity-100 text-gray-400 hover:text-red-500 transition-all shrink-0"
-                  >
-                    <Trash2 size={12} />
-                  </motion.button>
+                  {/* 🛠️ CORRECTION : Cacher le bouton si onRemoveInsight n'existe pas */}
+                  {onRemoveInsight && (
+                    <motion.button
+                      whileHover={{ scale: 1.2, rotate: 90 }}
+                      whileTap={{ scale: 0.8 }}
+                      onClick={handleRemoveInsightClick(insightId)}
+                      className="opacity-0 group-hover/insight:opacity-100 text-gray-400 hover:text-red-500 transition-all shrink-0"
+                    >
+                      <Trash2 size={12} />
+                    </motion.button>
+                  )}
                 </div>
                 <p className="text-sm text-gray-800 leading-snug line-clamp-3">
                   {insight.text}

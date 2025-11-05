@@ -2,67 +2,16 @@
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import DraggableGroup from "./DraggableGroup";
-import { GripVertical, Move, Plus, Redo2, Undo2 } from "lucide-react";
+import { GripVertical, Plus, Redo2, Undo2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { Id } from "@/convex/_generated/dataModel";
-import ConnectionsLayer from "./ConnectionLayer";
-import { useAffinityToasts } from "@/hooks/useAffinityToasts";
-import { toast } from "sonner";
-import { GroupConnection } from "@/types";
 
-// 🆕 IMPORTS SHADCN/UI
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { ConnectionEditModal } from "./ConnectionEditModal";
-import { ConnectionAnalytics } from "./ConnectionAnalytics";
-
-// 🆕 AJOUTER CES CONSTANTES POUR LES TYPES DE RELATIONS
-export const CONNECTION_TYPES = [
-  {
-    value: 'related' as const,
-    label: 'Related',
-    icon: '🔗',
-    description: 'These groups are related or connected',
-    color: '#8B5CF6'
-  },
-  {
-    value: 'hierarchy' as const,
-    label: 'Hierarchy', 
-    icon: '📊',
-    description: 'Parent-child or ranking relationship',
-    color: '#3B82F6'
-  },
-  {
-    value: 'dependency' as const,
-    label: 'Dependency',
-    icon: '⚡', 
-    description: 'One group depends on another',
-    color: '#10B981'
-  },
-  {
-    value: 'contradiction' as const,
-    label: 'Contradiction',
-    icon: '⚠️',
-    description: 'These groups contradict or conflict',
-    color: '#EF4444'
-  }
-] as const;
-
+// Dans AffinityCanvas.tsx - corriger l'interface
 interface AffinityGroup {
   id: string;
   title: string;
   color: string;
   position: { x: number; y: number };
-  insightIds: Id<"insights">[];
+  insightIds: string[]; // ← Doit correspondre au type dans types/index.ts
 }
 
 interface Insight {
@@ -82,11 +31,7 @@ interface AffinityCanvasProps {
   onGroupDelete?: (groupId: string) => void;
   onManualInsightCreate: (text: string, type: Insight['type']) => void;
   onGroupTitleUpdate?: (groupId: string, title: string) => void;
-  onGroupsReplace?: (groups: AffinityGroup[]) => void;
-  connections?: GroupConnection[];
-  onConnectionCreate?: (sourceId: string, targetId: string, type: GroupConnection['type']) => void;
-  onConnectionDelete?: (connectionId: Id<"groupConnections">) => void;
-  onConnectionUpdate?: (connectionId: Id<"groupConnections">, updates: Partial<GroupConnection>) => void;
+  onGroupsReplace?: (groups: AffinityGroup[]) => void; // ← Doit correspondre
 }
 
 export default function AffinityCanvas({ 
@@ -99,11 +44,7 @@ export default function AffinityCanvas({
   onGroupDelete,
   onManualInsightCreate,
   onGroupTitleUpdate,
-  onGroupsReplace,
-  connections = [],
-  onConnectionCreate,
-  onConnectionDelete,
-  onConnectionUpdate
+  onGroupsReplace
 }: AffinityCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -119,214 +60,19 @@ export default function AffinityCanvas({
   const [showAddInsight, setShowAddInsight] = useState(false);
   const [draggedInsightId, setDraggedInsightId] = useState<string | null>(null);
 
-  // 🆕 STATE POUR LE MODAL DE CONNECTION
-  const [selectedConnection, setSelectedConnection] = useState<GroupConnection | null>(null);
-
-  // 🆕 STATES POUR LE MODE CONNECTION
-  const [connectionMode, setConnectionMode] = useState<GroupConnection['type'] | null>(null);
-  const [connectionStart, setConnectionStart] = useState<string | null>(null);
-  const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
-  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState("");
-  const [selectedConnectionType, setSelectedConnectionType] = useState<GroupConnection['type']>('related');
-
-  // 📚 Historique des états de groupes (pour undo/redo)
+  // 📚 Historique pour undo/redo
   const [history, setHistory] = useState<{ groups: AffinityGroup[]; timestamp: number }[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [lastActionTime, setLastActionTime] = useState(0);
 
-  // 📦 Groupes actuellement sélectionnés (Ctrl+Clic, Shift+Clic, sélection rectangulaire)
+  // 🎯 Sélection de groupes
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null);
-  const [showAnalytics, setShowAnalytics] = useState(false);
-  const [showConnectionModal, setShowConnectionModal] = useState(false);
-  const [editingConnection, setEditingConnection] = useState<GroupConnection | null>(null);
-  const [isMovingWithArrows, setIsMovingWithArrows] = useState(false);
-  const [connectionsVisible, setConnectionsVisible] = useState(false);
-  const [showConnectionTools, setShowConnectionTools] = useState(false);
-  const arrowMoveDistance = 10;
-
-  // not used yet
-  const [presentationMode, setPresentationMode] = useState(false);
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [selectionBox, setSelectionBox] = useState<{ start: { x: number; y: number }; end: { x: number; y: number } } | null>(null);
 
   const availableInsights = useMemo(() => {
     const usedInsightIds = new Set(groups.flatMap(group => group.insightIds));
-    return insights.filter(insight => !usedInsightIds.has(insight.id as Id<"insights">));
+    return insights.filter(insight => !usedInsightIds.has(insight.id));
   }, [groups, insights]);
-
-  // 🆕 INITIALISER LES TOASTS
-  const {
-    notifyConnectionCreated,
-    notifyConnectionCreationStarted,
-    notifyConnectionCreationCancelled,
-    notifyConnectionDeleted,
-    notifyConnectionError,
-  } = useAffinityToasts();
-
-  // ==================== HANDLERS CONNECTIONS ====================
-
-// HANDLER POUR SAUVEGARDER LES MODIFICATIONS
-const handleConnectionUpdate = useCallback((
-  connectionId: Id<"groupConnections">, 
-  updates: Partial<GroupConnection>
-) => {
-  console.log("🔄 Updating connection:", connectionId, updates);
-  onConnectionUpdate?.(connectionId, updates);
-  setShowConnectionModal(false);
-  setEditingConnection(null);
-}, [onConnectionUpdate]);
-
-  // 🆕 METTRE À JOUR LE BOUTON DE CONNECTION POUR UTILISER LE SELECT
-const handleConnectionModeToggle = (type: GroupConnection['type']) => {
-  const newMode = connectionMode === type ? null : type;
-  setConnectionMode(newMode);
-  setConnectionStart(null);
-  setMousePosition(null);
-  
-  if (newMode) {
-    toast.info(`Creating ${CONNECTION_TYPES.find(t => t.value === newMode)?.label} Connection`, {
-      description: "Click on a group to start, then another to connect",
-      duration: 3000
-    });
-  }
-};
-
-  // 🖱️ HANDLER POUR LA SUPPRESSION DE CONNECTION
-  const handleConnectionDelete = useCallback((connectionId: Id<"groupConnections">) => {
-    const connection = connections.find(c => c.id === connectionId);
-    
-    const shouldDelete = window.confirm(
-      `Delete connection "${connection?.label || connection?.type}"?\n\n` +
-      `From: ${groups.find(g => g.id === connection?.sourceGroupId)?.title}\n` +
-      `To: ${groups.find(g => g.id === connection?.targetGroupId)?.title}`
-    );
-    
-    if (shouldDelete) {
-      onConnectionDelete?.(connectionId);
-      notifyConnectionDeleted(connection?.label);
-    }
-  }, [connections, groups, onConnectionDelete, notifyConnectionDeleted]);
-
-  // 🖱️ HANDLER POUR LE CLIC SUR UNE CONNECTION
-  const handleConnectionClick = useCallback((connection: GroupConnection) => {
-    console.log("🔗 Connection clicked:", connection);
-    setEditingConnection(connection);
-    setShowConnectionModal(true);
-  }, []);
-
-  // 🆕 HANDLER POUR FERMER LE MODAL
-   // Ajouter le handler pour fermer le modal :
-  const handleCloseConnectionModal = useCallback(() => {
-    setShowConnectionModal(false);
-    setEditingConnection(null);
-  }, []);
-
-  // 🆕 HANDLER POUR SUPPRIMER DEPUIS LE MODAL
-  const handleDeleteFromModal = useCallback(() => {
-    if (selectedConnection) {
-      onConnectionDelete?.(selectedConnection.id);
-      notifyConnectionDeleted(selectedConnection.label);
-      setSelectedConnection(null);
-    }
-  }, [selectedConnection, onConnectionDelete, notifyConnectionDeleted]);
-
-  // 🆕 HANDLER POUR ÉDITER DEPUIS LE MODAL
-  const handleEditFromModal = useCallback(() => {
-    if (selectedConnection) {
-      // TODO: Ouvrir le modal d'édition des connections
-      console.log("Edit connection:", selectedConnection.id);
-      toast.info("Edit connection feature coming soon!");
-      setSelectedConnection(null);
-    }
-  }, [selectedConnection]);
-
-
-
-  // 🎨 CONFIGURATION DES TYPES DE CONNECTION
-  const getConnectionConfig = (type: GroupConnection['type']) => {
-    switch (type) {
-      case 'hierarchy': 
-        return { color: '#3B82F6', icon: '📊', label: 'Hierarchy' };
-      case 'dependency': 
-        return { color: '#10B981', icon: '⚡', label: 'Dependency' };
-      case 'contradiction': 
-        return { color: '#EF4444', icon: '⚠️', label: 'Contradiction' };
-      case 'related': 
-      default: 
-        return { color: '#8B5CF6', icon: '🔗', label: 'Related' };
-    }
-  };
-
-  // ==================== HANDLERS CONNECTION CREATION ====================
-
-  // 🖱️ HANDLER POUR TRACKER LA SOURIS DURANT LA CRÉATION
-  const handleCanvasMouseMoveForConnection = useCallback((e: React.MouseEvent) => {
-    if (connectionMode && connectionStart) {
-      const rect = canvasRef.current!.getBoundingClientRect();
-      const x = (e.clientX - rect.left - position.x) / scale;
-      const y = (e.clientY - rect.top - position.y) / scale;
-      setMousePosition({ x, y });
-    }
-  }, [connectionMode, connectionStart, position.x, position.y, scale]);
-
-  // 🖱️ HANDLER POUR DÉMARRER UNE CONNECTION
-  const handleGroupConnectionStart = useCallback((groupId: string) => {
-    if (connectionMode && connectionStart && connectionStart !== groupId) {
-      console.log(`🔗 Creating connection: ${connectionStart} → ${groupId} (${connectionMode})`);
-      onConnectionCreate?.(connectionStart, groupId, connectionMode);
-      setConnectionStart(null);
-      setConnectionMode(null);
-      setMousePosition(null);
-    } 
-    else if (connectionMode && !connectionStart) {
-      setConnectionStart(groupId);
-      console.log(`🔗 Connection started from group: ${groupId}`);
-    }
-  }, [connectionMode, connectionStart, onConnectionCreate]);
-
-  // 🚫 ANNULATION DE CRÉATION
-  const cancelConnectionCreation = useCallback(() => {
-    if (connectionStart) {
-      console.log("❌ Connection creation cancelled");
-      setConnectionStart(null);
-      setConnectionMode(null);
-      setMousePosition(null);
-      notifyConnectionCreationCancelled();
-    }
-  }, [connectionStart, notifyConnectionCreationCancelled]);
-
-  // ==================== HANDLERS EXISTANTS ====================
-
-  // 🆕 HANDLERS POUR LE CONTEXT MENU
-  const handleRenameRequest = useCallback((groupId: string) => {
-    const group = groups.find(g => g.id === groupId);
-    if (group) {
-      setEditingGroupId(groupId);
-      setEditingTitle(group.title);
-    }
-  }, [groups]);
-
-  const handleTitleEditSave = useCallback(() => {
-    if (editingGroupId && editingTitle.trim()) {
-      onGroupTitleUpdate?.(editingGroupId, editingTitle.trim());
-    }
-    setEditingGroupId(null);
-    setEditingTitle("");
-  }, [editingGroupId, editingTitle, onGroupTitleUpdate]);
-
-  const handleTitleEditCancel = useCallback(() => {
-    setEditingGroupId(null);
-    setEditingTitle("");
-  }, []);
-
-  // 🆕 HANDLER POUR LA CRÉATION DE CONNECTION DEPUIS LE MENU
-  const handleCreateConnectionFromGroup = useCallback((groupId: string) => {
-    setConnectionMode('related');
-    setConnectionStart(groupId);
-    console.log(`🔗 Connection started from context menu: ${groupId}`);
-  }, []);
 
   // ==================== UNDO/REDO ====================
 
@@ -371,16 +117,11 @@ const handleConnectionModeToggle = (type: GroupConnection['type']) => {
     }
   }, [historyIndex, history.length, history, onGroupsReplace]);
 
-  // ==================== SELECTION ====================
+  // ==================== SÉLECTION ====================
 
   const handleGroupClick = useCallback((groupId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     
-    if (connectionMode) {
-      handleGroupConnectionStart(groupId);
-      return;
-    }
-
     if (e.shiftKey && selectionAnchor) {
       const groupIds = groups.map(g => g.id);
       const anchorIndex = groupIds.indexOf(selectionAnchor);
@@ -411,17 +152,14 @@ const handleConnectionModeToggle = (type: GroupConnection['type']) => {
       setSelectedGroups(new Set([groupId]));
       setSelectionAnchor(groupId);
     }
-  }, [groups, selectionAnchor, connectionMode, handleGroupConnectionStart]);
+  }, [groups, selectionAnchor]);
 
   const handleCanvasClick = useCallback((e: React.MouseEvent) => {
     if (e.target === canvasRef.current) {
       setSelectedGroups(new Set());
       setSelectionAnchor(null);
-      if (connectionStart) {
-        cancelConnectionCreation();
-      }
     }
-  }, [connectionStart, cancelConnectionCreation]);
+  }, []);
 
   // ==================== DRAG & DROP ====================
 
@@ -433,23 +171,14 @@ const handleConnectionModeToggle = (type: GroupConnection['type']) => {
     const deltaY = newPosition.y - draggedGroup.position.y;
 
     if (selectedGroups.has(groupId) && selectedGroups.size > 1) {
-      const updates: Array<{ groupId: string; position: { x: number; y: number } }> = [];
-      
       selectedGroups.forEach(selectedGroupId => {
         const group = groups.find(g => g.id === selectedGroupId);
         if (group && selectedGroupId !== groupId) {
-          updates.push({
-            groupId: selectedGroupId,
-            position: {
-              x: group.position.x + deltaX,
-              y: group.position.y + deltaY
-            }
+          onGroupMove(selectedGroupId, {
+            x: group.position.x + deltaX,
+            y: group.position.y + deltaY
           });
         }
-      });
-      
-      updates.forEach(update => {
-        onGroupMove(update.groupId, update.position);
       });
     }
     
@@ -496,376 +225,56 @@ const handleConnectionModeToggle = (type: GroupConnection['type']) => {
         y: prev.y + e.movementY
       }));
     }
-    handleCanvasMouseMoveForConnection(e);
-  }, [isPanning, handleCanvasMouseMoveForConnection]);
+  }, [isPanning]);
 
   const handleCanvasMouseUp = () => {
     setIsPanning(false);
   };
 
-  // ==================== HANDLERS KeyDown====================
-  // 🎮 HANDLER POUR LE CLAVIER - AJOUTER APRÈS LES AUTRES HANDLERS
-const handleKeyDown = useCallback((e: KeyboardEvent) => {
-  const isTypingInInput = e.target instanceof HTMLInputElement || 
-                         e.target instanceof HTMLTextAreaElement;
-  
-  if (isTypingInInput) return;
+  // ==================== RACCOURCIS CLAVIER ====================
 
-  // MOUVEMENT AVEC FLÈCHES
-  if (selectedGroups.size > 0 && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-    e.preventDefault();
-    setIsMovingWithArrows(true);
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isTypingInInput = e.target instanceof HTMLInputElement || 
+                             e.target instanceof HTMLTextAreaElement;
+      
+      if (isTypingInInput) return;
 
-    const moveDelta = e.shiftKey ? arrowMoveDistance * 3 : arrowMoveDistance;
-    
-    selectedGroups.forEach(groupId => {
-      const group = groups.find(g => g.id === groupId);
-      if (group) {
-        let newX = group.position.x;
-        let newY = group.position.y;
-
-        switch (e.key) {
-          case 'ArrowUp':
-            newY -= moveDelta;
-            break;
-          case 'ArrowDown':
-            newY += moveDelta;
-            break;
-          case 'ArrowLeft':
-            newX -= moveDelta;
-            break;
-          case 'ArrowRight':
-            newX += moveDelta;
-            break;
-        }
-
-        onGroupMove(groupId, { x: newX, y: newY });
+      // ESC - Annule sélection
+      if (e.key === 'Escape' && selectedGroups.size > 0) {
+        e.preventDefault();
+        setSelectedGroups(new Set());
+        setSelectionAnchor(null);
       }
-    });
 
-    setTimeout(() => setIsMovingWithArrows(false), 100);
-  }
+      // UNDO/REDO
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+      if (((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) || 
+          ((e.ctrlKey || e.metaKey) && e.key === 'y')) {
+        e.preventDefault();
+        redo();
+      }
 
-  // ESC - Annule sélection et création de connection
-  if (e.key === 'Escape') {
-    if (selectedGroups.size > 0) {
-      e.preventDefault();
-      setSelectedGroups(new Set());
-      setSelectionAnchor(null);
-    }
-    if (connectionStart) {
-      e.preventDefault();
-      cancelConnectionCreation();
-    }
-    if (editingGroupId) {
-      e.preventDefault();
-      handleTitleEditCancel();
-    }
-  }
+      // SELECTION
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+        e.preventDefault();
+        setSelectedGroups(new Set(groups.map(g => g.id)));
+      }
+    };
 
-  // UNDO/REDO
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-    e.preventDefault();
-    undo();
-  }
-  if (((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) || 
-      ((e.ctrlKey || e.metaKey) && e.key === 'y')) {
-    e.preventDefault();
-    redo();
-  }
-
-  // SELECTION
-  if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
-    e.preventDefault();
-    setSelectedGroups(new Set(groups.map(g => g.id)));
-  }
-}, [
-  selectedGroups, 
-  groups, 
-  onGroupMove, 
-  connectionStart, 
-  editingGroupId, 
-  cancelConnectionCreation, 
-  handleTitleEditCancel, 
-  undo, 
-  redo
-]);
-
-  // ==================== KEYBOARD SHORTCUTS ====================
-
- useEffect(() => {
-  const handleKeyDownWrapper = (e: KeyboardEvent) => {
-    handleKeyDown(e);
-  };
-
-  document.addEventListener('keydown', handleKeyDownWrapper);
-  return () => document.removeEventListener('keydown', handleKeyDownWrapper);
-}, [handleKeyDown]);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedGroups, groups, undo, redo]);
 
   // ==================== RENDER ====================
 
   return (
     <div className="h-full relative bg-gray-50 overflow-hidden">
-
-       {/* 🆕 MODAL D'ÉDITION DES CONNECTIONS */}
-         <ConnectionEditModal
-          connection={editingConnection}
-          isOpen={showConnectionModal}
-          onClose={handleCloseConnectionModal}
-          onSave={handleConnectionUpdate}
-          onDelete={handleConnectionDelete}
-          sourceGroupTitle={groups.find(g => g.id === editingConnection?.sourceGroupId)?.title}
-          targetGroupTitle={groups.find(g => g.id === editingConnection?.targetGroupId)?.title}
-        />
-
-
-      {/* 🆕 PANEL ANALYTIQUES */}
-      {showAnalytics && (
-        <div className="absolute top-20 right-4 w-1/2 bg-white rounded-xl shadow-xl border border-gray-200 z-30 max-h-[80vh] overflow-y-auto">
-          <ConnectionAnalytics 
-            groups={groups} 
-            connections={connections} 
-          />
-        </div>
-      )}
-      {/* 🆕 MODAL DE DÉTAILS DE CONNECTION AVEC SHADCN/UI */}
-      <Dialog open={!!selectedConnection} onOpenChange={(open) => !open && handleCloseConnectionModal()}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {selectedConnection && getConnectionConfig(selectedConnection.type).icon}
-              Connection Details
-            </DialogTitle>
-            <DialogDescription>
-              View and manage connection between groups
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            {/* TYPE DE CONNECTION */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Connection Type</span>
-              <Badge 
-                variant="outline"
-                className="capitalize"
-                style={{ 
-                  borderColor: selectedConnection ? getConnectionConfig(selectedConnection.type).color : '',
-                  color: selectedConnection ? getConnectionConfig(selectedConnection.type).color : ''
-                }}
-              >
-                {selectedConnection?.type}
-              </Badge>
-            </div>
-
-            {/* GROUPES CONNECTÉS */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">From Group</span>
-                <span className="text-sm text-gray-600">
-                  {selectedConnection && groups.find(g => g.id === selectedConnection.sourceGroupId)?.title}
-                </span>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">To Group</span>
-                <span className="text-sm text-gray-600">
-                  {selectedConnection && groups.find(g => g.id === selectedConnection.targetGroupId)?.title}
-                </span>
-              </div>
-            </div>
-
-            {/* LABEL (si présent) */}
-            {selectedConnection?.label && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Label</span>
-                <span className="text-sm text-gray-600">{selectedConnection.label}</span>
-              </div>
-            )}
-
-            {/* STRENGTH (si présent) */}
-            {selectedConnection?.strength && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Strength</span>
-                <div className="flex items-center gap-1">
-                  <span className="text-sm text-yellow-600">
-                    {'★'.repeat(selectedConnection.strength)}
-                    {'☆'.repeat(5 - selectedConnection.strength)}
-                  </span>
-                  <span className="text-xs text-gray-500 ml-2">
-                    ({selectedConnection.strength}/5)
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="flex gap-2 sm:gap-0">
-            <Button
-              variant="outline"
-              onClick={handleDeleteFromModal}
-              className="text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700"
-            >
-              Delete Connection
-            </Button>
-            <Button onClick={handleEditFromModal}>
-              Edit Connection
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL D'ÉDITION DE TITRE */}
-      {editingGroupId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-96 shadow-2xl">
-            <h3 className="text-lg font-semibold mb-4">Renommer le groupe</h3>
-            
-            <input
-              type="text"
-              value={editingTitle}
-              onChange={(e) => setEditingTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleTitleEditSave();
-                if (e.key === 'Escape') handleTitleEditCancel();
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
-              placeholder="Nom du groupe..."
-              autoFocus
-            />
-            
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={handleTitleEditCancel}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleTitleEditSave}
-                disabled={!editingTitle.trim()}
-                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-              >
-                Sauvegarder
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Toolbar */}
+      {/* Toolbar Simplifiée */}
       <div className="absolute top-4 left-4 z-30 flex gap-2">
-         {/* Bouton Analytics - AJOUTER */}
-        <Button
-          onClick={() => setShowAnalytics(!showAnalytics)}
-          className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
-            showAnalytics 
-              ? 'bg-purple-500 text-white border-purple-500' 
-              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-          }`}
-        >
-          {showAnalytics ? '📊 Hide Analytics' : '📊 Show Analytics'}
-        </Button>
-        {/* Connection Tools */}
-        <div className="  flex flex-col gap-2 min-w-12">
-          {/* INDICATEUR DE STATUT */}
-        <>
-          {/* BOUTON PRINCIPAL FLOTTANT */}
-          {!connectionStart && (
-            <div className="relative">
-              <button
-                onClick={() => setShowConnectionTools(!showConnectionTools)}
-                className={`
-                  w-12 h-12 rounded-full shadow-lg border backdrop-blur-sm transition-all duration-300
-                  flex items-center justify-center text-lg
-                  ${showConnectionTools
-                    ? 'bg-blue-500 text-white border-blue-600 rotate-45'
-                    : 'bg-white/90 text-gray-600 border-gray-300/50 hover:bg-white'
-                  }
-                `}
-                title="Connection tools"
-              >
-                {showConnectionTools ? '✕' : '🔗'}
-              </button>
-
-              {/* MENU DÉROULANT ÉLÉGANT */}
-              {showConnectionTools && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  className="absolute top-14 left-0 bg-white/90 backdrop-blur-sm rounded-xl shadow-xl border border-gray-200/50 p-3 space-y-3 min-w-96 z-40"
-                >
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-semibold text-gray-700">Create Connection</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {CONNECTION_TYPES.map((type) => (
-                        <button
-                          key={type.value}
-                          onClick={() => {
-                            setSelectedConnectionType(type.value);
-                            handleConnectionModeToggle(type.value);
-                            setShowConnectionTools(false);
-                          }}
-                          className="flex flex-col items-center gap-1 p-3 rounded-lg border border-gray-200/60 hover:border-gray-300 hover:bg-white transition-all group"
-                        >
-                          <span className="text-2xl">{type.icon}</span>
-                          <span className="text-xs font-medium text-gray-700">{type.label}</span>
-                          <span className="text-xs text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {type.description}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-200/50 pt-3">
-                    <button
-                      onClick={() => setConnectionsVisible(!connectionsVisible)}
-                      className="flex items-center justify-between w-full p-2 rounded-lg hover:bg-gray-50/50 transition-colors"
-                    >
-                      <span className="text-sm font-medium text-gray-700">
-                        {connectionsVisible ? 'Hide' : 'Show'} Connections
-                      </span>
-                      <div className={`
-                        w-8 h-4 rounded-full transition-colors relative
-                        ${connectionsVisible ? 'bg-green-500' : 'bg-gray-400'}
-                      `}>
-                        <div className={`
-                          absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform
-                          ${connectionsVisible ? 'translate-x-4' : 'translate-x-0.5'}
-                        `} />
-                      </div>
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </div>
-          )}
-
-          {/* INDICATEUR CONNECTION EN COURS */}
-          {connectionStart && (
-            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-blue-200/50 p-4 space-y-3 min-w-56">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse" />
-                <div>
-                  <p className="text-sm font-semibold text-blue-700">Creating Connection</p>
-                  <p className="text-xs text-blue-600">Click on another group to connect</p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={cancelConnectionCreation}
-                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-        </>
-        </div>
-
-
-
         {/* Undo/Redo Buttons */}
         <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1">
           <button 
@@ -926,7 +335,7 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
       <div
         ref={canvasRef}
         className="absolute inset-0"
-        style={{ cursor: isPanning ? 'grabbing' : (connectionMode ? 'crosshair' : 'grab') }}
+        style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
         onMouseDown={handleCanvasMouseDown}
         onMouseMove={handleCanvasMouseMove}
         onMouseUp={handleCanvasMouseUp}
@@ -962,21 +371,7 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
             }}
           />
 
-          {/* 🔗 LAYER DES CONNECTIONS */}
-          {connectionsVisible && (
-          <ConnectionsLayer
-            groups={groups}
-            connections={connections}
-            // position={position}
-            scale={scale}
-            connectionMode={connectionMode}
-            connectionStart={connectionStart}
-            mousePosition={mousePosition}
-            onConnectionClick={handleConnectionClick}
-            onConnectionDelete={handleConnectionDelete}
-          />
-            )}
-          {/* Groups avec Framer Motion */}
+          {/* Groups */}
           {groups.map((group) => (
             <DraggableGroup
               onHover={setHoveredGroup}
@@ -987,17 +382,11 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
               isHovered={hoveredGroup === group.id}
               isDragOver={dragOverGroup === group.id}
               isSelected={selectedGroups.has(group.id)}
-              onSelect={(groupId, e) => {
-                if (connectionMode) {
-                  handleGroupConnectionStart(groupId);
-                } else {
-                  handleGroupClick(groupId, e);
-                }
-              }}
+              onSelect={handleGroupClick}
               onMove={handleGroupMove}
               onDelete={handleDeleteGroupCallback}
-              onTitleUpdate={(groupId, title) => onGroupTitleUpdate?.(groupId, title)}
-              onRemoveInsight={(insightId, groupId) => onInsightRemoveFromGroup?.(insightId, groupId)}
+              onTitleUpdate={onGroupTitleUpdate}
+              onRemoveInsight={onInsightRemoveFromGroup}
               onDragOver={(e, groupId) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1034,18 +423,14 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
                 setDraggedInsightId(null);
               }}
               selectedGroupsCount={selectedGroups.size}
-              onRenameRequest={handleRenameRequest}
-              onCreateConnectionFromGroup={handleCreateConnectionFromGroup}
             />
           ))}
         </div>
       </div>
-      
-     
 
       {/* Insights Panel */}
       <div className="absolute right-4 top-4 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-20 overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-linear-to-r from-blue-50 to-purple-50">
+        <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-gray-900">Available Insights</h3>
             <span className="text-sm bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-medium">
@@ -1055,7 +440,7 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
           
           <button
             onClick={() => setShowAddInsight(!showAddInsight)}
-            className="w-full bg-linear-to-r from-blue-500 to-blue-600 text-white py-2.5 px-4 rounded-lg text-sm font-medium hover:from-blue-600 hover:to-blue-700 transition-all flex items-center justify-center gap-2 shadow-sm"
+            className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-2.5 px-4 rounded-lg text-sm font-medium hover:from-blue-600 hover:to-blue-700 transition-all flex items-center justify-center gap-2 shadow-sm"
           >
             <Plus size={16} />
             Add New Insight
@@ -1166,7 +551,7 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
           animate={{ opacity: 1, y: 0 }}
           className="fixed top-6 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-50 flex items-center gap-2"
         >
-          <Move size={14} />
+          <GripVertical size={14} />
           Drag to organize insight
         </motion.div>
       )}
