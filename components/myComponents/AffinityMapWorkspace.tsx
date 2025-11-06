@@ -36,6 +36,8 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   // État local
   const [isSilentMode, setIsSilentMode] = useState(true);
 
+  
+
   // Créer une map automatiquement si elle n'existe pas
   useEffect(() => {
     if (project && !affinityMap) {

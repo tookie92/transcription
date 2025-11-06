@@ -14,6 +14,8 @@ export interface TranscriptionSegment {
   no_speech_prob: number;
 }
 
+
+
 export interface SimpleSegment {
   id: number;
   start: number;
@@ -88,7 +90,7 @@ export interface AffinityGroup {
   title: string;
   color: string;
   position: { x: number; y: number };
-  insightIds: string[]; // ← CHANGÉ: string[] au lieu de Id<"insights">[]
+  insightIds: string[];
 }
 
 // API Request/Response types
@@ -212,4 +214,19 @@ export interface ExportInsight {
   createdAt: string;
 }
 
-// 🗑️ SUPPRIMER tous les types liés aux connections
+export interface HistoryState {
+  groups: AffinityGroup[];
+  insights: Insight[];
+  timestamp: number;
+  action: string;
+  description: string;
+}
+
+export interface HistoryActions {
+  pushState: (groups: AffinityGroup[], action: string, description: string) => void;
+  undo: () => AffinityGroup[] | null;
+  redo: () => AffinityGroup[] | null;
+  canUndo: boolean;
+  canRedo: boolean;
+  clear: () => void;
+}

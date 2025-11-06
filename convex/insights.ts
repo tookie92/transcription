@@ -40,6 +40,48 @@ export const createInsights = mutation({
   },
 });
 
+// deleteInsight - SUPPRIMER un insight
+export const deleteInsight = mutation({
+  args: {
+    insightId: v.id("insights"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const insight = await ctx.db.get(args.insightId);
+    if (!insight) throw new Error("Insight not found");
+
+    // Vérifier que l'utilisateur peut supprimer cet insight
+    // Seulement les insights manuels ou le créateur
+    if (insight.source !== 'manual' && insight.createdBy !== identity.subject) {
+      throw new Error("Can only delete manual insights or your own insights");
+    }
+
+    await ctx.db.delete(args.insightId);
+    
+    // Optionnel: Retirer l'insight de tous les groupes
+    const maps = await ctx.db
+      .query("affinityMaps")
+      .filter(q => q.eq(q.field("projectId"), insight.projectId))
+      .collect();
+
+    for (const map of maps) {
+      const updatedGroups = map.groups.map(group => ({
+        ...group,
+        insightIds: group.insightIds.filter(id => id !== args.insightId)
+      }));
+      
+      await ctx.db.patch(map._id, {
+        groups: updatedGroups,
+        updatedAt: Date.now(),
+      });
+    }
+
+    return { success: true };
+  },
+});
+
 // Ajoute cette query à la fin du fichier
 export const getByProject = query({
   args: {

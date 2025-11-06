@@ -7,7 +7,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { Edit, Trash2, Link, Copy, ScanEye } from "lucide-react";
+import { Edit, Trash2 } from "lucide-react";
 
 interface GroupContextMenuProps {
   groupId: string;
@@ -15,9 +15,6 @@ interface GroupContextMenuProps {
   children: React.ReactNode;
   onRename: (groupId: string) => void;
   onDelete: (groupId: string) => void;
-  onDuplicate?: (groupId: string) => void;
-  onCreateConnection?: (groupId: string) => void;
-  onAnalyze?: (groupId: string) => void;
 }
 
 export function GroupContextMenu({
@@ -26,12 +23,9 @@ export function GroupContextMenu({
   children,
   onRename,
   onDelete,
-  onDuplicate,
-  onCreateConnection,
-  onAnalyze,
 }: GroupContextMenuProps) {
   return (
-    <ContextMenu >
+    <ContextMenu>
       <ContextMenuTrigger asChild>
         {children}
       </ContextMenuTrigger>
@@ -49,39 +43,6 @@ export function GroupContextMenu({
           <Edit size={14} />
           Renommer le groupe
         </ContextMenuItem>
-        
-        {onDuplicate && (
-          <ContextMenuItem 
-            onClick={() => onDuplicate(groupId)}
-            className="flex items-center gap-2 cursor-pointer"
-          >
-            <Copy size={14} />
-            Dupliquer
-          </ContextMenuItem>
-        )}
-        
-        {onCreateConnection && (
-          <ContextMenuItem 
-            onClick={() => onCreateConnection(groupId)}
-            className="flex items-center gap-2 cursor-pointer"
-          >
-            <Link size={14} />
-            Créer une connection
-          </ContextMenuItem>
-        )}
-        
-        <ContextMenuSeparator />
-        
-        {/* Actions avancées */}
-        {onAnalyze && (
-          <ContextMenuItem 
-            onClick={() => onAnalyze(groupId)}
-            className="flex items-center gap-2 cursor-pointer"
-          >
-            <ScanEye size={14} />
-            Analyser les insights
-          </ContextMenuItem>
-        )}
         
         <ContextMenuSeparator />
         

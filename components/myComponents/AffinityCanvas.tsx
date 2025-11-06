@@ -1,28 +1,17 @@
+// components/AffinityCanvas.tsx - VERSION COMPLÈTE ET SIMPLIFIÉE
 "use client";
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
-import DraggableGroup from "./DraggableGroup";
-import { GripVertical, Plus, Redo2, Undo2 } from "lucide-react";
+import AffinityGroup from "./AffinityGroup";
+import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo } from "lucide-react";
 import { motion } from "framer-motion";
-
-// Dans AffinityCanvas.tsx - corriger l'interface
-interface AffinityGroup {
-  id: string;
-  title: string;
-  color: string;
-  position: { x: number; y: number };
-  insightIds: string[]; // ← Doit correspondre au type dans types/index.ts
-}
-
-interface Insight {
-  id: string;
-  type: 'pain-point' | 'quote' | 'insight' | 'follow-up' | 'custom';
-  text: string;
-  timestamp: number;
-}
+import { AffinityGroup as AffinityGroupType, Insight } from "@/types";
+import { toast } from "sonner";
+import { useCanvasShortcuts } from "@/hooks/useCanvasShortcuts";
+import { useHistory } from "@/hooks/useHistory";
 
 interface AffinityCanvasProps {
-  groups: AffinityGroup[];
+  groups: AffinityGroupType[];
   insights: Insight[];
   onGroupMove: (groupId: string, position: { x: number; y: number }) => void;
   onGroupCreate: (position: { x: number; y: number }) => void;
@@ -31,7 +20,7 @@ interface AffinityCanvasProps {
   onGroupDelete?: (groupId: string) => void;
   onManualInsightCreate: (text: string, type: Insight['type']) => void;
   onGroupTitleUpdate?: (groupId: string, title: string) => void;
-  onGroupsReplace?: (groups: AffinityGroup[]) => void; // ← Doit correspondre
+  onGroupsReplace?: (groups: AffinityGroupType[]) => void;
 }
 
 export default function AffinityCanvas({ 
@@ -50,175 +39,192 @@ export default function AffinityCanvas({
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
   
-  const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
-  const [draggedInsight, setDraggedInsight] = useState<string | null>(null);
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
+  const [draggedInsightId, setDraggedInsightId] = useState<string | null>(null);
   
   const [newInsightText, setNewInsightText] = useState("");
   const [newInsightType, setNewInsightType] = useState<Insight['type']>('insight');
   const [showAddInsight, setShowAddInsight] = useState(false);
-  const [draggedInsightId, setDraggedInsightId] = useState<string | null>(null);
+  const [workspaceMode, setWorkspaceMode] = useState<'grouping' | 'voting'>('grouping');
 
-  // 📚 Historique pour undo/redo
-  const [history, setHistory] = useState<{ groups: AffinityGroup[]; timestamp: number }[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const [lastActionTime, setLastActionTime] = useState(0);
-
-  // 🎯 Sélection de groupes
+  // 🆕 États pour la sélection et mouvement clavier
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
-  const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null);
+  const [isMovingWithArrows, setIsMovingWithArrows] = useState(false);
+  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
+
+  // 🆕 Historique SIMPLE
+  const history = useHistory();
+
+  // 📊 Stats pour le header
+  const stats = useMemo(() => {
+    const totalInsights = insights.length;
+    const groupedInsights = groups.reduce((sum, group) => sum + group.insightIds.length, 0);
+    const ungroupedInsights = totalInsights - groupedInsights;
+    
+    return {
+      totalInsights,
+      groupedInsights,
+      ungroupedInsights,
+      groupCount: groups.length,
+      completion: totalInsights > 0 ? Math.round((groupedInsights / totalInsights) * 100) : 0
+    };
+  }, [groups, insights]);
 
   const availableInsights = useMemo(() => {
     const usedInsightIds = new Set(groups.flatMap(group => group.insightIds));
     return insights.filter(insight => !usedInsightIds.has(insight.id));
   }, [groups, insights]);
 
-  // ==================== UNDO/REDO ====================
+  // ==================== HISTORIQUE SIMPLE ====================
 
-  const saveToHistory = useCallback((newGroups: AffinityGroup[], action: string = "modification") => {
-    const now = Date.now();
-    if (now - lastActionTime < 500 && action === "drag") {
-      return;
-    }
-    setLastActionTime(now);
+  // 🆕 ONLY 2 handlers pour undo/redo
+const handleUndo = useCallback(() => {
+  console.log("🔄 UNDO called");
+  const previousState = history.undo();
+  if (previousState) {
+    onGroupsReplace?.(previousState.groups);
+    toast.success("Undone");
+  } else {
+    toast.info("Nothing to undo");
+  }
+}, [history, onGroupsReplace]);
 
-    const groupsSnapshot = JSON.parse(JSON.stringify(newGroups));
+const handleRedo = useCallback(() => {
+  console.log("🔄 REDO called");
+  const nextState = history.redo();
+  if (nextState) {
+    onGroupsReplace?.(nextState.groups);
+    toast.success("Redone");
+  } else {
+    toast.info("Nothing to redo");
+  }
+}, [history, onGroupsReplace]);
+
+  // 🆕 ONLY 1 fonction pour sauvegarder l'état actuel
+  const saveCurrentState = useCallback((action: string, description: string) => {
+    history.pushState(groups, insights, action, description);
+  }, [groups, insights, history]);
+
+  // 🆕 Handlers avec sauvegarde MANUELLE
+  const handleGroupDeleteWithSave = useCallback((groupId: string) => {
+    const groupToDelete = groups.find(g => g.id === groupId);
     
-    setHistory(prev => {
-      const newHistory = prev.slice(0, historyIndex + 1);
-      newHistory.push({ groups: groupsSnapshot, timestamp: now });
-      if (newHistory.length > 50) newHistory.shift();
-      return newHistory;
-    });
+    // 1. Sauvegarde AVANT la suppression
+    saveCurrentState("before_delete", `Before deleting group "${groupToDelete?.title}"`);
     
-    setHistoryIndex(prev => Math.min(prev + 1, 49));
-  }, [historyIndex, lastActionTime]);
-
-  const undo = useCallback(() => {
-    if (historyIndex > 0) {
-      const newIndex = historyIndex - 1;
-      const previousState = history[newIndex];
-      if (previousState && onGroupsReplace) {
-        onGroupsReplace(previousState.groups);
-      }
-      setHistoryIndex(newIndex);
-    }
-  }, [historyIndex, history, onGroupsReplace]);
-
-  const redo = useCallback(() => {
-    if (historyIndex < history.length - 1) {
-      const newIndex = historyIndex + 1;
-      const nextState = history[newIndex];
-      if (nextState && onGroupsReplace) {
-        onGroupsReplace(nextState.groups);
-      }
-      setHistoryIndex(newIndex);
-    }
-  }, [historyIndex, history.length, history, onGroupsReplace]);
-
-  // ==================== SÉLECTION ====================
-
-  const handleGroupClick = useCallback((groupId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    if (e.shiftKey && selectionAnchor) {
-      const groupIds = groups.map(g => g.id);
-      const anchorIndex = groupIds.indexOf(selectionAnchor);
-      const targetIndex = groupIds.indexOf(groupId);
-      
-      if (anchorIndex !== -1 && targetIndex !== -1) {
-        const start = Math.min(anchorIndex, targetIndex);
-        const end = Math.max(anchorIndex, targetIndex);
-        const newSelection = new Set(groupIds.slice(start, end + 1));
-        setSelectedGroups(newSelection);
-        return;
-      }
-    }
-    
-    if (e.ctrlKey || e.metaKey) {
-      setSelectedGroups(prev => {
-        const newSelection = new Set(prev);
-        if (newSelection.has(groupId)) {
-          newSelection.delete(groupId);
-        } else {
-          newSelection.add(groupId);
-        }
-        return newSelection;
-      });
-      setSelectionAnchor(groupId);
-    } 
-    else {
-      setSelectedGroups(new Set([groupId]));
-      setSelectionAnchor(groupId);
-    }
-  }, [groups, selectionAnchor]);
-
-  const handleCanvasClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === canvasRef.current) {
-      setSelectedGroups(new Set());
-      setSelectionAnchor(null);
-    }
-  }, []);
-
-  // ==================== DRAG & DROP ====================
-
-  const handleGroupMove = useCallback((groupId: string, newPosition: { x: number; y: number }) => {
-    const draggedGroup = groups.find(g => g.id === groupId);
-    if (!draggedGroup) return;
-
-    const deltaX = newPosition.x - draggedGroup.position.x;
-    const deltaY = newPosition.y - draggedGroup.position.y;
-
-    if (selectedGroups.has(groupId) && selectedGroups.size > 1) {
-      selectedGroups.forEach(selectedGroupId => {
-        const group = groups.find(g => g.id === selectedGroupId);
-        if (group && selectedGroupId !== groupId) {
-          onGroupMove(selectedGroupId, {
-            x: group.position.x + deltaX,
-            y: group.position.y + deltaY
-          });
-        }
-      });
-    }
-    
-    onGroupMove(groupId, newPosition);
-    
-    setTimeout(() => {
-      saveToHistory(groups, "drag");
-    }, 100);
-  }, [groups, selectedGroups, onGroupMove, saveToHistory]);
-
-  const handleDeleteGroupCallback = useCallback((groupId: string) => {
-    saveToHistory(groups, "delete_group");
+    // 2. Execute l'action
     onGroupDelete?.(groupId);
-  }, [onGroupDelete, groups, saveToHistory]);
+  }, [onGroupDelete, groups, saveCurrentState]);
 
-  // ==================== ZOOM & PAN ====================
-
-  const handleWheel = useCallback((e: WheelEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest('.group-insights-container')) return;
+  const handleGroupTitleUpdateWithSave = useCallback((groupId: string, title: string) => {
+    const oldGroup = groups.find(g => g.id === groupId);
     
-    e.preventDefault();
-    const delta = -e.deltaY * 0.001;
-    setScale(prev => Math.max(0.1, Math.min(3, prev + delta)));
-  }, []);
+    // 1. Sauvegarde AVANT le rename
+    saveCurrentState("before_rename", `Before renaming group "${oldGroup?.title}"`);
+    
+    // 2. Execute l'action
+    onGroupTitleUpdate?.(groupId, title);
+  }, [onGroupTitleUpdate, groups, saveCurrentState]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.addEventListener('wheel', handleWheel, { passive: false });
-    return () => canvas.removeEventListener('wheel', handleWheel);
-  }, [handleWheel]);
+  // ==================== RACCOURCIS CLAVIER ====================
+
+  useCanvasShortcuts({
+    onNewGroup: () => {
+      const x = (cursorPosition.x - position.x) / scale;
+      const y = (cursorPosition.y - position.y) / scale;
+      onGroupCreate({ x, y });
+      toast.success("New group created (N)");
+    },
+    onSelectAll: () => {
+      setSelectedGroups(new Set(groups.map(g => g.id)));
+      toast.info(`Selected all ${groups.length} groups`);
+    },
+    onDeleteSelected: () => {
+      if (selectedGroups.size > 0) {
+        // Sauvegarder avant suppression
+        saveCurrentState("before_multiple_delete", `Before deleting ${selectedGroups.size} groups`);
+        
+        if (confirm(`Delete ${selectedGroups.size} selected group(s)?`)) {
+          selectedGroups.forEach(groupId => {
+            onGroupDelete?.(groupId);
+          });
+          setSelectedGroups(new Set());
+          toast.success(`Deleted ${selectedGroups.size} group(s)`);
+        }
+      }
+    },
+    onEscape: () => {
+      if (selectedGroups.size > 0) {
+        setSelectedGroups(new Set());
+        toast.info("Selection cleared");
+      }
+    },
+    onArrowMove: (direction, shiftKey) => {
+      if (selectedGroups.size === 0) return;
+      
+      const moveDelta = shiftKey ? 20 : 5;
+      
+      selectedGroups.forEach(groupId => {
+        const group = groups.find(g => g.id === groupId);
+        if (group) {
+          let newX = group.position.x;
+          let newY = group.position.y;
+
+          switch (direction) {
+            case 'up':
+              newY -= moveDelta;
+              break;
+            case 'down':
+              newY += moveDelta;
+              break;
+            case 'left':
+              newX -= moveDelta;
+              break;
+            case 'right':
+              newX += moveDelta;
+              break;
+          }
+
+          onGroupMove(groupId, { x: newX, y: newY });
+        }
+      });
+
+      setIsMovingWithArrows(true);
+      setTimeout(() => setIsMovingWithArrows(false), 100);
+    },
+    onUndo: handleUndo,
+    onRedo: handleRedo,
+    selectedGroups,
+  });
+
+  // ==================== GESTION SOURIS ====================
 
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 0 && e.target === canvasRef.current) {
+    // Panning seulement avec espace + clic ou bouton milieu
+    if (e.button === 1 || (e.button === 0 && isSpacePressed)) {
       setIsPanning(true);
+      return;
+    }
+    
+    // Clic normal sur le canvas vide = désélection
+    if (e.button === 0 && e.target === canvasRef.current) {
+      setSelectedGroups(new Set());
     }
   };
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
+    // Track cursor position
+    if (canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      setCursorPosition({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      });
+    }
+
+    // Panning
     if (isPanning && e.buttons === 1) {
       setPosition(prev => ({
         x: prev.x + e.movementX,
@@ -231,330 +237,476 @@ export default function AffinityCanvas({
     setIsPanning(false);
   };
 
-  // ==================== RACCOURCIS CLAVIER ====================
+  const handleCanvasClick = useCallback((e: React.MouseEvent) => {
+    if (e.target === canvasRef.current) {
+      setSelectedGroups(new Set());
+    }
+  }, []);
+
+  const handleCanvasDoubleClick = (e: React.MouseEvent) => {
+    if (e.target === canvasRef.current) {
+      const rect = canvasRef.current!.getBoundingClientRect();
+      const x = (e.clientX - rect.left - position.x) / scale;
+      const y = (e.clientY - rect.top - position.y) / scale;
+      onGroupCreate({ x, y });
+    }
+  };
+
+  // 🆕 Gestion de la sélection des groupes
+  const handleGroupSelect = useCallback((groupId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (e.ctrlKey || e.metaKey) {
+      // Sélection multiple avec Ctrl
+      setSelectedGroups(prev => {
+        const newSelection = new Set(prev);
+        if (newSelection.has(groupId)) {
+          newSelection.delete(groupId);
+        } else {
+          newSelection.add(groupId);
+        }
+        return newSelection;
+      });
+    } else {
+      // Sélection simple
+      setSelectedGroups(new Set([groupId]));
+    }
+  }, []);
+
+  // ==================== GESTION TOUCHE ESPACE ====================
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const isTypingInInput = e.target instanceof HTMLInputElement || 
-                             e.target instanceof HTMLTextAreaElement;
-      
-      if (isTypingInInput) return;
-
-      // ESC - Annule sélection
-      if (e.key === 'Escape' && selectedGroups.size > 0) {
+      if (e.code === 'Space') {
         e.preventDefault();
-        setSelectedGroups(new Set());
-        setSelectionAnchor(null);
+        setIsSpacePressed(true);
+        if (canvasRef.current) {
+          canvasRef.current.style.cursor = 'grab';
+        }
       }
+    };
 
-      // UNDO/REDO
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-      }
-      if (((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) || 
-          ((e.ctrlKey || e.metaKey) && e.key === 'y')) {
-        e.preventDefault();
-        redo();
-      }
-
-      // SELECTION
-      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
-        e.preventDefault();
-        setSelectedGroups(new Set(groups.map(g => g.id)));
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setIsSpacePressed(false);
+        if (canvasRef.current) {
+          canvasRef.current.style.cursor = 'default';
+        }
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedGroups, groups, undo, redo]);
+    document.addEventListener('keyup', handleKeyUp);
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
 
   // ==================== RENDER ====================
 
   return (
-    <div className="h-full relative bg-gray-50 overflow-hidden">
-      {/* Toolbar Simplifiée */}
-      <div className="absolute top-4 left-4 z-30 flex gap-2">
-        {/* Undo/Redo Buttons */}
-        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1">
-          <button 
-            onClick={undo}
-            disabled={historyIndex <= 0}
-            className="w-8 h-8 rounded hover:bg-gray-100 flex items-center justify-center text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
-            title="Undo (Ctrl+Z)"
-          >
-            <Undo2 size={16} />
-          </button>
-          <button 
-            onClick={redo}
-            disabled={historyIndex >= history.length - 1}
-            className="w-8 h-8 rounded hover:bg-gray-100 flex items-center justify-center text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
-            title="Redo (Ctrl+Shift+Z)"
-          >
-            <Redo2 size={16} />
-          </button>
-        </div>
-
-        {/* Zoom Buttons */}
-        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1">
-          <button 
-            onClick={() => setScale(s => Math.min(3, s + 0.1))}
-            className="w-8 h-8 rounded hover:bg-gray-100 flex items-center justify-center text-gray-700 font-semibold"
-          >
-            +
-          </button>
-          <button 
-            onClick={() => setScale(s => Math.max(0.1, s - 0.1))}
-            className="w-8 h-8 rounded hover:bg-gray-100 flex items-center justify-center text-gray-700 font-semibold"
-          >
-            −
-          </button>
-          <div className="w-12 h-8 flex items-center justify-center text-xs text-gray-600 border-l border-gray-200">
-            {Math.round(scale * 100)}%
+    <div className="h-full flex flex-col bg-gray-50">
+      {/* HEADER AVEC RACCOURCIS */}
+      <header className="bg-white border-b border-gray-200 px-6 py-4 shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Affinity Diagram</h1>
+              <p className="text-sm text-gray-600">Group related insights to discover patterns</p>
+            </div>
+            
+            {/* STATS */}
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                <span className="text-gray-700">{stats.totalInsights} insights</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                <span className="text-gray-700">{stats.groupCount} groups</span>
+              </div>
+              {selectedGroups.size > 0 && (
+                <div className="flex items-center gap-2 bg-orange-100 px-3 py-1 rounded-full">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                  <span className="text-orange-700 font-medium">{selectedGroups.size} selected</span>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Stats */}
-      <div className="absolute top-4 right-96 z-30 bg-white rounded-lg shadow-lg border border-gray-200 px-4 py-2">
-        <div className="flex items-center gap-6 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-green-500"></div>
-            <span className="text-gray-600">Available:</span>
-            <span className="font-semibold text-gray-900">{availableInsights.length}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-            <span className="text-gray-600">Groups:</span>
-            <span className="font-semibold text-gray-900">{groups.length}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Canvas */}
-      <div
-        ref={canvasRef}
-        className="absolute inset-0"
-        style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
-        onMouseDown={handleCanvasMouseDown}
-        onMouseMove={handleCanvasMouseMove}
-        onMouseUp={handleCanvasMouseUp}
-        onMouseLeave={handleCanvasMouseUp}
-        onClick={handleCanvasClick}
-        onDoubleClick={(e) => {
-          if (e.target === canvasRef.current || (e.target as HTMLElement).closest('.canvas-content')) {
-            const rect = canvasRef.current!.getBoundingClientRect();
-            const x = (e.clientX - rect.left - position.x) / scale;
-            const y = (e.clientY - rect.top - position.y) / scale;
-            onGroupCreate({ x, y });
-          }
-        }}
-      >
-        <div
-          className="canvas-content absolute pointer-events-none"
-          style={{
-            transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-            transformOrigin: '0 0',
-            width: '5000px',
-            height: '5000px',
-          }}
-        >
-          {/* Grid background */}
-          <div 
-            className="absolute inset-0 z-0"
-            style={{
-              backgroundImage: `
-                linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px)
-              `,
-              backgroundSize: '40px 40px',
-            }}
-          />
-
-          {/* Groups */}
-          {groups.map((group) => (
-            <DraggableGroup
-              onHover={setHoveredGroup}
-              key={group.id}
-              group={group}
-              insights={insights}
-              scale={scale}
-              isHovered={hoveredGroup === group.id}
-              isDragOver={dragOverGroup === group.id}
-              isSelected={selectedGroups.has(group.id)}
-              onSelect={handleGroupClick}
-              onMove={handleGroupMove}
-              onDelete={handleDeleteGroupCallback}
-              onTitleUpdate={onGroupTitleUpdate}
-              onRemoveInsight={onInsightRemoveFromGroup}
-              onDragOver={(e, groupId) => {
-                e.preventDefault();
-                e.stopPropagation();
-                e.dataTransfer.dropEffect = 'move';
-                setDragOverGroup(groupId);
-              }}
-              onDragLeave={(e) => {
-                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                const x = e.clientX;
-                const y = e.clientY;
-                if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-                  setDragOverGroup(null);
-                }
-              }}
-              onDrop={(e, groupId) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const insightId = e.dataTransfer.getData('text/plain');
-                if (insightId) {
-                  onInsightDrop(insightId, groupId);
-                }
-                setDragOverGroup(null);
-                setDraggedInsight(null);
-              }}
-              onInsightDragStart={(e, insightId) => {
-                e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/plain', insightId);
-                setDraggedInsight(insightId);
-                setDraggedInsightId(insightId);
-              }}
-              onInsightDragEnd={() => {
-                setDraggedInsight(null);
-                setDragOverGroup(null);
-                setDraggedInsightId(null);
-              }}
-              selectedGroupsCount={selectedGroups.size}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Insights Panel */}
-      <div className="absolute right-4 top-4 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-20 overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-900">Available Insights</h3>
-            <span className="text-sm bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-medium">
-              {availableInsights.length}
-            </span>
-          </div>
-          
-          <button
-            onClick={() => setShowAddInsight(!showAddInsight)}
-            className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-2.5 px-4 rounded-lg text-sm font-medium hover:from-blue-600 hover:to-blue-700 transition-all flex items-center justify-center gap-2 shadow-sm"
-          >
-            <Plus size={16} />
-            Add New Insight
-          </button>
-
-          {showAddInsight && (
-            <div className="mt-3 p-3 bg-white rounded-lg border border-gray-200 space-y-2">
-              <select
-                value={newInsightType}
-                onChange={(e) => setNewInsightType(e.target.value as Insight['type'])}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          {/* TOOLBAR */}
+          <div className="flex items-center gap-4">
+            {/* UNDO/REDO */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleUndo}
+                disabled={!history.canUndo}
+                className={`px-3 py-2 rounded-lg border flex items-center gap-2 ${
+                  history.canUndo
+                    ? 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
+                    : 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
+                title="Undo (Ctrl+Z)"
               >
-                <option value="insight">💡 Insight</option>
-                <option value="pain-point">😣 Pain Point</option>
-                <option value="quote">💬 Quote</option>
-                <option value="follow-up">📋 Follow-up</option>
-              </select>
-              <textarea
-                value={newInsightText}
-                onChange={(e) => setNewInsightText(e.target.value)}
-                placeholder="Type your insight here..."
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                rows={3}
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    if (newInsightText.trim()) {
-                      onManualInsightCreate(newInsightText.trim(), newInsightType);
-                      setNewInsightText("");
-                      setShowAddInsight(false);
-                    }
-                  }}
-                  disabled={!newInsightText.trim()}
-                  className="flex-1 bg-green-500 text-white py-2 px-3 rounded-lg text-sm font-medium hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                >
-                  Add
-                </button>
-                <button
-                  onClick={() => {
-                    setShowAddInsight(false);
-                    setNewInsightText("");
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
+                <Undo size={16} />
+                Undo
+              </button>
+
+              <button
+                onClick={handleRedo}
+                disabled={!history.canRedo}
+                className={`px-3 py-2 rounded-lg border flex items-center gap-2 ${
+                  history.canRedo
+                    ? 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
+                    : 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
+                title="Redo (Ctrl+Y)"
+              >
+                <Redo size={16} />
+                Redo
+              </button>
             </div>
-          )}
+
+            {/* INDICATEUR RACCOURCIS */}
+            <div className="text-xs text-gray-500 flex items-center gap-3">
+              <kbd className="px-2 py-1 bg-gray-100 rounded border text-xs">N</kbd>
+              <span>New group</span>
+              <kbd className="px-2 py-1 bg-gray-100 rounded border text-xs">Ctrl+A</kbd>
+              <span>Select all</span>
+              <kbd className="px-2 py-1 bg-gray-100 rounded border text-xs">←↑↓→</kbd>
+              <span>Move</span>
+            </div>
+
+            {/* MODES */}
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setWorkspaceMode('grouping')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  workspaceMode === 'grouping'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Users size={16} className="inline mr-2" />
+                Grouping
+              </button>
+              <button
+                onClick={() => setWorkspaceMode('voting')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  workspaceMode === 'voting'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Vote size={16} className="inline mr-2" />
+                Dot Voting
+              </button>
+            </div>
+
+            <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2">
+              <Download size={16} />
+              Export
+            </button>
+          </div>
         </div>
 
-        <div className="p-3 max-h-[500px] overflow-y-auto space-y-2">
-          {availableInsights.map(insight => (
-            <motion.div
-              key={insight.id}
-              draggable
-              onDragStart={(e) => {
-                const dragTransfer  = e as unknown as React.DragEvent;
-                dragTransfer.dataTransfer.effectAllowed = 'move';
-                dragTransfer.dataTransfer.setData('text/plain', insight.id);
-                setDraggedInsight(insight.id);
-                setDraggedInsightId(insight.id);
-              }}
-              onDragEnd={() => {
-                setDraggedInsight(null);
-                setDragOverGroup(null);
-                setDraggedInsightId(null);
-              }}
-              whileHover={{ scale: 1.02, y: -2 }}
-              animate={{
-                scale: draggedInsightId === insight.id ? 0.95 : 1,
-                opacity: draggedInsightId === insight.id ? 0.6 : 1,
-                rotateZ: draggedInsightId === insight.id ? 5 : 0,
-              }}
-              className="bg-white border border-gray-200 rounded-lg p-3 cursor-move hover:shadow-md hover:border-blue-300 transition-all"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                  insight.type === 'pain-point' ? 'bg-red-100 text-red-700' :
-                  insight.type === 'quote' ? 'bg-blue-100 text-blue-700' :
-                  insight.type === 'insight' ? 'bg-purple-100 text-purple-700' :
-                  'bg-green-100 text-green-700'
-                }`}>
-                  {insight.type}
-                </span>
-                <GripVertical size={14} className="text-gray-400" />
-              </div>
-              <p className="text-sm text-gray-700 leading-snug line-clamp-2">
-                {insight.text}
-              </p>
-            </motion.div>
-          ))}
+        {/* PROGRESS BAR */}
+        <div className="mt-3">
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div 
+              className="bg-green-500 h-2 rounded-full transition-all duration-500"
+              style={{ width: `${stats.completion}%` }}
+            ></div>
+          </div>
+        </div>
+      </header>
 
-          {availableInsights.length === 0 && (
-            <div className="text-center py-12">
-              <div className="text-4xl mb-3">🎉</div>
-              <p className="text-sm font-medium text-gray-600">All insights organized!</p>
-              <p className="text-xs text-gray-400 mt-1">Great job on your affinity mapping</p>
+      {/* MAIN WORKSPACE */}
+      <div className="flex-1 flex min-h-0">
+        {/* SIDEBAR - INSIGHTS DISPONIBLES */}
+        <div className="w-80 bg-white border-r border-gray-200 flex flex-col shrink-0">
+          <div className="p-4 border-b border-gray-200 shrink-0">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-900">Available Insights</h3>
+              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-sm font-medium">
+                {availableInsights.length}
+              </span>
+            </div>
+            
+            <button
+              onClick={() => setShowAddInsight(!showAddInsight)}
+              className="w-full bg-blue-500 text-white py-2.5 px-4 rounded-lg text-sm font-medium hover:bg-blue-600 transition-all flex items-center justify-center gap-2"
+            >
+              <Plus size={16} />
+              Add Insight
+            </button>
+
+            {showAddInsight && (
+              <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
+                {/* Sélecteur de type */}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: 'pain-point', label: 'Pain', color: 'bg-red-100 text-red-700' },
+                    { value: 'quote', label: 'Quote', color: 'bg-blue-100 text-blue-700' },
+                    { value: 'insight', label: 'Insight', color: 'bg-purple-100 text-purple-700' },
+                    { value: 'follow-up', label: 'Follow-up', color: 'bg-green-100 text-green-700' },
+                    { value: 'custom', label: 'Custom', color: 'bg-gray-100 text-gray-700' },
+                  ].map(({ value, label, color }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setNewInsightType(value as Insight['type'])}
+                      className={`p-2 rounded-lg text-xs font-medium transition-colors ${
+                        newInsightType === value
+                          ? `${color} border-2 border-current`
+                          : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                
+                <textarea
+                  value={newInsightText}
+                  onChange={(e) => setNewInsightText(e.target.value)}
+                  placeholder="Type your insight, observation, or quote..."
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={3}
+                />
+                
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (newInsightText.trim()) {
+                        onManualInsightCreate(newInsightText.trim(), newInsightType);
+                        setNewInsightText("");
+                        setNewInsightType('insight');
+                        setShowAddInsight(false);
+                      }
+                    }}
+                    disabled={!newInsightText.trim()}
+                    className="flex-1 bg-green-500 text-white py-2 px-3 rounded-lg text-sm font-medium hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Add {newInsightType.charAt(0).toUpperCase() + newInsightType.slice(1).replace('-', ' ')}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddInsight(false);
+                      setNewInsightText("");
+                      setNewInsightType('insight');
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* LISTE DES INSIGHTS SCROLLABLE */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-3 space-y-2">
+              {availableInsights.map(insight => (
+                <motion.div
+                  key={insight.id}
+                  draggable={workspaceMode === 'grouping'}
+                  onDragStart={(e) => {
+                    const data = e as unknown as React.DragEvent;
+                    data.dataTransfer.effectAllowed = 'move';
+                    data.dataTransfer.setData('text/plain', insight.id);
+                    setDraggedInsightId(insight.id);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedInsightId(null);
+                  }}
+                  whileHover={{ scale: workspaceMode === 'grouping' ? 1.02 : 1 }}
+                  className={`p-3 rounded-lg border cursor-${workspaceMode === 'grouping' ? 'move' : 'default'} transition-all group relative ${
+                    workspaceMode === 'grouping' 
+                      ? 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-md' 
+                      : 'bg-gray-50 border-gray-100'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                      insight.type === 'pain-point' ? 'bg-red-100 text-red-700' :
+                      insight.type === 'quote' ? 'bg-blue-100 text-blue-700' :
+                      insight.type === 'insight' ? 'bg-purple-100 text-purple-700' :
+                      'bg-green-100 text-green-700'
+                    }`}>
+                      {insight.type}
+                    </span>
+                    {insight.source === 'manual' && (
+                      <span className="text-xs text-gray-400">Manual</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-700 leading-snug">
+                    {insight.text}
+                  </p>
+                  {workspaceMode === 'grouping' && (
+                    <p className="text-xs text-gray-400 mt-2">Drag to group</p>
+                  )}
+                </motion.div>
+              ))}
+
+              {availableInsights.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <div className="text-3xl mb-2">🎉</div>
+                  <p className="font-medium">All insights organized!</p>
+                  <p className="text-sm mt-1">Great job on your affinity mapping</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* CANVAS PRINCIPAL */}
+        <div className="flex-1 relative overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
+          <div
+            ref={canvasRef}
+            className="absolute inset-0"
+            style={{ 
+              cursor: isSpacePressed ? 'grab' : (isPanning ? 'grabbing' : 'default')
+            }}
+            onMouseDown={handleCanvasMouseDown}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseUp={handleCanvasMouseUp}
+            onMouseLeave={handleCanvasMouseUp}
+            onClick={handleCanvasClick}
+            onDoubleClick={handleCanvasDoubleClick}
+            onContextMenu={(e: React.MouseEvent) => {
+              e.preventDefault();
+              const rect = canvasRef.current!.getBoundingClientRect();
+              const x = (e.clientX - rect.left - position.x) / scale;
+              const y = (e.clientY - rect.top - position.y) / scale;
+              onGroupCreate({ x, y });
+            }}
+          >
+            {/* CANVAS CONTENT */}
+            <div
+              className="absolute"
+              style={{
+                transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+                transformOrigin: '0 0',
+                width: '5000px',
+                height: '5000px',
+              }}
+            >
+              {/* GRID BACKGROUND */}
+              <div 
+                className="absolute inset-0 canvas-background"
+                style={{
+                  backgroundImage: `
+                    linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px)
+                  `,
+                  backgroundSize: '40px 40px',
+                }}
+              />
+
+              {/* GROUPS */}
+              <div className="p-8">
+                {groups.map((group) => (
+                  <AffinityGroup
+                    key={group.id}
+                    group={group}
+                    insights={insights}
+                    scale={scale}
+                    isSelected={selectedGroups.has(group.id)}
+                    isDragOver={dragOverGroup === group.id}
+                    onMove={onGroupMove}
+                    onDelete={handleGroupDeleteWithSave}
+                    onTitleUpdate={handleGroupTitleUpdateWithSave}
+                    onRemoveInsight={onInsightRemoveFromGroup}
+                    onSelect={handleGroupSelect}
+                    onDragOver={(e: React.DragEvent) => {
+                      if (workspaceMode === 'grouping') {
+                        e.preventDefault();
+                        setDragOverGroup(group.id);
+                      }
+                    }}
+                    onDragLeave={() => {
+                      setDragOverGroup(null);
+                    }}
+                    onDrop={(e: React.DragEvent) => {
+                      if (workspaceMode === 'grouping') {
+                        e.preventDefault();
+                        const insightId = e.dataTransfer.getData('text/plain');
+                        if (insightId) {
+                          onInsightDrop(insightId, group.id);
+                        }
+                        setDragOverGroup(null);
+                      }
+                    }}
+                    workspaceMode={workspaceMode}
+                  />
+                ))}
+
+                {/* EMPTY STATE */}
+                {groups.length === 0 && (
+                  <div className="text-center py-20">
+                    <div className="text-6xl mb-4">📊</div>
+                    <h3 className="text-xl font-semibold text-gray-700 mb-2">Start Creating Groups</h3>
+                    <p className="text-gray-500 mb-4">Double-click on the canvas to create your first group</p>
+                    <div className="flex justify-center gap-4 text-sm text-gray-600 mb-6">
+                      <div className="flex items-center gap-2">
+                        <kbd className="px-2 py-1 bg-gray-100 rounded border text-xs">Double-click</kbd>
+                        <span>Create group</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <kbd className="px-2 py-1 bg-gray-100 rounded border text-xs">N</kbd>
+                        <span>New group</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* INDICATEUR MOUVEMENT CLAVIER */}
+          {isMovingWithArrows && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-50 flex items-center gap-2"
+            >
+              <ArrowUp size={14} />
+              <span>Moving {selectedGroups.size} group{selectedGroups.size > 1 ? 's' : ''}</span>
+            </motion.div>
+          )}
+
+          {/* INDICATEUR ESPACE */}
+          {isSpacePressed && (
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-50">
+              🖱️ Space + Drag to pan
             </div>
           )}
+
+          {/* ZOOM CONTROLS */}
+          <div className="absolute bottom-4 right-4 bg-white rounded-lg shadow-lg border border-gray-200 p-2 flex gap-1">
+            <button 
+              onClick={() => setScale(s => Math.min(2, s + 0.1))}
+              className="w-8 h-8 rounded hover:bg-gray-100 flex items-center justify-center text-gray-700 font-semibold"
+            >
+              +
+            </button>
+            <button 
+              onClick={() => setScale(s => Math.max(0.3, s - 0.1))}
+              className="w-8 h-8 rounded hover:bg-gray-100 flex items-center justify-center text-gray-700 font-semibold"
+            >
+              −
+            </button>
+            <div className="w-12 h-8 flex items-center justify-center text-xs text-gray-600 border-l border-gray-200">
+              {Math.round(scale * 100)}%
+            </div>
+          </div>
         </div>
       </div>
-
-      {draggedInsight && (
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="fixed top-6 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-50 flex items-center gap-2"
-        >
-          <GripVertical size={14} />
-          Drag to organize insight
-        </motion.div>
-      )}
     </div>
   );
 }

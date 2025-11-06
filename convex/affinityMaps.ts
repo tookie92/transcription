@@ -129,6 +129,7 @@ export const addGroup = mutation({
   },
 });
 
+// convex/affinityMaps.ts - VÉRIFIER moveGroup
 export const moveGroup = mutation({
   args: {
     mapId: v.id("affinityMaps"),
@@ -145,6 +146,8 @@ export const moveGroup = mutation({
     const map = await ctx.db.get(args.mapId);
     if (!map) throw new Error("Affinity map not found");
 
+    console.log("🔄 Moving group in Convex:", args.groupId, "to", args.position);
+
     const updatedGroups = map.groups.map(group =>
       group.id === args.groupId
         ? { ...group, position: args.position }
@@ -155,6 +158,8 @@ export const moveGroup = mutation({
       groups: updatedGroups,
       updatedAt: Date.now(),
     });
+
+    console.log("✅ Group moved successfully in Convex");
   },
 });
 
