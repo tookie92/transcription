@@ -230,3 +230,33 @@ export interface HistoryActions {
   canRedo: boolean;
   clear: () => void;
 }
+
+// dotVotingSessions
+
+export interface DotVotingSession {
+  _id: string;
+  projectId: string;
+  mapId: string;
+  name: string;
+  maxVotesPerUser: number;
+  isActive: boolean;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Vote {
+  _id: string;
+  sessionId: string;
+  userId: string;
+  groupId: string;
+  votes: number;
+  createdAt: number;
+}
+
+export interface GroupVoteSummary {
+  groupId: string;
+  totalVotes: number;
+  userVotes: number;
+  group: AffinityGroup;
+}

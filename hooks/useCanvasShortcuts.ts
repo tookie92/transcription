@@ -11,6 +11,7 @@ interface CanvasShortcutsConfig {
   onArrowMove: (direction: 'up' | 'down' | 'left' | 'right', shiftKey: boolean) => void;
   onUndo: () => void;
   onRedo: () => void;
+  onToggleVotingPanel: () => void; // 🆕 AJOUT
   selectedGroups: Set<string>;
 }
 
@@ -23,6 +24,7 @@ export function useCanvasShortcuts(config: CanvasShortcutsConfig) {
     onArrowMove, 
     onUndo, 
     onRedo,
+    onToggleVotingPanel, // 🆕 AJOUT
     selectedGroups 
   } = config;
 
@@ -32,7 +34,7 @@ export function useCanvasShortcuts(config: CanvasShortcutsConfig) {
       return;
     }
 
-    // 🎯 UNDO (Ctrl+Z) - DOIT ÊTRE EN PREMIER
+    // 🎯 UNDO (Ctrl+Z)
     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
       e.preventDefault();
       e.stopPropagation();
@@ -46,6 +48,14 @@ export function useCanvasShortcuts(config: CanvasShortcutsConfig) {
       e.preventDefault();
       e.stopPropagation();
       onRedo();
+      return;
+    }
+
+    // 🆕 RACCOURCI POUR VOTING PANEL (V)
+    if (e.key === 'v' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleVotingPanel();
       return;
     }
 
@@ -95,7 +105,7 @@ export function useCanvasShortcuts(config: CanvasShortcutsConfig) {
       return;
     }
 
-  }, [onNewGroup, onSelectAll, onDeleteSelected, onEscape, onArrowMove, onUndo, onRedo, selectedGroups]);
+  }, [onNewGroup, onSelectAll, onDeleteSelected, onEscape, onArrowMove, onUndo, onRedo, onToggleVotingPanel, selectedGroups]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);

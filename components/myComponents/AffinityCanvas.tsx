@@ -3,16 +3,20 @@
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import AffinityGroup from "./AffinityGroup";
-import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo } from "lucide-react";
-import { motion } from "framer-motion";
+import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo, ChevronRight, ChevronLeft } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { AffinityGroup as AffinityGroupType, Insight } from "@/types";
 import { toast } from "sonner";
 import { useCanvasShortcuts } from "@/hooks/useCanvasShortcuts";
 import { useHistory } from "@/hooks/useHistory";
+import { DotVotingPanel } from "./DotVotingPanel";
+import { Button } from "../ui/button";
 
 interface AffinityCanvasProps {
   groups: AffinityGroupType[];
   insights: Insight[];
+  projectId: string; // ← AJOUTER projectId
+  mapId: string;     // ← AJOUTER mapId
   onGroupMove: (groupId: string, position: { x: number; y: number }) => void;
   onGroupCreate: (position: { x: number; y: number }) => void;
   onInsightDrop: (insightId: string, groupId: string) => void;
@@ -25,7 +29,9 @@ interface AffinityCanvasProps {
 
 export default function AffinityCanvas({ 
   groups, 
-  insights, 
+  insights,
+  projectId,
+  mapId,
   onGroupMove, 
   onGroupCreate,
   onInsightDrop,
@@ -54,6 +60,7 @@ export default function AffinityCanvas({
   const [isMovingWithArrows, setIsMovingWithArrows] = useState(false);
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
 
+
   // 🆕 Historique SIMPLE
   const history = useHistory();
 
@@ -77,36 +84,130 @@ export default function AffinityCanvas({
     return insights.filter(insight => !usedInsightIds.has(insight.id));
   }, [groups, insights]);
 
+    // 🆕 Référence pour gérer les clicks
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const clickCountRef = useRef(0);
+
   // ==================== HISTORIQUE SIMPLE ====================
 
   // 🆕 ONLY 2 handlers pour undo/redo
-const handleUndo = useCallback(() => {
-  console.log("🔄 UNDO called");
-  const previousState = history.undo();
-  if (previousState) {
-    onGroupsReplace?.(previousState.groups);
-    toast.success("Undone");
-  } else {
-    toast.info("Nothing to undo");
-  }
-}, [history, onGroupsReplace]);
+  const handleUndo = useCallback(() => {
+    console.log("🔄 UNDO called");
+    const previousState = history.undo();
+    if (previousState) {
+      onGroupsReplace?.(previousState.groups);
+      toast.success("Undone");
+    } else {
+      toast.info("Nothing to undo");
+    }
+  }, [history, onGroupsReplace]);
 
-const handleRedo = useCallback(() => {
-  console.log("🔄 REDO called");
-  const nextState = history.redo();
-  if (nextState) {
-    onGroupsReplace?.(nextState.groups);
-    toast.success("Redone");
-  } else {
-    toast.info("Nothing to redo");
-  }
-}, [history, onGroupsReplace]);
+  const handleRedo = useCallback(() => {
+    console.log("🔄 REDO called");
+    const nextState = history.redo();
+    if (nextState) {
+      onGroupsReplace?.(nextState.groups);
+      toast.success("Redone");
+    } else {
+      toast.info("Nothing to redo");
+    }
+  }, [history, onGroupsReplace]);
 
-  // 🆕 ONLY 1 fonction pour sauvegarder l'état actuel
-  const saveCurrentState = useCallback((action: string, description: string) => {
-    history.pushState(groups, insights, action, description);
-  }, [groups, insights, history]);
+const saveCurrentState = useCallback((action: string, description: string) => {
+  history.pushState(groups, insights, action, description);
+}, [groups, insights, history]);
 
+//=========== Arrow Move ===========
+
+  // 🆕 État local pour les positions optimistes
+  const [optimisticPositions, setOptimisticPositions] = useState<Map<string, {x: number, y: number}>>(new Map());
+
+  // 🆕 Fonction pour obtenir la position actuelle (optimiste ou réelle)
+  const getCurrentPosition = useCallback((groupId: string) => {
+    return optimisticPositions.get(groupId) || groups.find(g => g.id === groupId)?.position;
+  }, [optimisticPositions, groups]);
+
+  // 🆕 Handler optimiste pour le mouvement flèches
+  const handleArrowMove = useCallback((direction: 'up' | 'down' | 'left' | 'right', shiftKey: boolean) => {
+    if (selectedGroups.size === 0) return;
+    
+    const moveDelta = shiftKey ? 20 : 5;
+    
+    // Sauvegarder l'état avant le mouvement
+    saveCurrentState("before_move", `Before moving ${selectedGroups.size} groups`);
+    
+    console.log("🎯 Arrow move triggered:", direction, "Shift:", shiftKey);
+    console.log("📋 Selected groups:", Array.from(selectedGroups));
+    
+    // 🆕 MISE À JOUR OPTIMISTE IMMÉDIATE
+    const newPositions = new Map(optimisticPositions);
+    
+    selectedGroups.forEach(groupId => {
+      const group = groups.find(g => g.id === groupId);
+      
+      if (group) {
+        // 🆕 UTILISER LA POSITION OPTIMISTE SI ELLE EXISTE
+        const currentPosition = optimisticPositions.get(groupId) || group.position;
+        
+        let newX = currentPosition.x;
+        let newY = currentPosition.y;
+
+        switch (direction) {
+          case 'up':
+            newY -= moveDelta;
+            break;
+          case 'down':
+            newY += moveDelta;
+            break;
+          case 'left':
+            newX -= moveDelta;
+            break;
+          case 'right':
+            newX += moveDelta;
+            break;
+        }
+
+        const newPosition = { x: newX, y: newY };
+        console.log(`📍 New position for ${group.title}:`, newPosition);
+        
+        // 🆕 MISE À JOUR IMMÉDIATE LOCALE
+        newPositions.set(groupId, newPosition);
+        
+        // 🆕 APPEL ASYNCHRONE À LA MUTATION
+        onGroupMove(groupId, newPosition);
+      }
+    });
+
+    // 🆕 APPLIQUER LES NOUVELLES POSITIONS OPTIMISTES
+    setOptimisticPositions(newPositions);
+
+    setIsMovingWithArrows(true);
+    setTimeout(() => setIsMovingWithArrows(false), 100);
+  }, [selectedGroups, groups, onGroupMove, saveCurrentState, optimisticPositions]);
+
+  // 🆕 Handler optimiste pour le drag & drop
+  const handleGroupMoveOptimistic = useCallback((groupId: string, newPosition: { x: number; y: number }) => {
+    // 🆕 MISE À JOUR OPTIMISTE IMMÉDIATE
+    setOptimisticPositions(prev => {
+      const newMap = new Map(prev);
+      newMap.set(groupId, newPosition);
+      return newMap;
+    });
+    
+    // Appel à la mutation parente
+    onGroupMove(groupId, newPosition);
+  }, [onGroupMove]);
+
+  // 🆕 Réinitialiser les positions optimistes quand les groupes changent
+  useEffect(() => {
+    setOptimisticPositions(new Map());
+  }, [groups]); // Réinitialise quand les groupes changent depuis la DB
+
+
+
+
+
+// ==================== RACCOURCIS CLAVIER ====================
   // 🆕 Handlers avec sauvegarde MANUELLE
   const handleGroupDeleteWithSave = useCallback((groupId: string) => {
     const groupToDelete = groups.find(g => g.id === groupId);
@@ -130,6 +231,7 @@ const handleRedo = useCallback(() => {
 
   // ==================== RACCOURCIS CLAVIER ====================
 
+  // 🆕 Raccourci clavier pour toggle voting panel
   useCanvasShortcuts({
     onNewGroup: () => {
       const x = (cursorPosition.x - position.x) / scale;
@@ -143,7 +245,6 @@ const handleRedo = useCallback(() => {
     },
     onDeleteSelected: () => {
       if (selectedGroups.size > 0) {
-        // Sauvegarder avant suppression
         saveCurrentState("before_multiple_delete", `Before deleting ${selectedGroups.size} groups`);
         
         if (confirm(`Delete ${selectedGroups.size} selected group(s)?`)) {
@@ -161,57 +262,82 @@ const handleRedo = useCallback(() => {
         toast.info("Selection cleared");
       }
     },
-    onArrowMove: (direction, shiftKey) => {
-      if (selectedGroups.size === 0) return;
-      
-      const moveDelta = shiftKey ? 20 : 5;
-      
-      selectedGroups.forEach(groupId => {
-        const group = groups.find(g => g.id === groupId);
-        if (group) {
-          let newX = group.position.x;
-          let newY = group.position.y;
-
-          switch (direction) {
-            case 'up':
-              newY -= moveDelta;
-              break;
-            case 'down':
-              newY += moveDelta;
-              break;
-            case 'left':
-              newX -= moveDelta;
-              break;
-            case 'right':
-              newX += moveDelta;
-              break;
-          }
-
-          onGroupMove(groupId, { x: newX, y: newY });
-        }
-      });
-
-      setIsMovingWithArrows(true);
-      setTimeout(() => setIsMovingWithArrows(false), 100);
-    },
+    onArrowMove: handleArrowMove, // 🆕 UTILISER LE HANDLER OPTIMISTE
     onUndo: handleUndo,
     onRedo: handleRedo,
+    onToggleVotingPanel: () => {
+      setShowVotingPanel(prev => !prev);
+      toast.info(showVotingPanel ? "Voting panel hidden" : "Voting panel shown");
+    },
     selectedGroups,
   });
 
-  // ==================== GESTION SOURIS ====================
+    // 🆕 État pour le panel voting
+  const [showVotingPanel, setShowVotingPanel] = useState(false);
 
+  // ==================== GESTION Wheel ====================
+
+  const handleWheel = useCallback((e: WheelEvent) => {
+    e.preventDefault();
+    
+    if (e.ctrlKey) {
+      // Zoom avec Ctrl + molette
+      const zoomIntensity = 0.1;
+      const delta = -e.deltaY * zoomIntensity * 0.01;
+      const newScale = Math.min(2, Math.max(0.3, scale * (1 + delta)));
+      
+      // Zoom vers le curseur
+      if (canvasRef.current) {
+        const rect = canvasRef.current.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        
+        // Calculer la position relative avant le zoom
+        const worldX = (mouseX - position.x) / scale;
+        const worldY = (mouseY - position.y) / scale;
+        
+        // Appliquer le zoom
+        setScale(newScale);
+        
+        // Ajuster la position pour zoomer vers le curseur
+        setPosition({
+          x: mouseX - worldX * newScale,
+          y: mouseY - worldY * newScale
+        });
+      }
+    } else {
+      // Pan avec molette seule
+      setPosition(prev => ({
+        x: prev.x - e.deltaX,
+        y: prev.y - e.deltaY
+      }));
+    }
+  }, [scale, position]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.addEventListener('wheel', handleWheel, { passive: false });
+      return () => canvas.removeEventListener('wheel', handleWheel);
+    }
+  }, [handleWheel]);
+
+
+  // ==================== GESTION SOURIS ====================
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    // LAISSER LE CLIC DROIT POUR SHADCN CONTEXT MENU
+    if (e.button === 2) {
+      return; // Shadcn gère le context menu
+    }
+
     // Panning seulement avec espace + clic ou bouton milieu
     if (e.button === 1 || (e.button === 0 && isSpacePressed)) {
       setIsPanning(true);
       return;
     }
     
-    // Clic normal sur le canvas vide = désélection
-    if (e.button === 0 && e.target === canvasRef.current) {
-      setSelectedGroups(new Set());
-    }
+    // Pour le clic gauche normal, on ne fait rien ici
+    // La gestion est dans handleCanvasClick
   };
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
@@ -237,20 +363,64 @@ const handleRedo = useCallback(() => {
     setIsPanning(false);
   };
 
-  const handleCanvasClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === canvasRef.current) {
-      setSelectedGroups(new Set());
-    }
+  // Nettoyer le timeout quand le composant est démonté
+  useEffect(() => {
+    return () => {
+      if (clickTimeoutRef.current) {
+        clearTimeout(clickTimeoutRef.current);
+      }
+    };
   }, []);
 
-  const handleCanvasDoubleClick = (e: React.MouseEvent) => {
+  // 🆕 DOUBLE-CLICK GAUCHE POUR CRÉER UN GROUPE
+  const handleDoubleClick = (e: React.MouseEvent) => {
     if (e.target === canvasRef.current) {
-      const rect = canvasRef.current!.getBoundingClientRect();
-      const x = (e.clientX - rect.left - position.x) / scale;
-      const y = (e.clientY - rect.top - position.y) / scale;
-      onGroupCreate({ x, y });
+    const rect = canvasRef.current!.getBoundingClientRect();
+    const x = (e.clientX - rect.left - position.x) / scale;
+    const y = (e.clientY - rect.top - position.y) / scale;
+    
+    onGroupCreate({ x, y });
+    toast.success("Group created with right-click");
     }
   };
+
+ const handleCanvasClick = (e: React.MouseEvent) => {
+    // Si c'est un clic sur le canvas vide (pas sur un groupe)
+    if (e.target === canvasRef.current) {
+      clickCountRef.current++;
+      
+      if (clickCountRef.current === 1) {
+        // Premier clic - attendre pour voir si c'est un double-click
+        clickTimeoutRef.current = setTimeout(() => {
+          // Clic simple - désélectionner les groupes
+          setSelectedGroups(new Set());
+          clickCountRef.current = 0;
+        }, 300); // Délai pour détecter le double-click
+      } else if (clickCountRef.current === 2) {
+        // Double-click détecté - créer un groupe
+        if (clickTimeoutRef.current) {
+          clearTimeout(clickTimeoutRef.current);
+        }
+        
+        const rect = canvasRef.current!.getBoundingClientRect();
+        const x = (e.clientX - rect.left - position.x) / scale;
+        const y = (e.clientY - rect.top - position.y) / scale;
+        
+        onGroupCreate({ x, y });
+        toast.success("Group created with double-click");
+        
+        clickCountRef.current = 0;
+      }
+    } else {
+      // Clic sur autre chose que le canvas - réinitialiser
+      if (clickTimeoutRef.current) {
+        clearTimeout(clickTimeoutRef.current);
+      }
+      clickCountRef.current = 0;
+    }
+  };
+
+
 
   // 🆕 Gestion de la sélection des groupes
   const handleGroupSelect = useCallback((groupId: string, e: React.MouseEvent) => {
@@ -272,6 +442,19 @@ const handleRedo = useCallback(() => {
       setSelectedGroups(new Set([groupId]));
     }
   }, []);
+
+   // 🆕 GESTION CLIC DROIT POUR CRÉER UN GROUPE
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault(); // Empêcher le menu contextuel du navigateur
+    
+    // const rect = canvasRef.current!.getBoundingClientRect();
+    // const x = (e.clientX - rect.left - position.x) / scale;
+    // const y = (e.clientY - rect.top - position.y) / scale;
+    
+    // onGroupCreate({ x, y });
+    // toast.success("Group created with right-click");
+  };
+
 
   // ==================== GESTION TOUCHE ESPACE ====================
 
@@ -338,6 +521,20 @@ const handleRedo = useCallback(() => {
 
           {/* TOOLBAR */}
           <div className="flex items-center gap-4">
+
+            {/* BOUTON TOGGLE VOTING PANEL */}
+            <Button
+              onClick={() => setShowVotingPanel(!showVotingPanel)}
+              className={`px-4 py-2 rounded-lg border flex items-center gap-2 transition-colors ${
+                showVotingPanel 
+                  ? 'bg-purple-500 text-white border-purple-600' 
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Vote size={16} />
+              {showVotingPanel ? 'Hide Voting' : 'Show Voting'}
+              {showVotingPanel ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+            </Button>
             {/* UNDO/REDO */}
             <div className="flex items-center gap-2">
               <button
@@ -564,7 +761,7 @@ const handleRedo = useCallback(() => {
         </div>
 
         {/* CANVAS PRINCIPAL */}
-        <div className="flex-1 relative overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="flex-1 relative overflow-hidden bg-linear-to-br from-gray-50 to-gray-100">
           <div
             ref={canvasRef}
             className="absolute inset-0"
@@ -575,16 +772,10 @@ const handleRedo = useCallback(() => {
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleCanvasMouseUp}
             onMouseLeave={handleCanvasMouseUp}
-            onClick={handleCanvasClick}
-            onDoubleClick={handleCanvasDoubleClick}
-            onContextMenu={(e: React.MouseEvent) => {
-              e.preventDefault();
-              const rect = canvasRef.current!.getBoundingClientRect();
-              const x = (e.clientX - rect.left - position.x) / scale;
-              const y = (e.clientY - rect.top - position.y) / scale;
-              onGroupCreate({ x, y });
-            }}
+            onDoubleClick={handleDoubleClick}
+            onContextMenu={handleContextMenu}
           >
+           
             {/* CANVAS CONTENT */}
             <div
               className="absolute"
@@ -609,41 +800,64 @@ const handleRedo = useCallback(() => {
 
               {/* GROUPS */}
               <div className="p-8">
-                {groups.map((group) => (
-                  <AffinityGroup
-                    key={group.id}
-                    group={group}
-                    insights={insights}
-                    scale={scale}
-                    isSelected={selectedGroups.has(group.id)}
-                    isDragOver={dragOverGroup === group.id}
-                    onMove={onGroupMove}
-                    onDelete={handleGroupDeleteWithSave}
-                    onTitleUpdate={handleGroupTitleUpdateWithSave}
-                    onRemoveInsight={onInsightRemoveFromGroup}
-                    onSelect={handleGroupSelect}
-                    onDragOver={(e: React.DragEvent) => {
-                      if (workspaceMode === 'grouping') {
-                        e.preventDefault();
-                        setDragOverGroup(group.id);
-                      }
-                    }}
-                    onDragLeave={() => {
-                      setDragOverGroup(null);
-                    }}
-                    onDrop={(e: React.DragEvent) => {
-                      if (workspaceMode === 'grouping') {
-                        e.preventDefault();
-                        const insightId = e.dataTransfer.getData('text/plain');
-                        if (insightId) {
-                          onInsightDrop(insightId, group.id);
+                {groups.map((group) =>{
+                  const currentPosition = getCurrentPosition(group.id);
+                 return (
+                    
+                    <AffinityGroup
+                      key={group.id}
+                      group={{
+                        ...group,
+                        position: currentPosition || group.position
+                      }}
+                      insights={insights}
+                      scale={scale}
+                      isSelected={selectedGroups.has(group.id)}
+                      isDragOver={dragOverGroup === group.id}
+                      onMove={handleGroupMoveOptimistic}
+                      onDelete={onGroupDelete}
+                      onTitleUpdate={onGroupTitleUpdate}
+                      onRemoveInsight={onInsightRemoveFromGroup}
+                      onSelect={(groupId, e) => {
+                        e.stopPropagation();
+                        if (e.ctrlKey || e.metaKey) {
+                          setSelectedGroups(prev => {
+                            const newSelection = new Set(prev);
+                            if (newSelection.has(groupId)) {
+                              newSelection.delete(groupId);
+                            } else {
+                              newSelection.add(groupId);
+                            }
+                            return newSelection;
+                          });
+                        } else {
+                          setSelectedGroups(new Set([groupId]));
                         }
+                      }}
+                      onDragOver={(e: React.DragEvent) => {
+                        if (workspaceMode === 'grouping') {
+                          e.preventDefault();
+                          setDragOverGroup(group.id);
+                        }
+                      }}
+                      onDragLeave={() => {
                         setDragOverGroup(null);
-                      }
-                    }}
-                    workspaceMode={workspaceMode}
-                  />
-                ))}
+                      }}
+                      onDrop={(e: React.DragEvent) => {
+                        if (workspaceMode === 'grouping') {
+                          e.preventDefault();
+                          const insightId = e.dataTransfer.getData('text/plain');
+                          if (insightId) {
+                            onInsightDrop(insightId, group.id);
+                          }
+                          setDragOverGroup(null);
+                        }
+                      }}
+                      workspaceMode={workspaceMode}
+                    />
+                  )
+                } 
+                )}
 
                 {/* EMPTY STATE */}
                 {groups.length === 0 && (
@@ -706,6 +920,24 @@ const handleRedo = useCallback(() => {
             </div>
           </div>
         </div>
+         <AnimatePresence>
+          {showVotingPanel && (
+            <motion.div
+              initial={{ x: 300, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 300, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-30"
+            >
+              <DotVotingPanel 
+                projectId={projectId}
+                mapId={mapId}
+                groups={groups}
+                insights={insights}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

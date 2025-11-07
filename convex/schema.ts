@@ -86,5 +86,28 @@ export default defineSchema({
     updatedAt: v.number(),
   }),
 
-  // 🗑️ SUPPRIMER la table groupConnections et affinityAnalytics
+ // pour le dot voting
+  // 🆕 Table Dot Voting Sessions
+  dotVotingSessions: defineTable({
+    projectId: v.id("projects"),
+    mapId: v.id("affinityMaps"),
+    name: v.string(),
+    maxVotesPerUser: v.number(),
+    isActive: v.boolean(),
+    createdBy: v.string(), // Clerk user ID
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+  .index("by_project",["projectId"]),
+
+  // 🆕 Table Votes
+  votes: defineTable({
+    sessionId: v.id("dotVotingSessions"),
+    userId: v.string(), // Clerk user ID
+    groupId: v.string(), // ID du groupe dans affinityMaps.groups[]
+    votes: v.number(), // Nombre de votes pour ce groupe
+    createdAt: v.number(),
+  })
+  .index("by_user_group_session", ["userId", "groupId", "sessionId"])
+  .index("by_session", ["sessionId"]),
 });

@@ -146,7 +146,14 @@ export const moveGroup = mutation({
     const map = await ctx.db.get(args.mapId);
     if (!map) throw new Error("Affinity map not found");
 
-    console.log("🔄 Moving group in Convex:", args.groupId, "to", args.position);
+    console.log("🔄 Moving group:", args.groupId, "to", args.position);
+
+    // 🆕 VÉRIFICATION QUE LE GROUPE EXISTE
+    const groupExists = map.groups.some(g => g.id === args.groupId);
+    if (!groupExists) {
+      console.error("❌ Group not found:", args.groupId);
+      throw new Error("Group not found");
+    }
 
     const updatedGroups = map.groups.map(group =>
       group.id === args.groupId
@@ -159,10 +166,10 @@ export const moveGroup = mutation({
       updatedAt: Date.now(),
     });
 
-    console.log("✅ Group moved successfully in Convex");
+    console.log("✅ Group moved successfully");
+    return { success: true };
   },
 });
-
 
 export const addInsightToGroup = mutation({
   args: {

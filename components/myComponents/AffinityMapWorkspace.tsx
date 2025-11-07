@@ -35,8 +35,44 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
 
   // État local
   const [isSilentMode, setIsSilentMode] = useState(true);
+    const [optimisticPositions, setOptimisticPositions] = useState<Map<string, {x: number, y: number}>>(new Map());
 
-  
+
+    const handleGroupMoveOptimistic = useCallback(async (groupId: string, newPosition: { x: number; y: number }) => {
+    if (!affinityMap) return;
+    
+    try {
+      // 🆕 MISE À JOUR OPTIMISTE IMMÉDIATE
+      setOptimisticPositions(prev => {
+        const newMap = new Map(prev);
+        newMap.set(groupId, newPosition);
+        return newMap;
+      });
+      
+      // 🆕 APPEL ASYNCHRONE À CONVEX
+      await moveGroup({
+        mapId: affinityMap._id,
+        groupId,
+        position: newPosition
+      });
+      
+      console.log("✅ Group moved and synced to database");
+      
+    } catch (error) {
+      console.error("❌ Failed to move group:", error);
+      
+      // 🆕 ROLLBACK OPTIMISTE EN CAS D'ERREUR
+      setOptimisticPositions(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(groupId); // Retour à la position réelle
+        return newMap;
+      });
+      
+      toast.error("Failed to move group");
+    }
+  }, [affinityMap, moveGroup]);
+
+
 
   // Créer une map automatiquement si elle n'existe pas
   useEffect(() => {
@@ -65,6 +101,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     }
   };
 
+// 🆕 MISE À JOUR DE LA MUTATION moveGroup POUR SYNC RAPIDE
   const handleGroupMove = async (groupId: string, position: { x: number; y: number }) => {
     if (!affinityMap) return;
     
@@ -76,9 +113,18 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
       });
     } catch (error) {
       console.error("Failed to move group:", error);
+      toast.error("Failed to move group");
     }
   };
 
+  // Les groupes viennent directement de la query Convex
+  const groups: AffinityGroup[] = affinityMap?.groups.map(group => ({
+    id: group.id,
+    title: group.title,
+    color: group.color,
+    position: group.position,
+    insightIds: group.insightIds as string[]
+  })) || [];
   const handleInsightDrop = async (insightId: string, groupId: string) => {
     if (!affinityMap) return;
     
@@ -171,14 +217,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     }
   };
 
-  // Adapter les données pour le canvas
-  const groups: AffinityGroup[] = affinityMap?.groups.map(group => ({
-    id: group.id,
-    title: group.title,
-    color: group.color,
-    position: group.position,
-    insightIds: group.insightIds as string[] // ← Conversion explicite
-  })) || [];
+
 
   const insights: Insight[] = insightsData?.map(insight => ({
     id: insight._id,
@@ -256,7 +295,9 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         <AffinityCanvas
           groups={groups}
           insights={insights}
-          onGroupMove={handleGroupMove}
+          projectId={projectId}
+          mapId={affinityMap?._id || ""}
+          onGroupMove={handleGroupMoveOptimistic}
           onGroupCreate={handleGroupCreate}
           onInsightDrop={handleInsightDrop}
           onInsightRemoveFromGroup={handleInsightRemoveFromGroup}
