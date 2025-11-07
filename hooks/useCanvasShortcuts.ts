@@ -12,6 +12,7 @@ interface CanvasShortcutsConfig {
   onUndo: () => void;
   onRedo: () => void;
   onToggleVotingPanel: () => void; // 🆕 AJOUT
+  onToggleAnalytics: () => void; // 🆕 AJOUT
   selectedGroups: Set<string>;
 }
 
@@ -25,6 +26,7 @@ export function useCanvasShortcuts(config: CanvasShortcutsConfig) {
     onUndo, 
     onRedo,
     onToggleVotingPanel, // 🆕 AJOUT
+    onToggleAnalytics, // 🆕 AJOUT
     selectedGroups 
   } = config;
 
@@ -107,6 +109,13 @@ export function useCanvasShortcuts(config: CanvasShortcutsConfig) {
       onEscape();
       return;
     }
+
+  if (e.key === 'a' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    e.stopPropagation();
+    onToggleAnalytics();
+    return;
+  }
 
   }, [onNewGroup, onSelectAll, onDeleteSelected, onEscape, onArrowMove, onUndo, onRedo, onToggleVotingPanel, selectedGroups]);
 

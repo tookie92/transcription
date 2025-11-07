@@ -3,7 +3,7 @@
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import AffinityGroup from "./AffinityGroup";
-import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo, ChevronRight, ChevronLeft } from "lucide-react";
+import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo, ChevronRight, ChevronLeft, BarChart3 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AffinityGroup as AffinityGroupType, Insight } from "@/types";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import { useCanvasShortcuts } from "@/hooks/useCanvasShortcuts";
 import { useHistory } from "@/hooks/useHistory";
 import { DotVotingPanel } from "./DotVotingPanel";
 import { Button } from "../ui/button";
+import { AnalyticsDashboard } from "./AnalyticsDashboard";
 
 interface AffinityCanvasProps {
   groups: AffinityGroupType[];
@@ -59,6 +60,22 @@ export default function AffinityCanvas({
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [isMovingWithArrows, setIsMovingWithArrows] = useState(false);
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
+
+// 🆕 AJOUTER ANALYTICS
+  const [showAnalytics, setShowAnalytics] = useState(false);
+
+// 🆕 AJOUTER PANELS
+  const [activePanel, setActivePanel] = useState<'voting' | 'analytics' | null>(null);
+
+  // 🆕 Fonctions pour gérer les panels avec les raccourcis
+const toggleVotingPanel = useCallback(() => {
+  setActivePanel(prev => prev === 'voting' ? null : 'voting');
+}, []);
+
+const toggleAnalyticsPanel = useCallback(() => {
+  setActivePanel(prev => prev === 'analytics' ? null : 'analytics');
+}, []);
+
 
 
   // 🆕 Historique SIMPLE
@@ -328,10 +345,9 @@ useCanvasShortcuts({
   onArrowMove: handleArrowKeys, // 🆕 BIEN PASSER TA FONCTION
   onUndo: handleUndo,
   onRedo: handleRedo,
-  onToggleVotingPanel: () => {
-    setShowVotingPanel(prev => !prev);
-    toast.info(showVotingPanel ? "Voting panel hidden" : "Voting panel shown");
-  },
+  onToggleVotingPanel: toggleVotingPanel,
+  onToggleAnalytics: toggleAnalyticsPanel,
+
   selectedGroups,
 });
 
@@ -584,20 +600,28 @@ useCanvasShortcuts({
 
           {/* TOOLBAR */}
           <div className="flex items-center gap-4">
+            
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setActivePanel(activePanel === 'voting' ? null : 'voting')}
+                variant={activePanel === 'voting' ? "default" : "outline"}
+                size="sm"
+              >
+                <Vote size={16} />
+                Voting
+              </Button>
+              
+              <Button
+                onClick={() => setActivePanel(activePanel === 'analytics' ? null : 'analytics')}
+                variant={activePanel === 'analytics' ? "default" : "outline"}
+                size="sm"
+              >
+                <BarChart3 size={16} />
+                Analytics
+              </Button>
+            </div>
 
-            {/* BOUTON TOGGLE VOTING PANEL */}
-            <Button
-              onClick={() => setShowVotingPanel(!showVotingPanel)}
-              className={`px-4 py-2 rounded-lg border flex items-center gap-2 transition-colors ${
-                showVotingPanel 
-                  ? 'bg-purple-500 text-white border-purple-600' 
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <Vote size={16} />
-              {showVotingPanel ? 'Hide Voting' : 'Show Voting'}
-              {showVotingPanel ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-            </Button>
+
             {/* UNDO/REDO */}
             <div className="flex items-center gap-2">
               <button
@@ -983,14 +1007,30 @@ useCanvasShortcuts({
             </div>
           </div>
         </div>
-         <AnimatePresence>
-          {showVotingPanel && (
+
+        <AnimatePresence>
+          {activePanel === 'analytics' && (
             <motion.div
-              initial={{ x: 300, opacity: 0 }}
+              initial={{ x: 600, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 300, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-30"
+              exit={{ x: 600, opacity: 0 }}
+              className="w-[600px] bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
+            >
+              <AnalyticsDashboard 
+                groups={groups}
+                insights={insights}
+                projectName={`Project ${projectId}`}
+                onClose={() => setActivePanel(null)}
+              />
+            </motion.div>
+          )}
+          
+          {activePanel === 'voting' && (
+            <motion.div
+              initial={{ x: 600, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 600, opacity: 0 }}
+              className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
             >
               <DotVotingPanel 
                 projectId={projectId}
