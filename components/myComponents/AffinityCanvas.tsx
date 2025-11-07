@@ -119,34 +119,106 @@ const saveCurrentState = useCallback((action: string, description: string) => {
 
 //=========== Arrow Move ===========
 
-  // 🆕 État local pour les positions optimistes
+
+
+  // 🆕 AJOUTER ICI - État pour les positions optimistes
   const [optimisticPositions, setOptimisticPositions] = useState<Map<string, {x: number, y: number}>>(new Map());
+
+  // 🆕 AJOUTER CET EFFET - FORCER LE RE-RENDER
+const [renderKey, setRenderKey] = useState(0);
+
+useEffect(() => {
+  // Force un re-render quand les positions optimistes changent
+  setRenderKey(prev => prev + 1);
+}, [optimisticPositions]);
 
   // 🆕 Fonction pour obtenir la position actuelle (optimiste ou réelle)
   const getCurrentPosition = useCallback((groupId: string) => {
     return optimisticPositions.get(groupId) || groups.find(g => g.id === groupId)?.position;
   }, [optimisticPositions, groups]);
 
+
+// 🆕 Handler optimiste pour le mouvement flèches
+  const handleArrowKeys = useCallback((direction: 'up' | 'down' | 'left' | 'right', shiftKey: boolean) => {
+
+    console.log("🔑 ARROW KEY PRESSED:", direction, "Shift:", shiftKey);
+  console.log("👥 Selected groups count:", selectedGroups.size);
+  
+  if (selectedGroups.size === 0) {
+    console.log("⚠️ No groups selected - ignoring arrow key");
+    return;
+  }  
+  // if (selectedGroups.size === 0) return;
+
+  // 🎯 Distance de déplacement (pixels)
+  const moveDistance = shiftKey ? 20 : 5; // 🚀 SHIFT + flèche = déplacement plus grand
+  
+  let deltaX = 0;
+  let deltaY = 0;
+
+  switch (direction) {
+    case 'up':
+      deltaY = -moveDistance;
+      break;
+    case 'down':
+      deltaY = moveDistance;
+      break;
+    case 'left':
+      deltaX = -moveDistance;
+      break;
+    case 'right':
+      deltaX = moveDistance;
+      break;
+    default:
+      return; // Pas une flèche, on sort
+  }
+
+  // 🎯 Animation feedback
+  setIsMovingWithArrows(true);
+  setTimeout(() => setIsMovingWithArrows(false), 150);
+
+  // 🚀 Déplace tous les groupes sélectionnés AVEC POSITION OPTIMISTE
+  selectedGroups.forEach(groupId => {
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+      const newPosition = {
+        x: group.position.x + deltaX,
+        y: group.position.y + deltaY
+      };
+
+      console.log(`🎯 Moving ${group.title} to:`, newPosition);
+      
+      // 🆕 MISE À JOUR OPTIMISTE IMMÉDIATE
+      setOptimisticPositions(prev => {
+        const newMap = new Map(prev);
+        newMap.set(groupId, newPosition);
+        return newMap;
+      });
+
+      // 🚀 Appel à la mutation
+      onGroupMove(groupId, newPosition);
+    }
+  });
+}, [selectedGroups, groups, onGroupMove]);
+
+//! on verra plus tard
   // 🆕 Handler optimiste pour le mouvement flèches
   const handleArrowMove = useCallback((direction: 'up' | 'down' | 'left' | 'right', shiftKey: boolean) => {
     if (selectedGroups.size === 0) return;
     
     const moveDelta = shiftKey ? 20 : 5;
     
-    // Sauvegarder l'état avant le mouvement
     saveCurrentState("before_move", `Before moving ${selectedGroups.size} groups`);
     
     console.log("🎯 Arrow move triggered:", direction, "Shift:", shiftKey);
-    console.log("📋 Selected groups:", Array.from(selectedGroups));
     
-    // 🆕 MISE À JOUR OPTIMISTE IMMÉDIATE
+    // MISE À JOUR OPTIMISTE IMMÉDIATE
     const newPositions = new Map(optimisticPositions);
     
     selectedGroups.forEach(groupId => {
       const group = groups.find(g => g.id === groupId);
       
       if (group) {
-        // 🆕 UTILISER LA POSITION OPTIMISTE SI ELLE EXISTE
         const currentPosition = optimisticPositions.get(groupId) || group.position;
         
         let newX = currentPosition.x;
@@ -170,39 +242,31 @@ const saveCurrentState = useCallback((action: string, description: string) => {
         const newPosition = { x: newX, y: newY };
         console.log(`📍 New position for ${group.title}:`, newPosition);
         
-        // 🆕 MISE À JOUR IMMÉDIATE LOCALE
         newPositions.set(groupId, newPosition);
-        
-        // 🆕 APPEL ASYNCHRONE À LA MUTATION
         onGroupMove(groupId, newPosition);
       }
     });
 
-    // 🆕 APPLIQUER LES NOUVELLES POSITIONS OPTIMISTES
     setOptimisticPositions(newPositions);
-
     setIsMovingWithArrows(true);
     setTimeout(() => setIsMovingWithArrows(false), 100);
   }, [selectedGroups, groups, onGroupMove, saveCurrentState, optimisticPositions]);
 
   // 🆕 Handler optimiste pour le drag & drop
   const handleGroupMoveOptimistic = useCallback((groupId: string, newPosition: { x: number; y: number }) => {
-    // 🆕 MISE À JOUR OPTIMISTE IMMÉDIATE
     setOptimisticPositions(prev => {
       const newMap = new Map(prev);
       newMap.set(groupId, newPosition);
       return newMap;
     });
     
-    // Appel à la mutation parente
     onGroupMove(groupId, newPosition);
   }, [onGroupMove]);
 
   // 🆕 Réinitialiser les positions optimistes quand les groupes changent
   useEffect(() => {
     setOptimisticPositions(new Map());
-  }, [groups]); // Réinitialise quand les groupes changent depuis la DB
-
+  }, [groups]);
 
 
 
@@ -231,46 +295,45 @@ const saveCurrentState = useCallback((action: string, description: string) => {
 
   // ==================== RACCOURCIS CLAVIER ====================
 
-  // 🆕 Raccourci clavier pour toggle voting panel
-  useCanvasShortcuts({
-    onNewGroup: () => {
-      const x = (cursorPosition.x - position.x) / scale;
-      const y = (cursorPosition.y - position.y) / scale;
-      onGroupCreate({ x, y });
-      toast.success("New group created (N)");
-    },
-    onSelectAll: () => {
-      setSelectedGroups(new Set(groups.map(g => g.id)));
-      toast.info(`Selected all ${groups.length} groups`);
-    },
-    onDeleteSelected: () => {
-      if (selectedGroups.size > 0) {
-        saveCurrentState("before_multiple_delete", `Before deleting ${selectedGroups.size} groups`);
-        
-        if (confirm(`Delete ${selectedGroups.size} selected group(s)?`)) {
-          selectedGroups.forEach(groupId => {
-            onGroupDelete?.(groupId);
-          });
-          setSelectedGroups(new Set());
-          toast.success(`Deleted ${selectedGroups.size} group(s)`);
-        }
-      }
-    },
-    onEscape: () => {
-      if (selectedGroups.size > 0) {
+useCanvasShortcuts({
+  onNewGroup: () => {
+    const x = (cursorPosition.x - position.x) / scale;
+    const y = (cursorPosition.y - position.y) / scale;
+    onGroupCreate({ x, y });
+    toast.success("New group created (N)");
+  },
+  onSelectAll: () => {
+    setSelectedGroups(new Set(groups.map(g => g.id)));
+    toast.info(`Selected all ${groups.length} groups`);
+  },
+  onDeleteSelected: () => {
+    if (selectedGroups.size > 0) {
+      saveCurrentState("before_multiple_delete", `Before deleting ${selectedGroups.size} groups`);
+      
+      if (confirm(`Delete ${selectedGroups.size} selected group(s)?`)) {
+        selectedGroups.forEach(groupId => {
+          onGroupDelete?.(groupId);
+        });
         setSelectedGroups(new Set());
-        toast.info("Selection cleared");
+        toast.success(`Deleted ${selectedGroups.size} group(s)`);
       }
-    },
-    onArrowMove: handleArrowMove, // 🆕 UTILISER LE HANDLER OPTIMISTE
-    onUndo: handleUndo,
-    onRedo: handleRedo,
-    onToggleVotingPanel: () => {
-      setShowVotingPanel(prev => !prev);
-      toast.info(showVotingPanel ? "Voting panel hidden" : "Voting panel shown");
-    },
-    selectedGroups,
-  });
+    }
+  },
+  onEscape: () => {
+    if (selectedGroups.size > 0) {
+      setSelectedGroups(new Set());
+      toast.info("Selection cleared");
+    }
+  },
+  onArrowMove: handleArrowKeys, // 🆕 BIEN PASSER TA FONCTION
+  onUndo: handleUndo,
+  onRedo: handleRedo,
+  onToggleVotingPanel: () => {
+    setShowVotingPanel(prev => !prev);
+    toast.info(showVotingPanel ? "Voting panel hidden" : "Voting panel shown");
+  },
+  selectedGroups,
+});
 
     // 🆕 État pour le panel voting
   const [showVotingPanel, setShowVotingPanel] = useState(false);
@@ -778,6 +841,7 @@ const saveCurrentState = useCallback((action: string, description: string) => {
            
             {/* CANVAS CONTENT */}
             <div
+              key={renderKey}
               className="absolute"
               style={{
                 transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
@@ -800,10 +864,11 @@ const saveCurrentState = useCallback((action: string, description: string) => {
 
               {/* GROUPS */}
               <div className="p-8">
-                {groups.map((group) =>{
+               {groups.map((group) => {
+                  // UTILISER LA POSITION OPTIMISTE
                   const currentPosition = getCurrentPosition(group.id);
-                 return (
-                    
+                  
+                  return (
                     <AffinityGroup
                       key={group.id}
                       group={{
@@ -814,7 +879,7 @@ const saveCurrentState = useCallback((action: string, description: string) => {
                       scale={scale}
                       isSelected={selectedGroups.has(group.id)}
                       isDragOver={dragOverGroup === group.id}
-                      onMove={handleGroupMoveOptimistic}
+                      onMove={handleGroupMoveOptimistic} // 🆕 UTILISER LE HANDLER OPTIMISTE
                       onDelete={onGroupDelete}
                       onTitleUpdate={onGroupTitleUpdate}
                       onRemoveInsight={onInsightRemoveFromGroup}
@@ -855,10 +920,8 @@ const saveCurrentState = useCallback((action: string, description: string) => {
                       }}
                       workspaceMode={workspaceMode}
                     />
-                  )
-                } 
-                )}
-
+                  );
+                })}
                 {/* EMPTY STATE */}
                 {groups.length === 0 && (
                   <div className="text-center py-20">

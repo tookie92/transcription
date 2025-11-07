@@ -1,4 +1,4 @@
-import { Interview } from '@/store/transcriptionStore';
+import { Interview } from '@/stores/transcriptionStore';
 import { ExportInterview } from '@/types';
 import jsPDF from 'jspdf';
 

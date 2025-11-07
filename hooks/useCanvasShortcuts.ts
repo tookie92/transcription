@@ -80,6 +80,9 @@ export function useCanvasShortcuts(config: CanvasShortcutsConfig) {
 
     // 🎯 MOUVEMENT AVEC FLÈCHES
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      e.preventDefault();
+      e.stopPropagation();
+      
       if (selectedGroups.size > 0) {
         const direction = e.key.replace('Arrow', '').toLowerCase() as 'up' | 'down' | 'left' | 'right';
         onArrowMove(direction, e.shiftKey);

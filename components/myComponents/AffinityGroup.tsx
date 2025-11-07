@@ -119,33 +119,40 @@ export default function AffinityGroup({
   return (
     <ContextMenu>
       <ContextMenuTrigger>
-        <motion.div
-          drag
-          dragMomentum={false}
-          dragElastic={0}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onClick={handleClick}
-          style={{ 
-            x, 
-            y,
-            rotateX: isDragging ? rotateX : 0,
-            rotateY: isDragging ? rotateY : 0,
-            borderColor: isDragOver ? "#3B82F6" : (isSelected ? "#F59E0B" : group.color),
-          }}
-          whileHover={{ scale: 1.02 }}
-          whileDrag={{ 
-            scale: 1.05,
-            boxShadow: "0 20px 40px -12px rgba(0, 0, 0, 0.25)",
-            zIndex: 50,
-          }}
-          transition={{ 
-            type: "spring", 
-            stiffness: 300, 
-            damping: 30 
-          }}
-          className="absolute bg-white rounded-xl shadow-lg border-2 min-w-80 max-w-96 cursor-grab active:cursor-grabbing"
-         
+      <motion.div
+        drag
+        dragMomentum={false}
+        dragElastic={0}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onClick={handleClick}
+        style={{ 
+          x, 
+          y,
+          rotateX: isDragging ? rotateX : 0,
+          rotateY: isDragging ? rotateY : 0,
+          borderColor: isDragOver ? "#3B82F6" : (isSelected ? "#F59E0B" : group.color),
+        }}
+        // 🆕 PARAMÈTRES OPTIMISÉS POUR MOINS DE BOUNCE
+        animate={{
+          x: group.position.x,
+          y: group.position.y
+        }}
+        transition={{
+          type: "spring",
+          stiffness: 500,     // 🆕 PLUS RIGIDE = MOINS DE BOUNCE
+          damping: 40,        // 🆕 PLUS D'AMORTISSEMENT
+          mass: 0.5,          // 🆕 PLUS LÉGER
+          restDelta: 0.5,     // 🆕 ARRÊT PLUS RAPIDE
+          restSpeed: 10       // 🆕 VITESSE MINIMALE POUR ARRÊTER
+        }}
+        whileHover={{ scale: 1.02 }}
+        whileDrag={{ 
+          scale: 1.05,
+          boxShadow: "0 20px 40px -12px rgba(0, 0, 0, 0.25)",
+          zIndex: 50,
+        }}
+        className="absolute bg-white rounded-xl shadow-lg border-2 min-w-80 max-w-96 cursor-grab active:cursor-grabbing"
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}

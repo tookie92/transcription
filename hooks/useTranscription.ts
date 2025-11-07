@@ -1,4 +1,4 @@
-import { useTranscriptionStore, Interview, TranscriptionSegment } from '@/store/transcriptionStore';
+import { useTranscriptionStore, Interview, TranscriptionSegment } from '@/stores/transcriptionStore';
 
 interface TranscriptionResult {
   text: string;
