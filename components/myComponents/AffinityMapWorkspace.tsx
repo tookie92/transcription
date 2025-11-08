@@ -12,6 +12,7 @@ import AffinityCanvas from "./AffinityCanvas";
 
 interface AffinityMapWorkspaceProps {
   projectId: Id<"projects">;
+  
 }
 
 export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
@@ -261,6 +262,10 @@ const handleGroupMove = async (groupId: string, position: { x: number; y: number
           groups={groups}
           insights={insights}
           projectId={projectId}
+           projectInfo={project ? { // 🎯 PASSER LES INFOS DU PROJET
+              name: project.name,
+              description: project.description
+            } : undefined}
           mapId={affinityMap?._id || ""}
           onGroupMove={handleGroupMove}
           onGroupCreate={handleGroupCreate}

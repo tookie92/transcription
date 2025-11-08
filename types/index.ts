@@ -144,13 +144,14 @@ export interface StoreInsight {
 // Convex-specific types
 export interface ConvexProject {
   _id: string;
+  _creationTime: number;
   name: string;
   description?: string;
   ownerId: string;
-  createdAt: number;
-  updatedAt: number;
   isPublic: boolean;
   members: ProjectMember[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface ConvexInterview {

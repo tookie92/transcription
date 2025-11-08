@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Search, CheckCircle, AlertTriangle, Lightbulb, Users, Sparkles, Plus } from "lucide-react";
-import { AffinityGroup, Insight } from "@/types";
+import { AffinityGroup, ConvexProject, Insight, Project } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -12,14 +12,24 @@ import { GroupSuggestion, useGroupSuggestions } from "@/hooks/useGroupSuggestion
 import { toast } from "sonner";
 import { AISuggestionsPanel } from "./AISuggestionsPanel";
 
+interface ProjectInfo {
+  name: string;
+  description?: string;
+}
+
+
 interface InsightsOrganizationPanelProps {
   groups: AffinityGroup[];
   insights: Insight[];
+  projectInfo?: ProjectInfo,
   onGroupCreate: (position: { x: number; y: number }) => void;
   onInsightDrop: (insightId: string, groupId: string) => void;
   onManualInsightCreate: (text: string, type: Insight['type']) => void;
   onGroupTitleUpdate?: (groupId: string, title: string) => void; // 🆕 OPTIONNEL
+ 
 }
+
+
 
 // 🆕 INTERFACE PENDING INSIGHTS
 interface PendingInsights {
@@ -34,6 +44,7 @@ export function InsightsOrganizationPanel({
   onInsightDrop,
   onManualInsightCreate,
   onGroupTitleUpdate,
+  projectInfo
 }: InsightsOrganizationPanelProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState<'all' | 'ready' | 'problematic'>('all');
@@ -59,7 +70,15 @@ export function InsightsOrganizationPanel({
       return;
     }
 
-    generateSuggestions(availableInsights, groups, "Affinity diagram grouping");
+    // 🎯 CONTEXTE AVEC projectInfo
+    const projectContext = projectInfo ? `
+PROJECT NAME: ${projectInfo.name}
+PROJECT DESCRIPTION: ${projectInfo.description || 'No description available'}
+    `.trim() : 'General user research project';
+
+    console.log('📋 Project context for AI:', projectContext);
+
+    generateSuggestions(availableInsights, groups, projectContext);
   };
 
  // Dans InsightsOrganizationPanel.tsx - REMPLACER handleApplySuggestion

@@ -13,12 +13,19 @@ import { DotVotingPanel } from "./DotVotingPanel";
 import { Button } from "../ui/button";
 import { AnalyticsDashboard } from "./AnalyticsDashboard";
 import { UngroupedInsightsPanel } from "./UngroupedInsightsPanel";
-import { InsightsOrganizationPanel } from "./InsightOrganizationPanel";
+import { InsightsOrganizationPanel } from "./InsightsOrganizationPanel";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 
 interface AffinityCanvasProps {
   groups: AffinityGroupType[];
   insights: Insight[];
   projectId: string; // ← AJOUTER projectId
+  projectInfo?: { // 🎯 NOUVELLE PROP
+    name: string;
+    description?: string;
+  };
   mapId: string;     // ← AJOUTER mapId
   onGroupMove: (groupId: string, position: { x: number; y: number }) => void;
   onGroupCreate: (position: { x: number; y: number }) => void;
@@ -35,6 +42,7 @@ export default function AffinityCanvas({
   insights,
   projectId,
   mapId,
+  projectInfo,
   onGroupMove, 
   onGroupCreate,
   onInsightDrop,
@@ -44,6 +52,9 @@ export default function AffinityCanvas({
   onGroupTitleUpdate,
   onGroupsReplace
 }: AffinityCanvasProps) {
+
+const projectName = useQuery(api.projects.getById, {projectId: projectId as Id<"projects">});
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -752,6 +763,7 @@ useEffect(() => {
         <InsightsOrganizationPanel
           groups={groups}
           insights={insights}
+          projectInfo={projectInfo} // 🎯 PASSER LES INFOS
           onGroupCreate={onGroupCreate}
           onInsightDrop={onInsightDrop}
           onManualInsightCreate={onManualInsightCreate}
@@ -930,7 +942,7 @@ useEffect(() => {
               <AnalyticsDashboard 
                 groups={groups}
                 insights={insights}
-                projectName={`Project ${projectId}`}
+                projectName={`Project: ${projectName?.name}`}
                 onClose={() => setActivePanel(null)}
               />
             </motion.div>

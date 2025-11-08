@@ -57,7 +57,7 @@ export function AnalyticsDashboard({ groups, insights, projectName, onClose }: A
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* Header avec bouton fermer */}
-      <div className="flex-shrink-0 bg-white border-b border-gray-200 p-4">
+      <div className="shrink-0 bg-white border-b border-gray-200 p-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -106,7 +106,7 @@ export function AnalyticsDashboard({ groups, insights, projectName, onClose }: A
           <TabsContent value="overview" className="space-y-6 m-0">
             {/* KPI Cards - Plus espacées */}
             <div className="grid grid-cols-2 gap-4">
-              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+              <Card className="bg-linear-to-br from-blue-50 to-blue-100 border-blue-200">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -118,7 +118,7 @@ export function AnalyticsDashboard({ groups, insights, projectName, onClose }: A
                 </CardContent>
               </Card>
 
-              <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+              <Card className="bg-linear-to-br from-green-50 to-green-100 border-green-200">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -130,7 +130,7 @@ export function AnalyticsDashboard({ groups, insights, projectName, onClose }: A
                 </CardContent>
               </Card>
 
-              <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+              <Card className="bg-linear-to-br from-purple-50 to-purple-100 border-purple-200">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -142,7 +142,7 @@ export function AnalyticsDashboard({ groups, insights, projectName, onClose }: A
                 </CardContent>
               </Card>
 
-              <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+              <Card className="bg-linear-to-br from-orange-50 to-orange-100 border-orange-200">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -323,7 +323,7 @@ export function AnalyticsDashboard({ groups, insights, projectName, onClose }: A
                     >
                       <div className="flex items-center gap-4 flex-1">
                         <div 
-                          className="w-4 h-4 rounded-full flex-shrink-0"
+                          className="w-4 h-4 rounded-full shrink-0"
                           style={{ backgroundColor: group.color }}
                         />
                         <div className="flex-1 min-w-0">
@@ -333,7 +333,7 @@ export function AnalyticsDashboard({ groups, insights, projectName, onClose }: A
                           </div>
                         </div>
                       </div>
-                      <Badge variant="secondary" className="flex-shrink-0">
+                      <Badge variant="secondary" className="shrink-0">
                         #{index + 1}
                       </Badge>
                     </div>
@@ -354,7 +354,7 @@ export function AnalyticsDashboard({ groups, insights, projectName, onClose }: A
             <div className="space-y-4">
               {metrics.ungroupedInsights > 10 && (
                 <div className="flex items-start gap-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                  <Target className="w-6 h-6 text-yellow-600 mt-0.5 flex-shrink-0" />
+                  <Target className="w-6 h-6 text-yellow-600 mt-0.5 shrink-0" />
                   <div>
                     <p className="font-medium text-yellow-800 text-lg">Focus on Ungrouped Insights</p>
                     <p className="text-yellow-700 mt-1">
