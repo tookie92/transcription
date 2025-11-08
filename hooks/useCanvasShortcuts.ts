@@ -12,7 +12,7 @@ interface CanvasShortcutsConfig {
   onUndo: () => void;
   onRedo: () => void;
   onToggleVotingPanel: () => void; // 🆕 AJOUT
-  onToggleAnalytics: () => void; // 🆕 AJOUT
+  onToggleAnalyticsPanel: () => void; // 🆕 AJOUT
   selectedGroups: Set<string>;
 }
 
@@ -26,40 +26,27 @@ export function useCanvasShortcuts(config: CanvasShortcutsConfig) {
     onUndo, 
     onRedo,
     onToggleVotingPanel, // 🆕 AJOUT
-    onToggleAnalytics, // 🆕 AJOUT
+    onToggleAnalyticsPanel, // 🆕 AJOUT
     selectedGroups 
   } = config;
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Ignorer si on tape dans un input
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-      return;
+    // if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+    //   return;
+    // }
+
+       // 🆕 IGNORER COMPLÈTEMENT SI C'EST UN INPUT/ TEXTAREA
+    if (
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLTextAreaElement
+    ) {
+      return; // Laisser toutes les touches fonctionner normalement dans les inputs
     }
 
-    // 🎯 UNDO (Ctrl+Z)
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-      e.preventDefault();
-      e.stopPropagation();
-      onUndo();
-      return;
-    }
 
-    // 🎯 REDO (Ctrl+Y ou Ctrl+Shift+Z)
-    if (((e.ctrlKey || e.metaKey) && e.key === 'y') || 
-        ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey)) {
-      e.preventDefault();
-      e.stopPropagation();
-      onRedo();
-      return;
-    }
 
-    // 🆕 RACCOURCI POUR VOTING PANEL (V)
-    if (e.key === 'v' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      e.preventDefault();
-      e.stopPropagation();
-      onToggleVotingPanel();
-      return;
-    }
+
 
     // 🛑 EMPÊCHER le comportement par défaut pour les autres raccourcis
     if (
@@ -110,14 +97,42 @@ export function useCanvasShortcuts(config: CanvasShortcutsConfig) {
       return;
     }
 
-  if (e.key === 'a' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-    e.preventDefault();
-    e.stopPropagation();
-    onToggleAnalytics();
-    return;
-  }
+        // 🎯 UNDO (Ctrl+Z)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      onUndo();
+      return;
+    }
 
-  }, [onNewGroup, onSelectAll, onDeleteSelected, onEscape, onArrowMove, onUndo, onRedo, onToggleVotingPanel, selectedGroups]);
+      // 🎯 REDO (Ctrl+Y ou Ctrl+Shift+Z)
+    if (((e.ctrlKey || e.metaKey) && e.key === 'y') || 
+        ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey)) {
+      e.preventDefault();
+      e.stopPropagation();
+      onRedo();
+      return;
+    } 
+
+
+  // 🆕 RACCOURCI POUR VOTING PANEL (V)
+    if (e.key === 'v' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleVotingPanel();
+      return;
+    }
+
+ // 🆕 RACCOURCI POUR ANALYTICS PANEL (A)
+    if (e.key === 'a' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleAnalyticsPanel();
+      return;
+    }
+
+
+  }, [onNewGroup, onSelectAll, onDeleteSelected, onEscape, onArrowMove, onUndo, onRedo,onToggleAnalyticsPanel, onToggleVotingPanel, selectedGroups]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);

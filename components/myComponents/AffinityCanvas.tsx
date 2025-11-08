@@ -12,6 +12,8 @@ import { useHistory } from "@/hooks/useHistory";
 import { DotVotingPanel } from "./DotVotingPanel";
 import { Button } from "../ui/button";
 import { AnalyticsDashboard } from "./AnalyticsDashboard";
+import { UngroupedInsightsPanel } from "./UngroupedInsightsPanel";
+import { InsightsOrganizationPanel } from "./InsightOrganizationPanel";
 
 interface AffinityCanvasProps {
   groups: AffinityGroupType[];
@@ -218,7 +220,33 @@ useEffect(() => {
   });
 }, [selectedGroups, groups, onGroupMove]);
 
-//! on verra plus tard
+// 🆕 AJOUTER UNE FONCTION DE FOCUS DANS LES INPUTS
+
+const [isInputFocused, setIsInputFocused] = useState(false);
+
+// 🆕 DÉTECTION DU FOCUS DANS LES INPUTS
+useEffect(() => {
+  const handleFocusChange = () => {
+    const activeElement = document.activeElement;
+    const isInput = 
+      activeElement instanceof HTMLInputElement ||
+      activeElement instanceof HTMLTextAreaElement ||
+      (activeElement instanceof HTMLElement && activeElement.isContentEditable);
+    
+    setIsInputFocused(isInput);
+  };
+
+  document.addEventListener('focusin', handleFocusChange);
+  document.addEventListener('focusout', handleFocusChange);
+  
+  return () => {
+    document.removeEventListener('focusin', handleFocusChange);
+    document.removeEventListener('focusout', handleFocusChange);
+  };
+}, []);
+
+
+//
   // 🆕 Handler optimiste pour le mouvement flèches
   const handleArrowMove = useCallback((direction: 'up' | 'down' | 'left' | 'right', shiftKey: boolean) => {
     if (selectedGroups.size === 0) return;
@@ -346,7 +374,7 @@ useCanvasShortcuts({
   onUndo: handleUndo,
   onRedo: handleRedo,
   onToggleVotingPanel: toggleVotingPanel,
-  onToggleAnalytics: toggleAnalyticsPanel,
+  onToggleAnalyticsPanel: toggleAnalyticsPanel,
 
   selectedGroups,
 });
@@ -538,33 +566,44 @@ useCanvasShortcuts({
   // ==================== GESTION TOUCHE ESPACE ====================
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        e.preventDefault();
-        setIsSpacePressed(true);
-        if (canvasRef.current) {
-          canvasRef.current.style.cursor = 'grab';
-        }
+ const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.code === 'Space' && !isInputFocused) {
+      e.preventDefault();
+      setIsSpacePressed(true);
+      if (canvasRef.current) {
+        canvasRef.current.style.cursor = 'grab';
       }
-    };
+    }
+  };
 
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        setIsSpacePressed(false);
-        if (canvasRef.current) {
-          canvasRef.current.style.cursor = 'default';
-        }
+  const handleKeyUp = (e: KeyboardEvent) => {
+    if (e.code === 'Space' && !isInputFocused) {
+      setIsSpacePressed(false);
+      if (canvasRef.current) {
+        canvasRef.current.style.cursor = 'default';
       }
-    };
+    }
+  };
 
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('keyup', handleKeyUp);
-    
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('keyup', handleKeyUp);
-    };
-  }, []);
+  document.addEventListener('keydown', handleKeyDown);
+  document.addEventListener('keyup', handleKeyUp);
+  
+  return () => {
+    document.removeEventListener('keydown', handleKeyDown);
+    document.removeEventListener('keyup', handleKeyUp);
+  };
+}, [isInputFocused]); // 🆕 IMPORTANT: dépend de isInputFocused
+
+// 🆕 METTRE À JOUR LE STYLE DU CURSOR
+useEffect(() => {
+  if (canvasRef.current) {
+    if (isSpacePressed && !isInputFocused) {
+      canvasRef.current.style.cursor = isPanning ? 'grabbing' : 'grab';
+    } else {
+      canvasRef.current.style.cursor = isPanning ? 'grabbing' : 'default';
+    }
+  }
+}, [isSpacePressed, isPanning, isInputFocused]);
 
   // ==================== RENDER ====================
 
@@ -710,142 +749,14 @@ useCanvasShortcuts({
       {/* MAIN WORKSPACE */}
       <div className="flex-1 flex min-h-0">
         {/* SIDEBAR - INSIGHTS DISPONIBLES */}
-        <div className="w-80 bg-white border-r border-gray-200 flex flex-col shrink-0">
-          <div className="p-4 border-b border-gray-200 shrink-0">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-gray-900">Available Insights</h3>
-              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-sm font-medium">
-                {availableInsights.length}
-              </span>
-            </div>
-            
-            <button
-              onClick={() => setShowAddInsight(!showAddInsight)}
-              className="w-full bg-blue-500 text-white py-2.5 px-4 rounded-lg text-sm font-medium hover:bg-blue-600 transition-all flex items-center justify-center gap-2"
-            >
-              <Plus size={16} />
-              Add Insight
-            </button>
-
-            {showAddInsight && (
-              <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
-                {/* Sélecteur de type */}
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { value: 'pain-point', label: 'Pain', color: 'bg-red-100 text-red-700' },
-                    { value: 'quote', label: 'Quote', color: 'bg-blue-100 text-blue-700' },
-                    { value: 'insight', label: 'Insight', color: 'bg-purple-100 text-purple-700' },
-                    { value: 'follow-up', label: 'Follow-up', color: 'bg-green-100 text-green-700' },
-                    { value: 'custom', label: 'Custom', color: 'bg-gray-100 text-gray-700' },
-                  ].map(({ value, label, color }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setNewInsightType(value as Insight['type'])}
-                      className={`p-2 rounded-lg text-xs font-medium transition-colors ${
-                        newInsightType === value
-                          ? `${color} border-2 border-current`
-                          : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                
-                <textarea
-                  value={newInsightText}
-                  onChange={(e) => setNewInsightText(e.target.value)}
-                  placeholder="Type your insight, observation, or quote..."
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  rows={3}
-                />
-                
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      if (newInsightText.trim()) {
-                        onManualInsightCreate(newInsightText.trim(), newInsightType);
-                        setNewInsightText("");
-                        setNewInsightType('insight');
-                        setShowAddInsight(false);
-                      }
-                    }}
-                    disabled={!newInsightText.trim()}
-                    className="flex-1 bg-green-500 text-white py-2 px-3 rounded-lg text-sm font-medium hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Add {newInsightType.charAt(0).toUpperCase() + newInsightType.slice(1).replace('-', ' ')}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowAddInsight(false);
-                      setNewInsightText("");
-                      setNewInsightType('insight');
-                    }}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* LISTE DES INSIGHTS SCROLLABLE */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="p-3 space-y-2">
-              {availableInsights.map(insight => (
-                <motion.div
-                  key={insight.id}
-                  draggable={workspaceMode === 'grouping'}
-                  onDragStart={(e) => {
-                    const data = e as unknown as React.DragEvent;
-                    data.dataTransfer.effectAllowed = 'move';
-                    data.dataTransfer.setData('text/plain', insight.id);
-                    setDraggedInsightId(insight.id);
-                  }}
-                  onDragEnd={() => {
-                    setDraggedInsightId(null);
-                  }}
-                  whileHover={{ scale: workspaceMode === 'grouping' ? 1.02 : 1 }}
-                  className={`p-3 rounded-lg border cursor-${workspaceMode === 'grouping' ? 'move' : 'default'} transition-all group relative ${
-                    workspaceMode === 'grouping' 
-                      ? 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-md' 
-                      : 'bg-gray-50 border-gray-100'
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                      insight.type === 'pain-point' ? 'bg-red-100 text-red-700' :
-                      insight.type === 'quote' ? 'bg-blue-100 text-blue-700' :
-                      insight.type === 'insight' ? 'bg-purple-100 text-purple-700' :
-                      'bg-green-100 text-green-700'
-                    }`}>
-                      {insight.type}
-                    </span>
-                    {insight.source === 'manual' && (
-                      <span className="text-xs text-gray-400">Manual</span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-700 leading-snug">
-                    {insight.text}
-                  </p>
-                  {workspaceMode === 'grouping' && (
-                    <p className="text-xs text-gray-400 mt-2">Drag to group</p>
-                  )}
-                </motion.div>
-              ))}
-
-              {availableInsights.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <div className="text-3xl mb-2">🎉</div>
-                  <p className="font-medium">All insights organized!</p>
-                  <p className="text-sm mt-1">Great job on your affinity mapping</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <InsightsOrganizationPanel
+          groups={groups}
+          insights={insights}
+          onGroupCreate={onGroupCreate}
+          onInsightDrop={onInsightDrop}
+          onManualInsightCreate={onManualInsightCreate}
+          onGroupTitleUpdate={onGroupTitleUpdate} // 🆕 AJOUTER SI DISPONIBLE
+        />
 
         {/* CANVAS PRINCIPAL */}
         <div className="flex-1 relative overflow-hidden bg-linear-to-br from-gray-50 to-gray-100">
