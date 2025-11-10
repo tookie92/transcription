@@ -91,19 +91,24 @@ const handleGroupMove = async (groupId: string, position: { x: number; y: number
     position: group.position,
     insightIds: group.insightIds as string[]
   })) || [];
-  const handleInsightDrop = async (insightId: string, groupId: string) => {
-    if (!affinityMap) return;
-    
-    try {
-      await addInsightToGroup({
-        mapId: affinityMap._id,
-        groupId,
-        insightId: insightId as Id<"insights">
-      });
-    } catch (error) {
-      console.error("Failed to add insight to group:", error);
-    }
-  };
+
+  
+// Dans AffinityMapWorkspace.tsx - CORRIGER handleInsightDrop
+const handleInsightDrop = async (insightId: string, groupId: string) => {
+  if (!affinityMap) return;
+  
+  try {
+    // 🎯 CONVERTIR L'ID EN Id<"insights">
+    await addInsightToGroup({
+      mapId: affinityMap._id,
+      groupId,
+      insightId: insightId as Id<"insights"> // 🎯 CONVERSION EXPLICITE
+    });
+  } catch (error) {
+    console.error("Failed to add insight to group:", error);
+    toast.error("Failed to add insight to group");
+  }
+};
 
   const handleManualInsightCreate = async (text: string, type: Insight['type']) => {
     if (!project) return;

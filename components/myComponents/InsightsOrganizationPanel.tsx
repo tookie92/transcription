@@ -17,6 +17,13 @@ interface ProjectInfo {
   description?: string;
 }
 
+// Dans InsightsOrganizationPanel.tsx - METTRE À JOUR L'INTERFACE PENDING
+interface PendingInsights {
+  groupTitle: string;
+  insightIds: string[];
+  tempGroupId: string;
+  createdAt: number;
+}
 
 interface InsightsOrganizationPanelProps {
   groups: AffinityGroup[];
@@ -82,63 +89,44 @@ PROJECT DESCRIPTION: ${projectInfo.description || 'No description available'}
   };
 
  // Dans InsightsOrganizationPanel.tsx - REMPLACER handleApplySuggestion
+// Dans InsightsOrganizationPanel.tsx - AJOUTER UNE VÉRIFICATION
 const handleApplySuggestion = (suggestion: GroupSuggestion) => {
-  if (suggestion.action === 'add_to_existing' && suggestion.targetGroupId) {
-    // Ajouter les insights au groupe existant
-    suggestion.insightIds.forEach(insightId => {
-      onInsightDrop(insightId, suggestion.targetGroupId!);
+  if (suggestion.action === 'create_new' && suggestion.newGroupTitle) {
+    
+    // 🎯 VÉRIFIER QUE LES INSIGHT IDS SONT VALIDES
+    const validInsightIds = suggestion.insightIds.filter(id => {
+      if (!id || typeof id !== 'string') {
+        console.warn('❌ Invalid insight ID:', id);
+        return false;
+      }
+      return true;
     });
-    toast.success(`Added ${suggestion.insightIds.length} insights to group`);
-  } 
-  else if (suggestion.action === 'create_new' && suggestion.newGroupTitle) {
-    // 🆕 SOLUTION RAPIDE : STOCKER LES INSIGHTS ET CRÉER LE GROUPE
+    
+    if (validInsightIds.length === 0) {
+      toast.error('No valid insights to add to group');
+      return;
+    }
+    
+    console.log('✅ Valid insight IDs:', validInsightIds);
+    
     const position = {
       x: Math.random() * 400 + 100,
       y: Math.random() * 400 + 100
     };
     
-    // Stocker les insights à ajouter
     pendingInsightsRef.current = {
       groupTitle: suggestion.newGroupTitle,
-      insightIds: suggestion.insightIds
+      insightIds: validInsightIds, // 🎯 UTILISER SEULEMENT LES VALIDES
+      tempGroupId: `temp-${Date.now()}`,
+      createdAt: Date.now()
     };
     
-    // Créer le groupe (il sera créé avec le titre par défaut "New Theme")
     onGroupCreate(position);
-    
     toast.info(`Creating group "${suggestion.newGroupTitle}"...`);
   }
   
   clearSuggestions();
 };
-
-// Dans InsightsOrganizationPanel.tsx - AJOUTER APRÈS LES useMemo
-// 🆕 DÉTECTER QUAND UN NOUVEAU GROUPE EST CRÉÉ POUR Y AJOUTER LES INSIGHTS
-useEffect(() => {
-  if (pendingInsightsRef.current && groups.length > 0) {
-    const latestGroup = groups[groups.length - 1];
-    
-    const isNewGroup = latestGroup.title === "New Theme" || latestGroup.title === "New Group";
-    
-    if (isNewGroup) {
-      console.log("🎯 Found new group, adding insights and renaming...");
-      
-      // 1. Ajouter les insights
-      pendingInsightsRef.current.insightIds.forEach(insightId => {
-        onInsightDrop(insightId, latestGroup.id);
-      });
-      
-      // 2. Renommer le groupe (si la fonction est disponible)
-      if (onGroupTitleUpdate && pendingInsightsRef.current.groupTitle) {
-        onGroupTitleUpdate(latestGroup.id, pendingInsightsRef.current.groupTitle);
-      }
-      
-      toast.success(`Created "${pendingInsightsRef.current.groupTitle}" with ${pendingInsightsRef.current.insightIds.length} insights`);
-      
-      pendingInsightsRef.current = null;
-    }
-  }
-}, [groups, onInsightDrop, onGroupTitleUpdate]);// 🆕 DÉPEND DE groups POUR DÉTECTER LES CHANGEMENTS
 
   // 🎯 CALCUL DES CATÉGORIES
   const { readyInsights, problematicInsights, stats } = useMemo(() => {
@@ -186,6 +174,69 @@ useEffect(() => {
       }
     };
   }, [groups, insights, searchTerm]);
+
+
+  // Dans InsightsOrganizationPanel.tsx - AJOUTER APRÈS LES useMemo
+// 🎯 VERSION SYNCHRONE SANS ANY
+// Dans InsightsOrganizationPanel.tsx - METTRE À JOUR LE useEffect
+useEffect(() => {
+  const processPendingInsights = async () => {
+    if (pendingInsightsRef.current && groups.length > 0) {
+      const pending = pendingInsightsRef.current;
+      
+      const newGroup = groups.find(group => 
+        group.title === "New Theme" || 
+        group.title === "New Group"
+      );
+      
+      if (newGroup) {
+        console.log("🎯 Adding insights to group:", newGroup.id);
+        
+        try {
+          // 🎯 AJOUTER CHAQUE INSIGHT AVEC GESTION D'ERREUR
+          let successCount = 0;
+          
+          for (const insightId of pending.insightIds) {
+            try {
+              await new Promise(resolve => setTimeout(resolve, 50));
+              onInsightDrop(insightId, newGroup.id);
+              successCount++;
+            } catch (error) {
+              console.error(`❌ Failed to add insight ${insightId}:`, error);
+            }
+          }
+          
+          // 🎯 RENOMMER LE GROUPE
+          if (onGroupTitleUpdate) {
+            onGroupTitleUpdate(newGroup.id, pending.groupTitle);
+          }
+          
+          if (successCount > 0) {
+            toast.success(`Created "${pending.groupTitle}" with ${successCount} insights`);
+          } else {
+            toast.error('Failed to add any insights to the group');
+          }
+          
+          pendingInsightsRef.current = null;
+          
+        } catch (error) {
+          console.error('❌ Failed to process insights:', error);
+          toast.error('Failed to add insights to new group');
+          pendingInsightsRef.current = null;
+        }
+        
+      } else if (Date.now() - pending.createdAt > 10000) {
+        console.warn('⏰ Timeout waiting for group creation');
+        toast.error('Group creation timeout');
+        pendingInsightsRef.current = null;
+      }
+    }
+  };
+
+  processPendingInsights();
+}, [groups, onInsightDrop, onGroupTitleUpdate]);
+
+
 
   // 🎯 TROUVER UN GROUPE SUGGÉRÉ
   const findSuggestedGroup = (insight: Insight) => {

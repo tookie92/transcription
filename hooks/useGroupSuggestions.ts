@@ -18,81 +18,82 @@ export function useGroupSuggestions() {
   const [isLoading, setIsLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<GroupSuggestion[]>([]);
 
-  const generateSuggestions = useCallback(async (
-    insights: Insight[], // 🆕 TYPE Insight IMPORTÉ
-    existingGroups: AffinityGroup[], // 🆕 TYPE AffinityGroup IMPORTÉ
-    projectContext?: string
-  ) => {
-    if (insights.length === 0) {
-      toast.info('No insights to analyze');
-      return;
+// hooks/useGroupSuggestions.ts - AJOUTER UNE VALIDATION
+const generateSuggestions = useCallback(async (
+  insights: Insight[],
+  existingGroups: AffinityGroup[],
+  projectContext?: string
+) => {
+  if (insights.length === 0) {
+    toast.info('No insights to analyze');
+    return;
+  }
+
+  setIsLoading(true);
+  setSuggestions([]);
+
+  try {
+    console.log('🚀 Sending real insight IDs:', insights.map(i => i.id));
+
+    const response = await fetch('/api/suggest-groups', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        insights: insights.map(insight => ({
+          id: insight.id, // 🎯 ENVOYER LES VRAIS IDs
+          text: insight.text.substring(0, 500),
+          type: insight.type,
+        })),
+        existingGroups: existingGroups.map(group => ({
+          id: group.id,
+          title: group.title,
+          insightIds: group.insightIds,
+        })),
+        projectContext,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
     }
 
-    setIsLoading(true);
-    setSuggestions([]);
+    const data = await response.json();
+    console.log('✅ AI Response with IDs:', data);
 
-    try {
-      console.log('🚀 Sending request to AI...', {
-        insights: insights.length,
-        groups: existingGroups.length
-      });
-
-      const response = await fetch('/api/suggest-groups', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          insights: insights.map(insight => ({
-            id: insight.id,
-            text: insight.text.substring(0, 500),
-            type: insight.type,
-          })),
-          existingGroups: existingGroups.map(group => ({
-            id: group.id,
-            title: group.title,
-            insightIds: group.insightIds,
-          })),
-          projectContext,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ API Error:', response.status, errorText);
-        throw new Error(`API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('✅ AI Response:', data);
-
-      if (data.suggestions && Array.isArray(data.suggestions)) {
-        const validSuggestions = data.suggestions.filter((s: GroupSuggestion) => 
-          s.insightIds && 
+    if (data.suggestions && Array.isArray(data.suggestions)) {
+      // 🎯 VALIDER QUE LES IDs EXISTENT RÉELLEMENT
+      const validSuggestions = data.suggestions.filter((s: GroupSuggestion) => {
+        const hasValidIds = s.insightIds && 
           s.insightIds.length > 0 &&
-          s.confidence > 0.3
-        );
+          s.insightIds.every((id: string) => 
+            insights.some(realInsight => realInsight.id === id)
+          );
         
-        setSuggestions(validSuggestions);
-        
-        if (validSuggestions.length > 0) {
-          toast.success(`Found ${validSuggestions.length} grouping suggestions`);
-        } else {
-          toast.info('No strong grouping patterns found');
+        if (!hasValidIds) {
+          console.warn('❌ Suggestion with invalid IDs:', s.insightIds);
         }
+        
+        return hasValidIds && s.confidence > 0.3;
+      });
+      
+      setSuggestions(validSuggestions);
+      
+      if (validSuggestions.length > 0) {
+        toast.success(`Found ${validSuggestions.length} valid suggestions`);
       } else {
-        console.warn('⚠️ No suggestions in response:', data);
-        toast.info('AI could not find clear grouping patterns');
+        toast.info('No valid grouping patterns found');
       }
-
-    } catch (error) {
-      console.error('💥 Error generating suggestions:', error);
-      toast.error('Failed to generate AI suggestions');
-      setSuggestions([]);
-    } finally {
-      setIsLoading(false);
     }
-  }, []);
+
+  } catch (error) {
+    console.error('💥 Error generating suggestions:', error);
+    toast.error('Failed to generate AI suggestions');
+  } finally {
+    setIsLoading(false);
+  }
+}, []);
 
   const clearSuggestions = useCallback(() => {
     setSuggestions([]);

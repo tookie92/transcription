@@ -102,7 +102,8 @@ export async function POST(request: NextRequest) {
     console.log('📊 Insights count:', insights.length);
     console.log('🏷️ Existing groups count:', existingGroups.length);
 
-    const prompt = `
+// app/api/suggest-groups/route.ts - CORRIGER LE PROMPT
+const prompt = `
 You are a UX research assistant analyzing insights for an affinity diagram.
 
 PROJECT CONTEXT:
@@ -112,21 +113,21 @@ EXISTING GROUPS (for reference):
 ${existingGroups.map(group => `- "${group.title}" (${group.insightIds.length} insights)`).join('\n')}
 
 UNGROUPED INSIGHTS TO ORGANIZE:
-${insights.map((insight, index) => `${index + 1}. [${insight.type}] ${insight.text}`).join('\n')}
+${insights.map((insight, index) => `${index + 1}. ID:${insight.id} [${insight.type}] ${insight.text}`).join('\n')}
 
 CRITICAL INSTRUCTIONS:
-1. Create group titles that are SPECIFIC to the project context above
-2. Avoid generic titles like "UI Improvements", "User Feedback", or "Technical Issues"
-3. Base your suggestions on the actual project name and description
-4. Focus on themes that are directly relevant to this specific project
-5. Consider the business domain and user goals mentioned in the project context
+1. Use the EXACT insight IDs provided above (like "kh70x315yeh67j4ctd52tbfrbx7t3czn")
+2. NEVER invent new IDs like "id1", "id2" - use the real IDs from the list
+3. Create group titles that are SPECIFIC to the project context
+4. Avoid generic titles like "UI Improvements"
 
 For each suggestion, provide:
-- Specific, project-relevant group title that reflects the actual insight content
+- Use ONLY the real insight IDs from the list above
+- Specific, project-relevant group title
 - Clear reasoning that connects the insights to the project goals
-- Confidence level based on how well the insights cluster together (0.1 to 0.9)
+- Confidence level (0.1 to 0.9)
 
-IMPORTANT: The group titles should help the project team take actionable next steps.
+IMPORTANT: You MUST use the exact insight IDs provided in the "ID:" field.
 
 Respond with valid JSON only:
 {
@@ -134,10 +135,10 @@ Respond with valid JSON only:
     {
       "action": "create_new",
       "confidence": 0.85,
-      "reason": "Specific explanation tied to project context and insight content",
-      "insightIds": ["id1", "id2"],
-      "newGroupTitle": "Project-Specific Theme Based on Actual Content",
-      "newGroupDescription": "How this group relates to project goals and user needs"
+      "reason": "Specific explanation tied to project context",
+      "insightIds": ["kh70x315yeh67j4ctd52tbfrbx7t3czn", "kh76p0tgk0jb534rx07yeqpbsd7t3z7p"],
+      "newGroupTitle": "Project-Specific Theme",
+      "newGroupDescription": "How this relates to project goals"
     }
   ]
 }
@@ -154,7 +155,7 @@ Respond with valid JSON only:
           content: prompt
         }
       ],
-      model: "mixtral-8x7b-32768",
+      model: "openai/gpt-oss-20b",
       temperature: 0.2,
       max_tokens: 2000,
       response_format: { type: "json_object" }
@@ -190,18 +191,19 @@ Respond with valid JSON only:
     console.error('💥 Groq API error:', error);
     
     // 🎯 MAINTENANT projectContext EST ACCESSIBLE
-    const fallbackResponse = {
-      suggestions: [
-        {
-          action: "create_new" as const,
-          confidence: 0.8,
-          reason: generateFallbackReason(projectContext, insights),
-          insightIds: insights.slice(0, Math.min(2, insights.length)).map(i => i.id),
-          newGroupTitle: generateFallbackTitle(projectContext),
-          newGroupDescription: "User insights relevant to project goals"
-        }
-      ]
-    };
+// Dans le catch de l'API - UTILISER LES VRAIS IDs
+const fallbackResponse = {
+  suggestions: [
+    {
+      action: "create_new" as const,
+      confidence: 0.8,
+      reason: generateFallbackReason(projectContext, insights),
+      insightIds: insights.slice(0, Math.min(3, insights.length)).map(i => i.id), // 🎯 VRAIS IDs
+      newGroupTitle: generateFallbackTitle(projectContext),
+      newGroupDescription: "User insights relevant to project goals"
+    }
+  ]
+};
 
     console.log('🔄 Using fallback suggestions:', fallbackResponse);
     
