@@ -1,8 +1,8 @@
 "use client";
 
 import { motion, PanInfo } from "framer-motion";
-import { Trash2, Vote, GripVertical, Edit, Copy } from "lucide-react";
-import { useState, useCallback } from "react";
+import { Trash2, Vote, GripVertical, Edit, Copy, Edit3, Sparkles } from "lucide-react";
+import { useState, useCallback, useMemo } from "react";
 import { AffinityGroup as AffinityGroupType, Insight } from "@/types";
 import { useMotionValue, useTransform } from "framer-motion";
 import {
@@ -12,6 +12,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { GroupNameAssistant } from "./GroupNameAssistant";
 
 interface AffinityGroupProps {
   group: AffinityGroupType;
@@ -19,6 +20,7 @@ interface AffinityGroupProps {
   scale: number;
   isDragOver: boolean;
   workspaceMode: 'grouping' | 'voting';
+  projectContext?: string; // 🎯
   onMove: (groupId: string, position: { x: number; y: number }) => void;
   onDelete?: (groupId: string) => void;
   onTitleUpdate?: (groupId: string, title: string) => void;
@@ -49,6 +51,7 @@ export default function AffinityGroup({
   onDragOver,
   onDragLeave,
   onDrop,
+  projectContext,
   onDragStart,
   onDragEnd,
   onDragStateChange,
@@ -63,9 +66,14 @@ export default function AffinityGroup({
   const rotateX = useTransform(y, [-100, 0, 100], [1, 0, -1]);
   const rotateY = useTransform(x, [-100, 0, 100], [-1, 0, 1]);
 
-  const groupInsights = insights.filter(insight => 
-    group.insightIds.includes(insight.id)
+  // 🎯 CALCULER LES INSIGHTS DU GROUPE
+  const groupInsights = useMemo(() => 
+    insights.filter(insight => group.insightIds.includes(insight.id)),
+    [insights, group.insightIds]
   );
+// 🎯 CORRECTION : Utiliser groupInsights.length directement
+const hasInsights = groupInsights.length > 0;
+
 
   const handleDragStart = useCallback(() => {
     setIsDragging(true);
@@ -88,18 +96,30 @@ export default function AffinityGroup({
     onMove(group.id, { x: finalX, y: finalY });
   }, [group.position.x, group.position.y, group.id, scale, onMove, onDragStateChange]);
 
-  const handleTitleSave = useCallback(() => {
+  // 🎯 SAUVEGARDE DU TITRE
+  const handleTitleSave = () => {
     if (tempTitle.trim() && tempTitle !== group.title) {
       onTitleUpdate?.(group.id, tempTitle.trim());
     }
     setIsEditing(false);
-  }, [tempTitle, group.title, group.id, onTitleUpdate]);
+  };
 
-  const handleTitleClick = useCallback((e: React.MouseEvent) => {
+  // 🎯 CLICK SUR LE TITRE POUR ÉDITER
+  const handleTitleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setTempTitle(group.title);
     setIsEditing(true);
-  }, [group.title]);
+  };
+
+    // 🎯 GESTION DES TOUCHES
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleTitleSave();
+    } else if (e.key === 'Escape') {
+      setTempTitle(group.title);
+      setIsEditing(false);
+    }
+  };
 
   // 🆕 HANDLERS CONTEXT MENU
   const handleRename = useCallback(() => {
@@ -115,6 +135,13 @@ export default function AffinityGroup({
   const handleDelete = useCallback(() => {
     onDelete?.(group.id);
   }, [group.id, onDelete]);
+
+  const inputStyle = {
+  color: group.color,
+  border: `1px solid ${group.color}40`,
+  backgroundColor: 'white'
+};
+
 
   return (
     <ContextMenu>
@@ -172,45 +199,52 @@ export default function AffinityGroup({
 
             <GripVertical size={16} style={{ color: group.color }} className="shrink-0" />
 
-            {isEditing ? (
-              <input
-                type="text"
-                value={tempTitle}
-                onChange={(e) => setTempTitle(e.target.value)}
-                onBlur={handleTitleSave}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleTitleSave();
-                  if (e.key === 'Escape') {
-                    setTempTitle(group.title);
-                    setIsEditing(false);
-                  }
-                }}
-                className="flex-1 font-semibold text-sm bg-transparent border-none outline-none"
-                style={{ color: group.color }}
-                autoFocus
-              />
-            ) : (
-              <h3 
-                className="flex-1 font-semibold text-sm cursor-text select-text"
-                style={{ color: group.color }}
-                onClick={handleTitleClick}
-                title="Click to edit title"
-              >
-                {group.title}
-              </h3>
-            )}
+              {/* TITRE - ÉDITION MANUELLE OU AFFICHAGE */}
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={tempTitle}
+                        onChange={(e) => setTempTitle(e.target.value)}
+                        onBlur={handleTitleSave}
+                        onKeyDown={handleKeyDown}
+                        className="flex-1 font-semibold text-sm bg-white border outline-none px-2 py-1 rounded transition-all"
+                        style={inputStyle}
+                        autoFocus
+                      />
+                    ) : (
+                      <h3 
+                        className="flex-1 font-semibold text-sm cursor-text select-text hover:bg-gray-50 px-2 py-1 rounded transition-colors"
+                        style={{ color: group.color }}
+                        onClick={handleTitleClick}
+                        title="Click to edit title"
+                      >
+                        {group.title}
+                      </h3>
+                    )}
+
 
             <div className="flex items-center gap-2">
               <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
                 {groupInsights.length}
               </span>
-              
-              {workspaceMode === 'voting' && (
-                <button className="p-1 text-gray-400 hover:text-purple-500 transition-colors">
-                  <Vote size={14} />
-                </button>
+    
+              {/* 🎯 BOUTON IA SEULEMENT SI LE GROUPE A DES INSIGHTS */}
+              {hasInsights && (
+                <GroupNameAssistant
+                  group={group}
+                  insights={insights}
+                  currentTitle={group.title}
+                  onTitleUpdate={(newTitle) => onTitleUpdate?.(group.id, newTitle)}
+                  projectContext={projectContext}
+                />
               )}
-              
+    
+                  {workspaceMode === 'voting' && (
+                    <button className="p-1 text-gray-400 hover:text-purple-500 transition-colors">
+                      <Vote size={14} />
+                    </button>
+                  )}
+                  
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
@@ -225,9 +259,19 @@ export default function AffinityGroup({
           </div>
 
           {/* INSIGHTS CONTENT */}
-          <div className={`p-3 space-y-2 max-h-60 overflow-y-auto transition-colors ${
-            isDragOver ? 'bg-blue-50' : 'bg-white'
-          }`}>
+         <div 
+  className={`p-3 space-y-2 max-h-60 overflow-y-auto transition-colors ${
+    isDragOver ? 'bg-blue-50' : 'bg-white'
+  }`}
+  onWheel={(e) => {
+    // 🎯 EMPÊCHER LA PROPAGATION DU SCROLL AU CANVAS
+    e.stopPropagation();
+  }}
+  onTouchMove={(e) => {
+    // 🎯 POUR MOBILE AUSSI
+    e.stopPropagation();
+  }}
+>
             {groupInsights.map(insight => (
               <div
                 key={insight.id}
@@ -277,34 +321,48 @@ export default function AffinityGroup({
       {/* 🆕 CONTEXT MENU SHADCN */}
       <ContextMenuContent className="w-64">
         <div className="px-2 py-1.5 text-sm font-semibold text-gray-900 border-b">
-          {group.title}
-        </div>
-        
-        <ContextMenuItem 
-          onClick={handleRename}
-          className="flex items-center gap-2 cursor-pointer"
-        >
-          <Edit size={14} />
-          Rename Group
-        </ContextMenuItem>
-        
-        <ContextMenuItem 
-          onClick={handleDuplicate}
-          className="flex items-center gap-2 cursor-pointer"
-        >
-          <Copy size={14} />
-          Duplicate Group
-        </ContextMenuItem>
-        
-        <ContextMenuSeparator />
-        
-        <ContextMenuItem 
-          onClick={handleDelete}
-          className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
-        >
-          <Trash2 size={14} />
-          Delete Group
-        </ContextMenuItem>
+            {group.title}
+          </div>
+          
+          <ContextMenuItem 
+            onClick={handleTitleClick}
+            className="flex items-center gap-2 cursor-pointer"
+          >
+            <Edit3 size={14} />
+            Rename Group
+          </ContextMenuItem>
+          
+          {/* 🎯 OPTION IA SEULEMENT SI DES INSIGHTS */}
+          {hasInsights && (
+            <ContextMenuItem 
+              onClick={() => {
+                // Ouvrir le popover IA
+                // On peut utiliser une ref pour déclencher l'ouverture
+              }}
+              className="flex items-center gap-2 cursor-pointer"
+            >
+              <Sparkles size={14} />
+              AI Name Suggestions
+            </ContextMenuItem>
+          )}
+          
+          <ContextMenuItem 
+            onClick={handleDuplicate}
+            className="flex items-center gap-2 cursor-pointer"
+          >
+            <Copy size={14} />
+            Duplicate Group
+          </ContextMenuItem>
+          
+          <ContextMenuSeparator />
+          
+          <ContextMenuItem 
+            onClick={handleDelete}
+            className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
+          >
+            <Trash2 size={14} />
+            Delete Group
+          </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );

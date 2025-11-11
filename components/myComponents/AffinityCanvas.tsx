@@ -395,42 +395,53 @@ useCanvasShortcuts({
 
   // ==================== GESTION Wheel ====================
 
-  const handleWheel = useCallback((e: WheelEvent) => {
-    e.preventDefault();
+const handleWheel = useCallback((e: WheelEvent) => {
+  // 🎯 VÉRIFIER SI ON SCROLLE DANS UN ÉLÉMENT AVEC OVERFLOW
+  const target = e.target as HTMLElement;
+  const isScrollableElement = 
+    target.classList.contains('overflow-y-auto') ||
+    target.classList.contains('overflow-auto') ||
+    target.closest('.overflow-y-auto') ||
+    target.closest('.overflow-auto');
+
+  // 🎯 SI ON SCROLLE DANS UN ÉLÉMENT AVEC OVERFLOW, NE PAS INTERCEPTER
+  if (isScrollableElement) {
+    return; // Laisser le scroll normal fonctionner
+  }
+
+  e.preventDefault();
+  
+  if (e.ctrlKey) {
+    // Zoom avec Ctrl + molette
+    const zoomIntensity = 0.1;
+    const delta = -e.deltaY * zoomIntensity * 0.01;
+    const newScale = Math.min(2, Math.max(0.3, scale * (1 + delta)));
     
-    if (e.ctrlKey) {
-      // Zoom avec Ctrl + molette
-      const zoomIntensity = 0.1;
-      const delta = -e.deltaY * zoomIntensity * 0.01;
-      const newScale = Math.min(2, Math.max(0.3, scale * (1 + delta)));
+    // Zoom vers le curseur
+    if (canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
       
-      // Zoom vers le curseur
-      if (canvasRef.current) {
-        const rect = canvasRef.current.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-        
-        // Calculer la position relative avant le zoom
-        const worldX = (mouseX - position.x) / scale;
-        const worldY = (mouseY - position.y) / scale;
-        
-        // Appliquer le zoom
-        setScale(newScale);
-        
-        // Ajuster la position pour zoomer vers le curseur
-        setPosition({
-          x: mouseX - worldX * newScale,
-          y: mouseY - worldY * newScale
-        });
-      }
-    } else {
-      // Pan avec molette seule
-      setPosition(prev => ({
-        x: prev.x - e.deltaX,
-        y: prev.y - e.deltaY
-      }));
+      const worldX = (mouseX - position.x) / scale;
+      const worldY = (mouseY - position.y) / scale;
+      
+      setScale(newScale);
+      
+      setPosition({
+        x: mouseX - worldX * newScale,
+        y: mouseY - worldY * newScale
+      });
     }
-  }, [scale, position]);
+  } else {
+    // Pan avec molette seule
+    setPosition(prev => ({
+      x: prev.x - e.deltaX,
+      y: prev.y - e.deltaY
+    }));
+  }
+}, [scale, position]);
+
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -830,6 +841,7 @@ useEffect(() => {
                       onDelete={onGroupDelete}
                       onTitleUpdate={onGroupTitleUpdate}
                       onRemoveInsight={onInsightRemoveFromGroup}
+                      projectContext={projectInfo ? `PROJECT: ${projectInfo.name}` : undefined}
                       onSelect={(groupId, e) => {
                         e.stopPropagation();
                         if (e.ctrlKey || e.metaKey) {
