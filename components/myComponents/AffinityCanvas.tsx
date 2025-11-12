@@ -28,7 +28,17 @@ import { ThemeVisualizationFixed } from "./ThemeVisualizationFixed";
 import { SimpleThemeTest } from "./SimpleThemeTest";
 import { UltraSimpleTest } from "./UltraSimpleTest";
 import { Badge } from "../ui/badge";
+// 🆕 AJOUTER childGroupIds À L'INTERFACE
 
+
+
+interface PendingGroupData {
+  groupTitle: string;
+  insightIds: string[];
+  tempGroupId: string;
+  createdAt: number;
+  childGroupIds?: string[];
+}
 
 interface AffinityCanvasProps {
   groups: AffinityGroupType[];
@@ -65,88 +75,56 @@ export default function AffinityCanvas({
   onGroupsReplace
 }: AffinityCanvasProps) {
 
-const projectName = useQuery(api.projects.getById, {projectId: projectId as Id<"projects">});
+  // const [draggedInsightId, setDraggedInsightId] = useState<string | null>(null);
+  
+  // const [newInsightText, setNewInsightText] = useState("");
+  // const [newInsightType, setNewInsightType] = useState<Insight['type']>('insight');
+  // const [showAddInsight, setShowAddInsight] = useState(false);
 
+
+  // ==================== QUERIES ====================
+  const projectName = useQuery(api.projects.getById, {projectId: projectId as Id<"projects">});
+
+  // ==================== HOOKS EXTERNES ====================
+  const { 
+    isAnalyzing: isThemesAnalyzing, 
+    themeAnalysis,
+    detectThemes, 
+    clearThemes 
+  } = useThemeDetection();
+
+  const history = useHistory();
+
+  // ==================== useRef ====================
   const canvasRef = useRef<HTMLDivElement>(null);
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const clickCountRef = useRef(0);
+
+  // ==================== useState ====================
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
-  
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
-  const [draggedInsightId, setDraggedInsightId] = useState<string | null>(null);
-  
-  const [newInsightText, setNewInsightText] = useState("");
-  const [newInsightType, setNewInsightType] = useState<Insight['type']>('insight');
-  const [showAddInsight, setShowAddInsight] = useState(false);
   const [workspaceMode, setWorkspaceMode] = useState<'grouping' | 'voting'>('grouping');
-
-  // 🆕 États pour la sélection et mouvement clavier
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [isMovingWithArrows, setIsMovingWithArrows] = useState(false);
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
-
-// 🆕 AJOUTER THEME DISCOVERY
-const [showThemeDiscovery, setShowThemeDiscovery] = useState(false);
-// const [detectedThemes, setDetectedThemes] = useState<DetectedTheme[]>([]);
-const [selectedTheme, setSelectedTheme] = useState<DetectedTheme | null>(null);
-
-
-
-// AJOUTER APRÈS LES AUTRES useStates
-const [pendingParentGroup, setPendingParentGroup] = useState<{
-  groupId: string;
-  title: string;
-  insightIds: string[];
-} | null>(null);
-
-
-
-
-// 🆕 AJOUTER APRÈS LES AUTRES useStates
-const [applyingAction, setApplyingAction] = useState<string | null>(null);
-const [highlightedGroups, setHighlightedGroups] = useState<Set<string>>(new Set());
-
-// 🆕 UTILISER themeAnalysis DIRECTEMENT
-const { 
-  isAnalyzing: isThemesAnalyzing, 
-  themeAnalysis,  // 🆕 CONTIENT LES THÈMES
-  detectThemes, 
-  clearThemes 
-} = useThemeDetection();
-
-
-// AJOUTER CES HANDLERS
-const handleThemeSelect = (theme: DetectedTheme) => {
-  setSelectedTheme(theme);
-};
-
-
-
-// 🆕 UTILISER themeAnalysis DIRECTEMENT depuis le hook
-const detectedThemes = themeAnalysis?.themes || [];
-
-// 🆕 AJOUTER ANALYTICS
-  const [showAnalytics, setShowAnalytics] = useState(false);
-
-// 🆕 AJOUTER PANELS
+  const [showThemeDiscovery, setShowThemeDiscovery] = useState(false);
+  const [selectedTheme, setSelectedTheme] = useState<DetectedTheme | null>(null);
+  const [pendingParentGroup, setPendingParentGroup] = useState<PendingGroupData | null>(null);
+  const [applyingAction, setApplyingAction] = useState<string | null>(null);
+  const [highlightedGroups, setHighlightedGroups] = useState<Set<string>>(new Set());
   const [activePanel, setActivePanel] = useState<'voting' | 'analytics' | null>(null);
+  const [optimisticPositions, setOptimisticPositions] = useState<Map<string, {x: number, y: number}>>(new Map());
+  const [renderKey, setRenderKey] = useState(0);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
-  // 🆕 Fonctions pour gérer les panels avec les raccourcis
-const toggleVotingPanel = useCallback(() => {
-  setActivePanel(prev => prev === 'voting' ? null : 'voting');
-}, []);
+  // ==================== useMemo ====================
+  const detectedThemes = useMemo(() => {
+    return themeAnalysis?.themes || [];
+  }, [themeAnalysis?.themes]);
 
-const toggleAnalyticsPanel = useCallback(() => {
-  setActivePanel(prev => prev === 'analytics' ? null : 'analytics');
-}, []);
-
-
-
-  // 🆕 Historique SIMPLE
-  const history = useHistory();
-
-  // 📊 Stats pour le header
   const stats = useMemo(() => {
     const totalInsights = insights.length;
     const groupedInsights = groups.reduce((sum, group) => sum + group.insightIds.length, 0);
@@ -161,18 +139,326 @@ const toggleAnalyticsPanel = useCallback(() => {
     };
   }, [groups, insights]);
 
-  const availableInsights = useMemo(() => {
-    const usedInsightIds = new Set(groups.flatMap(group => group.insightIds));
-    return insights.filter(insight => !usedInsightIds.has(insight.id));
-  }, [groups, insights]);
+  const projectContext = useMemo(() => {
+    return projectInfo ? `
+PROJECT: ${projectInfo.name}
+DESCRIPTION: ${projectInfo.description || 'No description'}
+`.trim() : 'General user research project';
+  }, [projectInfo]);
 
-    // 🆕 Référence pour gérer les clicks
-  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const clickCountRef = useRef(0);
+  // ==================== useCallback ====================
+  const extractSuggestedName = useCallback((reason: string): string => {
+    console.log('🔍 Extracting name from:', reason);
+    
+    const patterns = [
+      /suggested name: "([^"]+)"/i,
+      /suggested name: '([^']+)'/i,
+      /suggested name: ([^.,]+)/i,
+      /suggested.*name: "([^"]+)"/i,
+      /create.*theme.*: "([^"]+)"/i,
+      /parent.*: "([^"]+)"/i,
+      /merge.*as "([^"]+)"/i,
+      /["']([^"']+)["'].*suggested/i
+    ];
+    
+    for (const pattern of patterns) {
+      const match = reason.match(pattern);
+      if (match && match[1]) {
+        const name = match[1].trim();
+        console.log('✅ Extracted name:', name);
+        return name;
+      }
+    }
+    
+    if (reason.includes('hierarchical')) return 'Parent Theme';
+    if (reason.includes('merge')) return `Merged Group`;
+    if (reason.includes('similar')) return 'Similar Insights';
+    
+    console.log('❌ No name found, using default');
+    return 'New Theme';
+  }, []);
 
-  // ==================== HISTORIQUE SIMPLE ====================
+  const saveCurrentState = useCallback((action: string, description: string) => {
+    history.pushState(groups, insights, action, description);
+  }, [groups, insights, history]);
 
-  // 🆕 ONLY 2 handlers pour undo/redo
+    const getCurrentPosition = useCallback((groupId: string) => {
+    return optimisticPositions.get(groupId) || groups.find(g => g.id === groupId)?.position;
+  }, [optimisticPositions, groups]);
+
+    const handleGroupsMerge = useCallback((groupIds: string[], newTitle: string) => {
+    if (!mapId || groupIds.length < 2) {
+      toast.error('Cannot merge - need at least 2 groups');
+      return;
+    }
+    
+    const groupsToMerge = groups.filter(group => groupIds.includes(group.id));
+    if (groupsToMerge.length < 2) {
+      toast.error('Selected groups not found');
+      return;
+    }
+    
+    const avgX = groupsToMerge.reduce((sum, group) => sum + group.position.x, 0) / groupsToMerge.length;
+    const avgY = groupsToMerge.reduce((sum, group) => sum + group.position.y, 0) / groupsToMerge.length;
+    const allInsightIds = groupsToMerge.flatMap(group => group.insightIds);
+    
+    console.log('🔄 Merging groups:', {
+      groups: groupsToMerge.map(g => g.title),
+      newTitle,
+      insightCount: allInsightIds.length
+    });
+    
+    saveCurrentState("before_merge", `Before merging ${groupsToMerge.length} groups into "${newTitle}"`);
+    onGroupCreate({ x: avgX, y: avgY });
+    
+    setTimeout(() => {
+      const newGroup = groups.find(group => 
+        group.title === "New Theme" || group.title === "New Group"
+      );
+      
+      if (newGroup) {
+        console.log('✅ New group created, adding insights:', newGroup.id);
+        
+        allInsightIds.forEach((insightId, index) => {
+          setTimeout(() => {
+            onInsightDrop(insightId, newGroup.id);
+          }, 50 * index);
+        });
+        
+        if (onGroupTitleUpdate) {
+          setTimeout(() => {
+            onGroupTitleUpdate(newGroup.id, newTitle);
+          }, 200);
+        }
+        
+        setTimeout(() => {
+          console.log('🗑️ Deleting empty source groups:', groupsToMerge.map(g => g.title));
+          groupsToMerge.forEach(group => {
+            if (group.insightIds.length === 0 || confirm(`Delete group "${group.title}"?`)) {
+              onGroupDelete?.(group.id);
+            }
+          });
+          toast.success(`✅ Merged ${groupsToMerge.length} groups into "${newTitle}"`);
+        }, 1000);
+        
+      } else {
+        toast.error('❌ Failed to create new group for merge');
+      }
+    }, 100);
+    
+  }, [mapId, groups, onGroupCreate, onInsightDrop, onGroupDelete, onGroupTitleUpdate, saveCurrentState]);
+
+  const handleCreateParentGroup = useCallback((groupIds: string[], parentTitle: string) => {
+    const childGroups = groups.filter(group => groupIds.includes(group.id));
+    if (childGroups.length === 0) {
+      toast.error('No groups found to create parent for');
+      return;
+    }
+    
+    const allChildInsightIds = childGroups.flatMap(group => group.insightIds);
+    const avgX = childGroups.reduce((sum, group) => sum + group.position.x, 0) / childGroups.length;
+    const avgY = childGroups.reduce((sum, group) => sum + group.position.y, 0) / childGroups.length;
+    
+    console.log('👨‍👦 Creating parent group:', {
+      parentTitle,
+      childGroups: childGroups.length,
+      insights: allChildInsightIds.length
+    });
+    
+    saveCurrentState("before_create_parent", `Creating parent "${parentTitle}" for ${childGroups.length} groups`);
+    
+    setPendingParentGroup({
+      groupTitle: parentTitle,
+      insightIds: allChildInsightIds,
+      tempGroupId: `pending-${Date.now()}`,
+      createdAt: Date.now(),
+      childGroupIds: childGroups.map(g => g.id)
+    });
+    
+    onGroupCreate({ x: avgX, y: avgY - 150 });
+    toast.info(`Creating parent group "${parentTitle}"...`);
+  }, [groups, onGroupCreate, saveCurrentState]);
+
+  const handleReorganizeGroups = useCallback((groupIds: string[]) => {
+    const groupsToReorganize = groups.filter(group => groupIds.includes(group.id));
+    if (groupsToReorganize.length === 0) return;
+    
+    const centerX = groupsToReorganize.reduce((sum, group) => sum + group.position.x, 0) / groupsToReorganize.length;
+    const centerY = groupsToReorganize.reduce((sum, group) => sum + group.position.y, 0) / groupsToReorganize.length;
+    
+    saveCurrentState("before_reorganize", `Before reorganizing ${groupsToReorganize.length} groups`);
+    
+    groupsToReorganize.forEach((group, index) => {
+      const angle = (index / groupsToReorganize.length) * 2 * Math.PI;
+      const radius = 200;
+      const newPosition = {
+        x: centerX + Math.cos(angle) * radius,
+        y: centerY + Math.sin(angle) * radius
+      };
+      
+      onGroupMove(group.id, newPosition);
+    });
+    
+    toast.success(`Reorganized ${groupsToReorganize.length} groups in a circle`);
+  }, [groups, onGroupMove, saveCurrentState]);
+
+  const handleApplyRecommendation = useCallback((recommendation: ThemeRecommendation) => {
+    console.log('🎯 RECOMMENDATION APPLIED:', {
+      type: recommendation.type,
+      groups: recommendation.groups,
+      reason: recommendation.reason
+    });
+    
+    setApplyingAction(recommendation.type);
+    setHighlightedGroups(new Set(recommendation.groups));
+    
+    const suggestedName = extractSuggestedName(recommendation.reason);
+    
+    toast.info(`Applying ${recommendation.type} recommendation...`);
+    
+    switch (recommendation.type) {
+      case 'merge':
+        if (recommendation.groups.length >= 2) {
+          handleGroupsMerge(recommendation.groups, suggestedName);
+        } else {
+          toast.error('Need at least 2 groups to merge');
+        }
+        break;
+        
+      case 'split':
+        if (recommendation.groups.length === 1) {
+          const groupId = recommendation.groups[0];
+          const group = groups.find(g => g.id === groupId);
+          
+          if (group) {
+            toast.info(`Select group "${group.title}" to split it manually`, {
+              duration: 5000,
+              action: {
+                label: 'Show Group',
+                onClick: () => {
+                  setSelectedGroups(new Set([groupId]));
+                  const groupElement = document.querySelector(`[data-group-id="${groupId}"]`);
+                  groupElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+              }
+            });
+          }
+        } else {
+          toast.info('Please select a single group to split manually');
+        }
+        break;
+        
+      case 'create_parent':
+        if (recommendation.groups.length >= 1) {
+          handleCreateParentGroup(recommendation.groups, suggestedName);
+        } else {
+          toast.error('Need groups to create parent for');
+        }
+        break;
+        
+      case 'reorganize':
+        if (recommendation.groups.length >= 1) {
+          handleReorganizeGroups(recommendation.groups);
+        } else {
+          toast.error('Need groups to reorganize');
+        }
+        break;
+        
+      default:
+        toast.info(`Action "${recommendation.type}" ready to implement`);
+    }
+    
+    setTimeout(() => {
+      setApplyingAction(null);
+      setHighlightedGroups(new Set());
+    }, 3000);
+    
+  }, [handleGroupsMerge, handleCreateParentGroup, handleReorganizeGroups, groups, setSelectedGroups, extractSuggestedName]);
+
+
+  const handleAnalyzeThemes = useCallback(async () => {
+    if (groups.length === 0) {
+      toast.error('No groups to analyze');
+      return;
+    }
+    
+    console.log('🔍 Starting theme analysis...', { groups: groups.length });
+    
+    toast.info('Analyzing themes patterns...');
+    
+    const analysis = await detectThemes(groups, insights, projectContext);
+    
+    if (analysis && analysis.themes.length > 0) {
+      console.log('✅ Themes analysis completed:', analysis.themes.length, 'themes found');
+      
+      if (!selectedTheme && analysis.themes.length > 0) {
+        setSelectedTheme(analysis.themes[0]);
+      }
+      
+      toast.success(`Found ${analysis.themes.length} themes with ${analysis.summary.coverage}% coverage`);
+    } else {
+      console.log('❌ No themes detected');
+      toast.info('No significant themes detected in current groups');
+    }
+  }, [groups, insights, projectContext, selectedTheme, detectThemes, setSelectedTheme]);
+
+
+
+
+
+  const handleArrowKeys = useCallback((direction: 'up' | 'down' | 'left' | 'right', shiftKey: boolean) => {
+    console.log("🔑 ARROW KEY PRESSED:", direction, "Shift:", shiftKey);
+    
+    if (selectedGroups.size === 0) {
+      console.log("⚠️ No groups selected - ignoring arrow key");
+      return;
+    }
+    
+    const moveDistance = shiftKey ? 20 : 5;
+    let deltaX = 0;
+    let deltaY = 0;
+
+    switch (direction) {
+      case 'up': deltaY = -moveDistance; break;
+      case 'down': deltaY = moveDistance; break;
+      case 'left': deltaX = -moveDistance; break;
+      case 'right': deltaX = moveDistance; break;
+      default: return;
+    }
+
+    setIsMovingWithArrows(true);
+    setTimeout(() => setIsMovingWithArrows(false), 150);
+
+    selectedGroups.forEach(groupId => {
+      const group = groups.find(g => g.id === groupId);
+      if (group) {
+        const newPosition = {
+          x: group.position.x + deltaX,
+          y: group.position.y + deltaY
+        };
+
+        setOptimisticPositions(prev => {
+          const newMap = new Map(prev);
+          newMap.set(groupId, newPosition);
+          return newMap;
+        });
+
+        onGroupMove(groupId, newPosition);
+      }
+    });
+  }, [selectedGroups, groups, onGroupMove]);
+
+  const handleGroupMoveOptimistic = useCallback((groupId: string, newPosition: { x: number; y: number }) => {
+    setOptimisticPositions(prev => {
+      const newMap = new Map(prev);
+      newMap.set(groupId, newPosition);
+      return newMap;
+    });
+    
+    onGroupMove(groupId, newPosition);
+  }, [onGroupMove]);
+
+
   const handleUndo = useCallback(() => {
     console.log("🔄 UNDO called");
     const previousState = history.undo();
@@ -195,336 +481,96 @@ const toggleAnalyticsPanel = useCallback(() => {
     }
   }, [history, onGroupsReplace]);
 
-const saveCurrentState = useCallback((action: string, description: string) => {
-  history.pushState(groups, insights, action, description);
-}, [groups, insights, history]);
-
-//=========== Arrow Move ===========
-
-
-
-  // 🆕 AJOUTER ICI - État pour les positions optimistes
-  const [optimisticPositions, setOptimisticPositions] = useState<Map<string, {x: number, y: number}>>(new Map());
-
-  // 🆕 AJOUTER CET EFFET - FORCER LE RE-RENDER
-const [renderKey, setRenderKey] = useState(0);
-
-useEffect(() => {
-  // Force un re-render quand les positions optimistes changent
-  setRenderKey(prev => prev + 1);
-}, [optimisticPositions]);
-
-  // 🆕 Fonction pour obtenir la position actuelle (optimiste ou réelle)
-  const getCurrentPosition = useCallback((groupId: string) => {
-    return optimisticPositions.get(groupId) || groups.find(g => g.id === groupId)?.position;
-  }, [optimisticPositions, groups]);
-
-
-// 🆕 Handler optimiste pour le mouvement flèches
-  const handleArrowKeys = useCallback((direction: 'up' | 'down' | 'left' | 'right', shiftKey: boolean) => {
-
-    console.log("🔑 ARROW KEY PRESSED:", direction, "Shift:", shiftKey);
-  console.log("👥 Selected groups count:", selectedGroups.size);
   
-  if (selectedGroups.size === 0) {
-    console.log("⚠️ No groups selected - ignoring arrow key");
-    return;
-  }  
-  // if (selectedGroups.size === 0) return;
 
-  // 🎯 Distance de déplacement (pixels)
-  const moveDistance = shiftKey ? 20 : 5; // 🚀 SHIFT + flèche = déplacement plus grand
-  
-  let deltaX = 0;
-  let deltaY = 0;
+  const toggleVotingPanel = useCallback(() => {
+    setActivePanel(prev => prev === 'voting' ? null : 'voting');
+  }, []);
 
-  switch (direction) {
-    case 'up':
-      deltaY = -moveDistance;
-      break;
-    case 'down':
-      deltaY = moveDistance;
-      break;
-    case 'left':
-      deltaX = -moveDistance;
-      break;
-    case 'right':
-      deltaX = moveDistance;
-      break;
-    default:
-      return; // Pas une flèche, on sort
-  }
+  const toggleAnalyticsPanel = useCallback(() => {
+    setActivePanel(prev => prev === 'analytics' ? null : 'analytics');
+  }, []);
 
-  // 🎯 Animation feedback
-  setIsMovingWithArrows(true);
-  setTimeout(() => setIsMovingWithArrows(false), 150);
+  const handleThemeSelect = useCallback((theme: DetectedTheme) => {
+    setSelectedTheme(theme);
+  }, []);
 
-  // 🚀 Déplace tous les groupes sélectionnés AVEC POSITION OPTIMISTE
-  selectedGroups.forEach(groupId => {
-    const group = groups.find(g => g.id === groupId);
-    if (group) {
-      const newPosition = {
-        x: group.position.x + deltaX,
-        y: group.position.y + deltaY
-      };
-
-      console.log(`🎯 Moving ${group.title} to:`, newPosition);
-      
-      // 🆕 MISE À JOUR OPTIMISTE IMMÉDIATE
-      setOptimisticPositions(prev => {
-        const newMap = new Map(prev);
-        newMap.set(groupId, newPosition);
-        return newMap;
-      });
-
-      // 🚀 Appel à la mutation
-      onGroupMove(groupId, newPosition);
-    }
-  });
-}, [selectedGroups, groups, onGroupMove]);
-
-// 🆕 AJOUTER UNE FONCTION DE FOCUS DANS LES INPUTS
-
-const [isInputFocused, setIsInputFocused] = useState(false);
-
-// 🆕 DÉTECTION DU FOCUS DANS LES INPUTS
-useEffect(() => {
-  const handleFocusChange = () => {
-    const activeElement = document.activeElement;
-    const isInput = 
-      activeElement instanceof HTMLInputElement ||
-      activeElement instanceof HTMLTextAreaElement ||
-      (activeElement instanceof HTMLElement && activeElement.isContentEditable);
+  // ==================== CUSTOM HOOKS ====================
+  const useNewGroupDetection = (
+    groups: AffinityGroupType[], 
+    onNewGroupDetected: (groupId: string, pendingData: PendingGroupData) => void
+  ) => {
+    const previousGroupsRef = useRef<AffinityGroupType[]>([]);
     
-    setIsInputFocused(isInput);
-  };
-
-  document.addEventListener('focusin', handleFocusChange);
-  document.addEventListener('focusout', handleFocusChange);
-  
-  return () => {
-    document.removeEventListener('focusin', handleFocusChange);
-    document.removeEventListener('focusout', handleFocusChange);
-  };
-}, []);
-
-
-//
-  // 🆕 Handler optimiste pour le mouvement flèches
-  const handleArrowMove = useCallback((direction: 'up' | 'down' | 'left' | 'right', shiftKey: boolean) => {
-    if (selectedGroups.size === 0) return;
-    
-    const moveDelta = shiftKey ? 20 : 5;
-    
-    saveCurrentState("before_move", `Before moving ${selectedGroups.size} groups`);
-    
-    console.log("🎯 Arrow move triggered:", direction, "Shift:", shiftKey);
-    
-    // MISE À JOUR OPTIMISTE IMMÉDIATE
-    const newPositions = new Map(optimisticPositions);
-    
-    selectedGroups.forEach(groupId => {
-      const group = groups.find(g => g.id === groupId);
-      
-      if (group) {
-        const currentPosition = optimisticPositions.get(groupId) || group.position;
+    useEffect(() => {
+      if (groups.length > previousGroupsRef.current.length && pendingParentGroup) {
+        const newGroups = groups.filter(newGroup => 
+          !previousGroupsRef.current.some(oldGroup => oldGroup.id === newGroup.id)
+        );
         
-        let newX = currentPosition.x;
-        let newY = currentPosition.y;
-
-        switch (direction) {
-          case 'up':
-            newY -= moveDelta;
-            break;
-          case 'down':
-            newY += moveDelta;
-            break;
-          case 'left':
-            newX -= moveDelta;
-            break;
-          case 'right':
-            newX += moveDelta;
-            break;
+        const defaultTitledGroups = newGroups.filter(group => 
+          group.title === "New Theme" || group.title === "New Group"
+        );
+        
+        if (defaultTitledGroups.length > 0) {
+          console.log('🆕 New group detected:', defaultTitledGroups[0]);
+          onNewGroupDetected(defaultTitledGroups[0].id, pendingParentGroup);
         }
+      }
+      
+      previousGroupsRef.current = groups;
+    }, [groups, pendingParentGroup, onNewGroupDetected]);
+  };
 
-        const newPosition = { x: newX, y: newY };
-        console.log(`📍 New position for ${group.title}:`, newPosition);
+  // ==================== HANDLERS SOURIS/CLAVIER ====================
+  const handleWheel = useCallback((e: WheelEvent) => {
+    const target = e.target as HTMLElement;
+    const isScrollableElement = 
+      target.classList.contains('overflow-y-auto') ||
+      target.classList.contains('overflow-auto') ||
+      target.closest('.overflow-y-auto') ||
+      target.closest('.overflow-auto');
+
+    if (isScrollableElement) return;
+
+    e.preventDefault();
+    
+    if (e.ctrlKey) {
+      const zoomIntensity = 0.1;
+      const delta = -e.deltaY * zoomIntensity * 0.01;
+      const newScale = Math.min(2, Math.max(0.3, scale * (1 + delta)));
+      
+      if (canvasRef.current) {
+        const rect = canvasRef.current.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
         
-        newPositions.set(groupId, newPosition);
-        onGroupMove(groupId, newPosition);
-      }
-    });
-
-    setOptimisticPositions(newPositions);
-    setIsMovingWithArrows(true);
-    setTimeout(() => setIsMovingWithArrows(false), 100);
-  }, [selectedGroups, groups, onGroupMove, saveCurrentState, optimisticPositions]);
-
-  // 🆕 Handler optimiste pour le drag & drop
-  const handleGroupMoveOptimistic = useCallback((groupId: string, newPosition: { x: number; y: number }) => {
-    setOptimisticPositions(prev => {
-      const newMap = new Map(prev);
-      newMap.set(groupId, newPosition);
-      return newMap;
-    });
-    
-    onGroupMove(groupId, newPosition);
-  }, [onGroupMove]);
-
-
-
-  // 🆕 Réinitialiser les positions optimistes quand les groupes changent
-  useEffect(() => {
-    setOptimisticPositions(new Map());
-  }, [groups]);
-
-
-
-
-// ==================== RACCOURCIS CLAVIER ====================
-  // 🆕 Handlers avec sauvegarde MANUELLE
-  const handleGroupDeleteWithSave = useCallback((groupId: string) => {
-    const groupToDelete = groups.find(g => g.id === groupId);
-    
-    // 1. Sauvegarde AVANT la suppression
-    saveCurrentState("before_delete", `Before deleting group "${groupToDelete?.title}"`);
-    
-    // 2. Execute l'action
-    onGroupDelete?.(groupId);
-  }, [onGroupDelete, groups, saveCurrentState]);
-
-  const handleGroupTitleUpdateWithSave = useCallback((groupId: string, title: string) => {
-    const oldGroup = groups.find(g => g.id === groupId);
-    
-    // 1. Sauvegarde AVANT le rename
-    saveCurrentState("before_rename", `Before renaming group "${oldGroup?.title}"`);
-    
-    // 2. Execute l'action
-    onGroupTitleUpdate?.(groupId, title);
-  }, [onGroupTitleUpdate, groups, saveCurrentState]);
-
-  // ==================== RACCOURCIS CLAVIER ====================
-
-useCanvasShortcuts({
-  onNewGroup: () => {
-    const x = (cursorPosition.x - position.x) / scale;
-    const y = (cursorPosition.y - position.y) / scale;
-    onGroupCreate({ x, y });
-    toast.success("New group created (N)");
-  },
-  onSelectAll: () => {
-    setSelectedGroups(new Set(groups.map(g => g.id)));
-    toast.info(`Selected all ${groups.length} groups`);
-  },
-  onDeleteSelected: () => {
-    if (selectedGroups.size > 0) {
-      saveCurrentState("before_multiple_delete", `Before deleting ${selectedGroups.size} groups`);
-      
-      if (confirm(`Delete ${selectedGroups.size} selected group(s)?`)) {
-        selectedGroups.forEach(groupId => {
-          onGroupDelete?.(groupId);
+        const worldX = (mouseX - position.x) / scale;
+        const worldY = (mouseY - position.y) / scale;
+        
+        setScale(newScale);
+        setPosition({
+          x: mouseX - worldX * newScale,
+          y: mouseY - worldY * newScale
         });
-        setSelectedGroups(new Set());
-        toast.success(`Deleted ${selectedGroups.size} group(s)`);
       }
+    } else {
+      setPosition(prev => ({
+        x: prev.x - e.deltaX,
+        y: prev.y - e.deltaY
+      }));
     }
-  },
-  onEscape: () => {
-    if (selectedGroups.size > 0) {
-      setSelectedGroups(new Set());
-      toast.info("Selection cleared");
-    }
-  },
-  onArrowMove: handleArrowKeys, // 🆕 BIEN PASSER TA FONCTION
-  onUndo: handleUndo,
-  onRedo: handleRedo,
-  onToggleVotingPanel: toggleVotingPanel,
-  onToggleAnalyticsPanel: toggleAnalyticsPanel,
+  }, [scale, position]);
 
-  selectedGroups,
-});
-
-    // 🆕 État pour le panel voting
-  const [showVotingPanel, setShowVotingPanel] = useState(false);
-
-  // ==================== GESTION Wheel ====================
-
-const handleWheel = useCallback((e: WheelEvent) => {
-  // 🎯 VÉRIFIER SI ON SCROLLE DANS UN ÉLÉMENT AVEC OVERFLOW
-  const target = e.target as HTMLElement;
-  const isScrollableElement = 
-    target.classList.contains('overflow-y-auto') ||
-    target.classList.contains('overflow-auto') ||
-    target.closest('.overflow-y-auto') ||
-    target.closest('.overflow-auto');
-
-  // 🎯 SI ON SCROLLE DANS UN ÉLÉMENT AVEC OVERFLOW, NE PAS INTERCEPTER
-  if (isScrollableElement) {
-    return; // Laisser le scroll normal fonctionner
-  }
-
-  e.preventDefault();
-  
-  if (e.ctrlKey) {
-    // Zoom avec Ctrl + molette
-    const zoomIntensity = 0.1;
-    const delta = -e.deltaY * zoomIntensity * 0.01;
-    const newScale = Math.min(2, Math.max(0.3, scale * (1 + delta)));
-    
-    // Zoom vers le curseur
-    if (canvasRef.current) {
-      const rect = canvasRef.current.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-      
-      const worldX = (mouseX - position.x) / scale;
-      const worldY = (mouseY - position.y) / scale;
-      
-      setScale(newScale);
-      
-      setPosition({
-        x: mouseX - worldX * newScale,
-        y: mouseY - worldY * newScale
-      });
-    }
-  } else {
-    // Pan avec molette seule
-    setPosition(prev => ({
-      x: prev.x - e.deltaX,
-      y: prev.y - e.deltaY
-    }));
-  }
-}, [scale, position]);
-
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      canvas.addEventListener('wheel', handleWheel, { passive: false });
-      return () => canvas.removeEventListener('wheel', handleWheel);
-    }
-  }, [handleWheel]);
-
-
-  // ==================== GESTION SOURIS ====================
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    // LAISSER LE CLIC DROIT POUR SHADCN CONTEXT MENU
-    if (e.button === 2) {
-      return; // Shadcn gère le context menu
-    }
-
-    // Panning seulement avec espace + clic ou bouton milieu
+    if (e.button === 2) return;
     if (e.button === 1 || (e.button === 0 && isSpacePressed)) {
       setIsPanning(true);
       return;
     }
-    
-    // Pour le clic gauche normal, on ne fait rien ici
-    // La gestion est dans handleCanvasClick
   };
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
-    // Track cursor position
     if (canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
       setCursorPosition({
@@ -533,7 +579,6 @@ const handleWheel = useCallback((e: WheelEvent) => {
       });
     }
 
-    // Panning
     if (isPanning && e.buttons === 1) {
       setPosition(prev => ({
         x: prev.x + e.movementX,
@@ -546,550 +591,223 @@ const handleWheel = useCallback((e: WheelEvent) => {
     setIsPanning(false);
   };
 
-  // Nettoyer le timeout quand le composant est démonté
-  useEffect(() => {
-    return () => {
-      if (clickTimeoutRef.current) {
-        clearTimeout(clickTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  // 🆕 DOUBLE-CLICK GAUCHE POUR CRÉER UN GROUPE
   const handleDoubleClick = (e: React.MouseEvent) => {
     if (e.target === canvasRef.current) {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const x = (e.clientX - rect.left - position.x) / scale;
-    const y = (e.clientY - rect.top - position.y) / scale;
-    
-    onGroupCreate({ x, y });
-    toast.success("Group created with right-click");
+      const rect = canvasRef.current!.getBoundingClientRect();
+      const x = (e.clientX - rect.left - position.x) / scale;
+      const y = (e.clientY - rect.top - position.y) / scale;
+      onGroupCreate({ x, y });
+      toast.success("Group created with double-click");
     }
   };
 
- const handleCanvasClick = (e: React.MouseEvent) => {
-    // Si c'est un clic sur le canvas vide (pas sur un groupe)
+  const handleCanvasClick = (e: React.MouseEvent) => {
     if (e.target === canvasRef.current) {
       clickCountRef.current++;
       
       if (clickCountRef.current === 1) {
-        // Premier clic - attendre pour voir si c'est un double-click
         clickTimeoutRef.current = setTimeout(() => {
-          // Clic simple - désélectionner les groupes
           setSelectedGroups(new Set());
           clickCountRef.current = 0;
-        }, 300); // Délai pour détecter le double-click
+        }, 300);
       } else if (clickCountRef.current === 2) {
-        // Double-click détecté - créer un groupe
-        if (clickTimeoutRef.current) {
-          clearTimeout(clickTimeoutRef.current);
-        }
-        
+        if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
         const rect = canvasRef.current!.getBoundingClientRect();
         const x = (e.clientX - rect.left - position.x) / scale;
         const y = (e.clientY - rect.top - position.y) / scale;
-        
         onGroupCreate({ x, y });
         toast.success("Group created with double-click");
-        
         clickCountRef.current = 0;
       }
     } else {
-      // Clic sur autre chose que le canvas - réinitialiser
-      if (clickTimeoutRef.current) {
-        clearTimeout(clickTimeoutRef.current);
-      }
+      if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
       clickCountRef.current = 0;
     }
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+  };
 
-
-  // 🆕 Gestion de la sélection des groupes
-  const handleGroupSelect = useCallback((groupId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    if (e.ctrlKey || e.metaKey) {
-      // Sélection multiple avec Ctrl
-      setSelectedGroups(prev => {
-        const newSelection = new Set(prev);
-        if (newSelection.has(groupId)) {
-          newSelection.delete(groupId);
-        } else {
-          newSelection.add(groupId);
-        }
-        return newSelection;
-      });
-    } else {
-      // Sélection simple
-      setSelectedGroups(new Set([groupId]));
+  // ==================== EFFETS ====================
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.addEventListener('wheel', handleWheel, { passive: false });
+      return () => canvas.removeEventListener('wheel', handleWheel);
     }
+  }, [handleWheel]);
+
+  useEffect(() => {
+    const handleFocusChange = () => {
+      const activeElement = document.activeElement;
+      const isInput = 
+        activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        (activeElement instanceof HTMLElement && activeElement.isContentEditable);
+      
+      setIsInputFocused(isInput);
+    };
+
+    document.addEventListener('focusin', handleFocusChange);
+    document.addEventListener('focusout', handleFocusChange);
+    
+    return () => {
+      document.removeEventListener('focusin', handleFocusChange);
+      document.removeEventListener('focusout', handleFocusChange);
+    };
   }, []);
 
-   // 🆕 GESTION CLIC DROIT POUR CRÉER UN GROUPE
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault(); // Empêcher le menu contextuel du navigateur
-    
-    // const rect = canvasRef.current!.getBoundingClientRect();
-    // const x = (e.clientX - rect.left - position.x) / scale;
-    // const y = (e.clientY - rect.top - position.y) / scale;
-    
-    // onGroupCreate({ x, y });
-    // toast.success("Group created with right-click");
-  };
-
-  console.log('🔍 AffinityCanvas render - detectedThemes:', detectedThemes.length);
-
-  // ==================== GESTION TOUCHE ESPACE ====================
-
   useEffect(() => {
- const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.code === 'Space' && !isInputFocused) {
-      e.preventDefault();
-      setIsSpacePressed(true);
-      if (canvasRef.current) {
-        canvasRef.current.style.cursor = 'grab';
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !isInputFocused) {
+        e.preventDefault();
+        setIsSpacePressed(true);
+        if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
       }
-    }
-  };
-
-  const handleKeyUp = (e: KeyboardEvent) => {
-    if (e.code === 'Space' && !isInputFocused) {
-      setIsSpacePressed(false);
-      if (canvasRef.current) {
-        canvasRef.current.style.cursor = 'default';
-      }
-    }
-  };
-
-  document.addEventListener('keydown', handleKeyDown);
-  document.addEventListener('keyup', handleKeyUp);
-  
-  return () => {
-    document.removeEventListener('keydown', handleKeyDown);
-    document.removeEventListener('keyup', handleKeyUp);
-  };
-}, [isInputFocused]); // 🆕 IMPORTANT: dépend de isInputFocused
-
-// 🆕 METTRE À JOUR LE STYLE DU CURSOR
-useEffect(() => {
-  if (canvasRef.current) {
-    if (isSpacePressed && !isInputFocused) {
-      canvasRef.current.style.cursor = isPanning ? 'grabbing' : 'grab';
-    } else {
-      canvasRef.current.style.cursor = isPanning ? 'grabbing' : 'default';
-    }
-  }
-}, [isSpacePressed, isPanning, isInputFocused]);
-
-// ================= Handle Theme Selection =================
-// Dans AffinityCanvas.tsx - AJOUTER CES HANDLERS
-// === SECTION 4: VARIABLES (après les déclarations) ===
-const projectContext = projectInfo ? `
-PROJECT: ${projectInfo.name}
-DESCRIPTION: ${projectInfo.description || 'No description'}
-`.trim() : 'General user research project';
-
-// 🆕 VERSION AMÉLIORÉE DE handleGroupsMerge
-const handleGroupsMerge = useCallback((groupIds: string[], newTitle: string) => {
-  if (!mapId || groupIds.length < 2) {
-    toast.error('Cannot merge - need at least 2 groups');
-    return;
-  }
-  
-  const groupsToMerge = groups.filter(group => groupIds.includes(group.id));
-  if (groupsToMerge.length < 2) {
-    toast.error('Selected groups not found');
-    return;
-  }
-  
-  // 🎯 CALCUL DE LA POSITION MOYENNE
-  const avgX = groupsToMerge.reduce((sum, group) => sum + group.position.x, 0) / groupsToMerge.length;
-  const avgY = groupsToMerge.reduce((sum, group) => sum + group.position.y, 0) / groupsToMerge.length;
-  
-  // 🎯 RÉCUPÉRATION DE TOUS LES INSIGHTS
-  const allInsightIds = groupsToMerge.flatMap(group => group.insightIds);
-  
-  console.log('🔄 Merging groups:', {
-    groups: groupsToMerge.map(g => g.title),
-    newTitle,
-    insightCount: allInsightIds.length,
-    position: { avgX, avgY }
-  });
-  
-  // 🎯 SAUVEGARDE AVANT ACTION
-  saveCurrentState("before_merge", `Before merging ${groupsToMerge.length} groups into "${newTitle}"`);
-  
-  // 🎯 CRÉATION DU NOUVEAU GROUPE
-  onGroupCreate({ x: avgX, y: avgY });
-  
-  // 🎯 ATTENDRE QUE LE GROUPE SOIT CRÉÉ PUIS LE REMPLIR
-  setTimeout(() => {
-    const newGroup = groups.find(group => 
-      group.title === "New Theme" || group.title === "New Group"
-    );
-    
-    if (newGroup) {
-      console.log('✅ New group created, adding insights:', newGroup.id);
-      
-      // AJOUTER TOUS LES INSIGHTS AU NOUVEAU GROUPE
-      allInsightIds.forEach((insightId, index) => {
-        setTimeout(() => {
-          onInsightDrop(insightId, newGroup.id);
-        }, 50 * index); // Délai progressif pour éviter les conflits
-      });
-      
-      // RENOMMER LE GROUPE
-      if (onGroupTitleUpdate) {
-        setTimeout(() => {
-          onGroupTitleUpdate(newGroup.id, newTitle);
-          console.log('✅ Group renamed to:', newTitle);
-        }, 200);
-      }
-      
-      // SUPPRIMER LES ANCIENS GROUPES
-      setTimeout(() => {
-        groupsToMerge.forEach(group => {
-          onGroupDelete?.(group.id);
-        });
-        toast.success(`✅ Merged ${groupsToMerge.length} groups into "${newTitle}"`);
-      }, 1000);
-      
-    } else {
-      toast.error('❌ Failed to create new group for merge');
-    }
-  }, 100);
-  
-}, [mapId, groups, onGroupCreate, onInsightDrop, onGroupDelete, onGroupTitleUpdate, saveCurrentState]);
-
-// 🆕 HANDLER POUR RÉORGANISER
-// 🆕 HANDLER POUR RÉORGANISER
-const handleReorganizeGroups = useCallback((groupIds: string[]) => {
-  const groupsToReorganize = groups.filter(group => groupIds.includes(group.id));
-  if (groupsToReorganize.length === 0) return;
-  
-  // Réorganiser en cercle autour du point central des groupes sélectionnés
-  const centerX = groupsToReorganize.reduce((sum, group) => sum + group.position.x, 0) / groupsToReorganize.length;
-  const centerY = groupsToReorganize.reduce((sum, group) => sum + group.position.y, 0) / groupsToReorganize.length;
-  
-  saveCurrentState("before_reorganize", `Before reorganizing ${groupsToReorganize.length} groups`);
-  
-  groupsToReorganize.forEach((group, index) => {
-    const angle = (index / groupsToReorganize.length) * 2 * Math.PI;
-    const radius = 200;
-    const newPosition = {
-      x: centerX + Math.cos(angle) * radius,
-      y: centerY + Math.sin(angle) * radius
     };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !isInputFocused) {
+        setIsSpacePressed(false);
+        if (canvasRef.current) canvasRef.current.style.cursor = 'default';
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
     
-    onGroupMove(group.id, newPosition);
-  });
-  
-  toast.success(`Reorganized ${groupsToReorganize.length} groups in a circle`);
-}, [groups, onGroupMove, saveCurrentState]);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [isInputFocused]);
 
-// 🆕 REMPLACER UNIQUEMENT handleCreateParentGroup
-const handleCreateParentGroup = useCallback((groupIds: string[], parentTitle: string) => {
-  const childGroups = groups.filter(group => groupIds.includes(group.id));
-  if (childGroups.length === 0) return;
-  
-  const allChildInsightIds = childGroups.flatMap(group => group.insightIds);
-  const avgX = childGroups.reduce((sum, group) => sum + group.position.x, 0) / childGroups.length;
-  const avgY = childGroups.reduce((sum, group) => sum + group.position.y, 0) / childGroups.length;
-  
-  // Marquer qu'un parent group est en attente
-  setPendingParentGroup({
-    groupId: `pending-${Date.now()}`, // ID temporaire
-    title: parentTitle,
-    insightIds: allChildInsightIds
-  });
-  
-  // Créer le groupe - le useEffect détectera le nouveau groupe
-  onGroupCreate({ x: avgX, y: avgY - 200 });
-  
-  toast.success(`Creating parent group "${parentTitle}"...`);
-}, [groups, onGroupCreate]);
-
-// 🆕 VERSION AMÉLIORÉE DE handleApplyRecommendation
-// 🆕 VERSION CORRIGÉE DE handleApplyRecommendation
-const handleApplyRecommendation = useCallback((recommendation: ThemeRecommendation) => {
-  console.log('🎯 RECOMMENDATION APPLIED:', {
-    type: recommendation.type,
-    groups: recommendation.groups,
-    reason: recommendation.reason
-  });
-  
-  // 🎯 FEEDBACK VISUEL IMMÉDIAT
-  setApplyingAction(recommendation.type);
-  setHighlightedGroups(new Set(recommendation.groups));
-  
-  // 🎯 EXTRACTION AUTOMATIQUE DU NOM SUGGÉRÉ
-  const suggestedName = extractSuggestedName(recommendation.reason);
-  
-  toast.info(`Applying ${recommendation.type} recommendation...`);
-  
-  switch (recommendation.type) {
-    case 'merge':
-      if (recommendation.groups.length >= 2) {
-        handleGroupsMerge(recommendation.groups, suggestedName);
-      } else {
-        toast.error('Need at least 2 groups to merge');
-      }
-      break;
-      
-    case 'split':
-      // 🆕 GESTION DU SPLIT SIMPLIFIÉE
-      if (recommendation.groups.length === 1) {
-        const groupId = recommendation.groups[0];
-        const group = groups.find(g => g.id === groupId);
-        
-        if (group) {
-          toast.info(`Select group "${group.title}" to split it manually`, {
-            duration: 5000,
-            action: {
-              label: 'Show Group',
-              onClick: () => {
-                // Sélectionner le groupe pour le split manuel
-                setSelectedGroups(new Set([groupId]));
-                // Scroll vers le groupe
-                const groupElement = document.querySelector(`[data-group-id="${groupId}"]`);
-                groupElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }
-            }
-          });
-        }
-      } else {
-        toast.info('Please select a single group to split manually');
-      }
-      break;
-      
-    case 'create_parent':
-      if (recommendation.groups.length >= 1) {
-        handleCreateParentGroup(recommendation.groups, suggestedName);
-      } else {
-        toast.error('Need groups to create parent for');
-      }
-      break;
-      
-    case 'reorganize':
-      if (recommendation.groups.length >= 1) {
-        handleReorganizeGroups(recommendation.groups);
-      } else {
-        toast.error('Need groups to reorganize');
-      }
-      break;
-      
-    default:
-      toast.info(`Action "${recommendation.type}" ready to implement`);
-  }
-  
-  // 🎯 NETTOYER LE FEEDBACK APRÈS 3 SECONDES
-  setTimeout(() => {
-    setApplyingAction(null);
-    setHighlightedGroups(new Set());
-  }, 3000);
-  
-}, [handleGroupsMerge, handleCreateParentGroup, handleReorganizeGroups, groups, setSelectedGroups]);
-
-// 🆕 AJOUTER APRÈS LES AUTRES HANDLERS DANS AffinityCanvas.tsx
-// 🆕 AJOUTER CETTE FONCTION DANS AffinityCanvas.tsx
-const extractSuggestedName = (reason: string): string => {
-  console.log('🔍 Extracting name from:', reason);
-  
-  // Patterns pour extraire les noms suggérés
-  const patterns = [
-    /suggested name: "([^"]+)"/i,
-    /suggested name: '([^']+)'/i,
-    /suggested name: ([^.,]+)/i,
-    /suggested.*name: "([^"]+)"/i,
-    /create.*theme.*: "([^"]+)"/i,
-    /parent.*: "([^"]+)"/i,
-    /merge.*as "([^"]+)"/i,
-    /["']([^"']+)["'].*suggested/i
-  ];
-  
-  for (const pattern of patterns) {
-    const match = reason.match(pattern);
-    if (match && match[1]) {
-      const name = match[1].trim();
-      console.log('✅ Extracted name:', name);
-      return name;
-    }
-  }
-  
-  // Fallback basé sur le contexte
-  if (reason.includes('hierarchical')) return 'Parent Theme';
-  if (reason.includes('merge')) return `Merged Group`;
-  if (reason.includes('similar')) return 'Similar Insights';
-  
-  console.log('❌ No name found, using default');
-  return 'New Theme';
-};
-
-// 🆕 AJOUTER CE HOOK PERSONNALISÉ APRÈS LES AUTRES HANDLERS
-const useNewGroupDetection = (groups: AffinityGroupType[], onNewGroupDetected: (groupId: string) => void) => {
-  const previousGroupsRef = useRef<AffinityGroupType[]>([]);
-  
   useEffect(() => {
-    // Détecter les nouveaux groupes
-    if (groups.length > previousGroupsRef.current.length) {
-      const newGroups = groups.filter(newGroup => 
-        !previousGroupsRef.current.some(oldGroup => oldGroup.id === newGroup.id)
-      );
-      
-      // Filtrer les groupes avec titres par défaut
-      const defaultTitledGroups = newGroups.filter(group => 
-        group.title === "New Theme" || group.title === "New Group"
-      );
-      
-      if (defaultTitledGroups.length > 0) {
-        console.log('🆕 New group detected:', defaultTitledGroups[0]);
-        onNewGroupDetected(defaultTitledGroups[0].id);
+    if (canvasRef.current) {
+      if (isSpacePressed && !isInputFocused) {
+        canvasRef.current.style.cursor = isPanning ? 'grabbing' : 'grab';
+      } else {
+        canvasRef.current.style.cursor = isPanning ? 'grabbing' : 'default';
       }
     }
-    
-    previousGroupsRef.current = groups;
-  }, [groups, onNewGroupDetected]);
-};
+  }, [isSpacePressed, isPanning, isInputFocused]);
 
-// 🆕 AJOUTER CET EFFET APRÈS LE HOOK
-useNewGroupDetection(groups, (newGroupId) => {
-  if (pendingParentGroup) {
-    console.log('🎯 New parent group ready to be filled:', newGroupId);
-    
-    // Ajouter les insights au nouveau groupe
-    pendingParentGroup.insightIds.forEach((insightId, index) => {
-      setTimeout(() => {
-        onInsightDrop(insightId, newGroupId);
-      }, 100 * index);
+  useEffect(() => {
+    setOptimisticPositions(new Map());
+  }, [groups]);
+
+  useEffect(() => {
+    setRenderKey(prev => prev + 1);
+  }, [optimisticPositions]);
+
+  useEffect(() => {
+    if (pendingParentGroup && Date.now() - pendingParentGroup.createdAt > 10000) {
+      console.warn('⏰ Timeout - pending group creation took too long');
+      setPendingParentGroup(null);
+      toast.error('Group creation timeout');
+    }
+  }, [pendingParentGroup]);
+
+  useEffect(() => {
+    if (showThemeDiscovery && groups.length >= 2) {
+      const hasNewGroups = groups.some(group => 
+        !themeAnalysis?.themes.some(theme => theme.groupIds.includes(group.id))
+      );
+      
+      if (hasNewGroups || !themeAnalysis) {
+        const timer = setTimeout(() => {
+          console.log('🔄 Groups changed significantly, auto-analyzing themes...');
+          handleAnalyzeThemes();
+        }, 1500);
+        
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [groups, showThemeDiscovery, themeAnalysis, handleAnalyzeThemes]);
+
+  useEffect(() => {
+    if (detectedThemes.length > 0 && !selectedTheme) {
+      setSelectedTheme(detectedThemes[0]);
+      console.log('🎯 Auto-selected first theme:', detectedThemes[0].name);
+    }
+  }, [detectedThemes, selectedTheme]);
+
+  useEffect(() => {
+    return () => {
+      if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
+    };
+  }, []);
+
+  // ==================== HOOKS PERSONNALISÉS ====================
+  useCanvasShortcuts({
+    onNewGroup: () => {
+      const x = (cursorPosition.x - position.x) / scale;
+      const y = (cursorPosition.y - position.y) / scale;
+      onGroupCreate({ x, y });
+      toast.success("New group created (N)");
+    },
+    onSelectAll: () => {
+      setSelectedGroups(new Set(groups.map(g => g.id)));
+      toast.info(`Selected all ${groups.length} groups`);
+    },
+    onDeleteSelected: () => {
+      if (selectedGroups.size > 0) {
+        saveCurrentState("before_multiple_delete", `Before deleting ${selectedGroups.size} groups`);
+        if (confirm(`Delete ${selectedGroups.size} selected group(s)?`)) {
+          selectedGroups.forEach(groupId => onGroupDelete?.(groupId));
+          setSelectedGroups(new Set());
+          toast.success(`Deleted ${selectedGroups.size} group(s)`);
+        }
+      }
+    },
+    onEscape: () => {
+      if (selectedGroups.size > 0) {
+        setSelectedGroups(new Set());
+        toast.info("Selection cleared");
+      }
+    },
+    onArrowMove: handleArrowKeys,
+    onUndo: handleUndo,
+    onRedo: handleRedo,
+    onToggleVotingPanel: toggleVotingPanel,
+    onToggleAnalyticsPanel: toggleAnalyticsPanel,
+    selectedGroups,
+  });
+
+  useNewGroupDetection(groups, (newGroupId, pendingData) => {
+    console.log('🎯 Processing new group:', {
+      newGroupId,
+      pendingTitle: pendingData.groupTitle,
+      insightsToAdd: pendingData.insightIds.length,
+      childrenToDelete: pendingData.childGroupIds?.length || 0
     });
     
-    // Renommer le groupe
+    pendingData.insightIds.forEach((insightId, index) => {
+      setTimeout(() => onInsightDrop(insightId, newGroupId), 100 * index);
+    });
+    
     if (onGroupTitleUpdate) {
       setTimeout(() => {
-        onGroupTitleUpdate(newGroupId, pendingParentGroup.title);
-        toast.success(`Parent group "${pendingParentGroup.title}" created with ${pendingParentGroup.insightIds.length} insights`);
+        onGroupTitleUpdate(newGroupId, pendingData.groupTitle);
+        
+        if (pendingData.childGroupIds && pendingData.childGroupIds.length > 0) {
+          setTimeout(() => {
+            console.log('🗑️ Deleting child groups:', pendingData.childGroupIds);
+            pendingData.childGroupIds?.forEach(childGroupId => onGroupDelete?.(childGroupId));
+            toast.success(`✅ Created "${pendingData.groupTitle}" + cleaned ${pendingData.childGroupIds?.length} groups`);
+          }, 1500);
+        } else {
+          toast.success(`✅ Created "${pendingData.groupTitle}"`);
+        }
+        
+        setPendingParentGroup(null);
       }, 500);
     }
-    
-    setPendingParentGroup(null);
-  }
-});
-
-
-const allGroupIds = new Set(groups.map(g => g.id));
-detectedThemes.forEach(theme => {
-  const invalidGroupIds = theme.groupIds?.filter(id => !allGroupIds.has(id)) || [];
-  if (invalidGroupIds.length > 0) {
-    console.warn('❌ IDs de groupes invalides:', invalidGroupIds);
-  }
-});
-
-// const handleThemesDetected = useCallback((analysis: ThemeAnalysis | null) => {
-//   if (analysis) {
-//     setDetectedThemes(analysis.themes);
-//     console.log('🎯 Themes detected:', analysis.themes.length);
-//   } else {
-//     setDetectedThemes([]);
-//   }
-// }, []);
-
-// 🆕 HANDLER SIMPLIFIÉ
-// 🆕 VERSION AMÉLIORÉE DE handleAnalyzeThemes
-const handleAnalyzeThemes = async () => {
-  if (groups.length === 0) {
-    toast.error('No groups to analyze');
-    return;
-  }
-  
-  console.log('🔍 Starting theme analysis...', { groups: groups.length });
-  
-  // Feedback immédiat
-  toast.info('Analyzing themes patterns...');
-  
-  const analysis = await detectThemes(groups, insights, projectContext);
-  
-  if (analysis && analysis.themes.length > 0) {
-    console.log('✅ Themes analysis completed:', analysis.themes.length, 'themes found');
-    
-    // Auto-sélection du premier thème si aucun n'est sélectionné
-    if (!selectedTheme && analysis.themes.length > 0) {
-      setSelectedTheme(analysis.themes[0]);
-    }
-    
-    toast.success(`Found ${analysis.themes.length} themes with ${analysis.summary.coverage}% coverage`);
-  } else {
-    console.log('❌ No themes detected');
-    toast.info('No significant themes detected in current groups');
-  }
-};
-
-// 🆕 AUTO-DÉTECTION AMÉLIORÉE - REMPLACER L'ANCIEN
-useEffect(() => {
-  if (showThemeDiscovery && groups.length >= 2) {
-    // Vérifier si l'analyse est nécessaire (groupes changés significativement)
-    const hasNewGroups = groups.some(group => 
-      !themeAnalysis?.themes.some(theme => 
-        theme.groupIds.includes(group.id)
-      )
-    );
-    
-    if (hasNewGroups || !themeAnalysis) {
-      // Délai pour éviter les analyses trop fréquentes
-      const timer = setTimeout(() => {
-        console.log('🔄 Groups changed significantly, auto-analyzing themes...');
-        handleAnalyzeThemes();
-      }, 1500);
-      
-      return () => clearTimeout(timer);
-    }
-  }
-}, [groups, showThemeDiscovery, themeAnalysis, handleAnalyzeThemes]);
-
-// 🆕 EFFET POUR SELECTIONNER LE PREMIER THÈME
-useEffect(() => {
-  if (detectedThemes.length > 0 && !selectedTheme) {
-    setSelectedTheme(detectedThemes[0]);
-    console.log('🎯 Auto-selected first theme:', detectedThemes[0].name);
-  }
-}, [detectedThemes, selectedTheme]);
-
-// 🆕 AUTO-DÉTECTION QUAND LES GROUPES CHANGENT SIGNIFICATIVEMENT
-useEffect(() => {
-  if (showThemeDiscovery && groups.length >= 3) {
-    // Délai pour éviter les analyses trop fréquentes
-    const timer = setTimeout(() => {
-      console.log('🔄 Groups changed, auto-analyzing themes...');
-      handleAnalyzeThemes();
-    }, 2000);
-    
-    return () => clearTimeout(timer);
-  }
-}, [groups.length, showThemeDiscovery]); // On surveille seulement le nombre de groupes
-
-
-console.log('🔍 AffinityCanvas render - detectedThemes:', detectedThemes.length);
-// 🆕 DEBUG DÉTAILLÉ
-if (detectedThemes.length > 0) {
-  console.log('📋 Thèmes détaillés:', detectedThemes.map(theme => ({
-    id: theme.id,
-    name: theme.name,
-    type: theme.type,
-    groupIds: theme.groupIds?.length || 0,
-    confidence: theme.confidence,
-    description: theme.description?.substring(0, 50) + '...'
-  })));
-  
-  // 🆕 VÉRIFIER LES GROUPES CORRESPONDANTS
-  detectedThemes.forEach(theme => {
-    const themeGroups = groups.filter(g => theme.groupIds?.includes(g.id));
-    console.log(`🎯 Thème "${theme.name}": ${themeGroups.length} groupes trouvés sur ${theme.groupIds?.length} attendus`);
-    
-    if (themeGroups.length === 0) {
-      console.warn('❌ THÈME SANS GROUPES:', theme);
-    }
   });
-}
+
+  // ==================== DEBUG ====================
+  console.log('🔍 AffinityCanvas render - detectedThemes:', detectedThemes.length);
 
   // ==================== RENDER ====================
 
