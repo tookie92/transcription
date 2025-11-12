@@ -261,3 +261,40 @@ export interface GroupVoteSummary {
   userVotes: number;
   group: AffinityGroup;
 }
+
+//
+// types/index.ts - AJOUTER CES TYPES
+
+export type ThemeType = 'hierarchical' | 'related' | 'contradictory' | 'complementary';
+
+export interface DetectedTheme {
+  id: string;
+  name: string;
+  type: ThemeType;
+  confidence: number;
+  groupIds: string[];
+  description: string;
+  parentThemeId?: string;
+  insightsCount: number;
+}
+
+export interface ThemeAnalysis {
+  themes: DetectedTheme[];
+  summary: {
+    totalThemes: number;
+    coverage: number; // % de groupes couverts par les thèmes
+    avgConfidence: number;
+    mainTheme?: DetectedTheme;
+  };
+  recommendations: ThemeRecommendation[];
+}
+
+// types/index.ts - METTRE À JOUR ThemeRecommendation
+export interface ThemeRecommendation {
+  type: 'merge' | 'split' | 'reorganize' | 'create_parent';
+  groups: string[];
+  reason: string;
+  confidence: number;
+  expectedImpact: 'high' | 'medium' | 'low';
+  suggestedName?: string; // 🆕 OPTIONNEL - pour les noms suggérés
+}

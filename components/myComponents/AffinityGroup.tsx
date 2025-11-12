@@ -33,7 +33,8 @@ interface AffinityGroupProps {
   onDragStateChange?: (dragging: boolean) => void;
   onSelect: (groupId: string, e: React.MouseEvent) => void;
   isSelected: boolean;
-  
+  isHighlighted?: boolean; // 🆕 NOUVELLE PROP
+
 }
 
 export default function AffinityGroup({
@@ -51,6 +52,7 @@ export default function AffinityGroup({
   onDragOver,
   onDragLeave,
   onDrop,
+  isHighlighted,
   projectContext,
   onDragStart,
   onDragEnd,
@@ -58,6 +60,11 @@ export default function AffinityGroup({
 }: AffinityGroupProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempTitle, setTempTitle] = useState(group.title);
+  // 🆕 AJOUTER APRÈS LES AUTRES useStates DANS AffinityCanvas.tsx
+const [applyingAction, setApplyingAction] = useState<string | null>(null);
+const [highlightedGroups, setHighlightedGroups] = useState<Set<string>>(new Set());
+
+
   const [isDragging, setIsDragging] = useState(false);
 
   const x = useMotionValue(group.position.x);
@@ -142,6 +149,13 @@ const hasInsights = groupInsights.length > 0;
   backgroundColor: 'white'
 };
 
+// 🆕 AJOUTER CETTE FONCTION DANS LE COMPOSANT (avant le return)
+const getBorderColor = () => {
+  if (isDragOver) return "#3B82F6";
+  if (isSelected) return "#F59E0B"; 
+  if (isHighlighted) return "#10B981";
+  return group.color;
+};
 
   return (
     <ContextMenu>
@@ -153,13 +167,16 @@ const hasInsights = groupInsights.length > 0;
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         onClick={handleClick}
-        style={{ 
-          x, 
-          y,
-          rotateX: isDragging ? rotateX : 0,
-          rotateY: isDragging ? rotateY : 0,
-          borderColor: isDragOver ? "#3B82F6" : (isSelected ? "#F59E0B" : group.color),
-        }}
+      // 🆕 REMPLACER LE STYLE EXISTANT PAR :
+      style={{ 
+        x, 
+        y,
+        rotateX: isDragging ? rotateX : 0,
+        rotateY: isDragging ? rotateY : 0,
+        borderColor: getBorderColor(),
+        borderWidth: isHighlighted ? '3px' : '2px',
+        boxShadow: isHighlighted ? '0 0 0 3px rgba(16, 185, 129, 0.3)' : 'none'
+      }}
         // 🆕 PARAMÈTRES OPTIMISÉS POUR MOINS DE BOUNCE
         animate={{
           x: group.position.x,
@@ -179,7 +196,7 @@ const hasInsights = groupInsights.length > 0;
           boxShadow: "0 20px 40px -12px rgba(0, 0, 0, 0.25)",
           zIndex: 50,
         }}
-        className="absolute bg-white rounded-xl shadow-lg border-2 min-w-80 max-w-96 cursor-grab active:cursor-grabbing"
+        className="absolute bg-white rounded-xl shadow-lg border-2 min-w-80 max-w-96 cursor-grab active:cursor-grabbing z-20"
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
