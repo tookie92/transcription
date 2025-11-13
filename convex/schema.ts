@@ -110,4 +110,9 @@ export default defineSchema({
   })
   .index("by_user_group_session", ["userId", "groupId", "sessionId"])
   .index("by_session", ["sessionId"]),
+
+  
+
+  
 });
+

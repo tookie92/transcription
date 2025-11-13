@@ -3,7 +3,7 @@
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import AffinityGroup from "./AffinityGroup";
-import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo, ChevronRight, ChevronLeft, BarChart3, Sparkles } from "lucide-react";
+import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo, ChevronRight, ChevronLeft, BarChart3, Sparkles, Move } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AffinityGroup as AffinityGroupType, Insight } from "@/types";
 import { toast } from "sonner";
@@ -119,6 +119,8 @@ export default function AffinityCanvas({
   const [optimisticPositions, setOptimisticPositions] = useState<Map<string, {x: number, y: number}>>(new Map());
   const [renderKey, setRenderKey] = useState(0);
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [draggedInsightId, setDraggedInsightId] = useState<string | null>(null);
+  const [dragSourceGroupId, setDragSourceGroupId] = useState<string | null>(null);
 
   // ==================== useMemo ====================
   const detectedThemes = useMemo(() => {
@@ -906,6 +908,19 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
               <span>Move</span>
             </div>
 
+            {/* INDICATEUR DE DRAG ENTRE GROUPES */}
+            {draggedInsightId && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-50 flex items-center gap-2"
+              >
+                <Move size={14} />
+                <span>Moving insight to another group...</span>
+              </motion.div>
+            )}
+
             {/* INDICATEUR ACTION EN COURS */}
             {applyingAction && (
               <motion.div 
@@ -1006,7 +1021,38 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
         />
 
         {/* CANVAS PRINCIPAL */}
-        <div className="flex-1 relative overflow-hidden bg-linear-to-br from-gray-50 to-gray-100">
+        <div 
+          className="flex-1 relative overflow-hidden bg-linear-to-br from-gray-50 to-gray-100"
+          onDragOver={(e: React.DragEvent) => {
+            // 🆕 Permettre le drop sur le canvas
+            if (workspaceMode === 'grouping') {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+            }
+          }}
+          onDrop={(e: React.DragEvent) => {
+            // 🆕 Handler pour drop sur le canvas (retirer l'insight du groupe)
+            if (workspaceMode === 'grouping') {
+              e.preventDefault();
+              const insightId = e.dataTransfer.getData('text/plain');
+              const sourceGroupId = e.dataTransfer.getData('application/group-id');
+              
+              console.log('🗑️ Dropping insight on canvas:', { insightId, sourceGroupId });
+              
+              if (insightId && sourceGroupId) {
+                // Sauvegarder avant modification
+                saveCurrentState("before_insight_remove", `Removing insight from group`);
+                
+                // Retirer l'insight du groupe
+                onInsightRemoveFromGroup?.(insightId, sourceGroupId);
+                toast.info("Insight removed from group and returned to available insights");
+              }
+              
+              setDraggedInsightId(null);
+              setDragSourceGroupId(null);
+            }
+          }}
+        >
            {/* 🧪 BOUTON TEST TEMPORAIRE */}
         <Button
           onClick={() => {
@@ -1080,59 +1126,94 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
                   const currentPosition = getCurrentPosition(group.id);
                   
                   return (
-                    <AffinityGroup
-                      key={group.id}
-                      group={{
-                        ...group,
-                        position: currentPosition || group.position
-                      }}
-                      insights={insights}
-                      scale={scale}
-                      isSelected={selectedGroups.has(group.id)}
-                      isDragOver={dragOverGroup === group.id}
-                      isHighlighted={highlightedGroups.has(group.id)} // 🆕 PROP AJOUTÉE
-                      onMove={handleGroupMoveOptimistic}
-                      onDelete={onGroupDelete}
-                      onTitleUpdate={onGroupTitleUpdate}
-                      onRemoveInsight={onInsightRemoveFromGroup}
-                      projectContext={projectInfo ? `PROJECT: ${projectInfo.name}` : undefined}
-                      onSelect={(groupId, e) => {
-                        e.stopPropagation();
-                        if (e.ctrlKey || e.metaKey) {
-                          setSelectedGroups(prev => {
-                            const newSelection = new Set(prev);
-                            if (newSelection.has(groupId)) {
-                              newSelection.delete(groupId);
-                            } else {
-                              newSelection.add(groupId);
-                            }
-                            return newSelection;
-                          });
-                        } else {
-                          setSelectedGroups(new Set([groupId]));
-                        }
-                      }}
-                      onDragOver={(e: React.DragEvent) => {
-                        if (workspaceMode === 'grouping') {
-                          e.preventDefault();
-                          setDragOverGroup(group.id);
-                        }
-                      }}
-                      onDragLeave={() => {
-                        setDragOverGroup(null);
-                      }}
-                      onDrop={(e: React.DragEvent) => {
-                        if (workspaceMode === 'grouping') {
-                          e.preventDefault();
-                          const insightId = e.dataTransfer.getData('text/plain');
-                          if (insightId) {
-                            onInsightDrop(insightId, group.id);
-                          }
-                          setDragOverGroup(null);
-                        }
-                      }}
-                      workspaceMode={workspaceMode}
-                    />
+              <AffinityGroup
+                key={group.id}
+                group={{
+                  ...group,
+                  position: currentPosition || group.position
+                }}
+                insights={insights}
+                scale={scale}
+                isSelected={selectedGroups.has(group.id)}
+                isDragOver={dragOverGroup === group.id}
+                isHighlighted={highlightedGroups.has(group.id)}
+                onMove={handleGroupMoveOptimistic}
+                onDelete={onGroupDelete}
+                onTitleUpdate={onGroupTitleUpdate}
+                onRemoveInsight={onInsightRemoveFromGroup}
+                // 🆕 AJOUTER CES PROPS MANQUANTES :
+                onDragOver={(e: React.DragEvent) => {
+                  if (workspaceMode === 'grouping') {
+                    e.preventDefault();
+                    setDragOverGroup(group.id);
+                  }
+                }}
+                onDragLeave={() => {
+                  setDragOverGroup(null);
+                }}
+              onDrop={(e: React.DragEvent) => {
+                  if (workspaceMode === 'grouping') {
+                    e.preventDefault();
+                    const insightId = e.dataTransfer.getData('text/plain');
+                    const sourceGroupId = e.dataTransfer.getData('application/group-id');
+                    
+                    console.log('🎯 Group drop received:', {
+                      insightId,
+                      sourceGroupId: sourceGroupId || 'panel'
+                    });
+                    
+                    if (insightId) {
+                      // 🆕 SAUVEGARDER AVANT MODIFICATION
+                      saveCurrentState("before_insight_add", `Adding insight to group "${group.title}"`);
+                      
+                      onInsightDrop(insightId, group.id);
+                      
+                      const message = sourceGroupId 
+                        ? `Insight moved to "${group.title}"`
+                        : `Insight added to "${group.title}"`;
+                      toast.success(message);
+                    }
+                    setDragOverGroup(null);
+                  }
+                }}
+                onInsightDragStart={(insightId, sourceGroupId) => {
+                  console.log('🧩 Insight drag started:', { insightId, sourceGroupId });
+                  setDraggedInsightId(insightId);
+                  setDragSourceGroupId(sourceGroupId);
+                }}
+                onInsightDrop={(insightId, targetGroupId) => {
+                  console.log('🎯 Insight dropped to new group:', { insightId, targetGroupId });
+                  
+                  // Sauvegarder l'état avant modification
+                  saveCurrentState("before_insight_move", `Moving insight to different group`);
+                  
+                  // Transférer l'insight vers le nouveau groupe
+                  onInsightDrop(insightId, targetGroupId);
+                  
+                  toast.success("Insight moved to new group");
+                  
+                  setDraggedInsightId(null);
+                  setDragSourceGroupId(null);
+                }}
+                projectContext={projectInfo ? `PROJECT: ${projectInfo.name}` : undefined}
+                onSelect={(groupId, e) => {
+                  e.stopPropagation();
+                  if (e.ctrlKey || e.metaKey) {
+                    setSelectedGroups(prev => {
+                      const newSelection = new Set(prev);
+                      if (newSelection.has(groupId)) {
+                        newSelection.delete(groupId);
+                      } else {
+                        newSelection.add(groupId);
+                      }
+                      return newSelection;
+                    });
+                  } else {
+                    setSelectedGroups(new Set([groupId]));
+                  }
+                }}
+                workspaceMode={workspaceMode}
+              />
                   );
                 })}
                 
