@@ -3,7 +3,7 @@
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import AffinityGroup from "./AffinityGroup";
-import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo, ChevronRight, ChevronLeft, BarChart3, Sparkles, Move } from "lucide-react";
+import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo, ChevronRight, ChevronLeft, BarChart3, Sparkles, Move, Upload } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AffinityGroup as AffinityGroupType, Insight } from "@/types";
 import { toast } from "sonner";
@@ -28,6 +28,8 @@ import { ThemeVisualizationFixed } from "./ThemeVisualizationFixed";
 import { SimpleThemeTest } from "./SimpleThemeTest";
 import { UltraSimpleTest } from "./UltraSimpleTest";
 import { Badge } from "../ui/badge";
+import { ExportPanel } from "./ExportPanel";
+import { ImportModal } from "./ImportModal";
 // 🆕 AJOUTER childGroupIds À L'INTERFACE
 
 
@@ -121,6 +123,9 @@ export default function AffinityCanvas({
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [draggedInsightId, setDraggedInsightId] = useState<string | null>(null);
   const [dragSourceGroupId, setDragSourceGroupId] = useState<string | null>(null);
+   // 🆕 AJOUTER CES STATES POUR EXPORT/IMPORT
+  const [showExportPanel, setShowExportPanel] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   // ==================== useMemo ====================
   const detectedThemes = useMemo(() => {
@@ -147,6 +152,13 @@ PROJECT: ${projectInfo.name}
 DESCRIPTION: ${projectInfo.description || 'No description'}
 `.trim() : 'General user research project';
   }, [projectInfo]);
+
+    // 🆕 FONCTION POUR SUCCÈS D'IMPORT
+  const handleImportSuccess = (newMapId: string) => {
+    console.log('✅ Map imported successfully:', newMapId);
+    // Optionnel: recharger les données ou naviguer
+    toast.success("Map imported successfully!");
+  };
 
   // ==================== useCallback ====================
   const extractSuggestedName = useCallback((reason: string): string => {
@@ -988,10 +1000,44 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
                 </Badge>
               )}
             </Button>
-            <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2">
+            {/* EXPORT Button */}
+            <div className="relative">
+
+            <Button
+            onClick={() => setShowExportPanel(!showExportPanel)}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+            >
               <Download size={16} />
               Export
-            </button>
+            </Button>
+
+             {/* Panel d'export */}
+                {showExportPanel && (
+                  <div className="absolute top-full right-0 mt-2 z-50">
+                    <ExportPanel
+                      mapId={mapId}
+                      projectId={projectId}
+                      onClose={() => setShowExportPanel(false)}
+                    />
+                  </div>
+                )}
+            </div>
+
+            {/* IMPORT Modal */}
+             {/* 🆕 AJOUTER BOUTON IMPORT */}
+              <Button
+                onClick={() => setShowImportModal(true)}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <Upload size={16} />
+                Import
+              </Button>
+
+
           </div>
         </div>
        
@@ -1346,6 +1392,14 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
           )}
         </AnimatePresence>
       </div>
+
+       {/* 🆕 AJOUTER LE MODAL D'IMPORT */}
+    <ImportModal
+      open={showImportModal}
+      onOpenChange={setShowImportModal}
+      projectId={projectId}
+      onImportSuccess={handleImportSuccess}
+    />
     </div>
   );
 }
