@@ -1393,7 +1393,7 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
         </AnimatePresence>
       </div>
 
-       {/* 🆕 AJOUTER LE MODAL D'IMPORT */}
+   {/* 🆕 AJOUTER LE MODAL D'IMPORT ICI */}
     <ImportModal
       open={showImportModal}
       onOpenChange={setShowImportModal}
