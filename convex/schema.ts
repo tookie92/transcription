@@ -111,7 +111,60 @@ export default defineSchema({
   .index("by_user_group_session", ["userId", "groupId", "sessionId"])
   .index("by_session", ["sessionId"]),
 
-  
+  // 🆕 Présence utilisateur en temps réel
+presence: defineTable({
+  mapId: v.id("affinityMaps"),
+  userId: v.string(), // Clerk user ID
+  cursor: v.object({
+    x: v.number(),
+    y: v.number(),
+  }),
+  selection: v.array(v.string()), // groupIds sélectionnés
+  user: v.object({
+    id: v.string(),
+    name: v.string(),
+    avatar: v.optional(v.string()),
+  }),
+  lastSeen: v.number(),
+})
+.index("by_map", ["mapId"])
+.index("by_user_map", ["userId", "mapId"]),
+
+// 🆕 Historique des modifications
+activityLog: defineTable({
+  mapId: v.id("affinityMaps"),
+  userId: v.string(),
+  action: v.union(
+    v.literal("group_moved"),
+    v.literal("group_created"),
+    v.literal("group_deleted"),
+    v.literal("insight_added"),
+    v.literal("insight_removed"),
+    v.literal("group_renamed")
+  ),
+  payload: v.object({
+    groupId: v.optional(v.string()),
+    insightId: v.optional(v.string()),
+    oldValue: v.optional(v.any()),
+    newValue: v.optional(v.any()),
+  }),
+  timestamp: v.number(),
+})
+.index("by_map", ["mapId"])
+.index("by_user", ["userId"]),
+
+// 🆕 Commentaires sur les groupes
+comments: defineTable({
+  mapId: v.id("affinityMaps"),
+  groupId: v.string(),
+  userId: v.string(),
+  text: v.string(),
+  resolved: v.boolean(),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+})
+.index("by_map", ["mapId"])
+.index("by_group", ["groupId"]),
 
   
 });

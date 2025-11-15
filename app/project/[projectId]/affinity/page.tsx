@@ -4,18 +4,20 @@ import { Metadata } from "next";
 
 
 interface AffinityPageProps {
-  params: {
+  params: Promise<{
     projectId: Id<"projects">;
-  };
+  }>;
 }
 
 export async function generateMetadata({ params }: AffinityPageProps): Promise<Metadata> {
+  await params; // Await params here too
   return {
     title: "Affinity Map",
     description: "Organize insights into affinity groups",
   };
 }
 
-export default function AffinityPage({ params }: AffinityPageProps) {
-  return <AffinityMapWorkspace projectId={params.projectId} />;
+export default async function AffinityPage({ params }: AffinityPageProps) {
+  const { projectId } = await params;
+  return <AffinityMapWorkspace projectId={projectId} />;
 }

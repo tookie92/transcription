@@ -112,3 +112,46 @@ export const inviteToProject = mutation({
     // ...
   },
 });
+
+export const inviteUser = mutation({
+  args: {
+    projectId: v.id("projects"),
+    email: v.string(),
+    role: v.union(v.literal("editor"), v.literal("viewer")),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new Error("Project not found");
+
+    // Seul le propriétaire peut inviter
+    if (project.ownerId !== identity.subject) {
+      throw new Error("Only the project owner can invite users");
+    }
+
+    // Vérifie que l’email n’est pas déjà membre
+    const alreadyMember = project.members.some(m => m.userId === args.email);
+    if (alreadyMember) {
+      throw new Error("User already a member");
+    }
+
+    // Ajoute l’utilisateur (on utilise l’email comme userId temporaire)
+    const updatedMembers = [
+      ...project.members,
+      {
+        userId: args.email, // ✅ on utilisera l’email comme identifiant temporaire
+        role: args.role,
+        joinedAt: Date.now(),
+      },
+    ];
+
+    await ctx.db.patch(args.projectId, {
+      members: updatedMembers,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});

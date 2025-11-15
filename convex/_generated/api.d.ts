@@ -15,6 +15,7 @@ import type * as dotVoting from "../dotVoting.js";
 import type * as export_ from "../export.js";
 import type * as insights from "../insights.js";
 import type * as interviews from "../interviews.js";
+import type * as presence from "../presence.js";
 import type * as projects from "../projects.js";
 
 import type {
@@ -39,6 +40,7 @@ declare const fullApi: ApiFromModules<{
   export: typeof export_;
   insights: typeof insights;
   interviews: typeof interviews;
+  presence: typeof presence;
   projects: typeof projects;
 }>;
 declare const fullApiWithMounts: typeof fullApi;

@@ -14,7 +14,7 @@ import { Button } from "../ui/button";
 import { AnalyticsDashboard } from "./AnalyticsDashboard";
 import { UngroupedInsightsPanel } from "./UngroupedInsightsPanel";
 import { InsightsOrganizationPanel } from "./InsightsOrganizationPanel";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 
@@ -30,6 +30,9 @@ import { UltraSimpleTest } from "./UltraSimpleTest";
 import { Badge } from "../ui/badge";
 import { ExportPanel } from "./ExportPanel";
 import { ImportModal } from "./ImportModal";
+import { usePresence } from "@/hooks/usePresence";
+import { DebugSecondUser } from "./DebugSecondUser";
+import { useAuth, useUser } from "@clerk/nextjs";
 // 🆕 AJOUTER childGroupIds À L'INTERFACE
 
 
@@ -86,6 +89,13 @@ export default function AffinityCanvas({
 
   // ==================== QUERIES ====================
   const projectName = useQuery(api.projects.getById, {projectId: projectId as Id<"projects">});
+
+  const upsertPresence = useMutation(api.presence.upsert);  
+
+  // Dans le composant :
+// const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
+const updatePresence = usePresence(mapId);
+const otherUsers = useQuery(api.presence.getByMap, { mapId: mapId as Id<"affinityMaps"> });
 
   // ==================== HOOKS EXTERNES ====================
   const { 
@@ -584,22 +594,32 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
     }
   };
 
-  const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
-    if (canvasRef.current) {
-      const rect = canvasRef.current.getBoundingClientRect();
-      setCursorPosition({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
-      });
-    }
 
-    if (isPanning && e.buttons === 1) {
-      setPosition(prev => ({
-        x: prev.x + e.movementX,
-        y: prev.y + e.movementY
-      }));
-    }
-  }, [isPanning]);
+
+
+const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
+  if (!canvasRef.current) return;
+
+  const rect = canvasRef.current.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  setCursorPosition({ x, y });
+
+  // 🆕 Mise à jour de la présence (curseur + sélection)
+  if (updatePresence) {
+    const worldX = (x - position.x) / scale;
+    const worldY = (y - position.y) / scale;
+    updatePresence(worldX, worldY, Array.from(selectedGroups));
+  }
+
+  if (isPanning && e.buttons === 1) {
+    setPosition(prev => ({
+      x: prev.x + e.movementX,
+      y: prev.y + e.movementY,
+    }));
+  }
+}, [isPanning, position, scale, selectedGroups, updatePresence]);
 
   const handleCanvasMouseUp = () => {
     setIsPanning(false);
@@ -821,7 +841,13 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
   });
 
   // ==================== DEBUG ====================
-  console.log('🔍 AffinityCanvas render - detectedThemes:', detectedThemes.length);
+  // console.log('🔍 AffinityCanvas render - detectedThemes:', detectedThemes.length);
+// const { userId } = useAuth();
+//   console.log("🧪 DebugSecondUser monté avec mapId :", mapId);
+//   console.log("🧪 NODE_ENV :", process.env.NODE_ENV);
+//   console.log("🧪 userId from Clerk :", userId);
+  
+
 
   // ==================== RENDER ====================
 
@@ -1100,7 +1126,7 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
           }}
         >
            {/* 🧪 BOUTON TEST TEMPORAIRE */}
-        <Button
+        {/* <Button
           onClick={() => {
             if (groups.length > 0) {
               const firstGroupId = groups[0].id;
@@ -1114,7 +1140,26 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
           className="absolute top-4 left-4 z-50"
         >
           🧪 Test Highlight
-        </Button>
+        </Button> */}
+        <button
+        className="absolute top-4 left-4 z-50"
+          onClick={() => {
+            upsertPresence({
+              mapId: mapId as Id<"affinityMaps">,
+              userId: "test-user-123",
+              cursor: { x: 200, y: 200 },
+              selection: [],
+              user: {
+                id: "test-user-123",
+                name: "Test User",
+                avatar: undefined,
+              },
+            });
+            console.log("🧪 Test manuel envoyé");
+          }}
+        >
+          🧪 Test Presence
+        </button>
           
           {/* 🎯 COUCHE 1: THÈMES (EN ARRIÈRE-PLAN) */}
           {detectedThemes.length > 0 && (
@@ -1142,7 +1187,24 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
             onContextMenu={handleContextMenu}
             onClick={handleCanvasClick}
           >
-            
+            {otherUsers?.map(user => (
+                <motion.div
+                  key={user.userId}
+                  className="absolute pointer-events-none z-50"
+                  style={{
+                    left: user.cursor.x * scale + position.x,
+                    top: user.cursor.y * scale + position.y,
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow" />
+                    <span className="text-xs bg-gray-900 text-white px-2 py-1 rounded shadow">
+                      {user.user.name}
+                    </span>
+                  </div>
+                </motion.div>
+              ))}
+                          
             {/* CANVAS CONTENT */}
             <div
               key={renderKey}
@@ -1165,7 +1227,7 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
                   backgroundSize: '40px 40px',
                 }}
               />
-
+             
               {/* GROUPS */}
               <div className="p-8">
                 {groups.map((group) => {
@@ -1283,6 +1345,10 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
                 )}
               </div>
             </div>
+
+             {process.env.NODE_ENV === "development" && (
+                <DebugSecondUser mapId={mapId} />
+              )}
           </div>
 
           {/* 🎯 COUCHE 3: INDICATEURS UI (PAR-DESSUS TOUT) */}
