@@ -167,6 +167,14 @@ comments: defineTable({
 .index("by_map", ["mapId"])
 .index("by_group", ["groupId"]),
 
+
+commentViews: defineTable({
+  commentId: v.id("comments"),
+  userId: v.string(),
+  viewedAt: v.number(),
+})
+.index("by_user_comment", ["userId", "commentId"]),
+
   
 });
 

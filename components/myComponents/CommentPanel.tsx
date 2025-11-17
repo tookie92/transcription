@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
 import { useAuth, useUser } from "@clerk/nextjs";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Send } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
@@ -31,6 +31,8 @@ export function CommentPanel({ mapId, groupId, onClose }: CommentPanelProps) {
 
   const addComment = useMutation(api.comments.addComment);
 
+  const markAsViewed = useMutation(api.comments.markAsViewed);
+
   const handleSubmit = async () => {
     if (!text.trim()) return;
     await addComment({
@@ -44,6 +46,16 @@ export function CommentPanel({ mapId, groupId, onClose }: CommentPanelProps) {
     console.log("🧪 userName envoyé =", userName);
 
   };
+
+useEffect(() => {
+  if (!comments || !userId) return;
+  const commentIds = comments.map(c => c._id as Id<"comments">);
+  markAsViewed({
+    commentIds,
+    userId,
+  });
+}, [comments, userId])
+
 
   return (
     <div className="absolute top-0 right-0 w-80 bg-white border border-gray-200 rounded-lg shadow-lg p-4 z-30">

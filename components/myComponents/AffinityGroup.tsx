@@ -17,6 +17,9 @@ import { toast } from "sonner";
 import { hashCode } from "@/utils/hashCodes";
 import { useAuth } from "@clerk/nextjs";
 import { CommentPanel } from "./CommentPanel";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 
 interface AffinityGroupProps {
   group: AffinityGroupType;
@@ -87,7 +90,11 @@ const isNew = comments?.some(
 );
 
 
-
+const unreadCount = useQuery(api.comments.getUnreadCount, {
+  groupId: group.id,
+  userId: currentUserId!,
+  mapId: mapId as Id<"affinityMaps">,
+});
 
 
 // 🎯 Trouve qui a sélectionné ce groupe (autre que moi)
@@ -388,12 +395,17 @@ console.log("🎨 Surbrillance render pour groupe :", group.id);
         }}
       >
         {showComments && (
-  <CommentPanel
-    mapId={mapId}
-    groupId={group.id}
-    onClose={() => setShowComments(false)}
-  />
-)}
+          <CommentPanel
+            mapId={mapId}
+            groupId={group.id}
+            onClose={() => setShowComments(false)}
+          />
+        )}
+
+
+{unreadCount && unreadCount > 0 ? (
+  <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white shadow-sm" />
+) : null}
 
         {/* 🎯 Surbrillance partagée (autre utilisateur) */}
         {Object.entries(sharedSelections || {}).some(

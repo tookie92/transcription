@@ -58,3 +58,43 @@ export const getCommentsByGroup = query({
     return comments as Comment[];
   },
 });
+
+export const markAsViewed = mutation({
+  args: {
+    commentIds: v.array(v.id("comments")),
+    userId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    for (const commentId of args.commentIds) {
+      await ctx.db.insert("commentViews", {
+        commentId,
+        userId: args.userId,
+        viewedAt: Date.now(),
+      });
+    }
+  },
+});
+
+export const getUnreadCount = query({
+  args: { groupId: v.string(), userId: v.string(), mapId: v.id("affinityMaps") },
+  handler: async (ctx, args) => {
+    const comments = await ctx.db
+      .query("comments")
+      .withIndex("by_group", q => q.eq("groupId", args.groupId))
+      .filter(q => q.eq(q.field("mapId"), args.mapId))
+      .collect();
+
+    let unread = 0;
+
+    for (const comment of comments) {
+      const viewed = await ctx.db
+        .query("commentViews")
+        .withIndex("by_user_comment", q => q.eq("userId", args.userId).eq("commentId", comment._id))
+        .first();
+
+      if (!viewed) unread++;
+    }
+
+    return unread;
+  },
+});

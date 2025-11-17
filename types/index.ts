@@ -309,4 +309,6 @@ export interface Comment {
   resolved: boolean;
   createdAt: number;
   updatedAt: number;
+  viewedAt?: number; // ✅ ajoute ce champ
+
 }
