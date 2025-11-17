@@ -298,3 +298,15 @@ export interface ThemeRecommendation {
   expectedImpact: 'high' | 'medium' | 'low';
   suggestedName?: string; // 🆕 OPTIONNEL - pour les noms suggérés
 }
+
+export interface Comment {
+  _id: string;
+  mapId: string;
+  groupId: string;
+  userId: string;
+  userName: string;
+  text: string;
+  resolved: boolean;
+  createdAt: number;
+  updatedAt: number;
+}

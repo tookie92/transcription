@@ -3,7 +3,7 @@
 import { motion, PanInfo } from "framer-motion";
 import { Trash2, Vote, GripVertical, Edit, Copy, Edit3, Sparkles } from "lucide-react";
 import React, { useState, useCallback, useMemo } from "react";
-import { AffinityGroup as AffinityGroupType, Insight } from "@/types";
+import { AffinityGroup as AffinityGroupType, Comment, Insight } from "@/types";
 import { useMotionValue, useTransform } from "framer-motion";
 import {
   ContextMenu,
@@ -14,6 +14,9 @@ import {
 } from "@/components/ui/context-menu";
 import { GroupNameAssistant } from "./GroupNameAssistant";
 import { toast } from "sonner";
+import { hashCode } from "@/utils/hashCodes";
+import { useAuth } from "@clerk/nextjs";
+import { CommentPanel } from "./CommentPanel";
 
 interface AffinityGroupProps {
   group: AffinityGroupType;
@@ -36,6 +39,12 @@ interface AffinityGroupProps {
   onDrop: (e: React.DragEvent) => void; // ✅ CETTE PROP DOIT EXISTER
   onInsightDragStart?: (insightId: string, groupId: string) => void;
   onInsightDrop?: (insightId: string, targetGroupId: string) => void;
+  sharedSelections?: Record<string, string[]>;
+  currentUserId?: string;
+  onOpenComments?: (groupId: string) => void;
+  mapId: string;
+  commentCounts?: Record<string, number>;
+  comments?: Comment[];
 }
 
 export default function AffinityGroup({
@@ -57,13 +66,35 @@ export default function AffinityGroup({
   onInsightDrop,
   workspaceMode,
   projectContext,
+  sharedSelections,
+  currentUserId,
+  onOpenComments,
+  mapId,
+  commentCounts,
+  comments
 }: AffinityGroupProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempTitle, setTempTitle] = useState(group.title);
   // 🆕 AJOUTER APRÈS LES AUTRES useStates DANS AffinityCanvas.tsx
 const [applyingAction, setApplyingAction] = useState<string | null>(null);
 const [highlightedGroups, setHighlightedGroups] = useState<Set<string>>(new Set());
+const [showComments, setShowComments] = useState(false);
 
+
+
+const isNew = comments?.some(
+  (c) => Date.now() - c.createdAt < 5 * 60 * 1000 // ✅ 5 minutes
+);
+
+
+
+
+
+// 🎯 Trouve qui a sélectionné ce groupe (autre que moi)
+const sharedUser = Object.entries(sharedSelections || {}).find(
+  ([userId, groupIds]) =>
+    userId !== currentUserId && (groupIds as string[]).includes(group.id)
+);
 
   const [isDragging, setIsDragging] = useState(false);
 
@@ -87,10 +118,24 @@ const handleDragStart = useCallback(() => {
   // onDragStateChange?.(true); // ✅ Optionnel - pas besoin de dépendance
 }, []); // 🆕 Tableau de dépendances vide
 
-    const handleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    onSelect(group.id, e);
-  }, [group.id, onSelect]);
+const handleClick = useCallback((e: React.MouseEvent) => {
+  console.log("🔥 handleClick appelé pour groupe :", group.id);
+
+  const isTaken = Object.entries(sharedSelections || {}).some(
+    ([userId, groupIds]) =>
+      userId !== currentUserId && (groupIds as string[]).includes(group.id)
+  );
+
+  console.log("🔍 Vérification :", group.id, "verrouillé ? :", isTaken);
+
+  if (isTaken) {
+    console.log("🚫 Groupe verrouillé");
+    return;
+  }
+
+  e.stopPropagation();
+  onSelect(group.id, e);
+}, [group.id, onSelect, sharedSelections, currentUserId]);
 
 
 const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
@@ -245,12 +290,26 @@ const handleInsightDragEnd = (e: React.DragEvent) => {
 
 
 
+
+
 //
   const inputStyle = {
   color: group.color,
   border: `1px solid ${group.color}40`,
   backgroundColor: 'white'
 };
+
+
+
+
+// 🎯 Est-ce que quelqu’un d’autre a sélectionné ce groupe ?
+const isSelectedByOther = Object.entries(sharedSelections || {}).some(
+  ([userId, groupIds]) =>
+    userId !== currentUserId && (groupIds as string[]).includes(group.id)
+);
+
+console.log("🧪 sharedSelections :", sharedSelections);
+console.log("🧪 currentUserId :", currentUserId)
 
 // 🆕 AJOUTER CETTE FONCTION DANS LE COMPOSANT (avant le return)
 const getBorderColor = () => {
@@ -260,11 +319,13 @@ const getBorderColor = () => {
   return group.color;
 };
 
+console.log("🎨 Surbrillance render pour groupe :", group.id);
+
   return (
     <ContextMenu>
       <ContextMenuTrigger>
      <motion.div
-        drag
+        drag={!isSelectedByOther}
         dragMomentum={false}
         dragElastic={0}
         onDragStart={(e) => {
@@ -276,7 +337,18 @@ const getBorderColor = () => {
           }
         }}
         onDragEnd={handleDragEnd}
-        onClick={handleClick}
+        onClick={(e) => {
+          // 🎯 Vérou : si un AUTRE a sélectionné ce groupe → on bloque
+          const isTaken = Object.entries(sharedSelections || {}).some(
+            ([userId, groupIds]) =>
+              userId !== currentUserId && (groupIds as string[]).includes(group.id)
+          );
+          if (isTaken) {
+            console.log("🚫 Groupe verrouillé");
+            return;
+          }
+          handleClick(e);
+        }}
         // 🆕 AJOUTER onDrop SUR LE GROUPE ENTIER
         // onDrop={handleGroupDrop} // ✅ UTILISER LA PROP
          onDrop={(e: React.DragEvent) => {
@@ -315,6 +387,55 @@ const getBorderColor = () => {
           onDragLeave?.();
         }}
       >
+        {showComments && (
+  <CommentPanel
+    mapId={mapId}
+    groupId={group.id}
+    onClose={() => setShowComments(false)}
+  />
+)}
+
+        {/* 🎯 Surbrillance partagée (autre utilisateur) */}
+        {Object.entries(sharedSelections || {}).some(
+          ([userId, groupIds]) =>
+            userId !== currentUserId && (groupIds as string[]).includes(group.id)
+        ) && (
+          <div
+            className="absolute inset-0 rounded-xl border-2 pointer-events-none"
+            style={{
+              borderColor: `hsl(${Math.abs(group.id.split("").reduce((a, b) => a + b.charCodeAt(0), 0)) % 360}, 70%, 60%)`,
+            }}
+          />
+        )}
+        {/* 🎯 Ma sélection perso (bleue) */}
+        {isSelected && (
+          <div className="absolute inset-0 rounded-xl border-2 border-blue-500 pointer-events-none" />
+        )}
+
+        {/* 🎯 Verrou visuel si pris */}
+        {Object.entries(sharedSelections || {}).some(
+          ([userId, groupIds]) =>
+            userId !== currentUserId && (groupIds as string[]).includes(group.id)
+        ) && (
+          <div className="absolute top-2 right-2 text-xs bg-red-500 text-white px-2 py-1 rounded pointer-events-none">
+            🔒
+          </div>
+        )}
+       {isSelectedByOther && (
+          <div className="absolute top-2 right-2 text-xs bg-red-500 text-white px-2 py-1 rounded-full font-semibold pointer-events-none z-10">
+            🔒 Locked
+          </div>
+        )}
+
+            {sharedUser && (
+                <div
+                 className="absolute inset-0 rounded-xl border-2 pointer-events-none"
+                 style={{
+                   borderColor: `hsl(${hashCode(sharedUser[0]) % 360}, 70%, 60%)`,
+                   boxShadow: `0 0 0 3px hsl(${hashCode(sharedUser[0]) % 360}, 70%, 60%, 0.3)`,
+                 }}
+               />
+               )}
           {/* HEADER DRAGGABLE */}
           <div 
             className="flex items-center gap-2 px-3 py-2 border-b cursor-grab active:cursor-grabbing relative"
@@ -338,10 +459,7 @@ const getBorderColor = () => {
                 toast.info("Drop insights in the group content area below");
               }}
           >
-            {/* INDICATEUR DE SÉLECTION */}
-            {isSelected && (
-              <div className="absolute -left-2 -top-2 w-3 h-3 bg-orange-500 rounded-full border-2 border-white shadow-sm" />
-            )}
+            
 
             <GripVertical size={16} style={{ color: group.color }} className="shrink-0" />
 
@@ -403,6 +521,25 @@ const getBorderColor = () => {
               >
                 <Trash2 size={14} />
               </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation(); // ✅ bloque le clic parent
+                onOpenComments?.(group.id);
+              }}
+              className="p-1 text-gray-400 hover:text-blue-500 transition-colors"
+              title="Add comment"
+            >
+              💬
+            </button>
+            {isNew && (
+              <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></div>
+            )}
+
+            {commentCounts?.[group.id] && (
+              <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full ml-1">
+                {commentCounts[group.id]}
+              </span>
+            )}
             </div>
           </div>
 
@@ -468,7 +605,7 @@ const getBorderColor = () => {
             <div
               key={insight.id}
               className="p-2 bg-gray-50 rounded border border-gray-100 text-sm text-gray-700 cursor-move transition-all hover:bg-gray-100"
-              draggable={workspaceMode === 'grouping'}
+              draggable={workspaceMode === 'grouping' && !isSelectedByOther}
               onDragStart={(e) => handleInsightDragStart(e, insight.id)}
               onDragOver={handleInsightDragOver}
               onDragLeave={handleInsightDragLeave}

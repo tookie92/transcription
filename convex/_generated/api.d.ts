@@ -10,6 +10,7 @@
 
 import type * as affinityMaps from "../affinityMaps.js";
 import type * as analytics from "../analytics.js";
+import type * as comments from "../comments.js";
 import type * as connections from "../connections.js";
 import type * as dotVoting from "../dotVoting.js";
 import type * as export_ from "../export.js";
@@ -35,6 +36,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   affinityMaps: typeof affinityMaps;
   analytics: typeof analytics;
+  comments: typeof comments;
   connections: typeof connections;
   dotVoting: typeof dotVoting;
   export: typeof export_;

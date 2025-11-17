@@ -158,6 +158,7 @@ comments: defineTable({
   mapId: v.id("affinityMaps"),
   groupId: v.string(),
   userId: v.string(),
+  userName: v.string(),
   text: v.string(),
   resolved: v.boolean(),
   createdAt: v.number(),

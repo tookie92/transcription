@@ -1,6 +1,42 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+
+
+export const claimInvite = mutation({
+  args: {
+    projectId: v.id("projects"),
+    email: v.string(), // l’email qu’on a utilisé pour inviter
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new Error("Project not found");
+
+    // Trouve l’invitation par email
+    const invited = project.members.find(m => m.userId === args.email);
+    if (!invited) {
+      throw new Error("You were not invited");
+    }
+
+    // Remplace l’email par le vrai userId
+    const updatedMembers = project.members.map(m =>
+      m.userId === args.email
+        ? { ...m, userId: identity.subject }
+        : m
+    );
+
+    await ctx.db.patch(args.projectId, {
+      members: updatedMembers,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
 // Créer un projet
 export const createProject = mutation({
   args: {

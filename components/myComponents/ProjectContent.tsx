@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, Plus, Users, Calendar, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
+import { InviteUserButton } from "./InviteUserButton";
+import { toast } from "sonner";
+import { useEffect } from "react";
+import { useAuth, useUser } from "@clerk/nextjs";
+import { CopyInviteLink } from "./CopyInviteLink";
 
 interface ProjectContentProps {
   projectId:  Id<"projects">;
@@ -16,11 +21,31 @@ interface ProjectContentProps {
 
 export function ProjectContent({ projectId }: ProjectContentProps) {
   const router = useRouter();
+  const {userId} = useAuth();
+  const {user} = useUser();
   
   // Récupérer les données du projet
   const project = useQuery(api.projects.getById, { projectId });
   const interviews = useQuery(api.interviews.getProjectInterviews, { projectId });
   const allProjects = useQuery(api.projects.getUserProjects);
+  const claimInvite = useMutation(api.projects.claimInvite);
+
+  useEffect(() => {
+  if (!project || !userId || !user?.emailAddresses?.[0]?.emailAddress) return;
+
+  const invitedEmail = user.emailAddresses[0].emailAddress;
+  const isInvited = project.members.some(m => m.userId === invitedEmail);
+  const isMember = project.members.some(m => m.userId === userId);
+
+  if (isInvited && !isMember) {
+    claimInvite({
+      projectId,
+      email: invitedEmail,
+    }).then(() => {
+      toast.success("You’ve been added to the project!");
+    });
+  }
+}, [project, userId, user]);
 
   if (!project) {
     return (
@@ -57,6 +82,8 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
           <Plus className="w-4 h-4" />
           New Interview
         </Button>
+        {/* <InviteUserButton projectId={projectId} /> */}
+                <CopyInviteLink projectId={projectId} />
       </div>
 
       {/* Project Stats */}

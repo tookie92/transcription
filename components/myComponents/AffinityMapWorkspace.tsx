@@ -9,6 +9,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { AffinityGroup, Insight } from "@/types"; // ← Utiliser les types importés
 import { toast } from "sonner";
 import AffinityCanvas from "./AffinityCanvas";
+import { useAuth, useUser } from "@clerk/nextjs";
 
 interface AffinityMapWorkspaceProps {
   projectId: Id<"projects">;
@@ -33,6 +34,9 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const removeInsightFromGroup = useMutation(api.affinityMaps.removeInsightFromGroup);
   const replaceAllGroups = useMutation(api.affinityMaps.replaceAllGroups);
   const createManualInsight = useMutation(api.affinityMaps.createManualInsight);
+  const claimInvite = useMutation(api.projects.claimInvite);
+  const { userId } = useAuth();
+  const {user} = useUser();
 
   // État local
   const [isSilentMode, setIsSilentMode] = useState(true);
@@ -50,6 +54,13 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
       }).catch(console.error);
     }
   }, [project, affinityMap, projectId, createAffinityMap]);
+
+
+  useEffect(() => {
+  console.log("🧪 AffinityMapWorkspace monté avec projectId :", projectId);
+  console.log("🧪 User connecté :", userId);
+  console.log("🧪 Email du user :", user?.emailAddresses?.[0]?.emailAddress);
+}, [projectId, userId, user]);
 
   // Handlers
   const handleGroupCreate = async (position: { x: number; y: number }) => {
@@ -216,6 +227,23 @@ const handleInsightDrop = async (insightId: string, groupId: string) => {
             Back to Home
           </button>
         </div>
+        <button
+  onClick={async () => {
+    if (!user?.emailAddresses?.[0]?.emailAddress) return;
+    try {
+      await claimInvite({
+        projectId,
+        email: user.emailAddresses[0].emailAddress,
+      });
+      toast.success("You’ve been added to the project!");
+    } catch (e) {
+      toast.error("Failed to claim invite");
+    }
+  }}
+  className="px-3 py-2 border rounded-lg hover:bg-gray-50"
+>
+  🧪 Claim Invite
+</button>
       </div>
     );
   }

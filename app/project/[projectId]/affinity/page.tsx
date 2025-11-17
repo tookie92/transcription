@@ -1,23 +1,18 @@
+import { Metadata } from "next";
 import { AffinityMapWorkspace } from "@/components/myComponents/AffinityMapWorkspace";
 import { Id } from "@/convex/_generated/dataModel";
-import { Metadata } from "next";
 
-
-interface AffinityPageProps {
-  params: Promise<{
-    projectId: Id<"projects">;
-  }>;
+interface PageProps {
+  params: { projectId: string };
 }
 
-export async function generateMetadata({ params }: AffinityPageProps): Promise<Metadata> {
-  await params; // Await params here too
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   return {
     title: "Affinity Map",
-    description: "Organize insights into affinity groups",
+    description: "Collaborative affinity diagram",
   };
 }
 
-export default async function AffinityPage({ params }: AffinityPageProps) {
-  const { projectId } = await params;
-  return <AffinityMapWorkspace projectId={projectId} />;
+export default function AffinityPage({ params }: PageProps) {
+  return <AffinityMapWorkspace projectId={params.projectId as Id<"projects">} />;
 }

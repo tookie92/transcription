@@ -16,8 +16,8 @@ export const upsert = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity || identity.subject !== args.userId) return;
-    console.log("🧪 Mutation upsert appelée avec :", args);
-    console.log("🧪 Ligne créée avec _id :", identity);
+    // console.log("🧪 Mutation upsert appelée avec :", args);
+    // console.log("🧪 Ligne créée avec _id :", identity);
 
     const existing = await ctx.db
       .query("presence")

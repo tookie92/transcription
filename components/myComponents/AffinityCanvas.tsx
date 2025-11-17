@@ -33,6 +33,7 @@ import { ImportModal } from "./ImportModal";
 import { usePresence } from "@/hooks/usePresence";
 import { DebugSecondUser } from "./DebugSecondUser";
 import { useAuth, useUser } from "@clerk/nextjs";
+import { CommentPanel } from "./CommentPanel";
 // 🆕 AJOUTER childGroupIds À L'INTERFACE
 
 
@@ -88,6 +89,8 @@ export default function AffinityCanvas({
 
 
   // ==================== QUERIES ====================
+  const { userId: currentUserId } = useAuth();
+
   const projectName = useQuery(api.projects.getById, {projectId: projectId as Id<"projects">});
 
   const upsertPresence = useMutation(api.presence.upsert);  
@@ -96,6 +99,14 @@ export default function AffinityCanvas({
 // const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
 const updatePresence = usePresence(mapId);
 const otherUsers = useQuery(api.presence.getByMap, { mapId: mapId as Id<"affinityMaps"> });
+
+useEffect(() => {
+  const selections: Record<string, string[]> = {};
+  otherUsers?.forEach(user => {
+    selections[user.userId] = user.selection || [];
+  });
+  setSharedSelections(selections);
+}, [otherUsers]);
 
   // ==================== HOOKS EXTERNES ====================
   const { 
@@ -136,6 +147,14 @@ const otherUsers = useQuery(api.presence.getByMap, { mapId: mapId as Id<"affinit
    // 🆕 AJOUTER CES STATES POUR EXPORT/IMPORT
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [sharedSelections, setSharedSelections] = useState<Record<string, string[]>>({});
+  const [showComments, setShowComments] = useState<string | null>(null);
+
+  const commentCounts = useQuery(api.comments.getCommentCountsByMap, {
+  mapId: mapId as Id<"affinityMaps">,
+});
+
+
 
   // ==================== useMemo ====================
   const detectedThemes = useMemo(() => {
@@ -170,7 +189,18 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
     toast.success("Map imported successfully!");
   };
 
+
+
   // ==================== useCallback ====================
+
+  const handleOpenComments = (groupId: string) => {
+  console.log("🧪 handleOpenComments reçu :", groupId);
+  setShowComments(groupId);
+};
+
+
+
+
   const extractSuggestedName = useCallback((reason: string): string => {
     console.log('🔍 Extracting name from:', reason);
     
@@ -1125,6 +1155,7 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
             }
           }}
         >
+          
            {/* 🧪 BOUTON TEST TEMPORAIRE */}
         {/* <Button
           onClick={() => {
@@ -1204,6 +1235,8 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
                   </div>
                 </motion.div>
               ))}
+
+              
                           
             {/* CANVAS CONTENT */}
             <div
@@ -1321,6 +1354,12 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
                   }
                 }}
                 workspaceMode={workspaceMode}
+                sharedSelections={sharedSelections}
+                currentUserId={currentUserId!}
+                onOpenComments={handleOpenComments}
+                mapId={mapId}
+                commentCounts={commentCounts}
+                // comments={comments}
               />
                   );
                 })}
@@ -1346,9 +1385,9 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
               </div>
             </div>
 
-             {process.env.NODE_ENV === "development" && (
+             {/* {process.env.NODE_ENV === "development" && (
                 <DebugSecondUser mapId={mapId} />
-              )}
+              )} */}
           </div>
 
           {/* 🎯 COUCHE 3: INDICATEURS UI (PAR-DESSUS TOUT) */}
@@ -1458,6 +1497,16 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
           )}
         </AnimatePresence>
       </div>
+
+      {showComments && (
+        <CommentPanel
+          mapId={mapId}
+          groupId={showComments}
+          onClose={() => setShowComments(null)}
+        />
+      )}
+
+  
 
    {/* 🆕 AJOUTER LE MODAL D'IMPORT ICI */}
     <ImportModal
