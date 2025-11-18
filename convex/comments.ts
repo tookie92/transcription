@@ -28,6 +28,27 @@ export const addComment = mutation({
   },
 });
 
+
+// convex/comments.ts
+export const getMentionsForUser = query({
+  args: { mapId: v.id("affinityMaps"), userName: v.string() },
+  handler: async (ctx, args) => {
+    const comments = await ctx.db
+      .query("comments")
+      .withIndex("by_map", q => q.eq("mapId", args.mapId))
+      .collect();
+
+    // on retourne les groupId où l’user est mentionné
+    const mentionedGroupIds = new Set<string>();
+    for (const c of comments) {
+      if (c.text.includes(`@${args.userName}`)) {
+        mentionedGroupIds.add(c.groupId);
+      }
+    }
+    return Array.from(mentionedGroupIds);
+  },
+});
+
 export const getCommentCountsByMap = query({
   args: { mapId: v.id("affinityMaps") },
   handler: async (ctx, args) => {

@@ -15,7 +15,7 @@ import {
 import { GroupNameAssistant } from "./GroupNameAssistant";
 import { toast } from "sonner";
 import { hashCode } from "@/utils/hashCodes";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { CommentPanel } from "./CommentPanel";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -82,7 +82,7 @@ export default function AffinityGroup({
 const [applyingAction, setApplyingAction] = useState<string | null>(null);
 const [highlightedGroups, setHighlightedGroups] = useState<Set<string>>(new Set());
 const [showComments, setShowComments] = useState(false);
-
+const { user } = useUser();
 
 
 const isNew = comments?.some(
@@ -207,6 +207,9 @@ const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, in
     onDrop(e);
   };
 
+//
+
+
 //=========== Drag & Drop ===========
 // Dans AffinityGroup.tsx - AJOUTER CES HANDLERS :
 
@@ -315,8 +318,8 @@ const isSelectedByOther = Object.entries(sharedSelections || {}).some(
     userId !== currentUserId && (groupIds as string[]).includes(group.id)
 );
 
-console.log("🧪 sharedSelections :", sharedSelections);
-console.log("🧪 currentUserId :", currentUserId)
+// console.log("🧪 sharedSelections :", sharedSelections);
+// console.log("🧪 currentUserId :", currentUserId)
 
 // 🆕 AJOUTER CETTE FONCTION DANS LE COMPOSANT (avant le return)
 const getBorderColor = () => {
@@ -326,7 +329,14 @@ const getBorderColor = () => {
   return group.color;
 };
 
-console.log("🎨 Surbrillance render pour groupe :", group.id);
+const myMentions = useQuery(api.comments.getMentionsForUser, {
+  mapId : mapId as Id<"affinityMaps">,
+  userName: user?.fullName || user?.firstName || "",
+});
+
+const amIMentioned = myMentions?.includes(group.id);
+
+// console.log("🎨 Surbrillance render pour groupe :", group.id);
 
   return (
     <ContextMenu>
@@ -534,19 +544,22 @@ console.log("🎨 Surbrillance render pour groupe :", group.id);
               >
                 <Trash2 size={14} />
               </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                // on part du bouton et on remonte jusqu’au groupe
-                const groupEl = (e.currentTarget as HTMLElement)
-                  .closest('[data-group-id]');
-                if (!groupEl) return;                 // sécurité
-                const rect = groupEl.getBoundingClientRect();
-                onOpenComments?.(group.id, { x: rect.right, y: rect.top });
-              }}
-            >
-              💬
-            </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const rect = (e.currentTarget as HTMLElement)
+                .closest('[data-group-id]')!
+                .getBoundingClientRect();
+              onOpenComments?.(group.id, { x: rect.right, y: rect.top });
+            }}
+            className="p-1 text-gray-400 hover:text-blue-500 transition-colors relative"
+            title="Add comment"
+          >
+            💬
+            {amIMentioned && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+            )}
+          </button>
             {isNew && (
               <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></div>
             )}

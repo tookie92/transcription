@@ -227,23 +227,7 @@ const handleInsightDrop = async (insightId: string, groupId: string) => {
             Back to Home
           </button>
         </div>
-        <button
-  onClick={async () => {
-    if (!user?.emailAddresses?.[0]?.emailAddress) return;
-    try {
-      await claimInvite({
-        projectId,
-        email: user.emailAddresses[0].emailAddress,
-      });
-      toast.success("You’ve been added to the project!");
-    } catch (e) {
-      toast.error("Failed to claim invite");
-    }
-  }}
-  className="px-3 py-2 border rounded-lg hover:bg-gray-50"
->
-  🧪 Claim Invite
-</button>
+
       </div>
     );
   }

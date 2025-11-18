@@ -3,11 +3,9 @@ import { v } from "convex/values";
 
 
 
+// convex/projects.ts
 export const claimInvite = mutation({
-  args: {
-    projectId: v.id("projects"),
-    email: v.string(), // l’email qu’on a utilisé pour inviter
-  },
+  args: { projectId: v.id("projects"), email: v.string() },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
@@ -15,21 +13,15 @@ export const claimInvite = mutation({
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
 
-    // Trouve l’invitation par email
+    // 🔒 on cherche l’email dans la liste des membres
     const invited = project.members.find(m => m.userId === args.email);
-    if (!invited) {
-      throw new Error("You were not invited");
-    }
+    if (!invited) throw new Error("You were not invited");
 
-    // Remplace l’email par le vrai userId
-    const updatedMembers = project.members.map(m =>
-      m.userId === args.email
-        ? { ...m, userId: identity.subject }
-        : m
-    );
-
+    // on remplace l’email par le vrai userId Clerk
     await ctx.db.patch(args.projectId, {
-      members: updatedMembers,
+      members: project.members.map(m =>
+        m.userId === args.email ? { ...m, userId: identity.subject } : m
+      ),
       updatedAt: Date.now(),
     });
 
@@ -189,5 +181,43 @@ export const inviteUser = mutation({
     });
 
     return { success: true };
+  },
+});
+
+
+// convex/projects.ts
+export const updateMemberRole = mutation({
+  args: { projectId: v.id("projects"), userId: v.string(), newRole: v.union(v.literal("owner"), v.literal("editor"), v.literal("viewer")) },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const proj = await ctx.db.get(args.projectId);
+    if (!proj) throw new Error("Project not found");
+    if (proj.ownerId !== identity.subject) throw new Error("Only owner can change roles");
+
+    await ctx.db.patch(args.projectId, {
+      members: proj.members.map(m =>
+        m.userId === args.userId ? { ...m, role: args.newRole } : m
+      ),
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const removeMember = mutation({
+  args: { projectId: v.id("projects"), userId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const proj = await ctx.db.get(args.projectId);
+    if (!proj) throw new Error("Project not found");
+    if (proj.ownerId !== identity.subject) throw new Error("Only owner can remove members");
+
+    await ctx.db.patch(args.projectId, {
+      members: proj.members.filter(m => m.userId !== args.userId),
+      updatedAt: Date.now(),
+    });
   },
 });

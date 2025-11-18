@@ -208,6 +208,13 @@ const handleOpenComments = (groupId: string, position: { x: number; y: number })
   setShowComments({ groupId, screenRect: rect });
 };
 
+
+const presenceUsers = useMemo(
+  () => otherUsers?.map(u => ({ id: u.userId, name: u.user.name })) ?? [],
+  [otherUsers]
+);
+
+
 // hook qui suit le mouvement
 const followRect = useFollowGroupRect(showComments?.groupId ?? null, {
   scale,
@@ -1173,6 +1180,7 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
   <CommentPanel
     mapId={mapId}
     groupId={showComments.groupId}
+    presenceUsers={presenceUsers}
     screenRect={followRect ?? showComments.screenRect} // fallback 1er render
     onClose={() => setShowComments(null)}
   />

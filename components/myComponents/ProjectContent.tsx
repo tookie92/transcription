@@ -11,9 +11,10 @@ import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 import { InviteUserButton } from "./InviteUserButton";
 import { toast } from "sonner";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { CopyInviteLink } from "./CopyInviteLink";
+import { MemberManagerDialog } from "./MemberManagerDialog";
 
 interface ProjectContentProps {
   projectId:  Id<"projects">;
@@ -27,10 +28,11 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
   // Récupérer les données du projet
   const project = useQuery(api.projects.getById, { projectId });
   const interviews = useQuery(api.interviews.getProjectInterviews, { projectId });
-  const allProjects = useQuery(api.projects.getUserProjects);
-  const claimInvite = useMutation(api.projects.claimInvite);
+  const [openManage, setOpenManage] = useState(false);
+  // const allProjects = useQuery(api.projects.getUserProjects);
+  // const claimInvite = useMutation(api.projects.claimInvite);
 
-  useEffect(() => {
+useEffect(() => {
   if (!project || !userId || !user?.emailAddresses?.[0]?.emailAddress) return;
 
   const invitedEmail = user.emailAddresses[0].emailAddress;
@@ -38,14 +40,10 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
   const isMember = project.members.some(m => m.userId === userId);
 
   if (isInvited && !isMember) {
-    claimInvite({
-      projectId,
-      email: invitedEmail,
-    }).then(() => {
-      toast.success("You’ve been added to the project!");
-    });
+    // au lieu de claimInvite → on redirige
+    router.push(`/invite/${projectId}?email=${encodeURIComponent(invitedEmail)}`);
   }
-}, [project, userId, user]);
+}, [project, userId, user, projectId, router]);
 
   if (!project) {
     return (
@@ -82,8 +80,8 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
           <Plus className="w-4 h-4" />
           New Interview
         </Button>
-        {/* <InviteUserButton projectId={projectId} /> */}
-                <CopyInviteLink projectId={projectId} />
+        <InviteUserButton projectId={projectId} />
+                {/* <CopyInviteLink projectId={projectId} /> */}
       </div>
 
       {/* Project Stats */}
@@ -98,15 +96,19 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Team Members</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{project.members.length}</div>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-medium">Team Members</CardTitle>
+              {project.ownerId === userId && (
+                <Button variant="outline" size="sm" onClick={() => setOpenManage(true)}>
+                  Manage
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{project.members.length}</div>
+            </CardContent>
+          </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -197,6 +199,14 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
           )}
         </CardContent>
       </Card>
+
+      {project.ownerId === userId && (
+        <MemberManagerDialog
+          projectId={projectId}
+          open={openManage}
+          onOpenChange={setOpenManage}
+        />
+      )}
     </div>
   );
 }
