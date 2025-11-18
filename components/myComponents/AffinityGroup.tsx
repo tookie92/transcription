@@ -44,7 +44,7 @@ interface AffinityGroupProps {
   onInsightDrop?: (insightId: string, targetGroupId: string) => void;
   sharedSelections?: Record<string, string[]>;
   currentUserId?: string;
-  onOpenComments?: (groupId: string) => void;
+  onOpenComments?: (groupId: string, position: { x: number; y: number }) => void;
   mapId: string;
   commentCounts?: Record<string, number>;
   comments?: Comment[];
@@ -332,6 +332,7 @@ console.log("🎨 Surbrillance render pour groupe :", group.id);
     <ContextMenu>
       <ContextMenuTrigger>
      <motion.div
+        data-group-id={group.id}
         drag={!isSelectedByOther}
         dragMomentum={false}
         dragElastic={0}
@@ -394,13 +395,13 @@ console.log("🎨 Surbrillance render pour groupe :", group.id);
           onDragLeave?.();
         }}
       >
-        {showComments && (
+        {/* {showComments && (
           <CommentPanel
             mapId={mapId}
             groupId={group.id}
             onClose={() => setShowComments(false)}
           />
-        )}
+        )} */}
 
 
 {unreadCount && unreadCount > 0 ? (
@@ -535,11 +536,14 @@ console.log("🎨 Surbrillance render pour groupe :", group.id);
               </button>
             <button
               onClick={(e) => {
-                e.stopPropagation(); // ✅ bloque le clic parent
-                onOpenComments?.(group.id);
+                e.stopPropagation();
+                // on part du bouton et on remonte jusqu’au groupe
+                const groupEl = (e.currentTarget as HTMLElement)
+                  .closest('[data-group-id]');
+                if (!groupEl) return;                 // sécurité
+                const rect = groupEl.getBoundingClientRect();
+                onOpenComments?.(group.id, { x: rect.right, y: rect.top });
               }}
-              className="p-1 text-gray-400 hover:text-blue-500 transition-colors"
-              title="Add comment"
             >
               💬
             </button>

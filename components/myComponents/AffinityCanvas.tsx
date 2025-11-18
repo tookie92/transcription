@@ -34,6 +34,7 @@ import { usePresence } from "@/hooks/usePresence";
 import { DebugSecondUser } from "./DebugSecondUser";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { CommentPanel } from "./CommentPanel";
+import { useFollowGroupRect } from "@/hooks/useFollowGroupRect";
 // 🆕 AJOUTER childGroupIds À L'INTERFACE
 
 
@@ -118,6 +119,8 @@ useEffect(() => {
 
   const history = useHistory();
 
+ 
+
   // ==================== useRef ====================
   const canvasRef = useRef<HTMLDivElement>(null);
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -148,11 +151,17 @@ useEffect(() => {
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [sharedSelections, setSharedSelections] = useState<Record<string, string[]>>({});
-  const [showComments, setShowComments] = useState<string | null>(null);
+// dans le composant :
+const [showComments, setShowComments] = useState<{
+  groupId: string;
+  screenRect: DOMRect;
+} | null>(null);
 
   const commentCounts = useQuery(api.comments.getCommentCountsByMap, {
   mapId: mapId as Id<"affinityMaps">,
 });
+
+
 
 
 
@@ -193,12 +202,17 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
 
   // ==================== useCallback ====================
 
-  const handleOpenComments = (groupId: string) => {
-  console.log("🧪 handleOpenComments reçu :", groupId);
-  setShowComments(groupId);
+// AffinityCanvas.tsx
+const handleOpenComments = (groupId: string, position: { x: number; y: number }) => {
+  const rect = new DOMRect(position.x, position.y, 0, 0); // largeur/hauteur inutiles ici
+  setShowComments({ groupId, screenRect: rect });
 };
 
-
+// hook qui suit le mouvement
+const followRect = useFollowGroupRect(showComments?.groupId ?? null, {
+  scale,
+  position,
+});
 
 
   const extractSuggestedName = useCallback((reason: string): string => {
@@ -876,7 +890,7 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
 //   console.log("🧪 DebugSecondUser monté avec mapId :", mapId);
 //   console.log("🧪 NODE_ENV :", process.env.NODE_ENV);
 //   console.log("🧪 userId from Clerk :", userId);
-  
+  // console.log("🧪 Panel position → x =", showComments!.position.x, "y =", showComments!.position.y);
 
 
   // ==================== RENDER ====================
@@ -1155,6 +1169,14 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
             }
           }}
         >
+{showComments && (
+  <CommentPanel
+    mapId={mapId}
+    groupId={showComments.groupId}
+    screenRect={followRect ?? showComments.screenRect} // fallback 1er render
+    onClose={() => setShowComments(null)}
+  />
+)}
           
            {/* 🧪 BOUTON TEST TEMPORAIRE */}
         {/* <Button
@@ -1263,6 +1285,7 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
              
               {/* GROUPS */}
               <div className="p-8">
+
                 {groups.map((group) => {
                   const currentPosition = getCurrentPosition(group.id);
                   
@@ -1498,13 +1521,6 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
         </AnimatePresence>
       </div>
 
-      {showComments && (
-        <CommentPanel
-          mapId={mapId}
-          groupId={showComments}
-          onClose={() => setShowComments(null)}
-        />
-      )}
 
   
 
