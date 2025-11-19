@@ -22,7 +22,13 @@ export default function InvitePage() {
   const searchParams = useSearchParams();
 const prefilledEmail = searchParams.get("email") || "";
 
-  const project = useQuery(api.projects.getById, { projectId  });
+
+    const project = useQuery(api.projects.getByIdWithEmail, {
+    projectId,
+    userEmail: user?.emailAddresses[0]?.emailAddress || "", // ← email connecté
+  });
+
+  console.log("📨 invite page", { projectId, prefilledEmail, userEmail: user?.emailAddresses[0]?.emailAddress, project });
   const claim = useMutation(api.projects.claimInvite);
 
   useEffect(() => {
@@ -33,19 +39,20 @@ const prefilledEmail = searchParams.get("email") || "";
     }
   }, [user, isLoaded, router]);
 
-  const handleJoin = async () => {
-    if (!email) return;
-    try {
-      await claim({ projectId, email });
-      toast.success("You’ve joined the project!");
-      router.push(`/project/${projectId}`);
-    } catch (e) {
-        const error = e as Error;
-      toast.error(error.message);
-    }
-  };
+const handleJoin = async () => {
+  if (!email) return;
+  await claim({ projectId, email });
+  router.push(`/project/${projectId}`);
+};
+
+
 
   if (!project) return <p>Loading…</p>;
+
+    const hasInvite = project.members.some(m => m.userId === prefilledEmail);
+    if (!hasInvite) {
+    return <p>You were not invited with this email.</p>;
+    }
 
   return (
     <div className="h-screen flex items-center justify-center bg-gray-50">
@@ -58,7 +65,7 @@ const prefilledEmail = searchParams.get("email") || "";
         placeholder="Confirm your email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        defaultValue={prefilledEmail} // ← pré-rempli
+        // defaultValue={prefilledEmail} // ← pré-rempli
         />
         <Button onClick={handleJoin} className="w-full mt-3">
           Join project

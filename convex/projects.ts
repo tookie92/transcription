@@ -95,10 +95,11 @@ export const getUserProjects = query({
 });
 
 
-// Récupérer un projet par son ID
-export const getById = query({
+// convex/projects.ts
+export const getByIdWithEmail = query({
   args: {
     projectId: v.id("projects"),
+    userEmail: v.string(), // ← email de l’utilisateur connecté
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -107,15 +108,57 @@ export const getById = query({
     const project = await ctx.db.get(args.projectId);
     if (!project) return null;
 
-    // Vérifier les permissions
-    const hasAccess = project.members.some(member => 
-      member.userId === identity.subject
-    ) || project.isPublic || project.ownerId === identity.subject;
+    const hasAccess =
+      project.members.some((m) => m.userId === identity.subject) ||
+      project.members.some((m) => m.userId === args.userEmail) || // ✅ email invité
+      project.isPublic ||
+      project.ownerId === identity.subject;
 
     return hasAccess ? project : null;
   },
 });
 
+// Récupérer un projet par son ID
+// convex/projects.ts
+export const getById = query({
+  args: {
+    projectId: v.id("projects"),
+    withNames: v.optional(v.boolean()), // ← nouveau flag
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const project = await ctx.db.get(args.projectId);
+    if (!project) return null;
+
+    const hasAccess =
+      project.members.some((m) => m.userId === identity.subject) ||
+      project.isPublic ||
+      project.ownerId === identity.subject;
+
+    if (!hasAccess) return null;
+
+    // Si on veut les noms, on les récupère via Clerk
+    if (args.withNames) {
+      const membersWithNames = await Promise.all(
+        project.members.map(async (m) => {
+          // on va chercher les métadatas Clerk
+          const user = await ctx.auth.getUserIdentity(); // ⚠️ pas dispo direct
+          // On passe donc par un petit helper côté client (voir étape 2)
+          // On renvoie juste l’email pour l’instant
+          return {
+            ...m,
+            email: m.userId, // email utilisé lors de l’invitation
+          };
+        })
+      );
+      return { ...project, members: membersWithNames };
+    }
+
+    return project;
+  },
+});
 
 // Dans la mutation d'invitation
 export const inviteToProject = mutation({
@@ -146,6 +189,8 @@ export const inviteUser = mutation({
     projectId: v.id("projects"),
     email: v.string(),
     role: v.union(v.literal("editor"), v.literal("viewer")),
+    name: v.string(),
+
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -172,6 +217,8 @@ export const inviteUser = mutation({
         userId: args.email, // ✅ on utilisera l’email comme identifiant temporaire
         role: args.role,
         joinedAt: Date.now(),
+        name: args.name,
+        email: args.email,
       },
     ];
 

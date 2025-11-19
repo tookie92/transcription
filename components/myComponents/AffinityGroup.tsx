@@ -28,6 +28,8 @@ interface AffinityGroupProps {
   isDragOver: boolean;
   workspaceMode: 'grouping' | 'voting';
   projectContext?: string;
+  
+  // 🎯 CORRECTION: RENDRE LES PROPS OBLIGATOIRES OU DONNER DES VALEURS PAR DÉFAUT
   onMove: (groupId: string, position: { x: number; y: number }) => void;
   onDelete?: (groupId: string) => void;
   onTitleUpdate?: (groupId: string, title: string) => void;
@@ -36,10 +38,11 @@ interface AffinityGroupProps {
   isSelected: boolean;
   isHighlighted?: boolean;
   
-  // 🆕 PROPS DE DRAG & DROP
+  // 🎯 DRAG & DROP - RENDRE OBLIGATOIRES AVEC FONCTIONS VIDES PAR DÉFAUT
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
-  onDrop: (e: React.DragEvent) => void; // ✅ CETTE PROP DOIT EXISTER
+  onDrop: (e: React.DragEvent) => void;
+  
   onInsightDragStart?: (insightId: string, groupId: string) => void;
   onInsightDrop?: (insightId: string, targetGroupId: string) => void;
   sharedSelections?: Record<string, string[]>;
@@ -48,10 +51,15 @@ interface AffinityGroupProps {
   mapId: string;
   commentCounts?: Record<string, number>;
   comments?: Comment[];
+  
+  // 🎯 NOUVELLES PROPS POUR LA PRÉSENTATION
+  isPresentationMode?: boolean;
+  isFocusedInPresentation?: boolean;
+  presentationScale?: number;
 }
 
 export default function AffinityGroup({
-    group,
+  group,
   insights,
   scale,
   isSelected,
@@ -64,7 +72,7 @@ export default function AffinityGroup({
   onSelect,
   onDragOver,
   onDragLeave,
-  onDrop, // ✅ MAINTENANT DISPONIBLE
+  onDrop, // 🎯 MAINTENANT OBLIGATOIRE
   onInsightDragStart,
   onInsightDrop,
   workspaceMode,
@@ -74,7 +82,12 @@ export default function AffinityGroup({
   onOpenComments,
   mapId,
   commentCounts,
-  comments
+  comments,
+  
+  // 🎯 NOUVELLES PROPS
+  isPresentationMode = false,
+  isFocusedInPresentation = false,
+  presentationScale = 1,
 }: AffinityGroupProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempTitle, setTempTitle] = useState(group.title);
@@ -120,29 +133,76 @@ const sharedUser = Object.entries(sharedSelections || {}).find(
 const hasInsights = groupInsights.length > 0;
 
 
-const handleDragStart = useCallback(() => {
-  setIsDragging(true);
-  // onDragStateChange?.(true); // ✅ Optionnel - pas besoin de dépendance
-}, []); // 🆕 Tableau de dépendances vide
 
-const handleClick = useCallback((e: React.MouseEvent) => {
-  console.log("🔥 handleClick appelé pour groupe :", group.id);
+// ==================== handle events ====================
 
-  const isTaken = Object.entries(sharedSelections || {}).some(
-    ([userId, groupIds]) =>
-      userId !== currentUserId && (groupIds as string[]).includes(group.id)
-  );
 
-  console.log("🔍 Vérification :", group.id, "verrouillé ? :", isTaken);
+// 🎯 FONCTIONS PAR DÉFAUT POUR LES PROPS OPTIONNELLES
+  const handleDelete = useCallback((groupId: string) => {
+    onDelete?.(groupId); // 🎯 APPEL SEULEMENT SI LA FONCTION EXISTE
+  }, [onDelete]);
 
-  if (isTaken) {
-    console.log("🚫 Groupe verrouillé");
-    return;
-  }
+  const handleTitleUpdate = useCallback((groupId: string, title: string) => {
+    onTitleUpdate?.(groupId, title);
+  }, [onTitleUpdate]);
 
+  const handleRemoveInsight = useCallback((insightId: string, groupId: string) => {
+    onRemoveInsight?.(insightId, groupId);
+  }, [onRemoveInsight]);
+
+const handleInsightDragStart = useCallback((e: React.DragEvent, insightId: string) => {
+  if (isPresentationMode) return;
+  
   e.stopPropagation();
-  onSelect(group.id, e);
-}, [group.id, onSelect, sharedSelections, currentUserId]);
+  console.log('🧩 Starting to drag insight:', insightId, 'from group:', group.id);
+  
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', insightId);
+  e.dataTransfer.setData('application/group-id', group.id);
+  e.dataTransfer.setData('application/insight-drag', 'true');
+  
+  onInsightDragStart?.(insightId, group.id);
+  
+  const element = e.currentTarget as HTMLElement;
+  element.style.opacity = '0.4';
+  e.stopPropagation();
+}, [group.id, isPresentationMode, onInsightDragStart]);
+
+const handleInsightDrop = useCallback((e: React.DragEvent, targetGroupId: string) => {
+  if (isPresentationMode) return;
+  
+  e.stopPropagation();
+  e.preventDefault();
+  
+  const insightId = e.dataTransfer.getData('text/plain');
+  const sourceGroupId = e.dataTransfer.getData('application/group-id');
+  
+  console.log('🎯 Dropping insight:', {
+    insightId,
+    fromGroup: sourceGroupId,
+    toGroup: targetGroupId
+  });
+  
+  const element = e.currentTarget as HTMLElement;
+  element.style.backgroundColor = '';
+  element.style.borderColor = '';
+  
+  const isValidDrop = !sourceGroupId || sourceGroupId !== targetGroupId;
+  
+  if (isValidDrop && insightId) {
+    onInsightDrop?.(insightId, targetGroupId);
+  }
+}, [isPresentationMode, onInsightDrop]);
+
+
+
+  const handleOpenComments = useCallback((groupId: string, position: { x: number; y: number }) => {
+    onOpenComments?.(groupId, position);
+  }, [onOpenComments]);
+
+
+// ==================== handle fin ==================== 
+
 
 
 const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
@@ -181,19 +241,23 @@ const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, in
   };
 
   // 🆕 HANDLERS CONTEXT MENU
-  const handleRename = useCallback(() => {
-    setTempTitle(group.title);
-    setIsEditing(true);
-  }, [group.title]);
+const handleRename = useCallback(() => {
+  if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
+  setTempTitle(group.title);
+  setIsEditing(true);
+}, [group.title, isPresentationMode]);
 
-  const handleDuplicate = useCallback(() => {
-    // Logique de duplication (à implémenter si besoin)
-    console.log("Duplicate group:", group.id);
-  }, [group.id]);
+const handleDuplicate = useCallback(() => {
+  if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
+  // Logique de duplication (à implémenter si besoin)
+  console.log("Duplicate group:", group.id);
+  toast.info("Duplicate functionality coming soon");
+}, [group.id, isPresentationMode]);
 
-  const handleDelete = useCallback(() => {
-    onDelete?.(group.id);
-  }, [group.id, onDelete]);
+
+  // const handleDelete = useCallback(() => {
+  //   onDelete?.(group.id);
+  // }, [group.id, onDelete]);
 
     // Handler pour le drop sur le groupe entier
   const handleGroupDrop = (e: React.DragEvent) => {
@@ -207,7 +271,39 @@ const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, in
     onDrop(e);
   };
 
-//
+// ====================== Gestionnaires conditionnels ======================
+
+ /**
+   * 🎯 GESTIONNAIRE DE MOUVEMENT - DÉSACTIVÉ EN PRÉSENTATION
+   */
+  const handleMove = useCallback((groupId: string, position: { x: number; y: number }) => {
+    if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
+    onMove(groupId, position);
+  }, [onMove, isPresentationMode]);
+
+  /**
+   * 🎯 GESTIONNAIRE DE DROP - DÉSACTIVÉ EN PRÉSENTATION
+   */
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
+    onDrop(e);
+  }, [onDrop, isPresentationMode]);
+
+  /**
+   * 🎯 GESTIONNAIRE DE DRAG OVER - DÉSACTIVÉ EN PRÉSENTATION
+   */
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
+    onDragOver(e);
+  }, [onDragOver, isPresentationMode]);
+
+  /**
+   * 🎯 GESTIONNAIRE DE DRAG LEAVE - DÉSACTIVÉ EN PRÉSENTATION
+   */
+  const handleDragLeave = useCallback(() => {
+    if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
+    onDragLeave();
+  }, [onDragLeave, isPresentationMode]);
 
 
 //=========== Drag & Drop ===========
@@ -215,89 +311,90 @@ const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, in
 
 // 🆕 Handler quand on commence à drag un insight
 // 🆕 Handler amélioré pour le drag d'insight
-const handleInsightDragStart = (e: React.DragEvent, insightId: string) => {
-  e.stopPropagation();
-  console.log('🧩 Starting to drag insight:', insightId, 'from group:', group.id);
+// const handleInsightDragStart = (e: React.DragEvent, insightId: string) => {
+//   e.stopPropagation();
+//   console.log('🧩 Starting to drag insight:', insightId, 'from group:', group.id);
   
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', insightId);
-  e.dataTransfer.setData('application/group-id', group.id);
-  e.dataTransfer.setData('application/insight-drag', 'true'); // 🆕 Identifier que c'est un insight qu'on drag
+//   e.dataTransfer.effectAllowed = 'move';
+//   e.dataTransfer.setData('text/plain', insightId);
+//   e.dataTransfer.setData('application/group-id', group.id);
+//   e.dataTransfer.setData('application/insight-drag', 'true'); // 🆕 Identifier que c'est un insight qu'on drag
   
-  // Notifier le parent
-  onInsightDragStart?.(insightId, group.id);
+//   // Notifier le parent
+//   onInsightDragStart?.(insightId, group.id);
   
-  // Style visuel
-  const element = e.currentTarget as HTMLElement;
-  element.style.opacity = '0.4';
+//   // Style visuel
+//   const element = e.currentTarget as HTMLElement;
+//   element.style.opacity = '0.4';
   
-  // 🆕 IMPORTANT: Empêcher la propagation pour éviter le drag du groupe
-  e.stopPropagation();
-};
+//   // 🆕 IMPORTANT: Empêcher la propagation pour éviter le drag du groupe
+//   e.stopPropagation();
+// };
 
 // 🆕 Handler quand on drag over un insight
-const handleInsightDragOver = (e: React.DragEvent) => {
+const handleInsightDragOver = useCallback((e: React.DragEvent) => {
+  if (isPresentationMode) return;
+  
   e.stopPropagation();
   e.preventDefault();
   
-  // Only allow drop if it's an insight from another group
   const sourceGroupId = e.dataTransfer.getData('application/group-id');
   if (sourceGroupId && sourceGroupId !== group.id) {
     e.dataTransfer.dropEffect = 'move';
     
-    // Feedback visuel
     const element = e.currentTarget as HTMLElement;
     element.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
     element.style.borderColor = '#3B82F6';
   }
-};
+}, [group.id, isPresentationMode]);
 
 // 🆕 Handler quand on quitte le drag
-const handleInsightDragLeave = (e: React.DragEvent) => {
+const handleInsightDragLeave = useCallback((e: React.DragEvent) => {
+  if (isPresentationMode) return;
+  
   e.stopPropagation();
   
-  // Reset du style
   const element = e.currentTarget as HTMLElement;
   element.style.backgroundColor = '';
   element.style.borderColor = '';
-};
+}, [isPresentationMode]);
 
 // 🆕 Handler quand on drop un insight
-const handleInsightDrop = (e: React.DragEvent, targetGroupId: string) => {
-  e.stopPropagation();
-  e.preventDefault();
+// const handleInsightDrop = (e: React.DragEvent, targetGroupId: string) => {
+//   e.stopPropagation();
+//   e.preventDefault();
   
-  const insightId = e.dataTransfer.getData('text/plain');
-  const sourceGroupId = e.dataTransfer.getData('application/group-id');
+//   const insightId = e.dataTransfer.getData('text/plain');
+//   const sourceGroupId = e.dataTransfer.getData('application/group-id');
   
-  console.log('🎯 Dropping insight:', {
-    insightId,
-    fromGroup: sourceGroupId,
-    toGroup: targetGroupId
-  });
+//   console.log('🎯 Dropping insight:', {
+//     insightId,
+//     fromGroup: sourceGroupId,
+//     toGroup: targetGroupId
+//   });
   
-  // Reset du style
-  const element = e.currentTarget as HTMLElement;
-  element.style.backgroundColor = '';
-  element.style.borderColor = '';
+//   // Reset du style
+//   const element = e.currentTarget as HTMLElement;
+//   element.style.backgroundColor = '';
+//   element.style.borderColor = '';
   
-  // Only process if it's from a different group
-  if (sourceGroupId && sourceGroupId !== targetGroupId && insightId) {
-    onInsightDrop?.(insightId, targetGroupId);
-  }
-};
+//   // Only process if it's from a different group
+//   if (sourceGroupId && sourceGroupId !== targetGroupId && insightId) {
+//     onInsightDrop?.(insightId, targetGroupId);
+//   }
+// };
 
 // 🆕 Handler de fin de drag
-const handleInsightDragEnd = (e: React.DragEvent) => {
+const handleInsightDragEnd = useCallback((e: React.DragEvent) => {
+  if (isPresentationMode) return;
+  
   e.stopPropagation();
   
-  // Reset du style
   const element = e.currentTarget as HTMLElement;
   element.style.opacity = '1';
   element.style.backgroundColor = '';
   element.style.borderColor = '';
-};
-
+}, [isPresentationMode]);
 
 
 
@@ -321,13 +418,7 @@ const isSelectedByOther = Object.entries(sharedSelections || {}).some(
 // console.log("🧪 sharedSelections :", sharedSelections);
 // console.log("🧪 currentUserId :", currentUserId)
 
-// 🆕 AJOUTER CETTE FONCTION DANS LE COMPOSANT (avant le return)
-const getBorderColor = () => {
-  if (isDragOver) return "#3B82F6";
-  if (isSelected) return "#F59E0B"; 
-  if (isHighlighted) return "#10B981";
-  return group.color;
-};
+
 
 const myMentions = useQuery(api.comments.getMentionsForUser, {
   mapId : mapId as Id<"affinityMaps">,
@@ -336,75 +427,145 @@ const myMentions = useQuery(api.comments.getMentionsForUser, {
 
 const amIMentioned = myMentions?.includes(group.id);
 
+// ==================== EFFETS VISUELS POUR LA PRÉSENTATION ====================
+  
+  /**
+   * 🎯 CALCUL DU STYLE SPÉCIAL PENDANT LA PRÉSENTATION
+   * Quand isFocusedInPresentation = true, on applique des effets visuels
+   * pour mettre ce groupe en avant devant tous les autres
+   */
+  const getPresentationStyles = () => {
+    if (!isPresentationMode) return {};
+    
+    return {
+      // 🎯 EFFET DE ZOOM SUR LE GROUPE FOCUS
+      transform: `scale(${isFocusedInPresentation ? presentationScale : 1})`,
+      
+      // 🎯 ANIMATION DOUCE POUR LES TRANSITIONS
+      transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+      
+      // 🎯 SURBRILLANCE AVEC OMBRE PORTÉE
+      boxShadow: isFocusedInPresentation 
+        ? '0 25px 50px -12px rgba(59, 130, 246, 0.5), 0 0 0 4px rgba(59, 130, 246, 0.3)' 
+        : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+      
+      // 🎯 COUCHE Z-INDEX POUR QUE LE GROUPE FOCUS SOIT AU-DESSUS
+      zIndex: isFocusedInPresentation ? 1000 : 20,
+      
+      // 🎯 OPACITÉ RÉDUITE POUR LES GROUPES NON FOCUS
+      opacity: isFocusedInPresentation ? 1 : 0.4,
+    };
+  };
+
+  /**
+   * 🎯 COULEUR DE BORDURE SPÉCIALE PENDANT LA PRÉSENTATION
+   * On utilise une bordure bleue plus épaisse pour le groupe focus
+   */
+  const getBorderColor = () => {
+    // Si on est en mode présentation ET ce groupe est focus → bordure bleue
+    if (isPresentationMode && isFocusedInPresentation) return "#3B82F6";
+    
+    // Sinon, on garde le comportement normal
+    if (isDragOver) return "#3B82F6";
+    if (isSelected) return "#F59E0B"; 
+    if (isHighlighted) return "#10B981";
+    return group.color;
+  };
+
+  /**
+   * 🎯 GESTION DU DRAG - DÉSACTIVÉ EN MODE PRÉSENTATION
+   * On empêche de déplacer les groupes pendant une présentation
+   */
+  const canDrag = !isSelectedByOther && !isPresentationMode;
+
+  // ==================== GESTION DES INTERACTIONS ====================
+  
+  /**
+   * 🎯 CLICK SUR UN GROUPE - COMPORTEMENT DIFFÉRENT EN PRÉSENTATION
+   * En mode normal: sélectionne le groupe
+   * En mode présentation: navigation vers ce groupe
+   */
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    // 🚫 EN MODE PRÉSENTATION: on laisse le parent gérer la navigation
+    if (isPresentationMode) {
+      e.stopPropagation();
+      // Le parent (AffinityCanvas) gérera la navigation
+      return;
+    }
+
+    // 👇 COMPORTEMENT NORMAL (CODE EXISTANT)
+    console.log("🔥 handleClick appelé pour groupe :", group.id);
+    const isTaken = Object.entries(sharedSelections || {}).some(
+      ([userId, groupIds]) =>
+        userId !== currentUserId && (groupIds as string[]).includes(group.id)
+    );
+    console.log("🔍 Vérification :", group.id, "verrouillé ? :", isTaken);
+    if (isTaken) {
+      console.log("🚫 Groupe verrouillé");
+      return;
+    }
+    e.stopPropagation();
+    onSelect(group.id, e);
+  }, [group.id, onSelect, sharedSelections, currentUserId, isPresentationMode]);
+
+  /**
+   * 🎯 DRAG START - DÉSACTIVÉ EN PRÉSENTATION
+   */
+  const handleDragStart = useCallback(() => {
+    if (isPresentationMode) return; // 🚫 Pas de drag en présentation
+    setIsDragging(true);
+  }, [isPresentationMode]);
+
 // console.log("🎨 Surbrillance render pour groupe :", group.id);
+
+
+
+// ====================== RENDU ======================
 
   return (
     <ContextMenu>
       <ContextMenuTrigger>
      <motion.div
-        data-group-id={group.id}
-        drag={!isSelectedByOther}
-        dragMomentum={false}
-        dragElastic={0}
-        onDragStart={(e) => {
-          const data = e as unknown as React.DragEvent;
-          // 🆕 VÉRIFIER si on drag un insight ou le groupe
-          const isInsightDrag = data.dataTransfer?.types.includes('application/insight-drag');
-          if (!isInsightDrag) {
-            handleDragStart();
-          }
-        }}
-        onDragEnd={handleDragEnd}
-        onClick={(e) => {
-          // 🎯 Vérou : si un AUTRE a sélectionné ce groupe → on bloque
-          const isTaken = Object.entries(sharedSelections || {}).some(
-            ([userId, groupIds]) =>
-              userId !== currentUserId && (groupIds as string[]).includes(group.id)
-          );
-          if (isTaken) {
-            console.log("🚫 Groupe verrouillé");
-            return;
-          }
-          handleClick(e);
-        }}
-        // 🆕 AJOUTER onDrop SUR LE GROUPE ENTIER
-        // onDrop={handleGroupDrop} // ✅ UTILISER LA PROP
-         onDrop={(e: React.DragEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-            // 🆕 NE RIEN FAIRE - la zone des insights gère déjà le drop
-          }}
-        style={{ 
-          x, 
-          y,
-          rotateX: isDragging ? rotateX : 0,
-          rotateY: isDragging ? rotateY : 0,
-          borderColor: getBorderColor(),
-          borderWidth: isHighlighted ? '3px' : '2px',
-          boxShadow: isHighlighted ? '0 0 0 3px rgba(16, 185, 129, 0.3)' : 'none',
-          pointerEvents: isDragging ? 'none' : 'auto'
-        }}
-        className="absolute bg-white rounded-xl shadow-lg border-2 min-w-80 max-w-96 cursor-grab active:cursor-grabbing z-20"
-        onDragOver={(e: React.DragEvent) => {
-          if (workspaceMode === 'grouping') {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const sourceGroupId = e.dataTransfer.getData('application/group-id');
-            const isFromPanel = !sourceGroupId; // 🆕 Vérifier si ça vient du panel
-            
-            // 🆕 AUTORISER LE DROP SI:
-            // - Ça vient d'un autre groupe OU
-            // - Ça vient du panel (pas de sourceGroupId)
-            if (isFromPanel || (sourceGroupId && sourceGroupId !== group.id)) {
-              onDragOver(e);
+          data-group-id={group.id}
+          drag={canDrag}
+          dragMomentum={false}
+          dragElastic={0}
+          
+          // 🎯 UTILISER LES GESTIONNAIRES CONDITIONNELS
+          onDragStart={(e) => {
+            if (isPresentationMode) return;
+            const data = e as unknown as React.DragEvent;
+            const isInsightDrag = data.dataTransfer?.types.includes('application/insight-drag');
+            if (!isInsightDrag) {
+              handleDragStart();
             }
-          }
-        }}
-        onDragLeave={() => {
-          onDragLeave?.();
-        }}
-      >
+          }}
+          onDragEnd={isPresentationMode ? undefined : handleDragEnd}
+          onClick={handleClick}
+          
+          // 🎯 GESTIONNAIRES DE DRAG CORRIGÉS
+          onDragOver={handleDragOver} // 🎯 TOUJOURS DÉFINI MAINTENANT
+          onDragLeave={handleDragLeave} // 🎯 TOUJOURS DÉFINI MAINTENANT
+          onDrop={handleDrop} // 🎯 TOUJOURS DÉFINI MAINTENANT
+          
+          style={{ 
+            ...getPresentationStyles(),
+            x, 
+            y,
+            rotateX: isDragging ? rotateX : 0,
+            rotateY: isDragging ? rotateY : 0,
+            borderColor: getBorderColor(),
+            borderWidth: (isPresentationMode && isFocusedInPresentation) ? '4px' : '2px',
+            pointerEvents: isPresentationMode ? 'none' : 'auto'
+          }}
+          
+          className={`absolute bg-white rounded-xl shadow-lg border-2 min-w-80 max-w-96 ${
+            isPresentationMode 
+              ? 'cursor-default' 
+              : 'cursor-grab active:cursor-grabbing'
+          }`}
+        >
+
         {/* {showComments && (
           <CommentPanel
             mapId={mapId}
@@ -414,9 +575,9 @@ const amIMentioned = myMentions?.includes(group.id);
         )} */}
 
 
-{unreadCount && unreadCount > 0 ? (
-  <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white shadow-sm" />
-) : null}
+        {unreadCount && unreadCount > 0 ? (
+          <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white shadow-sm" />
+        ) : null}
 
         {/* 🎯 Surbrillance partagée (autre utilisateur) */}
         {Object.entries(sharedSelections || {}).some(
@@ -460,167 +621,157 @@ const amIMentioned = myMentions?.includes(group.id);
                />
                )}
           {/* HEADER DRAGGABLE */}
-          <div 
+         <div 
             className="flex items-center gap-2 px-3 py-2 border-b cursor-grab active:cursor-grabbing relative"
             style={{ 
               backgroundColor: `${group.color}15`,
               borderColor: group.color 
             }}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-              }}
-              // 🆕 EMPÊCHER LE DROP D'INSIGHTS SUR LE HEADER
-              onDragOver={(e: React.DragEvent) => {
+            onMouseDown={(e) => {
+              if (isPresentationMode) {
+                e.preventDefault();
+                return;
+              }
+              e.stopPropagation();
+            }}
+            // 🎯 GESTIONNAIRES DE DRAG POUR LE HEADER
+            onDragOver={handleDragOver}
+            onDrop={(e: React.DragEvent) => {
+              if (isPresentationMode) {
                 e.preventDefault();
                 e.stopPropagation();
-                // 🆕 NE PAS APPELER onDragOver - empêcher le drop ici
-              }}
-              onDrop={(e: React.DragEvent) => {
-                e.preventDefault();
-                e.stopPropagation();
-                // 🆕 NE RIEN FAIRE - empêcher le drop sur le header
-                toast.info("Drop insights in the group content area below");
-              }}
+                return;
+              }
+              e.preventDefault();
+              e.stopPropagation();
+              toast.info("Drop insights in the group content area below");
+            }}
           >
             
 
-            <GripVertical size={16} style={{ color: group.color }} className="shrink-0" />
+              
+            {/* INDICATEUR PRÉSENTATION */}
+            {isPresentationMode && isFocusedInPresentation && (
+              <div className="absolute -top-2 -left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-semibold animate-pulse">
+                🎯 Focus
+              </div>
+            )}
+
+            <GripVertical 
+              size={16} 
+              style={{ 
+                color: group.color,
+                opacity: isPresentationMode ? 0.3 : 1,
+                cursor: isPresentationMode ? 'default' : 'grab'
+               }} 
+              className="shrink-0"
+              // 🎯 GRIP VISIBLE SEULEMENT HORS PRÉSENTATION
+
+            />
 
               {/* TITRE - ÉDITION MANUELLE OU AFFICHAGE */}
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={tempTitle}
-                        onChange={(e) => setTempTitle(e.target.value)}
-                        onBlur={handleTitleSave}
-                        onKeyDown={handleKeyDown}
-                        className="flex-1 font-semibold text-sm bg-white border outline-none px-2 py-1 rounded transition-all"
-                        style={inputStyle}
-                        autoFocus
-                      />
-                    ) : (
-                      <h3 
-                        className="flex-1 font-semibold text-sm cursor-text select-text hover:bg-gray-50 px-2 py-1 rounded transition-colors"
-                        style={{ color: group.color }}
-                        onClick={handleTitleClick}
-                        title="Click to edit title"
-                      >
-                        {group.title}
-                      </h3>
-                    )}
+                   {isEditing ? (
+              <input
+                type="text"
+                value={tempTitle}
+                onChange={(e) => setTempTitle(e.target.value)}
+                onBlur={handleTitleSave}
+                onKeyDown={handleKeyDown}
+                className="flex-1 font-semibold text-sm bg-white border outline-none px-2 py-1 rounded transition-all"
+                style={inputStyle}
+                autoFocus
+                // 🎯 DÉSACTIVER L'ÉDITION EN PRÉSENTATION
+                readOnly={isPresentationMode}
+              />) : (
+                     <h3 
+                className="flex-1 font-semibold text-sm cursor-text select-text hover:bg-gray-50 px-2 py-1 rounded transition-colors"
+                style={{ color: group.color }}
+                onClick={(e) => {
+                  if (isPresentationMode) return; // 🚫 DÉSACTIVÉ
+                  handleTitleClick(e);
+                }}
+                title={isPresentationMode ? "" : "Click to edit title"}
+              >
+                {group.title}
+              </h3>
+              )}
 
-
+                          {/* BOUTONS D'ACTION */}
             <div className="flex items-center gap-2">
               <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
                 {groupInsights.length}
               </span>
 
-
-    
-              {/* 🎯 BOUTON IA SEULEMENT SI LE GROUPE A DES INSIGHTS */}
-              {hasInsights && (
+              {/* BOUTON IA */}
+              {hasInsights && !isPresentationMode && (
                 <GroupNameAssistant
                   group={group}
                   insights={insights}
                   currentTitle={group.title}
-                  onTitleUpdate={(newTitle) => onTitleUpdate?.(group.id, newTitle)}
+                  // 🎯 CORRECTION: ADAPTER LA SIGNATURE DE LA FONCTION
+                  onTitleUpdate={(newTitle: string) => {
+                    // GroupNameAssistant attend (title: string) mais nous avons (groupId: string, title: string)
+                    handleTitleUpdate(group.id, newTitle);
+                  }}
                   projectContext={projectContext}
                 />
               )}
-    
-                  {workspaceMode === 'voting' && (
-                    <button className="p-1 text-gray-400 hover:text-purple-500 transition-colors">
-                      <Vote size={14} />
-                    </button>
-                  )}
-                  
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete?.(group.id);
-                }}
-                className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                title="Delete group"
-              >
-                <Trash2 size={14} />
-              </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              const rect = (e.currentTarget as HTMLElement)
-                .closest('[data-group-id]')!
-                .getBoundingClientRect();
-              onOpenComments?.(group.id, { x: rect.right, y: rect.top });
-            }}
-            className="p-1 text-gray-400 hover:text-blue-500 transition-colors relative"
-            title="Add comment"
-          >
-            💬
-            {amIMentioned && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
-            )}
-          </button>
-            {isNew && (
-              <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></div>
-            )}
 
-            {commentCounts?.[group.id] && (
-              <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full ml-1">
-                {commentCounts[group.id]}
-              </span>
-            )}
+              {/* BOUTON VOTE */}
+              {workspaceMode === 'voting' && !isPresentationMode && (
+                <button className="p-1 text-gray-400 hover:text-purple-500 transition-colors">
+                  <Vote size={14} />
+                </button>
+              )}
+              
+              {/* BOUTON SUPPRIMER */}
+              {!isPresentationMode && ( // 🎯 CACHÉ EN PRÉSENTATION
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(group.id);
+                  }}
+                  className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                  title="Delete group"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+
+              {/* BOUTON COMMENTAIRES */}
+              {!isPresentationMode && ( // 🎯 CACHÉ EN PRÉSENTATION
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const rect = (e.currentTarget as HTMLElement)
+                      .closest('[data-group-id]')!
+                      .getBoundingClientRect();
+                    handleOpenComments(group.id, { x: rect.right, y: rect.top });
+                  }}
+                  className="p-1 text-gray-400 hover:text-blue-500 transition-colors relative"
+                  title="Add comment"
+                >
+                  💬
+                  {amIMentioned && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+                  )}
+                </button>
+              )}
             </div>
+          
           </div>
 
           {/* INSIGHTS CONTENT */}
 
-          <div 
-            className={`p-3 space-y-2 max-h-60 overflow-y-auto transition-all ${
-              isDragOver ? 'bg-blue-50 border-2 border-blue-300 border-dashed' : 'bg-white'
-            }`}
-            onDragOver={(e: React.DragEvent) => {
-              if (workspaceMode === 'grouping') {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const sourceGroupId = e.dataTransfer.getData('application/group-id');
-                const isFromPanel = !sourceGroupId;
-                
-                if (isFromPanel || (sourceGroupId && sourceGroupId !== group.id)) {
-                  onDragOver(e);
-                }
-              }
-            }}
-            onDragLeave={() => {
-              onDragLeave?.();
-            }}
-            onDrop={(e: React.DragEvent) => {
-              if (workspaceMode === 'grouping') {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const insightId = e.dataTransfer.getData('text/plain');
-                const sourceGroupId = e.dataTransfer.getData('application/group-id');
-                
-                console.log('🎯 Dropping insight in group content:', {
-                  insightId,
-                  fromGroup: sourceGroupId || 'panel',
-                  toGroup: group.id
-                });
-                
-                const isValidDrop = !sourceGroupId || sourceGroupId !== group.id;
-                
-                if (isValidDrop && insightId) {
-                  onInsightDrop?.(insightId, group.id);
-                  const message = sourceGroupId 
-                    ? `Insight moved to "${group.title}"`
-                    : `Insight added to "${group.title}"`;
-                  toast.success(message);
-                }
-                
-                onDragLeave?.();
-              }
-            }}
+          <div className={`p-3 space-y-2 max-h-60 overflow-y-auto ${
+            isPresentationMode && isFocusedInPresentation 
+              ? 'bg-blue-50 border-blue-200' 
+              : 'bg-white'
+          }`}
+            // 🎯 GESTIONNAIRES DE DRAG POUR LE CONTENU
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
           >
           {/* onWheel={(e) => {
             // 🎯 EMPÊCHER LA PROPAGATION DU SCROLL AU CANVAS
@@ -630,43 +781,58 @@ const amIMentioned = myMentions?.includes(group.id);
             // 🎯 POUR MOBILE AUSSI
             e.stopPropagation();
           }} */}
-          {groupInsights.map(insight => (
-            <div
-              key={insight.id}
-              className="p-2 bg-gray-50 rounded border border-gray-100 text-sm text-gray-700 cursor-move transition-all hover:bg-gray-100"
-              draggable={workspaceMode === 'grouping' && !isSelectedByOther}
-              onDragStart={(e) => handleInsightDragStart(e, insight.id)}
-              onDragOver={handleInsightDragOver}
-              onDragLeave={handleInsightDragLeave}
-              onDrop={(e) => handleInsightDrop(e, group.id)}
-              onDragEnd={handleInsightDragEnd}
-            >
-              <div className="flex items-start justify-between">
-                <span className={`text-xs px-1.5 py-0.5 rounded mr-2 ${
-                  insight.type === 'pain-point' ? 'bg-red-100 text-red-700' :
-                  insight.type === 'quote' ? 'bg-blue-100 text-blue-700' :
-                  insight.type === 'insight' ? 'bg-purple-100 text-purple-700' :
-                  'bg-green-100 text-green-700'
-                }`}>
-                  {insight.type.charAt(0).toUpperCase()}
-                </span>
-                <span className="flex-1 text-sm">{insight.text}</span>
-                
-                {workspaceMode === 'grouping' && onRemoveInsight && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveInsight(insight.id, group.id);
-                    }}
-                    className="ml-2 text-gray-400 hover:text-red-500 transition-colors shrink-0"
-                    title="Remove from group"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+{groupInsights.map(insight => (
+  <div
+    key={insight.id}
+    className="p-2 bg-gray-50 rounded border border-gray-100 text-sm text-gray-700 cursor-move transition-all hover:bg-gray-100"
+    draggable={workspaceMode === 'grouping' && !isSelectedByOther && !isPresentationMode} // 🎯 DÉSACTIVÉ EN PRÉSENTATION
+    onDragStart={(e) => {
+      if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
+      handleInsightDragStart(e, insight.id);
+    }}
+    onDragOver={(e) => {
+      if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
+      handleInsightDragOver(e);
+    }}
+    onDragLeave={(e) => {
+      if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
+      handleInsightDragLeave(e);
+    }}
+    onDrop={(e) => {
+      if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
+      handleInsightDrop(e, group.id); // 🎯 CORRECTION: e est un DragEvent, group.id est string
+    }}
+    onDragEnd={(e) => {
+      if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
+      handleInsightDragEnd(e);
+    }}
+  >
+    <div className="flex items-start justify-between">
+      <span className={`text-xs px-1.5 py-0.5 rounded mr-2 ${
+        insight.type === 'pain-point' ? 'bg-red-100 text-red-700' :
+        insight.type === 'quote' ? 'bg-blue-100 text-blue-700' :
+        insight.type === 'insight' ? 'bg-purple-100 text-purple-700' :
+        'bg-green-100 text-green-700'
+      }`}>
+        {insight.type.charAt(0).toUpperCase()}
+      </span>
+      <span className="flex-1 text-sm">{insight.text}</span>
+      
+      {workspaceMode === 'grouping' && onRemoveInsight && !isPresentationMode && ( // 🎯 CACHÉ EN PRÉSENTATION
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleRemoveInsight(insight.id, group.id);
+          }}
+          className="ml-2 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+          title="Remove from group"
+        >
+          <Trash2 size={12} />
+        </button>
+      )}
+    </div>
+  </div>
+))}
 
         {groupInsights.length === 0 && (
           <div className={`text-center py-4 text-sm ${
@@ -685,51 +851,70 @@ const amIMentioned = myMentions?.includes(group.id);
       </ContextMenuTrigger>
 
       {/* 🆕 CONTEXT MENU SHADCN */}
-      <ContextMenuContent className="w-64">
-        <div className="px-2 py-1.5 text-sm font-semibold text-gray-900 border-b">
-            {group.title}
-          </div>
-          
-          <ContextMenuItem 
-            onClick={handleTitleClick}
-            className="flex items-center gap-2 cursor-pointer"
-          >
-            <Edit3 size={14} />
-            Rename Group
-          </ContextMenuItem>
-          
-          {/* 🎯 OPTION IA SEULEMENT SI DES INSIGHTS */}
-          {hasInsights && (
-            <ContextMenuItem 
-              onClick={() => {
-                // Ouvrir le popover IA
-                // On peut utiliser une ref pour déclencher l'ouverture
-              }}
-              className="flex items-center gap-2 cursor-pointer"
-            >
-              <Sparkles size={14} />
-              AI Name Suggestions
-            </ContextMenuItem>
-          )}
-          
-          <ContextMenuItem 
-            onClick={handleDuplicate}
-            className="flex items-center gap-2 cursor-pointer"
-          >
-            <Copy size={14} />
-            Duplicate Group
-          </ContextMenuItem>
-          
-          <ContextMenuSeparator />
-          
-          <ContextMenuItem 
-            onClick={handleDelete}
-            className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
-          >
-            <Trash2 size={14} />
-            Delete Group
-          </ContextMenuItem>
-      </ContextMenuContent>
+{!isPresentationMode && (
+  <ContextMenuContent className="w-64">
+    <div className="px-2 py-1.5 text-sm font-semibold text-gray-900 border-b">
+      {group.title}
+    </div>
+    
+    {/* RENAME */}
+    <ContextMenuItem 
+      onClick={(e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleRename();
+      }}
+      className="flex items-center gap-2 cursor-pointer"
+    >
+      <Edit3 size={14} />
+      Rename Group
+    </ContextMenuItem>
+    
+    {/* AI SUGGESTIONS - SEULEMENT SI DES INSIGHTS */}
+    {hasInsights && (
+      <ContextMenuItem 
+        onClick={(e: React.MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          // Logique pour ouvrir le popover IA
+          // (le composant GroupNameAssistant est déjà visible dans le header)
+        }}
+        className="flex items-center gap-2 cursor-pointer"
+      >
+        <Sparkles size={14} />
+        AI Name Suggestions
+      </ContextMenuItem>
+    )}
+    
+    {/* DUPLICATE */}
+    <ContextMenuItem 
+      onClick={(e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleDuplicate();
+      }}
+      className="flex items-center gap-2 cursor-pointer"
+    >
+      <Copy size={14} />
+      Duplicate Group
+    </ContextMenuItem>
+    
+    <ContextMenuSeparator />
+    
+    {/* DELETE */}
+    <ContextMenuItem 
+      onClick={(e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleDelete(group.id);
+      }}
+      className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
+    >
+      <Trash2 size={14} />
+      Delete Group
+    </ContextMenuItem>
+  </ContextMenuContent>
+)}
     </ContextMenu>
   );
 }

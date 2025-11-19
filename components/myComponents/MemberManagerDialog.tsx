@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { UserBadge } from "./UserBadge";
+import { useUser } from "@clerk/nextjs";
 
 interface Props {
   projectId: Id<"projects">;
@@ -23,9 +25,11 @@ interface Props {
 }
 
 export function MemberManagerDialog({ projectId, open, onOpenChange }: Props) {
-  const project = useQuery(api.projects.getById, { projectId });
+  const project = useQuery(api.projects.getById, { projectId , withNames: true });
   const updateRole = useMutation(api.projects.updateMemberRole);
   const removeMem = useMutation(api.projects.removeMember);
+  const { user } = useUser();
+
 
   if (!project) return null;
 
@@ -57,9 +61,19 @@ export function MemberManagerDialog({ projectId, open, onOpenChange }: Props) {
         </DialogHeader>
 
         <div className="space-y-3">
-          {project.members.map((m) => (
+          {project.members.map((m) => {
+              const isMe = m.userId === user?.id;
+
+            return(
             <div key={m.userId} className="flex items-center justify-between">
-              <span className="text-sm">{m.userId}</span>
+            {isMe ? (
+                    <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center">Y</div>
+                    <span className="text-sm">You</span>
+                    </div>
+                ) : (
+                    <UserBadge name={m.name || m.userId} email={m.email || m.userId} />
+                )}
               <div className="flex items-center gap-2">
                 <Select
                   defaultValue={m.role}
@@ -87,7 +101,8 @@ export function MemberManagerDialog({ projectId, open, onOpenChange }: Props) {
                 )}
               </div>
             </div>
-          ))}
+          )}
+          )}
         </div>
       </DialogContent>
     </Dialog>

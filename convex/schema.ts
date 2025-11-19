@@ -12,6 +12,8 @@ export default defineSchema({
       userId: v.string(),
       role: v.union(v.literal("owner"), v.literal("editor"), v.literal("viewer")),
       joinedAt: v.number(),
+      name:v.optional(v.string()),
+      email:v.optional(v.string()),
     })),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -131,10 +133,11 @@ presence: defineTable({
 .index("by_user_map", ["userId", "mapId"]),
 
 // 🆕 Historique des modifications
+// convex/schema.ts
 activityLog: defineTable({
   mapId: v.id("affinityMaps"),
   userId: v.string(),
-  action: v.union(
+  action: v.union( // ← nouveau
     v.literal("group_moved"),
     v.literal("group_created"),
     v.literal("group_deleted"),
@@ -142,12 +145,7 @@ activityLog: defineTable({
     v.literal("insight_removed"),
     v.literal("group_renamed")
   ),
-  payload: v.object({
-    groupId: v.optional(v.string()),
-    insightId: v.optional(v.string()),
-    oldValue: v.optional(v.any()),
-    newValue: v.optional(v.any()),
-  }),
+  payload: v.optional(v.any()),
   timestamp: v.number(),
 })
 .index("by_map", ["mapId"])

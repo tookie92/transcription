@@ -26,7 +26,11 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
   const {user} = useUser();
   
   // Récupérer les données du projet
-  const project = useQuery(api.projects.getById, { projectId });
+const userEmail = user?.emailAddresses?.[0]?.emailAddress || "";
+const project = useQuery(api.projects.getByIdWithEmail, {
+  projectId,
+  userEmail,
+});
   const interviews = useQuery(api.interviews.getProjectInterviews, { projectId });
   const [openManage, setOpenManage] = useState(false);
   // const allProjects = useQuery(api.projects.getUserProjects);
@@ -39,8 +43,9 @@ useEffect(() => {
   const isInvited = project.members.some(m => m.userId === invitedEmail);
   const isMember = project.members.some(m => m.userId === userId);
 
+  console.log("🔍 check invite", { invitedEmail, isInvited, isMember }); // ← ajoute ça
+
   if (isInvited && !isMember) {
-    // au lieu de claimInvite → on redirige
     router.push(`/invite/${projectId}?email=${encodeURIComponent(invitedEmail)}`);
   }
 }, [project, userId, user, projectId, router]);

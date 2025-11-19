@@ -146,6 +146,7 @@ const handleInsightDrop = async (insightId: string, groupId: string) => {
         groupId,
         title
       });
+      
     } catch (error) {
       console.error("Failed to update group title:", error);
     }

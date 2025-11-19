@@ -3,7 +3,7 @@
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import AffinityGroup from "./AffinityGroup";
-import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo, ChevronRight, ChevronLeft, BarChart3, Sparkles, Move, Upload } from "lucide-react";
+import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo, ChevronRight, ChevronLeft, BarChart3, Sparkles, Move, Upload, Presentation, Eye } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AffinityGroup as AffinityGroupType, Insight } from "@/types";
 import { toast } from "sonner";
@@ -35,6 +35,7 @@ import { DebugSecondUser } from "./DebugSecondUser";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { CommentPanel } from "./CommentPanel";
 import { useFollowGroupRect } from "@/hooks/useFollowGroupRect";
+import { ActivityPanel } from "./ActivityPanel";
 // 🆕 AJOUTER childGroupIds À L'INTERFACE
 
 
@@ -151,6 +152,7 @@ useEffect(() => {
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [sharedSelections, setSharedSelections] = useState<Record<string, string[]>>({});
+  const [isPresentMode, setPresentMode] = useState(false);
 // dans le composant :
 const [showComments, setShowComments] = useState<{
   groupId: string;
@@ -531,6 +533,7 @@ const followRect = useFollowGroupRect(showComments?.groupId ?? null, {
     });
     
     onGroupMove(groupId, newPosition);
+    
   }, [onGroupMove]);
 
 
@@ -714,6 +717,112 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
   };
 
+//!
+// 🆕 COMPOSANT AMÉLIORÉ - À AJOUTER DANS AffinityCanvas.tsx
+
+// ==================== NOUVEAU STATE POUR LA PRÉSENTATION ====================
+const [presentationState, setPresentationState] = useState<{
+  isActive: boolean;
+  currentGroupIndex: number;
+  isOverview: boolean; // Vue d'ensemble ou focus sur un groupe
+}>({
+  isActive: false,
+  currentGroupIndex: 0,
+  isOverview: true
+});
+
+const currentGroup = presentationState.isActive && !presentationState.isOverview 
+  ? groups[presentationState.currentGroupIndex]
+  : null;
+
+// ==================== FONCTIONS DE NAVIGATION ====================
+const nextGroup = useCallback(() => {
+  if (groups.length === 0) return;
+  setPresentationState(prev => ({
+    ...prev,
+    currentGroupIndex: (prev.currentGroupIndex + 1) % groups.length,
+    isOverview: false
+  }));
+}, [groups.length]);
+
+const prevGroup = useCallback(() => {
+  if (groups.length === 0) return;
+  setPresentationState(prev => ({
+    ...prev,
+    currentGroupIndex: (prev.currentGroupIndex - 1 + groups.length) % groups.length,
+    isOverview: false
+  }));
+}, [groups.length]);
+
+const toggleOverview = useCallback(() => {
+  setPresentationState(prev => ({
+    ...prev,
+    isOverview: !prev.isOverview
+  }));
+}, []);
+
+// ==================== ENTRÉE/SORTIE DU MODE PRÉSENTATION ====================
+const enterPresentationMode = useCallback(() => {
+  setPresentationState({
+    isActive: true,
+    currentGroupIndex: 0,
+    isOverview: true
+  });
+  toast.success("Mode présentation activé - Utilisez les flèches pour naviguer");
+}, []);
+
+const exitPresentationMode = useCallback(() => {
+  setPresentationState({
+    isActive: false,
+    currentGroupIndex: 0,
+    isOverview: true
+  });
+  toast.info("Mode présentation désactivé");
+}, []);
+
+// ==================== RACCOURCI CLAVIER POUR LA PRÉSENTATION ====================
+useEffect(() => {
+  if (!presentationState.isActive) return;
+
+  const handlePresentationKeys = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      exitPresentationMode();
+      return;
+    }
+
+    if (!presentationState.isActive) return;
+
+    switch (e.key) {
+      case 'ArrowRight':
+      case ' ':
+        e.preventDefault();
+        nextGroup();
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        prevGroup();
+        break;
+      case 'o':
+      case 'O':
+        e.preventDefault();
+        toggleOverview();
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        setPresentationState(prev => ({ ...prev, isOverview: true }));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setPresentationState(prev => ({ ...prev, isOverview: false }));
+        break;
+    }
+  };
+
+  document.addEventListener('keydown', handlePresentationKeys);
+  return () => document.removeEventListener('keydown', handlePresentationKeys);
+}, [presentationState.isActive, nextGroup, prevGroup, toggleOverview, exitPresentationMode]);
+ 
+//! end const currentUserId = userId!; // déjà récupéré via useAuth
   // ==================== EFFETS ====================
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -824,6 +933,18 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
     };
   }, []);
 
+
+  useEffect(() => {
+  const handleEsc = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && isPresentMode) {
+      e.preventDefault();
+      setPresentMode(false);
+    }
+  };
+  document.addEventListener('keydown', handleEsc);
+  return () => document.removeEventListener('keydown', handleEsc);
+}, [isPresentMode]);
+
   // ==================== HOOKS PERSONNALISÉS ====================
   useCanvasShortcuts({
     onNewGroup: () => {
@@ -904,7 +1025,14 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
+
+      {isPresentMode && (
+  <div className="fixed top-4 right-4 bg-black/70 text-white px-3 py-1 rounded text-xs">
+    Present mode – press ESC to exit
+  </div>
+)}
       {/* HEADER AVEC RACCOURCIS */}
+      {!isPresentMode && (
       <header className="bg-white border-b border-gray-200 px-6 py-4 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-6">
@@ -987,7 +1115,7 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
               </button>
             </div>
 
-            {/* INDICATEUR RACCOURCIS */}
+            {/* INDICATEUR RACCOURCIS
             <div className="text-xs text-gray-500 flex items-center gap-3">
               <kbd className="px-2 py-1 bg-gray-100 rounded border text-xs">N</kbd>
               <span>New group</span>
@@ -995,7 +1123,7 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
               <span>Select all</span>
               <kbd className="px-2 py-1 bg-gray-100 rounded border text-xs">←↑↓→</kbd>
               <span>Move</span>
-            </div>
+            </div> */}
 
             {/* INDICATEUR DE DRAG ENTRE GROUPES */}
             {draggedInsightId && (
@@ -1079,7 +1207,7 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
             </Button>
             {/* EXPORT Button */}
             <div className="relative">
-
+            {!isPresentMode && (
             <Button
             onClick={() => setShowExportPanel(!showExportPanel)}
             variant="outline"
@@ -1089,6 +1217,17 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
               <Download size={16} />
               Export
             </Button>
+            )}
+          <Button
+            onClick={presentationState.isActive ? exitPresentationMode : enterPresentationMode}
+            variant={presentationState.isActive ? "default" : "outline"}
+            size="sm"
+            className="gap-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0"
+          >
+            <Presentation size={16} />
+            {presentationState.isActive ? "Quitter" : "Présenter"}
+          </Button>
+            
 
              {/* Panel d'export */}
                 {showExportPanel && (
@@ -1129,7 +1268,7 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
           </div>
         </div>
       </header>
-
+      )}
       {/* MAIN WORKSPACE */}
       <div className="flex-1 flex min-h-0">
         {/* SIDEBAR - INSIGHTS DISPONIBLES */}
@@ -1176,7 +1315,7 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
             }
           }}
         >
-{showComments && (
+{!isPresentMode && showComments && (
   <CommentPanel
     mapId={mapId}
     groupId={showComments.groupId}
@@ -1185,7 +1324,87 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
     onClose={() => setShowComments(null)}
   />
 )}
-          
+{isPresentMode && (
+  <div className="fixed inset-0 z-50 pointer-events-none">
+    {/* HEADER MINIMALISTE */}
+    <div className="absolute top-0 left-0 right-0 bg-black/80 text-white p-4 flex justify-between items-center">
+      <div className="flex items-center gap-4">
+        <div className="bg-blue-500 px-3 py-1 rounded-full text-sm font-medium">
+          Mode Présentation
+        </div>
+        <span className="text-sm opacity-80">
+          {presentationState.isOverview 
+            ? "Vue d'ensemble" 
+            : `Groupe ${presentationState.currentGroupIndex + 1}/${groups.length}`
+          }
+        </span>
+        {!presentationState.isOverview && (
+          <span className="text-sm font-medium">
+            {groups[presentationState.currentGroupIndex]?.title}
+          </span>
+        )}
+      </div>
+      
+      <div className="flex items-center gap-4">
+        {/* INDICATEUR DE NAVIGATION */}
+        <div className="flex items-center gap-2 text-sm opacity-80">
+          <kbd className="px-2 py-1 bg-white/20 rounded text-xs">←→</kbd>
+          <span>Naviguer</span>
+          <kbd className="px-2 py-1 bg-white/20 rounded text-xs">Espace</kbd>
+          <span>Suivant</span>
+          <kbd className="px-2 py-1 bg-white/20 rounded text-xs">ESC</kbd>
+          <span>Quitter</span>
+        </div>
+        
+        <Button
+          onClick={exitPresentationMode}
+          variant="outline"
+          size="sm"
+          className="bg-white/10 text-white border-white/20 hover:bg-white/20 pointer-events-auto"
+        >
+          Quitter (ESC)
+        </Button>
+      </div>
+    </div>
+
+    {/* CONTROLS DE NAVIGATION FLOATING */}
+    {!presentationState.isOverview && (
+      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex items-center gap-4 bg-black/70 rounded-full px-6 py-3 pointer-events-auto">
+        <Button
+          onClick={prevGroup}
+          variant="ghost"
+          size="sm"
+          className="text-white hover:bg-white/20"
+        >
+          <ChevronLeft size={20} />
+        </Button>
+        
+        <span className="text-white text-sm mx-4">
+          {presentationState.currentGroupIndex + 1} / {groups.length}
+        </span>
+        
+        <Button
+          onClick={nextGroup}
+          variant="ghost"
+          size="sm"
+          className="text-white hover:bg-white/20"
+        >
+          <ChevronRight size={20} />
+        </Button>
+        
+        <Button
+          onClick={toggleOverview}
+          variant="ghost"
+          size="sm"
+          className="text-white hover:bg-white/20 ml-4"
+        >
+          <Eye size={16} className="mr-2" />
+          Vue d{"'"}ensemble
+        </Button>
+      </div>
+    )}
+  </div>
+)}
            {/* 🧪 BOUTON TEST TEMPORAIRE */}
         {/* <Button
           onClick={() => {
@@ -1202,25 +1421,7 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
         >
           🧪 Test Highlight
         </Button> */}
-        <button
-        className="absolute top-4 left-4 z-50"
-          onClick={() => {
-            upsertPresence({
-              mapId: mapId as Id<"affinityMaps">,
-              userId: "test-user-123",
-              cursor: { x: 200, y: 200 },
-              selection: [],
-              user: {
-                id: "test-user-123",
-                name: "Test User",
-                avatar: undefined,
-              },
-            });
-            console.log("🧪 Test manuel envoyé");
-          }}
-        >
-          🧪 Test Presence
-        </button>
+     
           
           {/* 🎯 COUCHE 1: THÈMES (EN ARRIÈRE-PLAN) */}
           {detectedThemes.length > 0 && (
@@ -1248,7 +1449,7 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
             onContextMenu={handleContextMenu}
             onClick={handleCanvasClick}
           >
-            {otherUsers?.map(user => (
+            {!isPresentMode && otherUsers?.map(user => (
                 <motion.div
                   key={user.userId}
                   className="absolute pointer-events-none z-50"
@@ -1294,107 +1495,136 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
               {/* GROUPS */}
               <div className="p-8">
 
-                {groups.map((group) => {
-                  const currentPosition = getCurrentPosition(group.id);
-                  
-                  return (
-              <AffinityGroup
-                key={group.id}
-                group={{
-                  ...group,
-                  position: currentPosition || group.position
-                }}
-                insights={insights}
-                scale={scale}
-                isSelected={selectedGroups.has(group.id)}
-                isDragOver={dragOverGroup === group.id}
-                isHighlighted={highlightedGroups.has(group.id)}
-                onMove={handleGroupMoveOptimistic}
-                onDelete={onGroupDelete}
-                onTitleUpdate={onGroupTitleUpdate}
-                onRemoveInsight={onInsightRemoveFromGroup}
-                // 🆕 AJOUTER CES PROPS MANQUANTES :
-                onDragOver={(e: React.DragEvent) => {
-                  if (workspaceMode === 'grouping') {
-                    e.preventDefault();
-                    setDragOverGroup(group.id);
-                  }
-                }}
-                onDragLeave={() => {
-                  setDragOverGroup(null);
-                }}
-              onDrop={(e: React.DragEvent) => {
-                  if (workspaceMode === 'grouping') {
-                    e.preventDefault();
-                    const insightId = e.dataTransfer.getData('text/plain');
-                    const sourceGroupId = e.dataTransfer.getData('application/group-id');
-                    
-                    console.log('🎯 Group drop received:', {
-                      insightId,
-                      sourceGroupId: sourceGroupId || 'panel'
-                    });
-                    
-                    if (insightId) {
-                      // 🆕 SAUVEGARDER AVANT MODIFICATION
-                      saveCurrentState("before_insight_add", `Adding insight to group "${group.title}"`);
-                      
-                      onInsightDrop(insightId, group.id);
-                      
-                      const message = sourceGroupId 
-                        ? `Insight moved to "${group.title}"`
-                        : `Insight added to "${group.title}"`;
-                      toast.success(message);
-                    }
-                    setDragOverGroup(null);
-                  }
-                }}
-                onInsightDragStart={(insightId, sourceGroupId) => {
-                  console.log('🧩 Insight drag started:', { insightId, sourceGroupId });
-                  setDraggedInsightId(insightId);
-                  setDragSourceGroupId(sourceGroupId);
-                }}
-                onInsightDrop={(insightId, targetGroupId) => {
-                  console.log('🎯 Insight dropped to new group:', { insightId, targetGroupId });
-                  
-                  // Sauvegarder l'état avant modification
-                  saveCurrentState("before_insight_move", `Moving insight to different group`);
-                  
-                  // Transférer l'insight vers le nouveau groupe
-                  onInsightDrop(insightId, targetGroupId);
-                  
-                  toast.success("Insight moved to new group");
-                  
-                  setDraggedInsightId(null);
-                  setDragSourceGroupId(null);
-                }}
-                projectContext={projectInfo ? `PROJECT: ${projectInfo.name}` : undefined}
-                onSelect={(groupId, e) => {
-                  e.stopPropagation();
-                  if (e.ctrlKey || e.metaKey) {
-                    setSelectedGroups(prev => {
-                      const newSelection = new Set(prev);
-                      if (newSelection.has(groupId)) {
-                        newSelection.delete(groupId);
-                      } else {
-                        newSelection.add(groupId);
-                      }
-                      return newSelection;
-                    });
-                  } else {
-                    setSelectedGroups(new Set([groupId]));
-                  }
-                }}
-                workspaceMode={workspaceMode}
-                sharedSelections={sharedSelections}
-                currentUserId={currentUserId!}
-                onOpenComments={handleOpenComments}
-                mapId={mapId}
-                commentCounts={commentCounts}
-                // comments={comments}
-              />
-                  );
-                })}
-                
+{groups.map((group, index) => {
+  const isCurrentInPresentation = presentationState.isActive && 
+    !presentationState.isOverview && 
+    index === presentationState.currentGroupIndex;
+  
+  return (
+    <AffinityGroup
+      key={group.id}
+      group={group}
+      insights={insights}
+      scale={scale}
+      
+      // 🎯 PROPS OBLIGATOIRES - TOUJOURS FOURNIR DES FONCTIONS, MÊME EN PRÉSENTATION
+      onMove={(groupId, position) => {
+        if (presentationState.isActive) return; // 🚫 Ignorer silencieusement en présentation
+        handleGroupMoveOptimistic(groupId, position);
+      }}
+      
+      onDragOver={(e: React.DragEvent) => {
+        if (presentationState.isActive) {
+          e.preventDefault(); // 🎯 Toujours appeler preventDefault() même en présentation
+          return;
+        }
+        if (workspaceMode === 'grouping') {
+          e.preventDefault();
+          setDragOverGroup(group.id);
+        }
+      }}
+      
+      onDragLeave={() => {
+        if (presentationState.isActive) return; // 🚫 Ignorer silencieusement
+        setDragOverGroup(null);
+      }}
+      
+      onDrop={(e: React.DragEvent) => {
+        if (presentationState.isActive) {
+          e.preventDefault(); // 🎯 Toujours appeler preventDefault() même en présentation
+          return;
+        }
+        if (workspaceMode === 'grouping') {
+          e.preventDefault();
+          const insightId = e.dataTransfer.getData('text/plain');
+          const sourceGroupId = e.dataTransfer.getData('application/group-id');
+          
+          if (insightId) {
+            saveCurrentState("before_insight_add", `Adding insight to group "${group.title}"`);
+            onInsightDrop(insightId, group.id);
+            
+            const message = sourceGroupId 
+              ? `Insight moved to "${group.title}"`
+              : `Insight added to "${group.title}"`;
+            toast.success(message);
+          }
+          setDragOverGroup(null);
+        }
+      }}
+      
+      onSelect={(groupId, e) => {
+        // 🎯 EN MODE PRÉSENTATION: NAVIGATION AU CLICK
+        if (presentationState.isActive) {
+          e.stopPropagation();
+          setPresentationState(prev => ({
+            ...prev,
+            currentGroupIndex: index,
+            isOverview: false
+          }));
+          return;
+        }
+        
+        // 👇 COMPORTEMENT NORMAL HORS PRÉSENTATION
+        if (e.ctrlKey || e.metaKey) {
+          setSelectedGroups(prev => {
+            const newSelection = new Set(prev);
+            if (newSelection.has(groupId)) {
+              newSelection.delete(groupId);
+            } else {
+              newSelection.add(groupId);
+            }
+            return newSelection;
+          });
+        } else {
+          setSelectedGroups(new Set([groupId]));
+        }
+      }}
+      
+      // 🎯 PROPS CONDITIONNELLES - TOUJOURS DÉFINIES
+      isSelected={presentationState.isActive ? false : selectedGroups.has(group.id)}
+      isDragOver={presentationState.isActive ? false : dragOverGroup === group.id}
+      isHighlighted={isCurrentInPresentation || highlightedGroups.has(group.id)}
+      
+      // 🎯 NOUVELLES PROPS POUR LA PRÉSENTATION
+      isPresentationMode={presentationState.isActive}
+      isFocusedInPresentation={isCurrentInPresentation}
+      presentationScale={1.1}
+      
+      // 🎯 PROPS OPTIONNELLES - AVEC FONCTIONS VIDES SI NON FOURNIES
+      onDelete={onGroupDelete}
+      onTitleUpdate={onGroupTitleUpdate}
+      onRemoveInsight={onInsightRemoveFromGroup}
+      onInsightDragStart={(insightId, sourceGroupId) => {
+        if (!presentationState.isActive) {
+          console.log('🧩 Insight drag started:', { insightId, sourceGroupId });
+          setDraggedInsightId(insightId);
+          setDragSourceGroupId(sourceGroupId);
+        }
+      }}
+      onInsightDrop={(insightId, targetGroupId) => {
+        if (!presentationState.isActive) {
+          console.log('🎯 Insight dropped to new group:', { insightId, targetGroupId });
+          saveCurrentState("before_insight_move", `Moving insight to different group`);
+          onInsightDrop(insightId, targetGroupId);
+          toast.success("Insight moved to new group");
+          setDraggedInsightId(null);
+          setDragSourceGroupId(null);
+        }
+      }}
+      onOpenComments={handleOpenComments}
+      
+      // 🎯 PROPS EXISTANTES
+      workspaceMode={workspaceMode}
+      projectContext={projectInfo ? `PROJECT: ${projectInfo.name}` : undefined}
+      sharedSelections={sharedSelections}
+      currentUserId={currentUserId!}
+      mapId={mapId}
+      commentCounts={commentCounts}
+      // comments={comments}
+    />
+  );
+})}
+
                 {/* EMPTY STATE */}
                 {groups.length === 0 && (
                   <div className="text-center py-20">
@@ -1478,7 +1708,7 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
      
 
           <AnimatePresence>
-            {showThemeDiscovery && (
+            {!isPresentMode && showThemeDiscovery && (
               <motion.div
                 initial={{ x: 600, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
@@ -1495,7 +1725,7 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
             />
               </motion.div>
             )}
-          {activePanel === 'analytics' && (
+          {!isPresentMode && activePanel === 'analytics' && (
             <motion.div
               initial={{ x: 600, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
@@ -1511,7 +1741,7 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
             </motion.div>
           )}
           
-          {activePanel === 'voting' && (
+          { !isPresentMode && activePanel === 'voting' && (
             <motion.div
               initial={{ x: 600, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
@@ -1526,6 +1756,10 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
               />
             </motion.div>
           )}
+
+          {/* {!isPresentMode && (
+          <ActivityFeed mapId={mapId as Id<"affinityMaps">} />
+        )} */}
         </AnimatePresence>
       </div>
 

@@ -130,15 +130,9 @@ export const addGroup = mutation({
 });
 
 // convex/affinityMaps.ts - VÉRIFIER moveGroup
+// convex/affinityMaps.ts
 export const moveGroup = mutation({
-  args: {
-    mapId: v.id("affinityMaps"),
-    groupId: v.string(),
-    position: v.object({
-      x: v.number(),
-      y: v.number(),
-    }),
-  },
+  args: { mapId: v.id("affinityMaps"), groupId: v.string(), position: v.object({ x: v.number(), y: v.number() }) },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
@@ -146,27 +140,28 @@ export const moveGroup = mutation({
     const map = await ctx.db.get(args.mapId);
     if (!map) throw new Error("Affinity map not found");
 
-    console.log("🔄 Moving group:", args.groupId, "to", args.position);
+    // 🔒 on récupère la position actuelle
+    const group = map.groups.find((g) => g.id === args.groupId);
+    if (!group) throw new Error("Group not found");
 
-    // 🆕 VÉRIFICATION QUE LE GROUPE EXISTE
-    const groupExists = map.groups.some(g => g.id === args.groupId);
-    if (!groupExists) {
-      console.error("❌ Group not found:", args.groupId);
-      throw new Error("Group not found");
-    }
+    const oldPos = group.position; // ← oldPos
 
-    const updatedGroups = map.groups.map(group =>
-      group.id === args.groupId
-        ? { ...group, position: args.position }
-        : group
+    // on met à jour
+    const updatedGroups = map.groups.map((g) =>
+      g.id === args.groupId ? { ...g, position: args.position } : g
     );
 
-    await ctx.db.patch(args.mapId, {
-      groups: updatedGroups,
-      updatedAt: Date.now(),
+    await ctx.db.patch(args.mapId, { groups: updatedGroups, updatedAt: Date.now() });
+
+    // 🔒 on log l’action
+    await ctx.db.insert("activityLog", {
+      mapId: args.mapId,
+      userId: identity.subject,
+      action: "group_moved",
+      payload: { groupId: args.groupId, oldValue: oldPos, newValue: args.position },
+      timestamp: Date.now(),
     });
 
-    console.log("✅ Group moved successfully");
     return { success: true };
   },
 });

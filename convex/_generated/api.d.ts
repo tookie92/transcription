@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as activityLog from "../activityLog.js";
 import type * as affinityMaps from "../affinityMaps.js";
 import type * as analytics from "../analytics.js";
 import type * as comments from "../comments.js";
@@ -34,6 +35,7 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  activityLog: typeof activityLog;
   affinityMaps: typeof affinityMaps;
   analytics: typeof analytics;
   comments: typeof comments;
