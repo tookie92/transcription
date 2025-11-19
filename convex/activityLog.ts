@@ -1,7 +1,22 @@
-// convex/activityLog.ts - NOUVEAU FICHIER
+// convex/activityLog.ts - VERSION AVEC TYPES STRICTS
 
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { ActivityAction, ActivityDetails, ConvexActivityLog } from "@/types";
+
+// 🎯 SCHÉMA VALIDATION POUR LES DÉTAILS
+const activityDetailsSchema = v.optional(v.object({
+  from: v.optional(v.union(
+    v.object({ x: v.number(), y: v.number() }),
+    v.string()
+  )),
+  to: v.optional(v.union(
+    v.object({ x: v.number(), y: v.number() }),
+    v.string()
+  )),
+  insightId: v.optional(v.string()),
+  mentionedUserId: v.optional(v.string()),
+}));
 
 export const logActivity = mutation({
   args: {
@@ -11,7 +26,7 @@ export const logActivity = mutation({
       v.literal("group_moved"),
       v.literal("group_renamed"),
       v.literal("group_deleted"),
-      v.literal("insight_added"), 
+      v.literal("insight_added"),
       v.literal("insight_removed"),
       v.literal("insight_moved"),
       v.literal("comment_added"),
@@ -19,7 +34,7 @@ export const logActivity = mutation({
     ),
     targetId: v.string(),
     targetName: v.optional(v.string()),
-    details: v.optional(v.any()),
+    details: activityDetailsSchema,
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -39,8 +54,11 @@ export const logActivity = mutation({
 });
 
 export const getActivityForMap = query({
-  args: { mapId: v.id("affinityMaps"), limit: v.optional(v.number()) },
-  handler: async (ctx, args) => {
+  args: { 
+    mapId: v.id("affinityMaps"), 
+    limit: v.optional(v.number()) 
+  },
+  handler: async (ctx, args): Promise<ConvexActivityLog[]> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
 
@@ -50,6 +68,6 @@ export const getActivityForMap = query({
       .order("desc")
       .take(args.limit || 50);
 
-    return activities;
+    return activities as ConvexActivityLog[];
   },
 });

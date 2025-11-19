@@ -3,7 +3,7 @@
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import AffinityGroup from "./AffinityGroup";
-import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo, ChevronRight, ChevronLeft, BarChart3, Sparkles, Move, Upload, Presentation, Eye } from "lucide-react";
+import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo, ChevronRight, ChevronLeft, BarChart3, Sparkles, Move, Upload, Presentation, Eye, ActivityIcon } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AffinityGroup as AffinityGroupType, Insight } from "@/types";
 import { toast } from "sonner";
@@ -35,7 +35,9 @@ import { DebugSecondUser } from "./DebugSecondUser";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { CommentPanel } from "./CommentPanel";
 import { useFollowGroupRect } from "@/hooks/useFollowGroupRect";
+import { useActivity } from "@/hooks/useActivity";
 import { ActivityPanel } from "./ActivityPanel";
+
 // 🆕 AJOUTER childGroupIds À L'INTERFACE
 
 
@@ -97,6 +99,11 @@ export default function AffinityCanvas({
 
   const upsertPresence = useMutation(api.presence.upsert);  
 
+  const activities = useQuery(api.activityLog.getActivityForMap, { 
+  mapId: mapId as Id<"affinityMaps">, 
+  limit: 10 // Seulement pour le compteur
+});
+
   // Dans le composant :
 // const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
 const updatePresence = usePresence(mapId);
@@ -157,6 +164,7 @@ useEffect(() => {
 const [showComments, setShowComments] = useState<{
   groupId: string;
   screenRect: DOMRect;
+  groupTitle: string;
 } | null>(null);
 
   const commentCounts = useQuery(api.comments.getCommentCountsByMap, {
@@ -200,15 +208,26 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
     toast.success("Map imported successfully!");
   };
 
+// 🆕 AJOUTER CE STATE
+const [showActivityPanel, setShowActivityPanel] = useState(false);
 
+// 🆕 INITIALISER LE HOOK
+const activity = useActivity();
 
   // ==================== useCallback ====================
 
 // AffinityCanvas.tsx
-const handleOpenComments = (groupId: string, position: { x: number; y: number }) => {
-  const rect = new DOMRect(position.x, position.y, 0, 0); // largeur/hauteur inutiles ici
-  setShowComments({ groupId, screenRect: rect });
-};
+const handleOpenComments = useCallback((groupId: string, position: { x: number; y: number }) => {
+  const group = groups.find(g => g.id === groupId);
+  if (!group) return;
+  
+  const rect = new DOMRect(position.x, position.y, 0, 0);
+  setShowComments({ 
+    groupId, 
+    screenRect: rect,
+    groupTitle: group.title // 🆕 AJOUTER LE TITRE
+  });
+}, [groups]);
 
 
 const presenceUsers = useMemo(
@@ -525,16 +544,32 @@ const followRect = useFollowGroupRect(showComments?.groupId ?? null, {
     });
   }, [selectedGroups, groups, onGroupMove]);
 
-  const handleGroupMoveOptimistic = useCallback((groupId: string, newPosition: { x: number; y: number }) => {
-    setOptimisticPositions(prev => {
-      const newMap = new Map(prev);
-      newMap.set(groupId, newPosition);
-      return newMap;
-    });
-    
-    onGroupMove(groupId, newPosition);
-    
-  }, [onGroupMove]);
+const handleGroupMoveOptimistic = useCallback((groupId: string, newPosition: { x: number; y: number }) => {
+  const group = groups.find(g => g.id === groupId);
+  const oldPosition = group?.position;
+  
+  // Mise à jour optimiste (existant)
+  setOptimisticPositions(prev => {
+    const newMap = new Map(prev);
+    newMap.set(groupId, newPosition);
+    return newMap;
+  });
+  
+  // Appel parent (existant)
+  onGroupMove(groupId, newPosition);
+  
+  // 🆕 LOG ACTIVITÉ (NOUVEAU - mais optionnel, car déjà fait dans AffinityMapWorkspace)
+  // On peut le laisser pour du double logging ou le supprimer
+  if (group && oldPosition) {
+    activity.logGroupMoved(
+      mapId as Id<"affinityMaps">,
+      groupId,
+      group.title,
+      oldPosition,
+      newPosition
+    );
+  }
+}, [groups, onGroupMove, mapId, activity]);
 
 
   const handleUndo = useCallback(() => {
@@ -1081,6 +1116,23 @@ useEffect(() => {
                 <BarChart3 size={16} />
                 Analytics
               </Button>
+
+              {!isPresentMode && (
+                <Button
+                  onClick={() => setShowActivityPanel(!showActivityPanel)}
+                  variant={showActivityPanel ? "default" : "outline"}
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <ActivityIcon size={16} />
+                  Activity
+                  {activities && activities.length > 0 && (
+                    <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-800">
+                      {activities.length}
+                    </Badge>
+                  )}
+                </Button>
+              )}
             </div>
 
 
@@ -1319,11 +1371,15 @@ useEffect(() => {
   <CommentPanel
     mapId={mapId}
     groupId={showComments.groupId}
+    groupTitle={showComments.groupTitle} // 🆕 AJOUTER
+    projectId={projectId}
     presenceUsers={presenceUsers}
-    screenRect={followRect ?? showComments.screenRect} // fallback 1er render
+    screenRect={followRect ?? showComments.screenRect}
     onClose={() => setShowComments(null)}
   />
 )}
+
+
 {isPresentMode && (
   <div className="fixed inset-0 z-50 pointer-events-none">
     {/* HEADER MINIMALISTE */}
@@ -1756,6 +1812,23 @@ useEffect(() => {
               />
             </motion.div>
           )}
+
+        <AnimatePresence>
+          {showActivityPanel && (
+            <motion.div
+              initial={{ x: 600, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 600, opacity: 0 }}
+              className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
+            >
+              <ActivityPanel
+                mapId={mapId as Id<"affinityMaps">}
+                isOpen={showActivityPanel}
+                onClose={() => setShowActivityPanel(false)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
           {/* {!isPresentMode && (
           <ActivityFeed mapId={mapId as Id<"affinityMaps">} />

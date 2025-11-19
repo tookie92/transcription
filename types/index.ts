@@ -1,5 +1,7 @@
 // types/index.ts
 
+import { Id } from "@/convex/_generated/dataModel";
+
 // Transcription types
 export interface TranscriptionSegment {
   id: number;
@@ -311,4 +313,124 @@ export interface Comment {
   updatedAt: number;
   viewedAt?: number; // ✅ ajoute ce champ
 
+}
+
+
+
+// types/index.ts - AJOUTER CES TYPES
+
+// 🎯 TYPES POUR L'HISTORIQUE D'ACTIVITÉ
+export type ActivityAction = 
+  | "group_created"
+  | "group_moved" 
+  | "group_renamed"
+  | "group_deleted"
+  | "insight_added"
+  | "insight_removed"
+  | "insight_moved"
+  | "comment_added"
+  | "user_mentioned";
+
+export interface ActivityDetails {
+  // 🎯 DÉTAILS SPÉCIFIQUES POUR CHAQUE ACTION
+  from?: { x: number; y: number } | string; // Position ou titre précédent
+  to?: { x: number; y: number } | string;   // Position ou nouveau titre
+  insightId?: string;
+  mentionedUserId?: string;
+}
+
+export interface ActivityLog {
+  _id: Id<"activityLog">;
+  _creationTime: number;
+  mapId: Id<"affinityMaps">;
+  userId: string;
+  userName: string;
+  action: ActivityAction;
+  targetId: string;
+  targetName?: string;
+  details?: ActivityDetails;
+  timestamp: number;
+}
+
+export interface ConvexActivityLog {
+  _id: Id<"activityLog">;
+  _creationTime: number;
+  mapId: Id<"affinityMaps">;
+  userId: string;
+  userName: string;
+  action: ActivityAction;
+  targetId: string;
+  targetName?: string;
+  details?: ActivityDetails;
+  timestamp: number;
+}
+
+// types/index.ts - AJOUTER CES TYPES
+
+// 🎯 TYPES POUR LE SYSTÈME DE NOTIFICATIONS
+
+export type NotificationType = 
+  | "group_created"
+  | "group_moved"
+  | "group_renamed" 
+  | "group_deleted"
+  | "insight_added"
+  | "insight_moved"
+  | "insight_removed"
+  | "comment_added"
+  | "user_mentioned"
+  | "invite_accepted";
+
+export interface Notification {
+  _id: Id<"notifications">;
+  _creationTime: number;
+  userId: string; // User qui reçoit la notification
+  type: NotificationType;
+  title: string;
+  message: string;
+  relatedId?: string; // ID du groupe/commentaire/insight concerné
+  relatedType?: "group" | "comment" | "insight" | "project";
+  read: boolean;
+  createdAt: number;
+  actionUrl?: string; // URL pour naviguer vers l'élément
+}
+
+export interface ConvexNotification {
+  _id: Id<"notifications">;
+  _creationTime: number;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  relatedId?: string;
+  relatedType?: "group" | "comment" | "insight" | "project";
+  read: boolean;
+  createdAt: number;
+  actionUrl?: string;
+}
+
+// 🎯 TYPES POUR LES PROPS DES COMPOSANTS
+export interface NotificationBellProps {
+  className?: string;
+}
+
+export interface NotificationCenterProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export interface NotificationToastProps {
+  notification: Notification;
+  onClose: () => void;
+  onClick?: () => void;
+}
+
+// 🎯 TYPE POUR LE HOOK useNotifications
+export interface UseNotificationsReturn {
+  notifications: Notification[];
+  unreadCount: number;
+  markAsRead: (notificationId: Id<"notifications">) => void;
+  markAllAsRead: () => void;
+  isLoading: boolean;
+  refresh: () => void;
 }

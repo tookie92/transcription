@@ -1,19 +1,24 @@
+// components/AffinityMapWorkspace.tsx - INTÉGRATION COMPLÈTE
+
 "use client";
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
-
 import { Id } from "@/convex/_generated/dataModel";
-import { AffinityGroup, Insight } from "@/types"; // ← Utiliser les types importés
+import { AffinityGroup, Insight } from "@/types";
 import { toast } from "sonner";
 import AffinityCanvas from "./AffinityCanvas";
 import { useAuth, useUser } from "@clerk/nextjs";
 
+// 🆕 IMPORTS POUR L'HISTORIQUE
+import { useActivity } from "@/hooks/useActivity";
+import { ActivityPanel } from "./ActivityPanel";
+import { NotificationBell } from "./NotificationBell";
+
 interface AffinityMapWorkspaceProps {
   projectId: Id<"projects">;
-  
 }
 
 export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
@@ -35,13 +40,23 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const replaceAllGroups = useMutation(api.affinityMaps.replaceAllGroups);
   const createManualInsight = useMutation(api.affinityMaps.createManualInsight);
   const claimInvite = useMutation(api.projects.claimInvite);
+  
   const { userId } = useAuth();
-  const {user} = useUser();
+  const { user } = useUser();
+
+  // 🆕 ÉTATS POUR L'HISTORIQUE
+  const [showActivityPanel, setShowActivityPanel] = useState(false);
+  const [optimisticPositions, setOptimisticPositions] = useState<Map<string, {x: number, y: number}>>(new Map());
+
+  // 🆕 INITIALISER LE HOOK D'ACTIVITÉ
+  const activity = useActivity();
 
   // État local
   const [isSilentMode, setIsSilentMode] = useState(true);
-    const [optimisticPositions, setOptimisticPositions] = useState<Map<string, {x: number, y: number}>>(new Map());
 
+  const broadcastGroupCreated = useMutation(api.notificationService.broadcastGroupCreated);
+const broadcastCommentAdded = useMutation(api.notificationService.broadcastCommentAdded);
+const broadcastInsightMoved = useMutation(api.notificationService.broadcastInsightMoved);
 
 
   // Créer une map automatiquement si elle n'existe pas
@@ -55,66 +70,112 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     }
   }, [project, affinityMap, projectId, createAffinityMap]);
 
+  // 🆕 HANDLERS AVEC LOGGING D'ACTIVITÉ
 
-  useEffect(() => {
-  console.log("🧪 AffinityMapWorkspace monté avec projectId :", projectId);
-  console.log("🧪 User connecté :", userId);
-  console.log("🧪 Email du user :", user?.emailAddresses?.[0]?.emailAddress);
-}, [projectId, userId, user]);
+const handleGroupCreate = async (position: { x: number; y: number }) => {
+  if (!affinityMap || !user) return;
+  
+  try {
+    const groupId = await addGroup({
+      mapId: affinityMap._id,
+      title: "New Theme",
+      color: "#F59E0B",
+      position
+    });
+    
+    // 🆕 LOG ACTIVITÉ
+    activity.logGroupCreated(affinityMap._id, groupId, "New Theme");
+    
+    // 🆕 BROADCAST NOTIFICATION
+    await broadcastGroupCreated({
+      mapId: affinityMap._id,
+      groupId,
+      groupTitle: "New Theme",
+      createdByUserId: userId!,
+      createdByUserName: user.fullName || user.firstName || "Un utilisateur",
+    });
+    
+  } catch (error) {
+    console.error("Failed to create group:", error);
+  }
+};
 
-  // Handlers
-  const handleGroupCreate = async (position: { x: number; y: number }) => {
+  const handleGroupMove = async (groupId: string, position: { x: number; y: number }) => {
     if (!affinityMap) return;
     
+    // 🆕 TROUVER LE GROUPE ET SA POSITION ACTUELLE POUR LE LOG
+    const group = affinityMap.groups.find(g => g.id === groupId);
+    const oldPosition = group?.position;
+    
     try {
-      await addGroup({
+      await moveGroup({
         mapId: affinityMap._id,
-        title: "New Theme",
-        color: "#F59E0B",
+        groupId,
         position
       });
+      
+      // 🆕 LOG ACTIVITÉ
+      if (group && oldPosition) {
+        activity.logGroupMoved(
+          affinityMap._id,
+          groupId,
+          group.title,
+          oldPosition,
+          position
+        );
+      }
+      
     } catch (error) {
-      console.error("Failed to create group:", error);
+      console.error("Failed to move group:", error);
+      toast.error("Failed to move group");
     }
   };
 
-// 🆕 MISE À JOUR DE LA MUTATION moveGroup POUR SYNC RAPIDE
-
-const handleGroupMove = async (groupId: string, position: { x: number; y: number }) => {
-  if (!affinityMap) return;
+const handleInsightDrop = async (insightId: string, targetGroupId: string) => {
+  if (!affinityMap || !user) return;
+  
+  const targetGroup = affinityMap.groups.find(g => g.id === targetGroupId);
+  const sourceGroup = affinityMap.groups.find(g => g.insightIds.includes(insightId));
   
   try {
-    await moveGroup({
-      mapId: affinityMap._id,
-      groupId,
-      position
-    });
-  } catch (error) {
-    console.error("Failed to move group:", error);
-    toast.error("Failed to move group");
-  }
-};
-  // Les groupes viennent directement de la query Convex
-  const groups: AffinityGroup[] = affinityMap?.groups.map(group => ({
-    id: group.id,
-    title: group.title,
-    color: group.color,
-    position: group.position,
-    insightIds: group.insightIds as string[]
-  })) || [];
-
-  
-// Dans AffinityMapWorkspace.tsx - CORRIGER handleInsightDrop
-const handleInsightDrop = async (insightId: string, groupId: string) => {
-  if (!affinityMap) return;
-  
-  try {
-    // 🎯 CONVERTIR L'ID EN Id<"insights">
     await addInsightToGroup({
       mapId: affinityMap._id,
-      groupId,
-      insightId: insightId as Id<"insights"> // 🎯 CONVERSION EXPLICITE
+      groupId: targetGroupId,
+      insightId: insightId as Id<"insights">
     });
+    
+    // 🆕 LOG ACTIVITÉ
+    if (targetGroup) {
+      if (sourceGroup && sourceGroup.id !== targetGroupId) {
+        activity.logInsightMoved(
+          affinityMap._id,
+          sourceGroup.id,
+          targetGroupId,
+          sourceGroup.title,
+          targetGroup.title,
+          insightId
+        );
+        
+        // 🆕 BROADCAST NOTIFICATION POUR MOUVEMENT
+        await broadcastInsightMoved({
+          mapId: affinityMap._id,
+          fromGroupId: sourceGroup.id,
+          toGroupId: targetGroupId,
+          fromGroupTitle: sourceGroup.title,
+          toGroupTitle: targetGroup.title,
+          movedByUserId: userId!,
+          movedByUserName: user.fullName || user.firstName || "Un utilisateur",
+        });
+      } else {
+        activity.logInsightAdded(
+          affinityMap._id,
+          targetGroupId,
+          targetGroup.title,
+          insightId
+        );
+      }
+    }
+    
   } catch (error) {
     console.error("Failed to add insight to group:", error);
     toast.error("Failed to add insight to group");
@@ -130,7 +191,10 @@ const handleInsightDrop = async (insightId: string, groupId: string) => {
         text,
         type
       });
+      
+      // 🆕 NOTE: L'activité sera loggée quand l'insight sera ajouté à un groupe
       toast.success("Manual insight created!");
+      
     } catch (error) {
       console.error("Failed to create manual insight:", error);
       toast.error("Failed to create insight");
@@ -140,12 +204,26 @@ const handleInsightDrop = async (insightId: string, groupId: string) => {
   const handleGroupTitleUpdate = async (groupId: string, title: string) => {
     if (!affinityMap) return;
     
+    // 🆕 TROUVER L'ANCIEN TITRE POUR LE LOG
+    const group = affinityMap.groups.find(g => g.id === groupId);
+    const oldTitle = group?.title;
+    
     try {
       await updateGroupTitle({
         mapId: affinityMap._id,
         groupId,
         title
       });
+      
+      // 🆕 LOG ACTIVITÉ
+      if (oldTitle && oldTitle !== title) {
+        activity.logGroupRenamed(
+          affinityMap._id,
+          groupId,
+          oldTitle,
+          title
+        );
+      }
       
     } catch (error) {
       console.error("Failed to update group title:", error);
@@ -155,11 +233,24 @@ const handleInsightDrop = async (insightId: string, groupId: string) => {
   const handleGroupDelete = async (groupId: string) => {
     if (!affinityMap) return;
     
+    // 🆕 TROUVER LE GROUPE POUR LE LOG
+    const group = affinityMap.groups.find(g => g.id === groupId);
+    
     try {
+      // 🆕 LOG ACTIVITÉ AVANT SUPPRESSION
+      if (group) {
+        activity.logGroupDeleted(
+          affinityMap._id,
+          groupId,
+          group.title
+        );
+      }
+      
       await removeGroup({
         mapId: affinityMap._id,
         groupId
       });
+      
     } catch (error) {
       console.error("Failed to delete group:", error);
     }
@@ -168,39 +259,66 @@ const handleInsightDrop = async (insightId: string, groupId: string) => {
   const handleInsightRemoveFromGroup = async (insightId: string, groupId: string) => {
     if (!affinityMap) return;
     
+    // 🆕 TROUVER LE GROUPE POUR LE LOG
+    const group = affinityMap.groups.find(g => g.id === groupId);
+    
     try {
       await removeInsightFromGroup({
         mapId: affinityMap._id,
         groupId,
         insightId: insightId as Id<"insights">
       });
+      
+      // 🆕 LOG ACTIVITÉ
+      if (group) {
+        activity.logInsightRemoved(
+          affinityMap._id,
+          groupId,
+          group.title,
+          insightId
+        );
+      }
+      
     } catch (error) {
       console.error("Failed to remove insight from group:", error);
     }
   };
 
-  // 🛠️ CORRECTION : Utiliser le type importé pour onGroupsReplace
   const handleGroupsReplace = async (newGroups: AffinityGroup[]) => {
     if (!affinityMap) return;
     
     try {
-      // Convertir les groupes pour correspondre au schema Convex
       const convexGroups = newGroups.map(group => ({
         ...group,
-        insightIds: group.insightIds as string[] // ← S'assurer que c'est string[]
+        insightIds: group.insightIds as string[]
       }));
 
       await replaceAllGroups({
         mapId: affinityMap._id,
         groups: convexGroups
       });
+      
+      // 🆕 NOTE: Pas de log spécifique pour undo/redo car chaque action est déjà loggée
+      
     } catch (error) {
       console.error("Failed to replace groups:", error);
       toast.error("Failed to undo/redo");
     }
   };
 
+  // 🆕 AJOUTER LA QUERY POUR LES ACTIVITÉS (pour le compteur)
+  const activities = useQuery(api.activityLog.getActivityForMap, { 
+    mapId: affinityMap?._id as Id<"affinityMaps">, 
+    limit: 10 
+  });
 
+  const groups: AffinityGroup[] = affinityMap?.groups.map(group => ({
+    id: group.id,
+    title: group.title,
+    color: group.color,
+    position: group.position,
+    insightIds: group.insightIds as string[]
+  })) || [];
 
   const insights: Insight[] = insightsData?.map(insight => ({
     id: insight._id,
@@ -228,7 +346,6 @@ const handleInsightDrop = async (insightId: string, groupId: string) => {
             Back to Home
           </button>
         </div>
-
       </div>
     );
   }
@@ -255,6 +372,26 @@ const handleInsightDrop = async (insightId: string, groupId: string) => {
 
         {/* Toolbar */}
         <div className="flex items-center gap-3">
+           {/* 🆕 BELL NOTIFICATIONS */}
+          <NotificationBell />
+          {/* 🆕 BOUTON ACTIVITÉ */}
+          <button
+            onClick={() => setShowActivityPanel(!showActivityPanel)}
+            className={`px-3 py-2 rounded-lg border flex items-center gap-2 ${
+              showActivityPanel 
+                ? 'bg-blue-100 border-blue-400 text-blue-800' 
+                : 'bg-gray-100 border-gray-300'
+            }`}
+          >
+            <span>📋</span>
+            Activity
+            {activities && activities.length > 0 && (
+              <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
+                {activities.length}
+              </span>
+            )}
+          </button>
+
           {/* Silent Mode Toggle */}
           <button
             onClick={() => setIsSilentMode(!isSilentMode)}
@@ -280,10 +417,10 @@ const handleInsightDrop = async (insightId: string, groupId: string) => {
           groups={groups}
           insights={insights}
           projectId={projectId}
-           projectInfo={project ? { // 🎯 PASSER LES INFOS DU PROJET
-              name: project.name,
-              description: project.description
-            } : undefined}
+          projectInfo={project ? {
+            name: project.name,
+            description: project.description
+          } : undefined}
           mapId={affinityMap?._id || ""}
           onGroupMove={handleGroupMove}
           onGroupCreate={handleGroupCreate}
@@ -292,8 +429,17 @@ const handleInsightDrop = async (insightId: string, groupId: string) => {
           onGroupDelete={handleGroupDelete}
           onGroupTitleUpdate={handleGroupTitleUpdate}
           onManualInsightCreate={handleManualInsightCreate}
-          onGroupsReplace={handleGroupsReplace} // ← Maintenant compatible
+          onGroupsReplace={handleGroupsReplace}
         />
+        
+        {/* 🆕 PANEL ACTIVITÉ */}
+        {showActivityPanel && affinityMap && (
+          <ActivityPanel
+            mapId={affinityMap._id}
+            isOpen={showActivityPanel}
+            onClose={() => setShowActivityPanel(false)}
+          />
+        )}
       </div>
 
       {/* Status Bar */}

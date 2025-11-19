@@ -3,7 +3,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuth, useUser } from "@clerk/nextjs";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Send } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
@@ -17,9 +17,11 @@ interface CommentPanelProps {
   onClose: () => void;
   screenRect: DOMRect;
   presenceUsers: MentionUser[];
+  groupTitle: string;
+  projectId: string;
 }
 
-export function CommentPanel({ mapId, groupId, onClose, screenRect, presenceUsers }: CommentPanelProps) {
+export function CommentPanel({ mapId, groupId, onClose, screenRect, presenceUsers, groupTitle, projectId }: CommentPanelProps) {
   const { userId } = useAuth();
   const { user } = useUser();
   const [text, setText] = useState("");
@@ -28,6 +30,8 @@ export function CommentPanel({ mapId, groupId, onClose, screenRect, presenceUser
     groupId,
     mapId: mapId as Id<"affinityMaps">,
   });
+
+  const createMentionNotification = useMutation(api.notifications.createMentionNotification);
 
   const userName =
     user?.fullName || user?.firstName || user?.emailAddresses?.[0]?.emailAddress || "You";
@@ -51,18 +55,88 @@ const handleInput = (val: string) => {
     reset();
   };
 
-  /* -------- submit -------- */
-  const handleSubmit = async () => {
-    if (!text.trim()) return;
-    await addComment({
-      mapId: mapId as Id<"affinityMaps">,
-      groupId,
-      text: text.trim(),
-      userName,
+
+   // 🆕 FONCTION POUR DÉTECTER ET TRAITER LES MENTIONS
+const handleMentions = useCallback(async (commentText: string, userName: string) => {
+  if (!presenceUsers.length) return;
+
+  console.log("🔍 Checking mentions in:", commentText);
+  console.log("👥 Available users:", presenceUsers);
+
+  const mentionRegex = /@([\p{L}\p{N}_]+)/gu;
+  const mentions = Array.from(commentText.matchAll(mentionRegex));
+  
+  if (mentions.length === 0) return;
+
+  for (const mention of mentions) {
+    const mentionedName = mention[1].toLowerCase();
+    console.log(`🔍 Looking for user: ${mentionedName}`);
+    
+    // 🆕 MEILLEURE DÉTECTION - PLUS TOLÉRANTE
+    const mentionedUser = presenceUsers.find(user => {
+      const userNameLower = user.name.toLowerCase();
+      return (
+        userNameLower === mentionedName ||
+        userNameLower.includes(mentionedName) ||
+        mentionedName.includes(userNameLower) ||
+        // 🆕 DÉTECTION PAR INITIALES OU PRÉNOM
+        userNameLower.split(' ').some(part => part.startsWith(mentionedName)) ||
+        mentionedName.split(' ').some(part => userNameLower.includes(part))
+      );
     });
-    setText("");
-    reset();
-    toast.success("Comment added");
+
+    console.log(`🎯 Found user:`, mentionedUser);
+
+    if (mentionedUser && mentionedUser.id !== userId) {
+      try {
+        console.log(`📨 Sending mention notification to ${mentionedUser.name}`);
+        
+        await createMentionNotification({
+          mentionedUserId: mentionedUser.id,
+          mentionedByUserId: userId!,
+          mentionedByUserName: userName,
+          groupId,
+          groupTitle: groupTitle,
+          projectId: projectId,
+        });
+        
+        toast.success(`Mention envoyée à ${mentionedUser.name}`);
+      } catch (error) {
+        console.error("❌ Failed to send mention notification:", error);
+        toast.error("Erreur lors de l'envoi de la mention");
+      }
+    } else if (!mentionedUser) {
+      console.warn(`❌ User "${mentionedName}" not found in presence users`);
+      toast.info(`Utilisateur "${mentionedName}" non trouvé ou non connecté`);
+    }
+  }
+}, [presenceUsers, userId, groupId, groupTitle, projectId, createMentionNotification]);
+
+
+  /* -------- submit -------- */
+ const handleSubmit = async () => {
+    if (!text.trim()) return;
+    
+    try {
+      // Ajouter le commentaire (existant)
+      await addComment({
+        mapId: mapId as Id<"affinityMaps">,
+        groupId,
+        text: text.trim(),
+        userName,
+      });
+
+      // 🆕 TRAITER LES MENTIONS APRÈS L'AJOUT DU COMMENTAIRE
+      await handleMentions(text.trim(), userName);
+
+      setText("");
+      reset();
+      toast.success("Commentaire ajouté");
+      
+    } catch (error) {
+      console.error("Erreur lors de l'ajout du commentaire:", error);
+      toast.error("Erreur lors de l'ajout du commentaire");
+    }
   };
 
  
@@ -76,7 +150,10 @@ const handleInput = (val: string) => {
   }, [comments, userId]);
 
 
-console.log({ query, suggestions });
+// console.log({ query, suggestions });
+
+
+console.log("👥 Presence users available for mentions:", presenceUsers);
   /* -------- render -------- */
   return (
     <div

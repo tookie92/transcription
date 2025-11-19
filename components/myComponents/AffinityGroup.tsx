@@ -47,7 +47,7 @@ interface AffinityGroupProps {
   onInsightDrop?: (insightId: string, targetGroupId: string) => void;
   sharedSelections?: Record<string, string[]>;
   currentUserId?: string;
-  onOpenComments?: (groupId: string, position: { x: number; y: number }) => void;
+    onOpenComments?: ( groupId: string, position: { x: number; y: number }, groupTitle: string) => void;
   mapId: string;
   commentCounts?: Record<string, number>;
   comments?: Comment[];
@@ -94,7 +94,13 @@ export default function AffinityGroup({
   // 🆕 AJOUTER APRÈS LES AUTRES useStates DANS AffinityCanvas.tsx
 const [applyingAction, setApplyingAction] = useState<string | null>(null);
 const [highlightedGroups, setHighlightedGroups] = useState<Set<string>>(new Set());
-const [showComments, setShowComments] = useState(false);
+// const [showComments, setShowComments] = useState(false);
+
+const [showComments, setShowComments] = useState<{
+  groupId: string;
+  screenRect: DOMRect;
+  groupTitle: string;
+} | null>(null);
 const { user } = useUser();
 
 
@@ -196,9 +202,19 @@ const handleInsightDrop = useCallback((e: React.DragEvent, targetGroupId: string
 
 
 
-  const handleOpenComments = useCallback((groupId: string, position: { x: number; y: number }) => {
-    onOpenComments?.(groupId, position);
-  }, [onOpenComments]);
+// 🆕 MODIFIER handleOpenComments POUR INCLURE LE TITRE
+const handleOpenComments = useCallback((
+  groupId: string, 
+  position: { x: number; y: number }, 
+  groupTitle: string
+) => {
+  const rect = new DOMRect(position.x, position.y, 0, 0);
+  setShowComments({ 
+    groupId, 
+    screenRect: rect,
+    groupTitle // 🆕 TITRE REÇU DIRECTEMENT
+  });
+}, []);
 
 
 // ==================== handle fin ==================== 
@@ -740,22 +756,26 @@ const amIMentioned = myMentions?.includes(group.id);
 
               {/* BOUTON COMMENTAIRES */}
               {!isPresentationMode && ( // 🎯 CACHÉ EN PRÉSENTATION
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const rect = (e.currentTarget as HTMLElement)
-                      .closest('[data-group-id]')!
-                      .getBoundingClientRect();
-                    handleOpenComments(group.id, { x: rect.right, y: rect.top });
-                  }}
-                  className="p-1 text-gray-400 hover:text-blue-500 transition-colors relative"
-                  title="Add comment"
-                >
-                  💬
-                  {amIMentioned && (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
-                  )}
-                </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const rect = (e.currentTarget as HTMLElement)
+                    .closest('[data-group-id]')!
+                    .getBoundingClientRect();
+                  
+                  // 🆕 APPEL CORRECT - PASSER LES 3 ARGUMENTS SÉPARÉMENT
+                  if (onOpenComments) {
+                    onOpenComments(group.id, { x: rect.right, y: rect.top }, group.title);
+                  }
+                }}
+                className="p-1 text-gray-400 hover:text-blue-500 transition-colors relative"
+                title="Add comment"
+              >
+                💬
+                {amIMentioned && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+                )}
+              </button>
               )}
             </div>
           

@@ -134,22 +134,30 @@ presence: defineTable({
 
 // 🆕 Historique des modifications
 // convex/schema.ts
+// 🎯 TABLE ACTIVITY LOG (existe déjà mais à compléter)
 activityLog: defineTable({
   mapId: v.id("affinityMaps"),
   userId: v.string(),
-  action: v.union( // ← nouveau
-    v.literal("group_moved"),
+  userName: v.string(), // 🆕 Ajouter le nom d'utilisateur
+  action: v.union(
     v.literal("group_created"),
+    v.literal("group_moved"), 
+    v.literal("group_renamed"),
     v.literal("group_deleted"),
     v.literal("insight_added"),
     v.literal("insight_removed"),
-    v.literal("group_renamed")
+    v.literal("insight_moved"),
+    v.literal("comment_added"),
+    v.literal("user_mentioned")
   ),
-  payload: v.optional(v.any()),
+  targetId: v.string(), // ID du groupe/insight concerné
+  targetName: v.optional(v.string()), // Nom/titre pour affichage
+  details: v.optional(v.any()), // Données supplémentaires
   timestamp: v.number(),
 })
 .index("by_map", ["mapId"])
-.index("by_user", ["userId"]),
+.index("by_user", ["userId"])
+.index("by_timestamp", ["timestamp"]),
 
 // 🆕 Commentaires sur les groupes
 comments: defineTable({
@@ -172,6 +180,38 @@ commentViews: defineTable({
   viewedAt: v.number(),
 })
 .index("by_user_comment", ["userId", "commentId"]),
+
+// 🎯 TABLE NOTIFICATIONS (pour plus tard)
+  notifications: defineTable({
+    userId: v.string(), // User qui reçoit la notification
+    type: v.union(
+      v.literal("group_created"),
+      v.literal("group_moved"),
+      v.literal("group_renamed"),
+      v.literal("group_deleted"),
+      v.literal("insight_added"),
+      v.literal("insight_moved"),
+      v.literal("insight_removed"),
+      v.literal("comment_added"),
+      v.literal("user_mentioned"),
+      v.literal("invite_accepted")
+    ),
+    title: v.string(), // Titre court de la notification
+    message: v.string(), // Message détaillé
+    relatedId: v.optional(v.string()), // ID de l'élément concerné
+    relatedType: v.optional(v.union(
+      v.literal("group"),
+      v.literal("comment"),
+      v.literal("insight"),
+      v.literal("project")
+    )),
+    read: v.boolean(), // Statut de lecture
+    actionUrl: v.optional(v.string()), // URL pour navigation
+    createdAt: v.number(),
+  })
+  .index("by_user", ["userId"])
+  .index("by_user_read", ["userId", "read"])
+  .index("by_user_created", ["userId", "createdAt"]),
 
   
 });

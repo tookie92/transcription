@@ -153,14 +153,14 @@ export const moveGroup = mutation({
 
     await ctx.db.patch(args.mapId, { groups: updatedGroups, updatedAt: Date.now() });
 
-    // 🔒 on log l’action
-    await ctx.db.insert("activityLog", {
-      mapId: args.mapId,
-      userId: identity.subject,
-      action: "group_moved",
-      payload: { groupId: args.groupId, oldValue: oldPos, newValue: args.position },
-      timestamp: Date.now(),
-    });
+    // // 🔒 on log l’action
+    // await ctx.db.insert("activityLog", {
+    //   mapId: args.mapId,
+    //   userId: identity.subject,
+    //   action: "group_moved",
+    //   payload: { groupId: args.groupId, oldValue: oldPos, newValue: args.position },
+    //   timestamp: Date.now(),
+    // });
 
     return { success: true };
   },
