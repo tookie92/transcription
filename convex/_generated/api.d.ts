@@ -21,6 +21,7 @@ import type * as notificationService from "../notificationService.js";
 import type * as notifications from "../notifications.js";
 import type * as presence from "../presence.js";
 import type * as projects from "../projects.js";
+import type * as typingIndicators from "../typingIndicators.js";
 
 import type {
   ApiFromModules,
@@ -50,6 +51,7 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   presence: typeof presence;
   projects: typeof projects;
+  typingIndicators: typeof typingIndicators;
 }>;
 declare const fullApiWithMounts: typeof fullApi;
 

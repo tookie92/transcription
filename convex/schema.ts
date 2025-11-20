@@ -213,6 +213,18 @@ commentViews: defineTable({
   .index("by_user_read", ["userId", "read"])
   .index("by_user_created", ["userId", "createdAt"]),
 
+    // 🎯 TABLE POUR LES INDICATEURS DE TYPING
+  typingIndicators: defineTable({
+    mapId: v.id("affinityMaps"),
+    groupId: v.string(),
+    userId: v.string(),
+    userName: v.string(),
+    isTyping: v.boolean(),
+    lastActivity: v.number(),
+  })
+  .index("by_map_group", ["mapId", "groupId"])
+  .index("by_user_map", ["userId", "mapId"])
+  .index("by_last_activity", ["lastActivity"]),
   
 });
 
