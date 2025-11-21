@@ -1,4 +1,4 @@
-// components/FloatingToolbar.tsx
+// components/FloatingToolbar.tsx - VERSION CORRIGÉE
 
 "use client";
 
@@ -18,8 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ThemeAnalysis } from "@/types";
-import { ConvexActivityLog } from "@/types";
+import { ThemeAnalysis, ConvexActivityLog } from "@/types";
 
 interface FloatingToolbarProps {
   // Stats
@@ -48,7 +47,7 @@ interface FloatingToolbarProps {
   onAnalyzeThemes: () => void;
   
   // Données
-  themeAnalysis?: ThemeAnalysis;
+  themeAnalysis: ThemeAnalysis | null | undefined; // 🎯 CORRIGÉ : ACCEPTE NULL ET UNDEFINED
   isThemesAnalyzing: boolean;
   activities?: ConvexActivityLog[];
 }

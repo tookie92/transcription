@@ -37,6 +37,7 @@ import { CommentPanel } from "./CommentPanel";
 import { useFollowGroupRect } from "@/hooks/useFollowGroupRect";
 import { useActivity } from "@/hooks/useActivity";
 import { ActivityPanel } from "./ActivityPanel";
+import { FloatingToolbar } from "./FloatingToolbar";
 
 // 🆕 AJOUTER childGroupIds À L'INTERFACE
 
@@ -1066,261 +1067,38 @@ useEffect(() => {
     Present mode – press ESC to exit
   </div>
 )}
+
+{!isPresentMode && (
+    <FloatingToolbar
+      // Stats
+      stats={stats}
+      
+      // États
+      workspaceMode={workspaceMode}
+      setWorkspaceMode={setWorkspaceMode}
+      activePanel={activePanel}
+      setActivePanel={setActivePanel}
+      showThemeDiscovery={showThemeDiscovery}
+      setShowThemeDiscovery={setShowThemeDiscovery}
+      showExportPanel={showExportPanel}
+      setShowExportPanel={setShowExportPanel}
+      showImportModal={showImportModal}
+      setShowImportModal={setShowImportModal}
+      showActivityPanel={showActivityPanel}
+      setShowActivityPanel={setShowActivityPanel}
+      
+      // Actions
+      onEnterPresentation={enterPresentationMode}
+      onAnalyzeThemes={handleAnalyzeThemes}
+      
+      // Données
+      themeAnalysis={themeAnalysis}
+      isThemesAnalyzing={isThemesAnalyzing}
+      activities={activities}
+    />
+  )}
       {/* HEADER AVEC RACCOURCIS */}
-      {!isPresentMode && (
-      <header className="bg-white border-b border-gray-200 px-6 py-4 shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Affinity Diagram</h1>
-              <p className="text-sm text-gray-600">Group related insights to discover patterns</p>
-            </div>
-            
-            {/* STATS */}
-            <div className="flex items-center gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                <span className="text-gray-700">{stats.totalInsights} insights</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span className="text-gray-700">{stats.groupCount} groups</span>
-              </div>
-              {selectedGroups.size > 0 && (
-                <div className="flex items-center gap-2 bg-orange-100 px-3 py-1 rounded-full">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                  <span className="text-orange-700 font-medium">{selectedGroups.size} selected</span>
-                </div>
-              )}
-            </div>
-          </div>
 
-          {/* TOOLBAR */}
-          <div className="flex items-center gap-4">
-            
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={() => setActivePanel(activePanel === 'voting' ? null : 'voting')}
-                variant={activePanel === 'voting' ? "default" : "outline"}
-                size="sm"
-              >
-                <Vote size={16} />
-                Voting
-              </Button>
-              
-              <Button
-                onClick={() => setActivePanel(activePanel === 'analytics' ? null : 'analytics')}
-                variant={activePanel === 'analytics' ? "default" : "outline"}
-                size="sm"
-              >
-                <BarChart3 size={16} />
-                Analytics
-              </Button>
-
-              {!isPresentMode && (
-                <Button
-                  onClick={() => setShowActivityPanel(!showActivityPanel)}
-                  variant={showActivityPanel ? "default" : "outline"}
-                  size="sm"
-                  className="flex items-center gap-2"
-                >
-                  <ActivityIcon size={16} />
-                  Activity
-                  {activities && activities.length > 0 && (
-                    <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-800">
-                      {activities.length}
-                    </Badge>
-                  )}
-                </Button>
-              )}
-            </div>
-
-
-            {/* UNDO/REDO */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleUndo}
-                disabled={!history.canUndo}
-                className={`px-3 py-2 rounded-lg border flex items-center gap-2 ${
-                  history.canUndo
-                    ? 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
-                    : 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-                title="Undo (Ctrl+Z)"
-              >
-                <Undo size={16} />
-                Undo
-              </button>
-
-              <button
-                onClick={handleRedo}
-                disabled={!history.canRedo}
-                className={`px-3 py-2 rounded-lg border flex items-center gap-2 ${
-                  history.canRedo
-                    ? 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
-                    : 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-                title="Redo (Ctrl+Y)"
-              >
-                <Redo size={16} />
-                Redo
-              </button>
-            </div>
-
-            {/* INDICATEUR RACCOURCIS
-            <div className="text-xs text-gray-500 flex items-center gap-3">
-              <kbd className="px-2 py-1 bg-gray-100 rounded border text-xs">N</kbd>
-              <span>New group</span>
-              <kbd className="px-2 py-1 bg-gray-100 rounded border text-xs">Ctrl+A</kbd>
-              <span>Select all</span>
-              <kbd className="px-2 py-1 bg-gray-100 rounded border text-xs">←↑↓→</kbd>
-              <span>Move</span>
-            </div> */}
-
-            {/* INDICATEUR DE DRAG ENTRE GROUPES */}
-            {draggedInsightId && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-50 flex items-center gap-2"
-              >
-                <Move size={14} />
-                <span>Moving insight to another group...</span>
-              </motion.div>
-            )}
-
-            {/* INDICATEUR ACTION EN COURS */}
-            {applyingAction && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-50 flex items-center gap-2"
-              >
-                <Sparkles size={14} />
-                <span>Applying {applyingAction}...</span>
-              </motion.div>
-            )}
-
-            {/* MODES */}
-            <div className="flex bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setWorkspaceMode('grouping')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  workspaceMode === 'grouping'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <Users size={16} className="inline mr-2" />
-                Grouping
-              </button>
-              <button
-                onClick={() => setWorkspaceMode('voting')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  workspaceMode === 'voting'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <Vote size={16} className="inline mr-2" />
-                Dot Voting
-              </button>
-            </div>
-            {/* GARDER SEULEMENT CE BOUTON AMÉLIORÉ : */}
-            <Button
-              onClick={() => {
-                if (showThemeDiscovery) {
-                  // Panel déjà ouvert - on le ferme
-                  setShowThemeDiscovery(false);
-                  clearThemes(); // 🆕 Optionnel: nettoyer l'analyse
-                } else {
-                  // Ouvrir le panel
-                  setShowThemeDiscovery(true);
-                  // Analyser seulement si on a des groupes et pas d'analyse récente
-                  if (groups.length >= 2 && !themeAnalysis) {
-                    setTimeout(() => handleAnalyzeThemes(), 300);
-                  }
-                }
-              }}
-              variant={showThemeDiscovery ? "default" : "outline"}
-              size="sm"
-              disabled={groups.length < 2} // 🆕 Désactivé si pas assez de groupes
-              title={groups.length < 2 ? "Need at least 2 groups for theme analysis" : "Discover themes and patterns"}
-            >
-              <Sparkles size={16} className="mr-2" />
-              {isThemesAnalyzing ? "Analyzing..." : "Themes"}
-              {themeAnalysis && !isThemesAnalyzing && (
-                <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800">
-                  {themeAnalysis.themes.length}
-                </Badge>
-              )}
-            </Button>
-            {/* EXPORT Button */}
-            <div className="relative">
-            {!isPresentMode && (
-            <Button
-            onClick={() => setShowExportPanel(!showExportPanel)}
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2"
-            >
-              <Download size={16} />
-              Export
-            </Button>
-            )}
-          <Button
-            onClick={presentationState.isActive ? exitPresentationMode : enterPresentationMode}
-            variant={presentationState.isActive ? "default" : "outline"}
-            size="sm"
-            className="gap-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0"
-          >
-            <Presentation size={16} />
-            {presentationState.isActive ? "Quitter" : "Présenter"}
-          </Button>
-            
-
-             {/* Panel d'export */}
-                {showExportPanel && (
-                  <div className="absolute top-full right-0 mt-2 z-50">
-                    <ExportPanel
-                      mapId={mapId}
-                      projectId={projectId}
-                      onClose={() => setShowExportPanel(false)}
-                    />
-                  </div>
-                )}
-            </div>
-
-            {/* IMPORT Modal */}
-             {/* 🆕 AJOUTER BOUTON IMPORT */}
-              <Button
-                onClick={() => setShowImportModal(true)}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2"
-              >
-                <Upload size={16} />
-                Import
-              </Button>
-
-
-          </div>
-        </div>
-       
-
-        {/* PROGRESS BAR */}
-        <div className="mt-3">
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-green-500 h-2 rounded-full transition-all duration-500"
-              style={{ width: `${stats.completion}%` }}
-            ></div>
-          </div>
-        </div>
-      </header>
-      )}
       {/* MAIN WORKSPACE */}
       <div className="flex-1 flex min-h-0">
         {/* SIDEBAR - INSIGHTS DISPONIBLES */}
