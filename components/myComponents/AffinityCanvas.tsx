@@ -1813,7 +1813,14 @@ useEffect(() => {
             </motion.div>
           )}
 
-        <AnimatePresence>
+    
+
+          {/* {!isPresentMode && (
+          <ActivityFeed mapId={mapId as Id<"affinityMaps">} />
+        )} */}
+        </AnimatePresence>
+
+            <AnimatePresence>
           {showActivityPanel && (
             <motion.div
               initial={{ x: 600, opacity: 0 }}
@@ -1828,11 +1835,6 @@ useEffect(() => {
               />
             </motion.div>
           )}
-        </AnimatePresence>
-
-          {/* {!isPresentMode && (
-          <ActivityFeed mapId={mapId as Id<"affinityMaps">} />
-        )} */}
         </AnimatePresence>
       </div>
 

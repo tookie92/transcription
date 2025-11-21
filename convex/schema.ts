@@ -90,28 +90,54 @@ export default defineSchema({
 
  // pour le dot voting
   // 🆕 Table Dot Voting Sessions
-  dotVotingSessions: defineTable({
-    projectId: v.id("projects"),
-    mapId: v.id("affinityMaps"),
-    name: v.string(),
-    maxVotesPerUser: v.number(),
-    isActive: v.boolean(),
-    createdBy: v.string(), // Clerk user ID
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-  .index("by_project",["projectId"]),
+dotVotingSessions: defineTable({
+  projectId: v.id("projects"),
+  mapId: v.id("affinityMaps"),
+  name: v.string(),
+  maxVotesPerUser: v.number(),
+  isActive: v.boolean(),
+  
+  // 🆕 CHAMPS POUR VOTE INVISIBLE
+  votingPhase: v.union(
+    v.literal("setup"),      // Configuration
+    v.literal("voting"),     // Vote en cours (invisible)
+    v.literal("revealed"),   // Votes révélés
+    v.literal("completed")   // Session terminée
+  ),
+  revealAt: v.optional(v.number()), // Révélation automatique
+  allowRevoting: v.boolean(),       // true par défaut
+  showResults: v.boolean(),         // true par défaut
+  
+  createdBy: v.string(),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+})
+.index("by_project", ["projectId"]),
 
-  // 🆕 Table Votes
-  votes: defineTable({
-    sessionId: v.id("dotVotingSessions"),
-    userId: v.string(), // Clerk user ID
-    groupId: v.string(), // ID du groupe dans affinityMaps.groups[]
-    votes: v.number(), // Nombre de votes pour ce groupe
-    createdAt: v.number(),
-  })
-  .index("by_user_group_session", ["userId", "groupId", "sessionId"])
-  .index("by_session", ["sessionId"]),
+// 🆕 Table Votes
+votes: defineTable({
+ sessionId: v.id("dotVotingSessions"),
+  userId: v.string(),
+  groupId: v.string(),
+  votes: v.number(),
+  isVisible: v.boolean(),
+  color: v.string(),
+  position: v.optional(v.object({
+    x: v.number(),
+    y: v.number()
+  })),
+  // 🎯 BIEN DÉFINIR CES CHAMPS COMME OPTIONNELS
+  dotSize: v.optional(v.number()),
+  isDragging: v.optional(v.boolean()),
+  zIndex: v.optional(v.number()),
+  createdAt: v.number(),
+})
+.index("by_user_group_session", ["userId", "groupId", "sessionId"])
+.index("by_session", ["sessionId"])
+.index("by_session_visible", ["sessionId", "isVisible"])
+.index("by_session_group", ["sessionId", "groupId"]), // 🆕 POUR LES DOTS PAR GROUPE
+
+
 
   // 🆕 Présence utilisateur en temps réel
 presence: defineTable({

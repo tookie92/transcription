@@ -236,33 +236,15 @@ export interface HistoryActions {
 
 // dotVotingSessions
 
-export interface DotVotingSession {
-  _id: string;
-  projectId: string;
-  mapId: string;
-  name: string;
-  maxVotesPerUser: number;
-  isActive: boolean;
-  createdBy: string;
-  createdAt: number;
-  updatedAt: number;
-}
 
-export interface Vote {
-  _id: string;
-  sessionId: string;
-  userId: string;
-  groupId: string;
-  votes: number;
-  createdAt: number;
-}
 
-export interface GroupVoteSummary {
-  groupId: string;
-  totalVotes: number;
-  userVotes: number;
-  group: AffinityGroup;
-}
+
+// export interface GroupVoteSummary {
+//   groupId: string;
+//   totalVotes: number;
+//   userVotes: number;
+//   group: AffinityGroup;
+// }
 
 //
 // types/index.ts - AJOUTER CES TYPES
@@ -433,4 +415,69 @@ export interface UseNotificationsReturn {
   markAllAsRead: () => void;
   isLoading: boolean;
   refresh: () => void;
+}
+
+
+// types/index.ts - AJOUTER CES TYPES
+
+// 🎯 TYPES POUR LE DOT VOTING AVEC SYSTÈME INVISIBLE
+export type VotingPhase = "setup" | "voting" | "revealed" | "completed";
+
+export interface DotVotingSession {
+  _id: Id<"dotVotingSessions">;
+  _creationTime: number;
+  projectId: Id<"projects">;
+  mapId: Id<"affinityMaps">;
+  name: string;
+  maxVotesPerUser: number;
+  isActive: boolean;
+  votingPhase: VotingPhase;
+  revealAt?: number;
+  allowRevoting: boolean;
+  showResults: boolean;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Vote {
+  _id: Id<"votes">;
+  _creationTime: number;
+  sessionId: Id<"dotVotingSessions">;
+  userId: string;
+  groupId: string;
+  votes: number;
+  isVisible: boolean;
+  color: string;
+  position?: { x: number; y: number };
+  
+  // 🆕 PROPRIÉTÉS POUR DRAG & DROP
+  dotSize?: number;
+  isDragging?: boolean;
+  zIndex?: number;
+  
+  createdAt: number;
+}
+
+export interface VoteDetail {
+  userId: string;
+  votes: number;
+  color: string;
+  position?: { x: number; y: number };
+}
+
+export interface GroupVoteResult {
+  groupId: string;
+  totalVotes: number;
+  userVotes: number;
+  group: AffinityGroup;
+  voteDetails: VoteDetail[];
+}
+
+export interface SessionResults {
+  session: DotVotingSession;
+  results: GroupVoteResult[];
+  userTotalVotes: number;
+  maxVotesPerUser: number;
+  myVotes: Vote[];
 }
