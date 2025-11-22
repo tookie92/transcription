@@ -147,3 +147,25 @@
     --sidebar-ring: oklch(0.439 0 0);
   }
 }
+
+
+/* 🎯 STYLES SIMPLES POUR LES DOTS */
+.dot-vote {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+}
+
+.dot-vote.my-dot::after {
+  content: "✓";
+}

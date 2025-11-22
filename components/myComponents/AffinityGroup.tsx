@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { hashCode } from "@/utils/hashCodes";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { CommentPanel } from "./CommentPanel";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 
@@ -56,6 +56,11 @@ interface AffinityGroupProps {
   isPresentationMode?: boolean;
   isFocusedInPresentation?: boolean;
   presentationScale?: number;
+
+   isPlacingDot?: boolean; // 🆕 AJOUTER CETTE PROP
+
+     // 🎯 NOUVELLES PROPS POUR LE VOTE SIMPLE
+  activeSessionId?: string;
 }
 
 export default function AffinityGroup({
@@ -88,6 +93,9 @@ export default function AffinityGroup({
   isPresentationMode = false,
   isFocusedInPresentation = false,
   presentationScale = 1,
+    // 🎯 NOUVELLES PROPS
+  isPlacingDot = false,
+  activeSessionId,
 }: AffinityGroupProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempTitle, setTempTitle] = useState(group.title);
@@ -129,6 +137,18 @@ const sharedUser = Object.entries(sharedSelections || {}).find(
 
   const rotateX = useTransform(y, [-100, 0, 100], [1, 0, -1]);
   const rotateY = useTransform(x, [-100, 0, 100], [-1, 0, 1]);
+
+    // 🎯 QUERIES POUR LES DOTS DU GROUPE
+  const groupDots = useQuery(api.dotVoting.getDotsByTarget, 
+    activeSessionId ? {
+      sessionId: activeSessionId as Id<"dotVotingSessions">,
+      targetType: 'group',
+      targetId: group.id
+    } : "skip"
+  );
+
+    // 🎯 MUTATION POUR PLACER UN DOT
+  const placeDot = useMutation(api.dotVoting.placeDot);
 
   // 🎯 CALCULER LES INSIGHTS DU GROUPE
   const groupInsights = useMemo(() => 
@@ -215,7 +235,8 @@ const handleOpenComments = useCallback((
     groupTitle // 🆕 TITRE REÇU DIRECTEMENT
   });
 }, []);
-
+// 🎯 AJOUTER CES ÉTATS LOCAUX EN HAUT DU COMPOSANT
+const [localDots, setLocalDots] = useState<Array<{id: string, x: number, y: number, color: string}>>([]);
 
 // ==================== handle fin ==================== 
 
@@ -496,33 +517,100 @@ const amIMentioned = myMentions?.includes(group.id);
 
   // ==================== GESTION DES INTERACTIONS ====================
   
+
+  // 🎯 FONCTION POUR GÉNÉRER UNE COULEUR UNIQUE PAR UTILISATEUR
+const getUserColor = useCallback((userId: string) => {
+  const colors = ["#EF4444", "#F59E0B", "#10B981", "#3B82F6", "#8B5CF6", "#EC4899"];
+  const hash = userId.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+  return colors[hash % colors.length];
+}, []);
   /**
    * 🎯 CLICK SUR UN GROUPE - COMPORTEMENT DIFFÉRENT EN PRÉSENTATION
    * En mode normal: sélectionne le groupe
    * En mode présentation: navigation vers ce groupe
    */
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    // 🚫 EN MODE PRÉSENTATION: on laisse le parent gérer la navigation
+ // 🎯 FONCTION SIMPLIFIÉE POUR AJOUTER UN DOT
+// 🎯 FONCTION ULTRA-SIMPLE POUR AJOUTER UN DOT
+const handleAddDot = useCallback(async (e: React.MouseEvent) => {
+ console.log('🎯 [START] handleAddDot called', { isPlacingDot, activeSessionId, currentUserId });
+
+  if (!isPlacingDot || !activeSessionId || !currentUserId) {
+    console.log('❌ [STOP] Conditions not met', { isPlacingDot, activeSessionId, currentUserId });
+    return;
+  }
+  e.stopPropagation();
+  e.preventDefault();
+
+  // 🎯 POSITION RELATIVE SIMPLE
+  const rect = e.currentTarget.getBoundingClientRect();
+  const position = {
+    x: e.clientX - rect.left - 12,
+    y: e.clientY - rect.top - 12
+  };
+
+  // 🎯 COULEUR FIXE POUR TEST (on simplifie)
+  const userColor = getUserColor(currentUserId!); // Bleu fixe pour test
+
+  console.log('🎯 Adding dot locally:', { position, groupId: group.id });
+
+  // 🎯 1. AJOUTER LOCALEMENT IMMÉDIATEMENT
+  const tempDotId = `local-${Date.now()}-${Math.random()}`;
+  setLocalDots(prev => [...prev, {
+    id: tempDotId,
+    x: position.x,
+    y: position.y,
+    color: userColor
+  }]);
+
+  // 🎯 2. ENVOYER À LA BASE (sans attendre)
+  try {
+    const result = await placeDot({
+      sessionId: activeSessionId as Id<"dotVotingSessions">,
+      targetType: 'group',
+      targetId: group.id,
+      position,
+    });
+    
+    if (result.success) {
+      console.log('✅ Dot saved to database');
+      // 🎯 REMPLACER LE DOT TEMPORAIRE PAR LE VRAI
+      setLocalDots(prev => prev.filter(dot => dot.id !== tempDotId));
+    } else {
+      console.log('❌ Max dots reached');
+      // Garder le dot local
+    }
+  } catch (error) {
+    console.error('❌ Failed to save dot:', error);
+    // Garder le dot local
+  }
+}, [isPlacingDot, activeSessionId, currentUserId, placeDot, group.id]);
+
+
+ const handleClick = useCallback((e: React.MouseEvent) => {
+    // 🎯 EN MODE VOTE, UTILISER handleAddDot
+    if (isPlacingDot) {
+      handleAddDot(e);
+      return;
+    }
+    
+    // COMPORTEMENT NORMAL
     if (isPresentationMode) {
       e.stopPropagation();
-      // Le parent (AffinityCanvas) gérera la navigation
       return;
     }
 
-    // 👇 COMPORTEMENT NORMAL (CODE EXISTANT)
-    console.log("🔥 handleClick appelé pour groupe :", group.id);
     const isTaken = Object.entries(sharedSelections || {}).some(
       ([userId, groupIds]) =>
         userId !== currentUserId && (groupIds as string[]).includes(group.id)
     );
-    console.log("🔍 Vérification :", group.id, "verrouillé ? :", isTaken);
+    
     if (isTaken) {
-      console.log("🚫 Groupe verrouillé");
       return;
     }
+    
     e.stopPropagation();
     onSelect(group.id, e);
-  }, [group.id, onSelect, sharedSelections, currentUserId, isPresentationMode]);
+  }, [isPlacingDot, isPresentationMode, sharedSelections, currentUserId, group.id, onSelect, handleAddDot]);
 
   /**
    * 🎯 DRAG START - DÉSACTIVÉ EN PRÉSENTATION
@@ -543,7 +631,7 @@ const amIMentioned = myMentions?.includes(group.id);
       <ContextMenuTrigger>
      <motion.div
           data-group-id={group.id}
-          drag={canDrag}
+          drag={!isSelectedByOther && !isPresentationMode}
           dragMomentum={false}
           dragElastic={0}
           
@@ -575,11 +663,11 @@ const amIMentioned = myMentions?.includes(group.id);
             pointerEvents: isPresentationMode ? 'none' : 'auto'
           }}
           
-          className={`absolute bg-white rounded-xl shadow-lg border-2 min-w-80 max-w-96 ${
-            isPresentationMode 
-              ? 'cursor-default' 
-              : 'cursor-grab active:cursor-grabbing'
-          }`}
+      className={`absolute bg-white rounded-xl shadow-lg border-2 min-w-80 max-w-96 ${
+          isPresentationMode 
+            ? 'cursor-default' 
+            : 'cursor-grab active:cursor-grabbing'
+        } ${isPlacingDot ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}`} // 🆕 EFFET VISUEL
         >
 
         {/* {showComments && (
@@ -637,11 +725,12 @@ const amIMentioned = myMentions?.includes(group.id);
                />
                )}
           {/* HEADER DRAGGABLE */}
-         <div 
+        <div 
             className="flex items-center gap-2 px-3 py-2 border-b cursor-grab active:cursor-grabbing relative"
             style={{ 
               backgroundColor: `${group.color}15`,
-              borderColor: group.color 
+              borderColor: group.color,
+              cursor: isPlacingDot ? 'crosshair' : 'grab'
             }}
             onMouseDown={(e) => {
               if (isPresentationMode) {
@@ -650,18 +739,7 @@ const amIMentioned = myMentions?.includes(group.id);
               }
               e.stopPropagation();
             }}
-            // 🎯 GESTIONNAIRES DE DRAG POUR LE HEADER
-            onDragOver={handleDragOver}
-            onDrop={(e: React.DragEvent) => {
-              if (isPresentationMode) {
-                e.preventDefault();
-                e.stopPropagation();
-                return;
-              }
-              e.preventDefault();
-              e.stopPropagation();
-              toast.info("Drop insights in the group content area below");
-            }}
+            onClick={handleAddDot}
           >
             
 
@@ -670,6 +748,12 @@ const amIMentioned = myMentions?.includes(group.id);
             {isPresentationMode && isFocusedInPresentation && (
               <div className="absolute -top-2 -left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-semibold animate-pulse">
                 🎯 Focus
+              </div>
+            )}
+            {/* 🎯 INDICATEUR MODE VOTE */}
+            {isPlacingDot && (
+              <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center animate-pulse z-10">
+                <span className="text-white text-xs">+</span>
               </div>
             )}
 
@@ -686,7 +770,8 @@ const amIMentioned = myMentions?.includes(group.id);
             />
 
               {/* TITRE - ÉDITION MANUELLE OU AFFICHAGE */}
-                   {isEditing ? (
+  {/* TITRE */}
+            {isEditing ? (
               <input
                 type="text"
                 value={tempTitle}
@@ -696,52 +781,44 @@ const amIMentioned = myMentions?.includes(group.id);
                 className="flex-1 font-semibold text-sm bg-white border outline-none px-2 py-1 rounded transition-all"
                 style={inputStyle}
                 autoFocus
-                // 🎯 DÉSACTIVER L'ÉDITION EN PRÉSENTATION
                 readOnly={isPresentationMode}
-              />) : (
-                     <h3 
+              />
+            ) : (
+              <h3 
                 className="flex-1 font-semibold text-sm cursor-text select-text hover:bg-gray-50 px-2 py-1 rounded transition-colors"
                 style={{ color: group.color }}
                 onClick={(e) => {
-                  if (isPresentationMode) return; // 🚫 DÉSACTIVÉ
+                  if (isPresentationMode || isPlacingDot) return;
                   handleTitleClick(e);
                 }}
                 title={isPresentationMode ? "" : "Click to edit title"}
               >
                 {group.title}
+                {isPlacingDot && " - Click to vote"}
               </h3>
-              )}
+            )}
 
-                          {/* BOUTONS D'ACTION */}
+            {/* BOUTONS D'ACTION */}
             <div className="flex items-center gap-2">
               <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
                 {groupInsights.length}
               </span>
 
               {/* BOUTON IA */}
-              {hasInsights && !isPresentationMode && (
+              {hasInsights && !isPresentationMode && !isPlacingDot && (
                 <GroupNameAssistant
                   group={group}
                   insights={insights}
                   currentTitle={group.title}
-                  // 🎯 CORRECTION: ADAPTER LA SIGNATURE DE LA FONCTION
                   onTitleUpdate={(newTitle: string) => {
-                    // GroupNameAssistant attend (title: string) mais nous avons (groupId: string, title: string)
                     handleTitleUpdate(group.id, newTitle);
                   }}
                   projectContext={projectContext}
                 />
               )}
 
-              {/* BOUTON VOTE */}
-              {workspaceMode === 'voting' && !isPresentationMode && (
-                <button className="p-1 text-gray-400 hover:text-purple-500 transition-colors">
-                  <Vote size={14} />
-                </button>
-              )}
-              
               {/* BOUTON SUPPRIMER */}
-              {!isPresentationMode && ( // 🎯 CACHÉ EN PRÉSENTATION
+              {!isPresentationMode && !isPlacingDot && (
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
@@ -755,27 +832,26 @@ const amIMentioned = myMentions?.includes(group.id);
               )}
 
               {/* BOUTON COMMENTAIRES */}
-              {!isPresentationMode && ( // 🎯 CACHÉ EN PRÉSENTATION
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const rect = (e.currentTarget as HTMLElement)
-                    .closest('[data-group-id]')!
-                    .getBoundingClientRect();
-                  
-                  // 🆕 APPEL CORRECT - PASSER LES 3 ARGUMENTS SÉPARÉMENT
-                  if (onOpenComments) {
-                    onOpenComments(group.id, { x: rect.right, y: rect.top }, group.title);
-                  }
-                }}
-                className="p-1 text-gray-400 hover:text-blue-500 transition-colors relative"
-                title="Add comment"
-              >
-                💬
-                {amIMentioned && (
-                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
-                )}
-              </button>
+              {!isPresentationMode && !isPlacingDot && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const rect = (e.currentTarget as HTMLElement)
+                      .closest('[data-group-id]')!
+                      .getBoundingClientRect();
+                    
+                    if (onOpenComments) {
+                      onOpenComments(group.id, { x: rect.right, y: rect.top }, group.title);
+                    }
+                  }}
+                  className="p-1 text-gray-400 hover:text-blue-500 transition-colors relative"
+                  title="Add comment"
+                >
+                  💬
+                  {amIMentioned && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+                  )}
+                </button>
               )}
             </div>
           
@@ -801,72 +877,102 @@ const amIMentioned = myMentions?.includes(group.id);
             // 🎯 POUR MOBILE AUSSI
             e.stopPropagation();
           }} */}
-{groupInsights.map(insight => (
-  <div
-    key={insight.id}
-    className="p-2 bg-gray-50 rounded border border-gray-100 text-sm text-gray-700 cursor-move transition-all hover:bg-gray-100"
-    draggable={workspaceMode === 'grouping' && !isSelectedByOther && !isPresentationMode} // 🎯 DÉSACTIVÉ EN PRÉSENTATION
-    onDragStart={(e) => {
-      if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
-      handleInsightDragStart(e, insight.id);
-    }}
-    onDragOver={(e) => {
-      if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
-      handleInsightDragOver(e);
-    }}
-    onDragLeave={(e) => {
-      if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
-      handleInsightDragLeave(e);
-    }}
-    onDrop={(e) => {
-      if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
-      handleInsightDrop(e, group.id); // 🎯 CORRECTION: e est un DragEvent, group.id est string
-    }}
-    onDragEnd={(e) => {
-      if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
-      handleInsightDragEnd(e);
-    }}
-  >
-    <div className="flex items-start justify-between">
-      <span className={`text-xs px-1.5 py-0.5 rounded mr-2 ${
-        insight.type === 'pain-point' ? 'bg-red-100 text-red-700' :
-        insight.type === 'quote' ? 'bg-blue-100 text-blue-700' :
-        insight.type === 'insight' ? 'bg-purple-100 text-purple-700' :
-        'bg-green-100 text-green-700'
-      }`}>
-        {insight.type.charAt(0).toUpperCase()}
-      </span>
-      <span className="flex-1 text-sm">{insight.text}</span>
-      
-      {workspaceMode === 'grouping' && onRemoveInsight && !isPresentationMode && ( // 🎯 CACHÉ EN PRÉSENTATION
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleRemoveInsight(insight.id, group.id);
-          }}
-          className="ml-2 text-gray-400 hover:text-red-500 transition-colors shrink-0"
-          title="Remove from group"
-        >
-          <Trash2 size={12} />
-        </button>
-      )}
-    </div>
-  </div>
-))}
+        {groupInsights.map(insight => (
+              <div
+                key={insight.id}
+                className="p-2 bg-gray-50 rounded border border-gray-100 text-sm text-gray-700 cursor-move transition-all hover:bg-gray-100"
+                draggable={workspaceMode === 'grouping' && !isSelectedByOther && !isPresentationMode && !isPlacingDot}
+                onDragStart={(e) => {
+                  if (isPresentationMode || isPlacingDot) return;
+                  handleInsightDragStart(e, insight.id);
+                }}
+                onDragOver={handleInsightDragOver}
+                onDragLeave={handleInsightDragLeave}
+                onDrop={(e) => {
+                  if (isPresentationMode || isPlacingDot) return;
+                  handleInsightDrop(e, group.id);
+                }}
+                onDragEnd={handleInsightDragEnd}
+              >
+                <div className="flex items-start justify-between">
+                  <span className={`text-xs px-1.5 py-0.5 rounded mr-2 ${
+                    insight.type === 'pain-point' ? 'bg-red-100 text-red-700' :
+                    insight.type === 'quote' ? 'bg-blue-100 text-blue-700' :
+                    insight.type === 'insight' ? 'bg-purple-100 text-purple-700' :
+                    'bg-green-100 text-green-700'
+                  }`}>
+                    {insight.type.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="flex-1 text-sm">{insight.text}</span>
+                  
+                  {workspaceMode === 'grouping' && onRemoveInsight && !isPresentationMode && !isPlacingDot && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveInsight(insight.id, group.id);
+                      }}
+                      className="ml-2 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                      title="Remove from group"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
 
-        {groupInsights.length === 0 && (
-          <div className={`text-center py-4 text-sm ${
-            isDragOver ? 'text-blue-600 font-medium' : 'text-gray-400'
-          }`}>
-            {workspaceMode === 'grouping' 
-              ? (isDragOver 
-                  ? '✨ Drop insights here!' 
-                  : '↓ Drag insights here to group them')
-              : 'No insights in this group'
-            }
-          </div>
-        )}
+         {groupInsights.length === 0 && (
+              <div className={`text-center py-4 text-sm ${
+                isDragOver ? 'text-blue-600 font-medium' : 'text-gray-400'
+              }`}>
+                {workspaceMode === 'grouping' && !isPlacingDot
+                  ? (isDragOver 
+                      ? '✨ Drop insights here!' 
+                      : '↓ Drag insights here to group them')
+                  : 'No insights in this group'
+                }
+                {isPlacingDot && 'Click to place your vote'}
+              </div>
+            )}
         </div>
+
+
+         {/* 🎯 DOTS LOCAUX - TOUJOURS VISIBLES */}
+        {localDots.map(dot => (
+          <div
+            key={dot.id}
+            className="absolute w-8 h-8 rounded-full border-3 border-white shadow-lg flex items-center justify-center z-40 animate-bounce"
+            style={{
+              left: dot.x,
+              top: dot.y,
+              backgroundColor: dot.color,
+            }}
+            title="Your vote"
+          >
+            <span className="text-white text-xs font-bold">✓</span>
+          </div>
+        ))}
+
+
+          {/* 🎯 DOTS DE VOTE - SIMPLES ET EFFICACES */}
+          {groupDots && groupDots.map(dot => (
+            <div
+              key={dot._id}
+              className="absolute w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-30 transition-all"
+              style={{
+                left: dot.position.x,
+                top: dot.position.y,
+                backgroundColor: dot.color || getUserColor(dot.userId),
+                transform: `scale(${dot.userId === currentUserId ? 1.1 : 1})`,
+              }}
+              title={`Vote by user`}
+            >
+              {dot.userId === currentUserId && (
+                <span className="text-white text-xs font-bold">✓</span>
+              )}
+            </div>
+          ))}
+
         </motion.div>
       </ContextMenuTrigger>
 

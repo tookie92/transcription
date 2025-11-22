@@ -429,16 +429,15 @@ export interface DotVotingSession {
   projectId: Id<"projects">;
   mapId: Id<"affinityMaps">;
   name: string;
-  maxVotesPerUser: number;
+  maxDotsPerUser: number;
   isActive: boolean;
   votingPhase: VotingPhase;
-  revealAt?: number;
-  allowRevoting: boolean;
-  showResults: boolean;
+  isSilentMode: boolean;
   createdBy: string;
   createdAt: number;
   updatedAt: number;
 }
+
 
 export interface Vote {
   _id: Id<"votes">;
@@ -457,6 +456,8 @@ export interface Vote {
   zIndex?: number;
   
   createdAt: number;
+  targetId: string;
+  targetType: "group" | "insight";
 }
 
 export interface VoteDetail {
@@ -480,4 +481,16 @@ export interface SessionResults {
   userTotalVotes: number;
   maxVotesPerUser: number;
   myVotes: Vote[];
+}
+
+export interface DotVote {
+  _id: Id<"dotVotes">;
+  _creationTime: number;
+  sessionId: Id<"dotVotingSessions">;
+  userId: string;
+  targetType: 'group' | 'insight';
+  targetId: string;
+  color: string;
+  position: { x: number; y: number };
+  createdAt: number;
 }

@@ -5,7 +5,7 @@ import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import AffinityGroup from "./AffinityGroup";
 import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo, ChevronRight, ChevronLeft, BarChart3, Sparkles, Move, Upload, Presentation, Eye, ActivityIcon } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AffinityGroup as AffinityGroupType, Insight } from "@/types";
+import { AffinityGroup as AffinityGroupType, DotVotingSession, Insight } from "@/types";
 import { toast } from "sonner";
 import { useCanvasShortcuts } from "@/hooks/useCanvasShortcuts";
 import { useHistory } from "@/hooks/useHistory";
@@ -38,6 +38,8 @@ import { useFollowGroupRect } from "@/hooks/useFollowGroupRect";
 import { useActivity } from "@/hooks/useActivity";
 import { ActivityPanel } from "./ActivityPanel";
 import { FloatingToolbar } from "./FloatingToolbar";
+import { VotingSessionManager } from "./VotingSessionManager";
+
 
 // 🆕 AJOUTER childGroupIds À L'INTERFACE
 
@@ -634,7 +636,34 @@ const handleGroupMoveOptimistic = useCallback((groupId: string, newPosition: { x
       
       previousGroupsRef.current = groups;
     }, [groups, pendingParentGroup, onNewGroupDetected]);
+
   };
+
+  // ===================== DOt VOTING ====================
+// 🎯 ÉTATS POUR LE VOTE DIRECT
+const [isPlacingDot, setIsPlacingDot] = useState(false);
+
+// 🎯 QUERIES POUR LES SESSIONS ET DOTS
+const activeSessions = useQuery(api.dotVoting.getActiveSessions, { 
+  mapId: mapId as Id<"affinityMaps"> 
+});
+
+
+const myDots = useQuery(api.dotVoting.getMyDots,
+  activeSessions && activeSessions.length > 0 ? { 
+    sessionId: activeSessions[0]._id 
+  } : "skip"
+);
+
+// 🎯 MUTATION POUR PLACER UN DOT
+const placeDot = useMutation(api.dotVoting.placeDot);
+
+
+// 🎯 GESTIONNAIRE POUR PLACER UN DOT SUR LE CANVAS
+
+
+
+
 
   // ==================== HANDLERS SOURIS/CLAVIER ====================
   const handleWheel = useCallback((e: WheelEvent) => {
@@ -725,29 +754,53 @@ const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
     }
   };
 
-  const handleCanvasClick = (e: React.MouseEvent) => {
-    if (e.target === canvasRef.current) {
-      clickCountRef.current++;
-      
-      if (clickCountRef.current === 1) {
-        clickTimeoutRef.current = setTimeout(() => {
-          setSelectedGroups(new Set());
-          clickCountRef.current = 0;
-        }, 300);
-      } else if (clickCountRef.current === 2) {
-        if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
-        const rect = canvasRef.current!.getBoundingClientRect();
-        const x = (e.clientX - rect.left - position.x) / scale;
-        const y = (e.clientY - rect.top - position.y) / scale;
-        onGroupCreate({ x, y });
-        toast.success("Group created with double-click");
+// 🎯 MODIFIER LE HANDLER DE CLICK EXISTANT
+const handleCanvasClick = (e: React.MouseEvent) => {
+    console.log('🔴 [START] Canvas click - isPlacingDot:', isPlacingDot, 'target:', e.target);
+
+  // if (isPlacingDot) {
+  //   console.log('🟢 [VOTE MODE] Calling handleCanvasClickForDot');
+  //   handleCanvasClickForDot(e);
+  //   console.log('🟢 [VOTE MODE] Done - returning early');
+  //   return;
+  // }
+
+  console.log('🔵 [NORMAL MODE] Normal group handling');
+  // ... reste du code normal
+  console.log('🖱️ Canvas click - target:', e.target, 'isPlacingDot:', isPlacingDot);
+
+  // 🎯 TOUJOURS TRAITER LES DOTS EN PREMIER SI MODE ACTIVÉ
+  if (isPlacingDot) {
+    console.log('🎯 Handling dot placement first');
+    // handleCanvasClickForDot(e);
+    
+    // 🎯 EN MODE VOTE, ON NE FAIT RIEN D'AUTRE
+    return; // 🆕 IMPORTANT : QUITTER IMMÉDIATEMENT
+  }
+
+  // 🎯 COMPORTEMENT NORMAL UNIQUEMENT HORS MODE VOTE
+  if (e.target === canvasRef.current) {
+    clickCountRef.current++;
+    
+    if (clickCountRef.current === 1) {
+      clickTimeoutRef.current = setTimeout(() => {
+        setSelectedGroups(new Set());
         clickCountRef.current = 0;
-      }
-    } else {
+      }, 300);
+    } else if (clickCountRef.current === 2) {
       if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
+      const rect = canvasRef.current!.getBoundingClientRect();
+      const x = (e.clientX - rect.left - position.x) / scale;
+      const y = (e.clientY - rect.top - position.y) / scale;
+      onGroupCreate({ x, y });
+      toast.success("Group created with double-click");
       clickCountRef.current = 0;
     }
-  };
+  } else {
+    if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
+    clickCountRef.current = 0;
+  }
+};
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -1056,7 +1109,14 @@ useEffect(() => {
 //   console.log("🧪 userId from Clerk :", userId);
   // console.log("🧪 Panel position → x =", showComments!.position.x, "y =", showComments!.position.y);
 
-
+// {console.log('🔍 Dots Debug:', { 
+//   dotsCount: dots?.length,
+//   myDotsCount: myDots?.length,
+//   activeSession: activeSessions?.[0],
+//   isSilentMode: activeSessions?.[0]?.isSilentMode,
+//   votingPhase: activeSessions?.[0]?.votingPhase,
+//   currentUserId
+// })}
   // ==================== RENDER ====================
 
   return (
@@ -1067,6 +1127,16 @@ useEffect(() => {
     Present mode – press ESC to exit
   </div>
 )}
+
+{/* VOTING SESSION MANAGER */}
+    {!isPresentMode && (
+      <VotingSessionManager
+        mapId={mapId}
+        projectId={projectId}
+        isPlacingDot={isPlacingDot}
+        onToggleDotPlacement={() => setIsPlacingDot(!isPlacingDot)}
+      />
+    )}
 
 {!isPresentMode && (
     <FloatingToolbar
@@ -1240,6 +1310,32 @@ useEffect(() => {
   </div>
 )}
            {/* 🧪 BOUTON TEST TEMPORAIRE */}
+
+{!isPresentMode && isPlacingDot && groups.length > 0 && (
+  <Button
+    onClick={async () => {
+      try {
+        const result = await placeDot({
+          sessionId: activeSessions![0]._id,
+          targetType: 'group',
+          targetId: groups[0].id,
+          position: { x: 100, y: 100 },
+        });
+        console.log('🧪 Test placeDot result:', result);
+        toast.success("Test dot placed!");
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : error;
+        console.error('🧪 Test placeDot error:', errorMessage);
+        toast.error("Test failed: " + errorMessage);
+      }
+    }}
+    size="sm"
+    variant="outline"
+    className="absolute top-20 left-4 z-50"
+  >
+    🧪 Test Dot on First Group
+  </Button>
+)}
         {/* <Button
           onClick={() => {
             if (groups.length > 0) {
@@ -1338,9 +1434,10 @@ useEffect(() => {
     <AffinityGroup
       key={group.id}
       group={group}
+      activeSessionId={activeSessions?.[0]?._id}
       insights={insights}
       scale={scale}
-      
+      isPlacingDot={isPlacingDot}
       // 🎯 PROPS OBLIGATOIRES - TOUJOURS FOURNIR DES FONCTIONS, MÊME EN PRÉSENTATION
       onMove={(groupId, position) => {
         if (presentationState.isActive) return; // 🚫 Ignorer silencieusement en présentation
@@ -1486,6 +1583,19 @@ useEffect(() => {
           </div>
 
           {/* 🎯 COUCHE 3: INDICATEURS UI (PAR-DESSUS TOUT) */}
+        {isPlacingDot && (
+          <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-50">
+            🎯 Click on groups or insights to place dots
+          </div>
+        )}
+
+          {isPlacingDot && (
+          <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-50 flex items-center gap-2">
+            <div className="w-3 h-3 bg-white rounded-full animate-ping" />
+            <span>Click on groups or insights to place dots</span>
+            <div className="w-3 h-3 bg-white rounded-full animate-ping" />
+          </div>
+          )}
           
           {/* Indicateur mouvement clavier */}
           {isMovingWithArrows && (
@@ -1575,21 +1685,7 @@ useEffect(() => {
             </motion.div>
           )}
           
-          { !isPresentMode && activePanel === 'voting' && (
-            <motion.div
-              initial={{ x: 600, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 600, opacity: 0 }}
-              className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
-            >
-              <DotVotingPanel 
-                projectId={projectId}
-                mapId={mapId}
-                groups={groups}
-                insights={insights}
-              />
-            </motion.div>
-          )}
+
 
     
 
@@ -1614,6 +1710,11 @@ useEffect(() => {
             </motion.div>
           )}
         </AnimatePresence>
+
+              {/* 🎯 RENDU DES DOTS SUR LE CANVAS */}
+              
+
+
       </div>
 
 

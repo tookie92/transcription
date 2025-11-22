@@ -1,12 +1,12 @@
-// components/DotVotingPanel.tsx - VERSION AVEC DRAG & DROP
+// components/DotVotingPanel.tsx - VERSION CORRIGÉE POUR NOUVEAU SYSTÈME
 
 "use client";
 
 import { useState, useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useAuth, useUser } from "@clerk/nextjs";
-import { Vote, Target, Award, Users, Plus, Trash2, Play, Eye, Timer, Grid } from "lucide-react";
+import { useAuth } from "@clerk/nextjs";
+import { Vote, Target, Award, Users, Plus, Trash2, Play, Eye, Timer, Grid, EyeOff } from "lucide-react";
 import { AffinityGroup, Insight } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,6 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Id } from "@/convex/_generated/dataModel";
-import { VotingGroup } from "./VotingGroup";
 
 interface DotVotingPanelProps {
   projectId: string;
@@ -30,7 +29,6 @@ const USER_COLORS = [
 
 export function DotVotingPanel({ projectId, mapId, groups, insights }: DotVotingPanelProps) {
   const { userId } = useAuth();
-  const { user } = useUser();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"dots" | "list">("dots");
 
@@ -40,12 +38,12 @@ export function DotVotingPanel({ projectId, mapId, groups, insights }: DotVoting
     return USER_COLORS[hash % USER_COLORS.length];
   }, [userId]);
 
-  // QUERIES
-  const sessions = useQuery(api.dotVoting.getProjectSessions, { 
-    projectId: projectId as Id<"projects"> 
+  // 🎯 QUERIES CORRIGÉES - UTILISER LES NOUVELLES FONCTIONS
+  const activeSessions = useQuery(api.dotVoting.getActiveSessions, { 
+    mapId: mapId as Id<"affinityMaps"> 
   });
   
-  const sessionResults = useQuery(api.dotVoting.getSessionResults, 
+  const sessionDots = useQuery(api.dotVoting.getSessionDots, 
     activeSessionId ? { sessionId: activeSessionId as Id<"dotVotingSessions"> } : "skip"
   );
 
@@ -53,12 +51,16 @@ export function DotVotingPanel({ projectId, mapId, groups, insights }: DotVoting
     activeSessionId ? { sessionId: activeSessionId as Id<"dotVotingSessions"> } : "skip"
   );
 
-  // MUTATIONS
+  const myDots = useQuery(api.dotVoting.getMyDots,
+    activeSessionId ? { sessionId: activeSessionId as Id<"dotVotingSessions"> } : "skip"
+  );
+
+  // 🎯 MUTATIONS CORRIGÉES
   const createSession = useMutation(api.dotVoting.createSession);
-  const createDot = useMutation(api.dotVoting.createDot);
-  const startVotingPhase = useMutation(api.dotVoting.startVotingPhase);
+  const placeDot = useMutation(api.dotVoting.placeDot);
   const revealVotes = useMutation(api.dotVoting.revealVotes);
-  const castVote = useMutation(api.dotVoting.castVote);
+  const endSession = useMutation(api.dotVoting.endSession);
+  const toggleSilentMode = useMutation(api.dotVoting.toggleSilentMode);
 
   const [newSessionName, setNewSessionName] = useState("Dot Voting Session");
 
@@ -73,29 +75,14 @@ export function DotVotingPanel({ projectId, mapId, groups, insights }: DotVoting
         projectId: projectId as Id<"projects">,
         mapId: mapId as Id<"affinityMaps">,
         name: newSessionName,
-        maxVotesPerUser: 10, // 🎯 PLUS DE DOTS POUR DRAG & DROP
-        allowRevoting: true,
-        showResults: true,
+        maxDotsPerUser: 10,
+        isSilentMode: true, // 🎯 MODE DISCRET PAR DÉFAUT
       });
       
       setActiveSessionId(sessionId);
       toast.success("Voting session created!");
     } catch (error) {
       toast.error("Failed to create voting session");
-      console.error(error);
-    }
-  };
-
-  const handleStartVoting = async () => {
-    if (!activeSessionId) return;
-
-    try {
-      await startVotingPhase({
-        sessionId: activeSessionId as Id<"dotVotingSessions">,
-      });
-      toast.success("Voting started! Drag & drop dots to vote.");
-    } catch (error) {
-      toast.error("Failed to start voting");
       console.error(error);
     }
   };
@@ -114,59 +101,80 @@ export function DotVotingPanel({ projectId, mapId, groups, insights }: DotVoting
     }
   };
 
-  const handleAddDot = async (groupId: string, position: { x: number; y: number }) => {
-    if (!activeSessionId || !userId) return;
+  const handleEndSession = async () => {
+    if (!activeSessionId) return;
 
     try {
-      const result = await createDot({
+      await endSession({
         sessionId: activeSessionId as Id<"dotVotingSessions">,
-        groupId,
-        position,
-        color: userColor,
       });
-
-      if (!result.success) {
-        toast.error("Maximum dots reached");
-      }
+      setActiveSessionId(null);
+      toast.success("Voting session ended!");
     } catch (error) {
-      toast.error("Failed to add dot");
+      toast.error("Failed to end session");
       console.error(error);
     }
   };
 
-  // 🎯 COMPATIBILITÉ AVEC L'ANCIEN SYSTÈME
-  const handleVote = async (groupId: string, newVoteCount: number) => {
-    if (!activeSessionId || !userId) return;
+  const handleToggleSilentMode = async () => {
+    if (!activeSessionId || !currentSession) return;
 
     try {
-      await castVote({
+      await toggleSilentMode({
         sessionId: activeSessionId as Id<"dotVotingSessions">,
-        groupId,
-        votes: newVoteCount,
-        color: userColor,
+        isSilentMode: !currentSession.isSilentMode,
       });
+      toast.success(currentSession.isSilentMode ? "Silent mode disabled" : "Silent mode enabled");
     } catch (error) {
-      toast.error("Failed to cast vote");
+      toast.error("Failed to toggle silent mode");
       console.error(error);
     }
   };
 
+  // 🎯 CALCUL DES STATS POUR LE NOUVEAU SYSTÈME
   const stats = useMemo(() => {
-    if (!sessionResults) return null;
+    if (!currentSession || !sessionDots || !myDots) return null;
 
-    const totalVotesCast = sessionResults.results.reduce((sum, result) => sum + result.totalVotes, 0);
-    const userVotesRemaining = Math.max(0, (sessionResults.maxVotesPerUser - sessionResults.userTotalVotes));
+    const totalDotsCast = sessionDots.length;
+    const userDotsRemaining = Math.max(0, currentSession.maxDotsPerUser - myDots.length);
+
+    // 🎯 CALCULER LES RÉSULTATS PAR GROUPE
+    const groupResults = groups.map(group => {
+      const groupDots = sessionDots.filter(dot => 
+        dot.targetType === 'group' && dot.targetId === group.id
+      );
+      
+      const userDotsOnGroup = myDots.filter(dot => 
+        dot.targetType === 'group' && dot.targetId === group.id
+      );
+
+      return {
+        groupId: group.id,
+        group,
+        totalVotes: groupDots.length,
+        userVotes: userDotsOnGroup.length,
+        voteDetails: groupDots.map(dot => ({
+          userId: dot.userId,
+          votes: 1, // Chaque dot = 1 vote
+          color: dot.color,
+          position: dot.position,
+        }))
+      };
+    }).sort((a, b) => b.totalVotes - a.totalVotes);
+
+    const topGroup = groupResults[0];
 
     return {
-      totalVotesCast,
-      userVotesRemaining,
-      topGroup: sessionResults.results[0],
-      isVotingPhase: currentSession?.votingPhase === "voting",
-      isRevealed: currentSession?.votingPhase === "revealed",
-      isSetup: currentSession?.votingPhase === "setup",
-      totalDots: sessionResults.myVotes.reduce((sum, vote) => sum + vote.votes, 0),
+      totalDotsCast,
+      userDotsRemaining,
+      topGroup,
+      groupResults,
+      isVotingPhase: currentSession.votingPhase === "voting",
+      isRevealed: currentSession.votingPhase === "revealed",
+      isSilentMode: currentSession.isSilentMode,
+      myDotsCount: myDots.length,
     };
-  }, [sessionResults, currentSession]);
+  }, [currentSession, sessionDots, myDots, groups]);
 
   if (!userId) {
     return (
@@ -193,8 +201,8 @@ export function DotVotingPanel({ projectId, mapId, groups, insights }: DotVoting
         </CardTitle>
         <CardDescription>
           {currentSession?.votingPhase === "voting" 
-            ? "Drag & drop dots to vote" 
-            : "Prioritize groups with dot voting"}
+            ? "Click on canvas to place dots" 
+            : "Prioritize with interactive dot voting"}
         </CardDescription>
       </CardHeader>
       
@@ -214,10 +222,10 @@ export function DotVotingPanel({ projectId, mapId, groups, insights }: DotVoting
               </Button>
             </div>
 
-            {sessions && sessions.length > 0 && (
+            {activeSessions && activeSessions.length > 0 && (
               <div className="space-y-2">
                 <p className="text-sm font-medium text-gray-700">Or join existing:</p>
-                {sessions.map(session => (
+                {activeSessions.map(session => (
                   <button
                     key={session._id}
                     onClick={() => setActiveSessionId(session._id)}
@@ -226,12 +234,12 @@ export function DotVotingPanel({ projectId, mapId, groups, insights }: DotVoting
                     <div className="font-medium text-sm">{session.name}</div>
                     <div className="text-xs text-gray-500 flex items-center gap-1">
                       <Badge variant={
-                        session.votingPhase === "setup" ? "secondary" :
                         session.votingPhase === "voting" ? "default" :
-                        session.votingPhase === "revealed" ? "outline" : "destructive"
+                        session.votingPhase === "revealed" ? "secondary" : "outline"
                       }>
                         {session.votingPhase}
                       </Badge>
+                      <span>{session.isSilentMode ? "🔇" : "🔊"}</span>
                       <span>{new Date(session.createdAt).toLocaleDateString()}</span>
                     </div>
                   </button>
@@ -241,63 +249,72 @@ export function DotVotingPanel({ projectId, mapId, groups, insights }: DotVoting
           </div>
         )}
 
-        {activeSessionId && sessionResults && currentSession && (
+        {activeSessionId && currentSession && (
           <div className="space-y-4">
+            {/* HEADER SESSION */}
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="font-semibold text-sm">{sessionResults.session.name}</h4>
+                <h4 className="font-semibold text-sm">{currentSession.name}</h4>
                 <div className="flex items-center gap-2 mt-1">
                   <Badge variant={
-                    currentSession.votingPhase === "setup" ? "secondary" :
                     currentSession.votingPhase === "voting" ? "default" :
-                    currentSession.votingPhase === "revealed" ? "outline" : "destructive"
+                    currentSession.votingPhase === "revealed" ? "secondary" : "outline"
                   }>
                     {currentSession.votingPhase}
                   </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {currentSession.isSilentMode ? "🔇 Silent" : "🔊 Live"}
+                  </Badge>
                   <span className="text-xs text-gray-500">
-                    {stats?.totalDots || 0} / {sessionResults.maxVotesPerUser} dots
+                    {stats?.myDotsCount || 0} / {currentSession.maxDotsPerUser} dots
                   </span>
                 </div>
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setActiveSessionId(null)}
+                onClick={handleEndSession}
               >
                 <Trash2 size={14} />
               </Button>
             </div>
 
+            {/* ACTIONS FACILITATEUR */}
             {currentSession.createdBy === userId && (
               <div className="flex gap-2">
-                {currentSession.votingPhase === "setup" && (
-                  <Button onClick={handleStartVoting} size="sm" className="flex-1">
-                    <Play size={14} className="mr-1" />
-                    Start Voting
-                  </Button>
-                )}
                 {currentSession.votingPhase === "voting" && (
-                  <Button onClick={handleRevealVotes} size="sm" className="flex-1">
-                    <Eye size={14} className="mr-1" />
-                    Reveal Votes
-                  </Button>
+                  <>
+                    <Button onClick={handleRevealVotes} size="sm" className="flex-1">
+                      <Eye size={14} className="mr-1" />
+                      Reveal Votes
+                    </Button>
+                    <Button 
+                      onClick={handleToggleSilentMode} 
+                      size="sm" 
+                      variant={currentSession.isSilentMode ? "default" : "outline"}
+                    >
+                      {currentSession.isSilentMode ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </Button>
+                  </>
                 )}
               </div>
             )}
 
+            {/* STATS UTILISATEUR */}
             <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
               <div className="flex items-center gap-2">
                 <Target className="w-4 h-4 text-blue-600" />
                 <span className="text-sm font-medium text-blue-900">
-                  {stats?.isVotingPhase ? "Your Dots (Private)" : "Your Dots"}
+                  {stats?.isVotingPhase && stats.isSilentMode ? "Your Dots (Private)" : "Your Dots"}
                 </span>
               </div>
-              <Badge variant={(stats?.userVotesRemaining ?? 0) > 0 ? "default" : "destructive"}>
-                {stats?.userVotesRemaining ?? 0} / {sessionResults.maxVotesPerUser}
+              <Badge variant={(stats?.userDotsRemaining ?? 0) > 0 ? "default" : "destructive"}>
+                {stats?.userDotsRemaining ?? 0} remaining
               </Badge>
             </div>
 
-            {stats?.isVotingPhase && (
+            {/* INDICATEUR MODE DISCRET */}
+            {stats?.isVotingPhase && stats.isSilentMode && (
               <div className="p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <div className="flex items-center gap-2 text-yellow-800">
                   <Eye size={14} />
@@ -306,94 +323,62 @@ export function DotVotingPanel({ projectId, mapId, groups, insights }: DotVoting
               </div>
             )}
 
-            {/* 🎯 ONGLETS POUR CHOISIR LE MODE */}
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "dots" | "list")}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="dots" className="flex items-center gap-2">
-                  <Grid size={14} />
-                  Dots View
-                </TabsTrigger>
-                <TabsTrigger value="list" className="flex items-center gap-2">
-                  <Vote size={14} />
-                  List View
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="dots" className="space-y-4">
-                {/* 🎯 VUE DRAG & DROP */}
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {groups.map(group => (
-                    <VotingGroup
-                      key={group.id}
-                      sessionId={activeSessionId}
-                      group={group}
-                      isVotingPhase={stats?.isVotingPhase || false}
-                      onAddDot={(position) => handleAddDot(group.id, position)}
-                    />
-                  ))}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="list" className="space-y-3">
-                {/* 🎯 VUE LISTE (COMPATIBILITÉ) */}
-                {sessionResults.results.map((result, index) => (
-                  <div
-                    key={result.groupId}
-                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors"
-                    style={{ borderLeftColor: result.group.color, borderLeftWidth: '4px' }}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-sm truncate" style={{ color: result.group.color }}>
-                        {result.group.title}
-                      </h4>
-                      <p className="text-xs text-gray-500">
-                        {result.group.insightIds.length} insights • #{index + 1}
-                      </p>
-                      {!stats?.isVotingPhase && result.totalVotes > 0 && (
-                        <p className="text-xs text-green-600 font-medium">
-                          {result.totalVotes} total votes
+            {/* RÉSULTATS */}
+            {stats && stats.groupResults && (
+              <div className="space-y-3">
+                <h4 className="font-medium text-sm">Voting Results</h4>
+                {stats.groupResults
+                  .filter(result => result.totalVotes > 0)
+                  .map((result, index) => (
+                    <div
+                      key={result.groupId}
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                      style={{ borderLeftColor: result.group.color, borderLeftWidth: '4px' }}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-sm truncate" style={{ color: result.group.color }}>
+                          {result.group.title}
+                        </h4>
+                        <p className="text-xs text-gray-500">
+                          {result.group.insightIds.length} insights • #{index + 1}
                         </p>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleVote(result.groupId, Math.max(0, result.userVotes - 1))}
-                        disabled={result.userVotes === 0}
-                        className="w-6 h-6 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-medium disabled:opacity-30 hover:bg-gray-300"
-                      >
-                        −
-                      </button>
-                      
-                      <div className="w-8 text-center">
-                        <span className={`text-sm font-bold ${
-                          result.userVotes > 0 ? 'text-purple-600' : 'text-gray-400'
-                        }`}>
-                          {result.userVotes}
-                        </span>
+                        {!stats.isVotingPhase && (
+                          <p className="text-xs text-green-600 font-medium">
+                            {result.totalVotes} total votes
+                          </p>
+                        )}
                       </div>
                       
-                      <button
-                        onClick={() => handleVote(result.groupId, result.userVotes + 1)}
-                        disabled={(stats?.userVotesRemaining ?? 0) === 0}
-                        className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-medium disabled:opacity-30 hover:bg-purple-200"
-                      >
-                        +
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 text-center">
+                          <span className={`text-sm font-bold ${
+                            result.userVotes > 0 ? 'text-purple-600' : 'text-gray-400'
+                          }`}>
+                            {result.userVotes}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </TabsContent>
-            </Tabs>
+                  ))
+                }
 
-            {stats && stats.isRevealed && stats.totalVotesCast > 0 && (
+                {stats.groupResults.filter(r => r.totalVotes > 0).length === 0 && (
+                  <div className="text-center py-4 text-gray-500 text-sm">
+                    No votes yet. Click on groups to place dots!
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TOP GROUPS RÉVÉLÉS */}
+            {stats && stats.isRevealed && stats.topGroup && (
               <div className="p-3 bg-green-50 rounded-lg border border-green-200">
                 <div className="flex items-center gap-2 mb-2">
                   <Award className="w-4 h-4 text-green-600" />
                   <span className="text-sm font-medium text-green-900">Top Groups</span>
                 </div>
                 <div className="space-y-1">
-                  {sessionResults.results
+                  {stats.groupResults
                     .filter(result => result.totalVotes > 0)
                     .slice(0, 3)
                     .map((result, index) => (

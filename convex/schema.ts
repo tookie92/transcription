@@ -94,48 +94,24 @@ dotVotingSessions: defineTable({
   projectId: v.id("projects"),
   mapId: v.id("affinityMaps"),
   name: v.string(),
-  maxVotesPerUser: v.number(),
+  maxDotsPerUser: v.number(),
   isActive: v.boolean(),
-  
-  // 🆕 CHAMPS POUR VOTE INVISIBLE
   votingPhase: v.union(
-    v.literal("setup"),      // Configuration
-    v.literal("voting"),     // Vote en cours (invisible)
-    v.literal("revealed"),   // Votes révélés
-    v.literal("completed")   // Session terminée
+    v.literal("setup"),
+    v.literal("voting"), 
+    v.literal("revealed"),
+    v.literal("completed")
   ),
-  revealAt: v.optional(v.number()), // Révélation automatique
-  allowRevoting: v.boolean(),       // true par défaut
-  showResults: v.boolean(),         // true par défaut
-  
+  isSilentMode: v.boolean(),
   createdBy: v.string(),
   createdAt: v.number(),
   updatedAt: v.number(),
 })
-.index("by_project", ["projectId"]),
+.index("by_project", ["projectId"])
+.index("by_map", ["mapId"]),
 
 // 🆕 Table Votes
-votes: defineTable({
- sessionId: v.id("dotVotingSessions"),
-  userId: v.string(),
-  groupId: v.string(),
-  votes: v.number(),
-  isVisible: v.boolean(),
-  color: v.string(),
-  position: v.optional(v.object({
-    x: v.number(),
-    y: v.number()
-  })),
-  // 🎯 BIEN DÉFINIR CES CHAMPS COMME OPTIONNELS
-  dotSize: v.optional(v.number()),
-  isDragging: v.optional(v.boolean()),
-  zIndex: v.optional(v.number()),
-  createdAt: v.number(),
-})
-.index("by_user_group_session", ["userId", "groupId", "sessionId"])
-.index("by_session", ["sessionId"])
-.index("by_session_visible", ["sessionId", "isVisible"])
-.index("by_session_group", ["sessionId", "groupId"]), // 🆕 POUR LES DOTS PAR GROUPE
+
 
 
 
@@ -251,6 +227,40 @@ commentViews: defineTable({
   .index("by_map_group", ["mapId", "groupId"])
   .index("by_user_map", ["userId", "mapId"])
   .index("by_last_activity", ["lastActivity"]),
+
+  //
+  votes: defineTable({
+  sessionId: v.id("dotVotingSessions"),
+  userId: v.string(),
+  targetId: v.string(), // 🆕 Peut être groupId OU insightId
+  targetType: v.union(v.literal("group"), v.literal("insight")),
+  votes: v.number(),
+  isVisible: v.boolean(),
+  color: v.string(),
+  position: v.optional(v.object({
+    x: v.number(),
+    y: v.number()
+  })),
+  dotSize: v.optional(v.number()),
+  isDragging: v.optional(v.boolean()),
+  zIndex: v.optional(v.number()),
+  createdAt: v.number(),
+})
+.index("by_user_target_session", ["userId", "targetId", "sessionId"]) // 🆕
+.index("by_session_target", ["sessionId", "targetId"]) ,// 
+
+dotVotes: defineTable({
+  sessionId: v.id("dotVotingSessions"),
+  userId: v.string(),
+  targetType: v.union(v.literal("group"), v.literal("insight")),
+  targetId: v.string(),
+  color: v.string(),
+  position: v.object({ x: v.number(), y: v.number() }),
+  createdAt: v.number(),
+})
+.index("by_session", ["sessionId"])
+.index("by_user_session", ["userId", "sessionId"]) // 🎯 CET INDEX EST CRUCIAL
+.index("by_target", ["targetType", "targetId"]),
   
 });
 

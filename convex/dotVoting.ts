@@ -1,209 +1,24 @@
-// convex/dotVoting.ts - VERSION AVEC TYPES STRICTS
+// convex/dotVoting.ts - SYSTÈME COMPLET
 
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { DotVotingSession, Vote, SessionResults, GroupVoteResult, VoteDetail } from "@/types";
+import { DotVotingSession, DotVote } from "@/types";
 import { Id } from "@/convex/_generated/dataModel";
 
-// 🎯 INTERFACE POUR LES MISES À JOUR DE SESSION
-interface SessionUpdates {
-  votingPhase?: "setup" | "voting" | "revealed" | "completed";
-  revealAt?: number;
-  updatedAt: number;
-}
+// 🎯 PALETTE DE COULEURS PAR DÉFAUT
+const DEFAULT_COLORS = [
+  "#EF4444", "#F59E0B", "#10B981", "#3B82F6", 
+  "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16"
+];
 
-
-// 🎯 CRÉER UN DOT INDIVIDUEL (DRAG & DROP)
-export const createDot = mutation({
-  args: {
-    sessionId: v.id("dotVotingSessions"),
-    groupId: v.string(),
-    position: v.object({ x: v.number(), y: v.number() }),
-    color: v.string(),
-  },
-  handler: async (ctx, args): Promise<{ success: boolean; voteId?: Id<"votes"> }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-
-    if (session.votingPhase !== "voting" && session.votingPhase !== "setup") {
-      throw new Error("Voting phase is not active");
-    }
-
-    const userDots = await ctx.db
-      .query("votes")
-      .withIndex("by_session", q => q.eq("sessionId", args.sessionId))
-      .filter(q => q.eq(q.field("userId"), identity.subject))
-      .collect();
-
-    const totalDots = userDots.reduce((sum, dot) => sum + dot.votes, 0);
-
-    if (totalDots >= session.maxVotesPerUser) {
-      return { success: false };
-    }
-
-    const voteId = await ctx.db.insert("votes", {
-      sessionId: args.sessionId,
-      userId: identity.subject,
-      groupId: args.groupId,
-      votes: 1,
-      color: args.color,
-      isVisible: session.votingPhase === "voting" ? false : true,
-      position: args.position,
-      dotSize: 24, // 🎯 BIEN DÉFINI
-      zIndex: Date.now(), // 🎯 BIEN DÉFINI
-      isDragging: false, // 🎯 BIEN DÉFINI
-      createdAt: Date.now(),
-    });
-
-    await ctx.db.patch(args.sessionId, {
-      updatedAt: Date.now(),
-    });
-
-    return { success: true, voteId };
-  },
-});
-
-
-// 🎯 DÉPLACER UN DOT EXISTANT
-export const moveDot = mutation({
-  args: {
-    voteId: v.id("votes"),
-    newGroupId: v.string(),
-    newPosition: v.object({ x: v.number(), y: v.number() }),
-  },
-  handler: async (ctx, args): Promise<{ success: boolean }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-
-    const vote = await ctx.db.get(args.voteId);
-    if (!vote) throw new Error("Vote not found");
-
-    if (vote.userId !== identity.subject) {
-      throw new Error("Can only move your own dots");
-    }
-
-    const session = await ctx.db.get(vote.sessionId);
-    if (!session) throw new Error("Session not found");
-
-    if (session.votingPhase !== "voting" && session.votingPhase !== "setup") {
-      throw new Error("Cannot move dots in current phase");
-    }
-
-    await ctx.db.patch(args.voteId, {
-      groupId: args.newGroupId,
-      position: args.newPosition,
-      zIndex: Date.now(), // 🎯 METTRE À JOUR L'ORDRE D'AFFICHAGE
-    });
-
-    await ctx.db.patch(vote.sessionId, {
-      updatedAt: Date.now(),
-    });
-
-    return { success: true };
-  },
-});
-
-
-// 🎯 SUPPRIMER UN DOT
-export const removeDot = mutation({
-  args: {
-    voteId: v.id("votes"),
-  },
-  handler: async (ctx, args): Promise<{ success: boolean }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-
-    const vote = await ctx.db.get(args.voteId);
-    if (!vote) throw new Error("Vote not found");
-
-    if (vote.userId !== identity.subject) {
-      throw new Error("Can only remove your own dots");
-    }
-
-    await ctx.db.delete(args.voteId);
-
-    const session = await ctx.db.get(vote.sessionId);
-    if (session) {
-      await ctx.db.patch(vote.sessionId, {
-        updatedAt: Date.now(),
-      });
-    }
-
-    return { success: true };
-  },
-});
-
-// 🎯 METTRE À JOUR LA POSITION D'UN DOT (DRAG EN COURS)
-export const updateDotPosition = mutation({
-  args: {
-    voteId: v.id("votes"),
-    position: v.object({ x: v.number(), y: v.number() }),
-    isDragging: v.boolean(),
-  },
-  handler: async (ctx, args): Promise<{ success: boolean }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-
-    const vote = await ctx.db.get(args.voteId);
-    if (!vote || vote.userId !== identity.subject) {
-      return { success: false };
-    }
-
-    await ctx.db.patch(args.voteId, {
-      position: args.position,
-      isDragging: args.isDragging,
-      zIndex: Date.now(), // 🎯 TOUJOURS AU-DESSUS PENDANT LE DRAG
-    });
-
-    return { success: true };
-  },
-});
-
-// 🎯 RÉCUPÉRER LES DOTS D'UN GROUPE (POUR L'AFFICHAGE)
-export const getGroupDots = query({
-  args: {
-    sessionId: v.id("dotVotingSessions"),
-    groupId: v.string(),
-  },
-  handler: async (ctx, args): Promise<Vote[]> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-
-    const dots = await ctx.db
-      .query("votes")
-      .withIndex("by_session_group", q => 
-        q.eq("sessionId", args.sessionId)
-         .eq("groupId", args.groupId)
-      )
-      .collect();
-
-    // 🎯 FILTRER LA VISIBILITÉ
-    const session = await ctx.db.get(args.sessionId);
-    const visibleDots = session?.votingPhase === "voting" 
-      ? dots.filter(dot => dot.userId === identity.subject || dot.isVisible)
-      : dots.filter(dot => dot.isVisible);
-
-    return visibleDots as Vote[];
-  },
-});
-
-
-
-
-// fin new Dot
-
-// 🎯 CRÉER UNE SESSION AVEC VOTE INVISIBLE
+// 🎯 CRÉER UNE SESSION DE VOTE
 export const createSession = mutation({
   args: {
     projectId: v.id("projects"),
     mapId: v.id("affinityMaps"),
     name: v.string(),
-    maxVotesPerUser: v.number(),
-    allowRevoting: v.optional(v.boolean()),
-    showResults: v.optional(v.boolean()),
+    maxDotsPerUser: v.number(),
+    isSilentMode: v.boolean(),
   },
   handler: async (ctx, args): Promise<Id<"dotVotingSessions">> => {
     const identity = await ctx.auth.getUserIdentity();
@@ -213,11 +28,10 @@ export const createSession = mutation({
       projectId: args.projectId,
       mapId: args.mapId,
       name: args.name,
-      maxVotesPerUser: args.maxVotesPerUser,
+      maxDotsPerUser: args.maxDotsPerUser,
       isActive: true,
-      votingPhase: "setup",
-      allowRevoting: args.allowRevoting ?? true,
-      showResults: args.showResults ?? true,
+      votingPhase: "voting",
+      isSilentMode: args.isSilentMode,
       createdBy: identity.subject,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -227,41 +41,179 @@ export const createSession = mutation({
   },
 });
 
-// 🎯 DÉMARRER LA PHASE DE VOTE
-export const startVotingPhase = mutation({
+// 🎯 PLACER UN DOT
+// convex/dotVoting.ts - CORRECTION DE placeDot
+// convex/dotVoting.ts - CORRECTION DU TYPE DE RETOUR
+
+// convex/dotVoting.ts - CORRECTION DE getDotsByTarget
+export const getDotsByTarget = query({
   args: {
     sessionId: v.id("dotVotingSessions"),
-    revealAfterMs: v.optional(v.number()),
+    targetType: v.union(v.literal("group"), v.literal("insight")),
+    targetId: v.string(),
+  },
+  handler: async (ctx, args): Promise<DotVote[]> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+
+    // 🎯 UTILISER L'INDEX EXISTANT by_session ET FILTRER MANUELLEMENT
+    const allSessionDots = await ctx.db
+      .query("dotVotes")
+      .withIndex("by_session", q => q.eq("sessionId", args.sessionId))
+      .collect();
+
+    // 🎯 FILTRER PAR TARGET
+    const filteredDots = allSessionDots.filter(dot => 
+      dot.targetType === args.targetType && dot.targetId === args.targetId
+    );
+
+    return filteredDots as DotVote[];
+  },
+});
+export const placeDot = mutation({
+  args: {
+    sessionId: v.id("dotVotingSessions"),
+    targetType: v.union(v.literal("group"), v.literal("insight")),
+    targetId: v.string(),
+    position: v.object({ x: v.number(), y: v.number() }),
+  },
+  handler: async (ctx, args): Promise<{ success: boolean; dotId?: Id<"dotVotes"> }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    console.log('🟢 placeDot called with:', args);
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) {
+      console.log('❌ Session not found:', args.sessionId);
+      throw new Error("Session not found");
+    }
+
+    if (session.votingPhase !== "voting") {
+      console.log('❌ Voting phase not active:', session.votingPhase);
+      throw new Error("Voting phase is not active");
+    }
+
+    // 🎯 COMPTER LES DOTS EXISTANTS
+    const userDots = await ctx.db
+      .query("dotVotes")
+      .withIndex("by_user_session", q => 
+        q.eq("userId", identity.subject)
+         .eq("sessionId", args.sessionId)
+      )
+      .collect();
+
+    console.log('📊 User dots count:', userDots.length, 'Max:', session.maxDotsPerUser);
+
+    if (userDots.length >= session.maxDotsPerUser) {
+      console.log('❌ Max dots reached');
+      return { success: false }; // 🎯 PAS de dotId ici
+    }
+
+    // 🎯 GÉNÉRER UNE COULEUR
+    const userHash = identity.subject.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+    const userColor = DEFAULT_COLORS[userHash % DEFAULT_COLORS.length];
+
+    console.log('🎨 User color:', userColor);
+
+    // 🎯 CRÉER LE DOT
+    try {
+      const dotId = await ctx.db.insert("dotVotes", {
+        sessionId: args.sessionId,
+        userId: identity.subject,
+        targetType: args.targetType,
+        targetId: args.targetId,
+        color: userColor,
+        position: args.position,
+        createdAt: Date.now(),
+      });
+
+      console.log('✅ Dot created successfully:', dotId);
+
+      await ctx.db.patch(args.sessionId, {
+        updatedAt: Date.now(),
+      });
+
+      return { success: true, dotId }; // 🎯 AJOUTER dotId ICI
+    } catch (error) {
+      console.error('❌ Error creating dot:', error);
+      throw error;
+    }
+  },
+});
+
+// 🎯 DÉPLACER UN DOT
+export const moveDot = mutation({
+  args: {
+    dotId: v.id("dotVotes"),
+    newPosition: v.object({ x: v.number(), y: v.number() }),
+    newTargetType: v.optional(v.union(v.literal("group"), v.literal("insight"))),
+    newTargetId: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ success: boolean }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
-    const session = await ctx.db.get(args.sessionId);
+    const dot = await ctx.db.get(args.dotId);
+    if (!dot) throw new Error("Dot not found");
+
+    if (dot.userId !== identity.subject) {
+      throw new Error("Can only move your own dots");
+    }
+
+    const session = await ctx.db.get(dot.sessionId);
     if (!session) throw new Error("Session not found");
 
-    if (session.createdBy !== identity.subject) {
-      throw new Error("Only session creator can start voting");
+    if (session.votingPhase !== "voting") {
+      throw new Error("Cannot move dots in current phase");
     }
 
-    const updates: SessionUpdates = {
-      votingPhase: "voting",
-      updatedAt: Date.now(),
+    const updates: {
+      position: { x: number; y: number };
+      targetType?: "group" | "insight";
+      targetId?: string;
+    } = {
+      position: args.newPosition,
     };
 
-    if (args.revealAfterMs) {
-      updates.revealAt = Date.now() + args.revealAfterMs;
+    if (args.newTargetType && args.newTargetId) {
+      updates.targetType = args.newTargetType;
+      updates.targetId = args.newTargetId;
     }
 
-    await ctx.db.patch(args.sessionId, updates);
-    
-    const existingVotes = await ctx.db
-      .query("votes")
-      .withIndex("by_session", q => q.eq("sessionId", args.sessionId))
-      .collect();
+    await ctx.db.patch(args.dotId, updates);
 
-    for (const vote of existingVotes) {
-      await ctx.db.patch(vote._id, { isVisible: false });
+    await ctx.db.patch(dot.sessionId, {
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+// 🎯 SUPPRIMER UN DOT
+export const removeDot = mutation({
+  args: {
+    dotId: v.id("dotVotes"),
+  },
+  handler: async (ctx, args): Promise<{ success: boolean }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const dot = await ctx.db.get(args.dotId);
+    if (!dot) throw new Error("Dot not found");
+
+    if (dot.userId !== identity.subject) {
+      throw new Error("Can only remove your own dots");
+    }
+
+    await ctx.db.delete(args.dotId);
+
+    const session = await ctx.db.get(dot.sessionId);
+    if (session) {
+      await ctx.db.patch(dot.sessionId, {
+        updatedAt: Date.now(),
+      });
     }
 
     return { success: true };
@@ -273,24 +225,15 @@ export const revealVotes = mutation({
   args: {
     sessionId: v.id("dotVotingSessions"),
   },
-  handler: async (ctx, args): Promise<{ success: boolean; votesRevealed: number }> => {
+  handler: async (ctx, args): Promise<{ success: boolean }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
 
-    if (session.createdBy !== identity.subject && session.votingPhase !== "voting") {
-      throw new Error("Not authorized to reveal votes");
-    }
-
-    const allVotes = await ctx.db
-      .query("votes")
-      .withIndex("by_session", q => q.eq("sessionId", args.sessionId))
-      .collect();
-
-    for (const vote of allVotes) {
-      await ctx.db.patch(vote._id, { isVisible: true });
+    if (session.createdBy !== identity.subject) {
+      throw new Error("Only session creator can reveal votes");
     }
 
     await ctx.db.patch(args.sessionId, {
@@ -298,17 +241,14 @@ export const revealVotes = mutation({
       updatedAt: Date.now(),
     });
 
-    return { success: true, votesRevealed: allVotes.length };
+    return { success: true };
   },
 });
 
-// 🎯 PLACER UN VOTE (VERSION INVISIBLE)
-export const castVote = mutation({
+// 🎯 TERMINER LA SESSION
+export const endSession = mutation({
   args: {
     sessionId: v.id("dotVotingSessions"),
-    groupId: v.string(),
-    votes: v.number(),
-    color: v.string(),
   },
   handler: async (ctx, args): Promise<{ success: boolean }> => {
     const identity = await ctx.auth.getUserIdentity();
@@ -317,57 +257,13 @@ export const castVote = mutation({
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
 
-    if (session.votingPhase !== "voting" && session.votingPhase !== "setup") {
-      throw new Error("Voting phase is not active");
-    }
-
-    const existingVotes = await ctx.db
-      .query("votes")
-      .withIndex("by_user_group_session", q => 
-        q.eq("userId", identity.subject)
-         .eq("groupId", args.groupId)
-         .eq("sessionId", args.sessionId)
-      )
-      .collect();
-
-    const userVotes = await ctx.db
-      .query("votes")
-      .withIndex("by_session", q => q.eq("sessionId", args.sessionId))
-      .filter(q => q.eq(q.field("userId"), identity.subject))
-      .collect();
-
-    const currentUserTotal = userVotes.reduce((sum, vote) => sum + vote.votes, 0);
-    const existingVoteCount = existingVotes.length > 0 ? existingVotes[0].votes : 0;
-    const newTotal = currentUserTotal - existingVoteCount + args.votes;
-
-    if (newTotal > session.maxVotesPerUser) {
-      throw new Error(`Maximum ${session.maxVotesPerUser} votes allowed`);
-    }
-
-    if (existingVotes.length > 0) {
-      await ctx.db.patch(existingVotes[0]._id, {
-        votes: args.votes,
-        color: args.color,
-        isVisible: session.votingPhase === "voting" ? false : true,
-        createdAt: Date.now(),
-      });
-    } else {
-      await ctx.db.insert("votes", {
-        sessionId: args.sessionId,
-        userId: identity.subject,
-        groupId: args.groupId,
-        votes: args.votes,
-        color: args.color,
-        isVisible: session.votingPhase === "voting" ? false : true,
-        position: {
-          x: Math.random() * 100,
-          y: Math.random() * 100
-        },
-        createdAt: Date.now(),
-      });
+    if (session.createdBy !== identity.subject) {
+      throw new Error("Only session creator can end session");
     }
 
     await ctx.db.patch(args.sessionId, {
+      votingPhase: "completed",
+      isActive: false,
       updatedAt: Date.now(),
     });
 
@@ -375,104 +271,87 @@ export const castVote = mutation({
   },
 });
 
-// 🎯 RÉCUPÉRER LES RÉSULTATS AVEC VISIBILITÉ CONDITIONNELLE
-export const getSessionResults = query({
+// 🎯 BASculer LE MODE DISCRET
+export const toggleSilentMode = mutation({
   args: {
     sessionId: v.id("dotVotingSessions"),
+    isSilentMode: v.boolean(),
   },
-  handler: async (ctx, args): Promise<SessionResults | null> => {
+  handler: async (ctx, args): Promise<{ success: boolean }> => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
+    if (!identity) throw new Error("Not authenticated");
 
     const session = await ctx.db.get(args.sessionId);
-    if (!session) return null;
+    if (!session) throw new Error("Session not found");
 
-    const visibleVotes = await ctx.db
-      .query("votes")
-      .withIndex("by_session_visible", q => 
-        q.eq("sessionId", args.sessionId)
-         .eq("isVisible", true)
-      )
-      .collect();
+    if (session.createdBy !== identity.subject) {
+      throw new Error("Only session creator can toggle silent mode");
+    }
 
-    const myVotes = await ctx.db
-      .query("votes")
-      .withIndex("by_session", q => q.eq("sessionId", args.sessionId))
-      .filter(q => q.eq(q.field("userId"), identity.subject))
-      .collect();
-
-    const map = await ctx.db.get(session.mapId);
-    if (!map) return null;
-
-    const groupTotals = new Map<string, number>();
-    const userVotes = new Map<string, number>();
-    const voteDetails = new Map<string, VoteDetail[]>();
-
-    visibleVotes.forEach(vote => {
-      const currentTotal = groupTotals.get(vote.groupId) || 0;
-      groupTotals.set(vote.groupId, currentTotal + vote.votes);
-
-      if (!voteDetails.has(vote.groupId)) {
-        voteDetails.set(vote.groupId, []);
-      }
-      
-      const detail: VoteDetail = {
-        userId: vote.userId,
-        votes: vote.votes,
-        color: vote.color,
-        position: vote.position
-      };
-      
-      voteDetails.get(vote.groupId)!.push(detail);
+    await ctx.db.patch(args.sessionId, {
+      isSilentMode: args.isSilentMode,
+      updatedAt: Date.now(),
     });
 
-    myVotes.forEach(vote => {
-      userVotes.set(vote.groupId, vote.votes);
-    });
-
-    const results: GroupVoteResult[] = map.groups.map(group => ({
-      groupId: group.id,
-      totalVotes: groupTotals.get(group.id) || 0,
-      userVotes: userVotes.get(group.id) || 0,
-      group: group,
-      voteDetails: voteDetails.get(group.id) || [],
-    })).sort((a, b) => b.totalVotes - a.totalVotes);
-
-    const sessionResults: SessionResults = {
-      session: session as DotVotingSession,
-      results,
-      userTotalVotes: Array.from(userVotes.values()).reduce((sum, votes) => sum + votes, 0),
-      maxVotesPerUser: session.maxVotesPerUser,
-      myVotes: myVotes as Vote[],
-    };
-
-    return sessionResults;
+    return { success: true };
   },
 });
 
-// 🎯 RÉCUPÉRER MES VOTES (TOUJOURS VISIBLES POUR MOI)
-export const getMyVotes = query({
+// 🎯 RÉCUPÉRER LES DOTS D'UNE SESSION
+export const getSessionDots = query({
   args: {
     sessionId: v.id("dotVotingSessions"),
   },
-  handler: async (ctx, args): Promise<Vote[]> => {
+  handler: async (ctx, args): Promise<DotVote[]> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
 
-    const votes = await ctx.db
-      .query("votes")
+    const dots = await ctx.db
+      .query("dotVotes")
       .withIndex("by_session", q => q.eq("sessionId", args.sessionId))
-      .filter(q => q.eq(q.field("userId"), identity.subject))
       .collect();
 
-    return votes as Vote[];
+    return dots as DotVote[];
   },
 });
 
-// 🎯 RÉCUPÉRER LES SESSIONS AVEC STATUT
-export const getProjectSessions = query({
+// 🎯 RÉCUPÉRER MES DOTS
+export const getMyDots = query({
   args: {
-    projectId: v.id("projects"),
+    sessionId: v.id("dotVotingSessions"),
+  },
+  handler: async (ctx, args): Promise<DotVote[]> => {
+    const identity = await ctx.auth.getUserIdentity();
+    
+    console.log('🔍 getMyDots called:', {
+      hasIdentity: !!identity,
+      userId: identity?.subject,
+      sessionId: args.sessionId
+    });
+
+    if (!identity) {
+      console.log('❌ No identity in getMyDots');
+      return [];
+    }
+
+    const dots = await ctx.db
+      .query("dotVotes")
+      .withIndex("by_user_session", q => 
+        q.eq("userId", identity.subject)
+         .eq("sessionId", args.sessionId)
+      )
+      .collect();
+
+    console.log('📊 getMyDots found:', dots.length, 'dots for user', identity.subject);
+    
+    return dots as DotVote[];
+  },
+});
+
+// 🎯 RÉCUPÉRER LES SESSIONS ACTIVES
+export const getActiveSessions = query({
+  args: {
+    mapId: v.id("affinityMaps"),
   },
   handler: async (ctx, args): Promise<DotVotingSession[]> => {
     const identity = await ctx.auth.getUserIdentity();
@@ -480,8 +359,8 @@ export const getProjectSessions = query({
 
     const sessions = await ctx.db
       .query("dotVotingSessions")
-      .withIndex("by_project", q => q.eq("projectId", args.projectId))
-      .order("desc")
+      .withIndex("by_map", q => q.eq("mapId", args.mapId))
+      .filter(q => q.eq(q.field("isActive"), true))
       .collect();
 
     return sessions as DotVotingSession[];
