@@ -12,7 +12,8 @@ import {
   Upload, 
   Presentation,
   ActivityIcon,
-  MoreHorizontal
+  MoreHorizontal,
+  Calendar
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +51,8 @@ interface FloatingToolbarProps {
   themeAnalysis: ThemeAnalysis | null | undefined; // 🎯 CORRIGÉ : ACCEPTE NULL ET UNDEFINED
   isThemesAnalyzing: boolean;
   activities?: ConvexActivityLog[];
+    onShowVotingHistory?: (show: boolean) => void; // 🎯 NOUVEAU CALLBACK
+  showVotingHistory?: boolean; // 🎯 PROP POUR SYNCHRONISER L'ÉTAT
 }
 
 export function FloatingToolbar({
@@ -70,9 +73,20 @@ export function FloatingToolbar({
   onAnalyzeThemes,
   themeAnalysis,
   isThemesAnalyzing,
-  activities
+  activities,
+  onShowVotingHistory,
+  showVotingHistory = false,
 }: FloatingToolbarProps) {
+
+
   const [isExpanded, setIsExpanded] = useState(false);
+  // 🎯 AJOUTER UN ÉTAT
+
+
+    // 🎯 UTILISER LA PROP AU LIEU DE L'ÉTAT LOCAL
+  const handleToggleHistory = () => {
+    onShowVotingHistory?.(!showVotingHistory);
+  };
 
   return (
     <TooltipProvider>
@@ -138,6 +152,22 @@ export function FloatingToolbar({
                   <p>Dot Voting</p>
                 </TooltipContent>
               </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={showVotingHistory ? "default" : "ghost"}
+                size="icon"
+                className="rounded-full w-10 h-10"
+                onClick={handleToggleHistory}
+              >
+                <Calendar size={18} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Voting History</p>
+            </TooltipContent>
+          </Tooltip>
 
               {/* ANALYTICS */}
               <Tooltip>
@@ -300,6 +330,8 @@ export function FloatingToolbar({
           </Badge>
         </div>
       </div>
+
+      
     </TooltipProvider>
   );
 }

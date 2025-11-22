@@ -19,17 +19,21 @@ interface VotingSessionManagerProps {
   projectId: string;
   isPlacingDot: boolean;
   onToggleDotPlacement: () => void;
+  onSessionEnd?: () => void; // 🎯 NOUVELLE PROP
 }
 
 export function VotingSessionManager({ 
   mapId, 
   projectId, 
   isPlacingDot, 
-  onToggleDotPlacement 
+  onToggleDotPlacement,
+  onSessionEnd,
 }: VotingSessionManagerProps) {
   const { userId } = useAuth();
   const [showHelp, setShowHelp] = useState(false);
   const [showEndSessionDialog, setShowEndSessionDialog] = useState(false);
+
+  
 
   // 🎯 QUERIES
   const activeSessions = useQuery(api.dotVoting.getActiveSessions, { 
@@ -80,17 +84,27 @@ export function VotingSessionManager({
   };
 
   const handleEndSession = async (): Promise<void> => {
-    if (!activeSession) return;
+  if (!activeSession) return;
 
-    try {
-      await endSession({ sessionId: activeSession._id });
-      setShowEndSessionDialog(false);
-      toast.success("Voting session ended");
-    } catch (error) {
-      console.error("Failed to end session:", error);
-      toast.error("Failed to end session");
+  try {
+    const result = await endSession({ sessionId: activeSession._id });
+    setShowEndSessionDialog(false);
+    
+    if (result.historyId) {
+      toast.success("Voting session ended and results saved");
+    } else {
+      toast.success("Voting session ended (no votes to save)");
     }
-  };
+    
+    // 🎯 NETTOYER L'ÉTAT
+    onSessionEnd?.();
+    onToggleDotPlacement();
+    
+  } catch (error) {
+    console.error("Failed to end session:", error);
+    toast.error("Failed to end session");
+  }
+};
 
   const handleToggleSilentMode = async (): Promise<void> => {
     if (!activeSession) return;
@@ -109,6 +123,34 @@ export function VotingSessionManager({
 
   const myDotsCount = myDots?.length || 0;
   const maxDots = activeSession?.maxDotsPerUser || 0;
+
+    // 🎯 CACHER LES INDICATEURS SI PAS DE SESSION ACTIVE
+// 🎯 METTRE :
+if (!activeSession) {
+  // 🎯 AFFICHER SEULEMENT LE BOUTON "START VOTING" QUAND PAS DE SESSION
+  return (
+    <div className="fixed top-4 right-4 z-40">
+      <div className="bg-background/95 backdrop-blur-sm border rounded-lg shadow-lg px-4 py-3">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="default"
+              size="sm"
+              className="gap-2"
+              onClick={handleCreateSession}
+            >
+              <Vote size={16} />
+              Start Voting
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Start a new dot voting session</p>
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    </div>
+  );
+}
 
   return (
     <TooltipProvider>

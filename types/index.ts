@@ -494,3 +494,25 @@ export interface DotVote {
   position: { x: number; y: number };
   createdAt: number;
 }
+
+export interface VotingResult {
+  groupId: string;
+  groupTitle: string;
+  totalVotes: number;
+  voteDetails: VoteDetail[];
+}
+
+export interface VotingHistoryItem {
+  _id: Id<"votingHistory">;
+  _creationTime: number;
+  sessionId: Id<"dotVotingSessions">;
+  results: VotingResult[];
+  savedBy: string;
+  savedAt: number;
+}
+
+// 🎯 AJOUTER AUSSI LE TYPE POUR LA MUTATION saveVotingResults
+export interface SaveVotingResultsArgs {
+  sessionId: Id<"dotVotingSessions">;
+  results: VotingResult[];
+}

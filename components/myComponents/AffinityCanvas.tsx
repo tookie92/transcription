@@ -39,6 +39,7 @@ import { useActivity } from "@/hooks/useActivity";
 import { ActivityPanel } from "./ActivityPanel";
 import { FloatingToolbar } from "./FloatingToolbar";
 import { VotingSessionManager } from "./VotingSessionManager";
+import { VotingHistoryPanel } from "./VotingHistoryPanel";
 
 
 // 🆕 AJOUTER childGroupIds À L'INTERFACE
@@ -163,6 +164,11 @@ useEffect(() => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [sharedSelections, setSharedSelections] = useState<Record<string, string[]>>({});
   const [isPresentMode, setPresentMode] = useState(false);
+    // 🎯 AJOUTER UN ÉTAT POUR SUIVRE LA SESSION ACTIVE
+const [activeVotingSession, setActiveVotingSession] = useState<string | null>(null);
+// 🎯 AJOUTER L'ÉTAT
+const [showVotingHistory, setShowVotingHistory] = useState(false);
+
 // dans le composant :
 const [showComments, setShowComments] = useState<{
   groupId: string;
@@ -346,6 +352,16 @@ const followRect = useFollowGroupRect(showComments?.groupId ?? null, {
     }, 100);
     
   }, [mapId, groups, onGroupCreate, onInsightDrop, onGroupDelete, onGroupTitleUpdate, saveCurrentState]);
+
+
+
+// 🎯 QUAND LA SESSION SE TERMINE
+const handleSessionEnd = useCallback(() => {
+  console.log('🎯 Session ended - cleaning up state');
+  setIsPlacingDot(false); // 🎯 FORCER LA DÉSACTIVATION DU MODE PLACEMENT
+  setActiveVotingSession(null); // 🎯 EFFACER LA SESSION ACTIVE
+}, []);
+
 
   const handleCreateParentGroup = useCallback((groupIds: string[], parentTitle: string) => {
     const childGroups = groups.filter(group => groupIds.includes(group.id));
@@ -1135,6 +1151,7 @@ useEffect(() => {
         projectId={projectId}
         isPlacingDot={isPlacingDot}
         onToggleDotPlacement={() => setIsPlacingDot(!isPlacingDot)}
+        onSessionEnd={handleSessionEnd} // 🎯 PASSER LE CALLBACK
       />
     )}
 
@@ -1165,6 +1182,10 @@ useEffect(() => {
       themeAnalysis={themeAnalysis}
       isThemesAnalyzing={isThemesAnalyzing}
       activities={activities}
+
+      // 🎯 NOUVEAU PROP
+      showVotingHistory={showVotingHistory}
+      onShowVotingHistory={setShowVotingHistory}
     />
   )}
       {/* HEADER AVEC RACCOURCIS */}
@@ -1425,137 +1446,137 @@ useEffect(() => {
               {/* GROUPS */}
               <div className="p-8">
 
-{groups.map((group, index) => {
-  const isCurrentInPresentation = presentationState.isActive && 
-    !presentationState.isOverview && 
-    index === presentationState.currentGroupIndex;
-  
-  return (
-    <AffinityGroup
-      key={group.id}
-      group={group}
-      activeSessionId={activeSessions?.[0]?._id}
-      insights={insights}
-      scale={scale}
-      isPlacingDot={isPlacingDot}
-      // 🎯 PROPS OBLIGATOIRES - TOUJOURS FOURNIR DES FONCTIONS, MÊME EN PRÉSENTATION
-      onMove={(groupId, position) => {
-        if (presentationState.isActive) return; // 🚫 Ignorer silencieusement en présentation
-        handleGroupMoveOptimistic(groupId, position);
-      }}
-      
-      onDragOver={(e: React.DragEvent) => {
-        if (presentationState.isActive) {
-          e.preventDefault(); // 🎯 Toujours appeler preventDefault() même en présentation
-          return;
-        }
-        if (workspaceMode === 'grouping') {
-          e.preventDefault();
-          setDragOverGroup(group.id);
-        }
-      }}
-      
-      onDragLeave={() => {
-        if (presentationState.isActive) return; // 🚫 Ignorer silencieusement
-        setDragOverGroup(null);
-      }}
-      
-      onDrop={(e: React.DragEvent) => {
-        if (presentationState.isActive) {
-          e.preventDefault(); // 🎯 Toujours appeler preventDefault() même en présentation
-          return;
-        }
-        if (workspaceMode === 'grouping') {
-          e.preventDefault();
-          const insightId = e.dataTransfer.getData('text/plain');
-          const sourceGroupId = e.dataTransfer.getData('application/group-id');
-          
-          if (insightId) {
-            saveCurrentState("before_insight_add", `Adding insight to group "${group.title}"`);
-            onInsightDrop(insightId, group.id);
-            
-            const message = sourceGroupId 
-              ? `Insight moved to "${group.title}"`
-              : `Insight added to "${group.title}"`;
-            toast.success(message);
-          }
-          setDragOverGroup(null);
-        }
-      }}
-      
-      onSelect={(groupId, e) => {
-        // 🎯 EN MODE PRÉSENTATION: NAVIGATION AU CLICK
-        if (presentationState.isActive) {
-          e.stopPropagation();
-          setPresentationState(prev => ({
-            ...prev,
-            currentGroupIndex: index,
-            isOverview: false
-          }));
-          return;
-        }
-        
-        // 👇 COMPORTEMENT NORMAL HORS PRÉSENTATION
-        if (e.ctrlKey || e.metaKey) {
-          setSelectedGroups(prev => {
-            const newSelection = new Set(prev);
-            if (newSelection.has(groupId)) {
-              newSelection.delete(groupId);
-            } else {
-              newSelection.add(groupId);
-            }
-            return newSelection;
-          });
-        } else {
-          setSelectedGroups(new Set([groupId]));
-        }
-      }}
-      
-      // 🎯 PROPS CONDITIONNELLES - TOUJOURS DÉFINIES
-      isSelected={presentationState.isActive ? false : selectedGroups.has(group.id)}
-      isDragOver={presentationState.isActive ? false : dragOverGroup === group.id}
-      isHighlighted={isCurrentInPresentation || highlightedGroups.has(group.id)}
-      
-      // 🎯 NOUVELLES PROPS POUR LA PRÉSENTATION
-      isPresentationMode={presentationState.isActive}
-      isFocusedInPresentation={isCurrentInPresentation}
-      presentationScale={1.1}
-      
-      // 🎯 PROPS OPTIONNELLES - AVEC FONCTIONS VIDES SI NON FOURNIES
-      onDelete={onGroupDelete}
-      onTitleUpdate={onGroupTitleUpdate}
-      onRemoveInsight={onInsightRemoveFromGroup}
-      onInsightDragStart={(insightId, sourceGroupId) => {
-        if (!presentationState.isActive) {
-          console.log('🧩 Insight drag started:', { insightId, sourceGroupId });
-          setDraggedInsightId(insightId);
-          setDragSourceGroupId(sourceGroupId);
-        }
-      }}
-      onInsightDrop={(insightId, targetGroupId) => {
-        if (!presentationState.isActive) {
-          console.log('🎯 Insight dropped to new group:', { insightId, targetGroupId });
-          saveCurrentState("before_insight_move", `Moving insight to different group`);
-          onInsightDrop(insightId, targetGroupId);
-          toast.success("Insight moved to new group");
-          setDraggedInsightId(null);
-          setDragSourceGroupId(null);
-        }
-      }}
-      onOpenComments={handleOpenComments}
-      
-      // 🎯 PROPS EXISTANTES
-      workspaceMode={workspaceMode}
-      projectContext={projectInfo ? `PROJECT: ${projectInfo.name}` : undefined}
-      sharedSelections={sharedSelections}
-      currentUserId={currentUserId!}
-      mapId={mapId}
-      commentCounts={commentCounts}
-      activeSession={activeSessions?.[0]}
-      // comments={comments}
-    />
-  );
-})}
+                {groups.map((group, index) => {
+                  const isCurrentInPresentation = presentationState.isActive && 
+                    !presentationState.isOverview && 
+                    index === presentationState.currentGroupIndex;
+                  
+                  return (
+                    <AffinityGroup
+                      key={group.id}
+                      group={group}
+                      activeSessionId={activeSessions?.[0]?._id}
+                      insights={insights}
+                      scale={scale}
+                      isPlacingDot={isPlacingDot && !!activeSessions?.[0]}
+                      // 🎯 PROPS OBLIGATOIRES - TOUJOURS FOURNIR DES FONCTIONS, MÊME EN PRÉSENTATION
+                      onMove={(groupId, position) => {
+                        if (presentationState.isActive) return; // 🚫 Ignorer silencieusement en présentation
+                        handleGroupMoveOptimistic(groupId, position);
+                      }}
+                      
+                      onDragOver={(e: React.DragEvent) => {
+                        if (presentationState.isActive) {
+                          e.preventDefault(); // 🎯 Toujours appeler preventDefault() même en présentation
+                          return;
+                        }
+                        if (workspaceMode === 'grouping') {
+                          e.preventDefault();
+                          setDragOverGroup(group.id);
+                        }
+                      }}
+                      
+                      onDragLeave={() => {
+                        if (presentationState.isActive) return; // 🚫 Ignorer silencieusement
+                        setDragOverGroup(null);
+                      }}
+                      
+                      onDrop={(e: React.DragEvent) => {
+                        if (presentationState.isActive) {
+                          e.preventDefault(); // 🎯 Toujours appeler preventDefault() même en présentation
+                          return;
+                        }
+                        if (workspaceMode === 'grouping') {
+                          e.preventDefault();
+                          const insightId = e.dataTransfer.getData('text/plain');
+                          const sourceGroupId = e.dataTransfer.getData('application/group-id');
+                          
+                          if (insightId) {
+                            saveCurrentState("before_insight_add", `Adding insight to group "${group.title}"`);
+                            onInsightDrop(insightId, group.id);
+                            
+                            const message = sourceGroupId 
+                              ? `Insight moved to "${group.title}"`
+                              : `Insight added to "${group.title}"`;
+                            toast.success(message);
+                          }
+                          setDragOverGroup(null);
+                        }
+                      }}
+                      
+                      onSelect={(groupId, e) => {
+                        // 🎯 EN MODE PRÉSENTATION: NAVIGATION AU CLICK
+                        if (presentationState.isActive) {
+                          e.stopPropagation();
+                          setPresentationState(prev => ({
+                            ...prev,
+                            currentGroupIndex: index,
+                            isOverview: false
+                          }));
+                          return;
+                        }
+                        
+                        // 👇 COMPORTEMENT NORMAL HORS PRÉSENTATION
+                        if (e.ctrlKey || e.metaKey) {
+                          setSelectedGroups(prev => {
+                            const newSelection = new Set(prev);
+                            if (newSelection.has(groupId)) {
+                              newSelection.delete(groupId);
+                            } else {
+                              newSelection.add(groupId);
+                            }
+                            return newSelection;
+                          });
+                        } else {
+                          setSelectedGroups(new Set([groupId]));
+                        }
+                      }}
+                      
+                      // 🎯 PROPS CONDITIONNELLES - TOUJOURS DÉFINIES
+                      isSelected={presentationState.isActive ? false : selectedGroups.has(group.id)}
+                      isDragOver={presentationState.isActive ? false : dragOverGroup === group.id}
+                      isHighlighted={isCurrentInPresentation || highlightedGroups.has(group.id)}
+                      
+                      // 🎯 NOUVELLES PROPS POUR LA PRÉSENTATION
+                      isPresentationMode={presentationState.isActive}
+                      isFocusedInPresentation={isCurrentInPresentation}
+                      presentationScale={1.1}
+                      
+                      // 🎯 PROPS OPTIONNELLES - AVEC FONCTIONS VIDES SI NON FOURNIES
+                      onDelete={onGroupDelete}
+                      onTitleUpdate={onGroupTitleUpdate}
+                      onRemoveInsight={onInsightRemoveFromGroup}
+                      onInsightDragStart={(insightId, sourceGroupId) => {
+                        if (!presentationState.isActive) {
+                          console.log('🧩 Insight drag started:', { insightId, sourceGroupId });
+                          setDraggedInsightId(insightId);
+                          setDragSourceGroupId(sourceGroupId);
+                        }
+                      }}
+                      onInsightDrop={(insightId, targetGroupId) => {
+                        if (!presentationState.isActive) {
+                          console.log('🎯 Insight dropped to new group:', { insightId, targetGroupId });
+                          saveCurrentState("before_insight_move", `Moving insight to different group`);
+                          onInsightDrop(insightId, targetGroupId);
+                          toast.success("Insight moved to new group");
+                          setDraggedInsightId(null);
+                          setDragSourceGroupId(null);
+                        }
+                      }}
+                      onOpenComments={handleOpenComments}
+                      
+                      // 🎯 PROPS EXISTANTES
+                      workspaceMode={workspaceMode}
+                      projectContext={projectInfo ? `PROJECT: ${projectInfo.name}` : undefined}
+                      sharedSelections={sharedSelections}
+                      currentUserId={currentUserId!}
+                      mapId={mapId}
+                      commentCounts={commentCounts}
+                      activeSession={activeSessions?.[0]}
+                      // comments={comments}
+                    />
+                  );
+                })}
 
                 {/* EMPTY STATE */}
                 {groups.length === 0 && (
@@ -1651,6 +1672,22 @@ useEffect(() => {
           </div>
         </div>
      
+
+        <AnimatePresence>
+          {showVotingHistory && (
+            <motion.div
+              initial={{ x: 600, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 600, opacity: 0 }}
+              className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
+            >
+              <VotingHistoryPanel 
+                projectId={projectId}
+                mapId={mapId}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
           <AnimatePresence>
             {!isPresentMode && showThemeDiscovery && (

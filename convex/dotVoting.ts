@@ -2,7 +2,7 @@
 
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { DotVotingSession, DotVote } from "@/types";
+import { DotVotingSession, DotVote, VotingHistoryItem } from "@/types";
 import { Id } from "@/convex/_generated/dataModel";
 
 // 🎯 PALETTE DE COULEURS PAR DÉFAUT
@@ -246,11 +246,12 @@ export const revealVotes = mutation({
 });
 
 // 🎯 TERMINER LA SESSION
+
 export const endSession = mutation({
   args: {
     sessionId: v.id("dotVotingSessions"),
   },
-  handler: async (ctx, args): Promise<{ success: boolean }> => {
+  handler: async (ctx, args): Promise<{ success: boolean; historyId?: Id<"votingHistory"> }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
@@ -261,13 +262,77 @@ export const endSession = mutation({
       throw new Error("Only session creator can end session");
     }
 
+    // 🎯 RÉCUPÉRER TOUS LES DOTS DE LA SESSION
+    const dots = await ctx.db
+      .query("dotVotes")
+      .withIndex("by_session", q => q.eq("sessionId", args.sessionId))
+      .collect();
+
+    // 🎯 CALCULER LES RÉSULTATS PAR GROUPE
+    const groupResults = new Map<string, {
+      groupId: string;
+      totalVotes: number;
+      voteDetails: Array<{ userId: string; votes: number; color: string }>;
+    }>();
+
+    dots.forEach(dot => {
+      if (!groupResults.has(dot.targetId)) {
+        groupResults.set(dot.targetId, {
+          groupId: dot.targetId,
+          totalVotes: 0,
+          voteDetails: []
+        });
+      }
+      
+      const result = groupResults.get(dot.targetId)!;
+      result.totalVotes += 1;
+      
+      // 🎯 COMPTER LES VOTES PAR UTILISATEUR
+      const userVote = result.voteDetails.find(v => v.userId === dot.userId);
+      if (userVote) {
+        userVote.votes += 1;
+      } else {
+        result.voteDetails.push({
+          userId: dot.userId,
+          votes: 1,
+          color: dot.color
+        });
+      }
+    });
+
+    // 🎯 RÉCUPÉRER LES TITRES DES GROUPES
+    const map = await ctx.db.get(session.mapId);
+    if (!map) throw new Error("Affinity map not found");
+
+    const results = Array.from(groupResults.values()).map(result => {
+      const group = map.groups.find(g => g.id === result.groupId);
+      return {
+        groupId: result.groupId,
+        groupTitle: group?.title || "Unknown Group",
+        totalVotes: result.totalVotes,
+        voteDetails: result.voteDetails
+      };
+    });
+
+    // 🎯 SAUVEGARDER L'HISTORIQUE
+    let historyId: Id<"votingHistory"> | undefined;
+    if (results.length > 0) {
+      historyId = await ctx.db.insert("votingHistory", {
+        sessionId: args.sessionId,
+        results: results,
+        savedBy: identity.subject,
+        savedAt: Date.now(),
+      });
+    }
+
+    // 🎯 TERMINER LA SESSION
     await ctx.db.patch(args.sessionId, {
       votingPhase: "completed",
       isActive: false,
       updatedAt: Date.now(),
     });
 
-    return { success: true };
+    return { success: true, historyId };
   },
 });
 
@@ -378,5 +443,66 @@ export const getSession = query({
 
     const session = await ctx.db.get(args.sessionId);
     return session as DotVotingSession | null;
+  },
+});
+
+export const saveVotingResults = mutation({
+  args: {
+    sessionId: v.id("dotVotingSessions"),
+    results: v.array(v.object({
+      groupId: v.string(),
+      groupTitle: v.string(),
+      totalVotes: v.number(),
+      voteDetails: v.array(v.object({
+        userId: v.string(),
+        votes: v.number(),
+        color: v.string(),
+      }))
+    }))
+  },
+  handler: async (ctx, args): Promise<Id<"votingHistory">> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    // 🎯 VÉRIFIER QUE LA SESSION EXISTE
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Session not found");
+
+    // 🎯 CRÉER UN DOCUMENT D'HISTORIQUE
+    const historyId = await ctx.db.insert("votingHistory", {
+      sessionId: args.sessionId,
+      results: args.results,
+      savedBy: identity.subject,
+      savedAt: Date.now(),
+    });
+
+    return historyId;
+  },
+});
+
+export const getVotingHistory = query({
+  args: {
+    mapId: v.id("affinityMaps"),
+  },
+  handler: async (ctx, args): Promise<VotingHistoryItem[]> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+
+    // 🎯 RÉCUPÉRER LES SESSIONS DU MAP
+    const sessions = await ctx.db
+      .query("dotVotingSessions")
+      .withIndex("by_map", q => q.eq("mapId", args.mapId))
+      .collect();
+
+    const sessionIds = sessions.map(session => session._id);
+
+    // 🎯 RÉCUPÉRER L'HISTORIQUE DE CES SESSIONS
+    const history = await ctx.db
+      .query("votingHistory")
+      .filter(q => q.or(...sessionIds.map(id => q.eq(q.field("sessionId"), id))))
+      .order("desc")
+      .collect();
+
+    return history as VotingHistoryItem[];
   },
 });

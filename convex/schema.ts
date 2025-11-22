@@ -261,6 +261,25 @@ dotVotes: defineTable({
 .index("by_session", ["sessionId"])
 .index("by_user_session", ["userId", "sessionId"]) // 🎯 CET INDEX EST CRUCIAL
 .index("by_target", ["targetType", "targetId"]),
+
+
+votingHistory: defineTable({
+  sessionId: v.id("dotVotingSessions"),
+  results: v.array(v.object({
+    groupId: v.string(),
+    groupTitle: v.string(),
+    totalVotes: v.number(),
+    voteDetails: v.array(v.object({
+      userId: v.string(),
+      votes: v.number(),
+      color: v.string(),
+    }))
+  })),
+  savedBy: v.string(),
+  savedAt: v.number(),
+})
+.index("by_session", ["sessionId"])
+.index("by_date", ["savedAt"]),
   
 });
 
