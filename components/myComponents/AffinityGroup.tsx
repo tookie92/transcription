@@ -61,6 +61,12 @@ interface AffinityGroupProps {
 
      // 🎯 NOUVELLES PROPS POUR LE VOTE SIMPLE
   activeSessionId?: string;
+  activeSession?: { 
+    _id: string; 
+    isSilentMode: boolean; 
+    votingPhase: string;
+    createdBy: string;
+  };
 }
 
 export default function AffinityGroup({
@@ -96,6 +102,7 @@ export default function AffinityGroup({
     // 🎯 NOUVELLES PROPS
   isPlacingDot = false,
   activeSessionId,
+  activeSession,
 }: AffinityGroupProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempTitle, setTempTitle] = useState(group.title);
@@ -955,23 +962,31 @@ const handleAddDot = useCallback(async (e: React.MouseEvent) => {
 
 
           {/* 🎯 DOTS DE VOTE - SIMPLES ET EFFICACES */}
-          {groupDots && groupDots.map(dot => (
-            <div
-              key={dot._id}
-              className="absolute w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-30 transition-all"
-              style={{
-                left: dot.position.x,
-                top: dot.position.y,
-                backgroundColor: dot.color || getUserColor(dot.userId),
-                transform: `scale(${dot.userId === currentUserId ? 1.1 : 1})`,
-              }}
-              title={`Vote by user`}
-            >
-              {dot.userId === currentUserId && (
-                <span className="text-white text-xs font-bold">✓</span>
-              )}
-            </div>
-          ))}
+            {groupDots && groupDots.map(dot => {
+              // 🎯 LOGIQUE DE VISIBILITÉ CORRECTE
+              const isVisible = !activeSession?.isSilentMode || 
+                              activeSession.votingPhase === 'revealed' || 
+                              dot.userId === currentUserId;
+
+              if (!isVisible) return null;
+
+              return (
+                <div
+                  key={dot._id}
+                  className="absolute w-8 h-8 rounded-full border-3 border-white shadow-lg flex items-center justify-center z-30 transition-transform hover:scale-110"
+                  style={{
+                    left: dot.position.x,
+                    top: dot.position.y,
+                    backgroundColor: dot.color || getUserColor(dot.userId),
+                  }}
+                  title={`Vote by ${dot.userId === currentUserId ? 'you' : 'participant'}`}
+                >
+                  {dot.userId === currentUserId && (
+                    <span className="text-white text-xs font-bold">✓</span>
+                  )}
+                </div>
+              );
+            })}
 
         </motion.div>
       </ContextMenuTrigger>

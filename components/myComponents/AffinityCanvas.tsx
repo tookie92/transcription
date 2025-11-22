@@ -1551,6 +1551,7 @@ useEffect(() => {
       currentUserId={currentUserId!}
       mapId={mapId}
       commentCounts={commentCounts}
+      activeSession={activeSessions?.[0]}
       // comments={comments}
     />
   );
