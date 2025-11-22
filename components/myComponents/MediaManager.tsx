@@ -131,7 +131,7 @@ const handleTranscribe = async () => {
   return (
     <Card className="bg-white rounded-2xl shadow-lg p-8 w-1/2">
       <CardContent className="space-y-6">
-        {/* Project Selection */}
+        {/* Project Selection
         <div className="space-y-2">
           <Label htmlFor="project">Select Project</Label>
           <Select value={currentProjectId || ""} onValueChange={setCurrentProject}>
@@ -146,7 +146,7 @@ const handleTranscribe = async () => {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </div> */}
 
         {/* Rest of your existing MediaManager code */}
         {audioUrl ? (

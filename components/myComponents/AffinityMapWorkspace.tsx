@@ -51,8 +51,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   // 🆕 INITIALISER LE HOOK D'ACTIVITÉ
   const activity = useActivity();
 
-  // État local
-  const [isSilentMode, setIsSilentMode] = useState(true);
+ 
 
   const broadcastGroupCreated = useMutation(api.notificationService.broadcastGroupCreated);
 const broadcastCommentAdded = useMutation(api.notificationService.broadcastCommentAdded);
@@ -392,22 +391,12 @@ const handleInsightDrop = async (insightId: string, targetGroupId: string) => {
             )}
           </button>
 
-          {/* Silent Mode Toggle */}
-          <button
-            onClick={() => setIsSilentMode(!isSilentMode)}
-            className={`px-3 py-2 rounded-lg border ${
-              isSilentMode 
-                ? 'bg-yellow-100 border-yellow-400 text-yellow-800' 
-                : 'bg-gray-100 border-gray-300'
-            }`}
-          >
-            {isSilentMode ? '🔇 Silent Mode' : '💬 Discussion Mode'}
-          </button>
+       
 
-          {/* Export */}
+          {/* Export
           <button className="px-3 py-2 border rounded-lg hover:bg-gray-50">
             Export
-          </button>
+          </button> */}
         </div>
       </header>
 
@@ -455,7 +444,6 @@ const handleInsightDrop = async (insightId: string, targetGroupId: string) => {
           )}
         </div>
         <div>
-          {isSilentMode ? '🔇 Drag insights silently to find patterns' : '💬 Discuss and refine groups'}
         </div>
       </footer>
     </div>

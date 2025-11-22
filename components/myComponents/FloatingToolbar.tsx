@@ -1,5 +1,4 @@
-// components/FloatingToolbar.tsx - VERSION CORRIGÉE
-
+// components/FloatingToolbar.tsx - CORRECTION FINALE
 "use client";
 
 import { useState } from "react";
@@ -13,7 +12,8 @@ import {
   Presentation,
   ActivityIcon,
   MoreHorizontal,
-  Calendar
+  Calendar,
+  History
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,11 +48,13 @@ interface FloatingToolbarProps {
   onAnalyzeThemes: () => void;
   
   // Données
-  themeAnalysis: ThemeAnalysis | null | undefined; // 🎯 CORRIGÉ : ACCEPTE NULL ET UNDEFINED
+  themeAnalysis: ThemeAnalysis | null | undefined;
   isThemesAnalyzing: boolean;
   activities?: ConvexActivityLog[];
-    onShowVotingHistory?: (show: boolean) => void; // 🎯 NOUVEAU CALLBACK
-  showVotingHistory?: boolean; // 🎯 PROP POUR SYNCHRONISER L'ÉTAT
+
+  // 🎯 HISTORIQUE DES VOTES
+  showVotingHistory?: boolean;
+  onShowVotingHistory?: (show: boolean) => void;
 }
 
 export function FloatingToolbar({
@@ -77,13 +79,9 @@ export function FloatingToolbar({
   onShowVotingHistory,
   showVotingHistory = false,
 }: FloatingToolbarProps) {
-
-
   const [isExpanded, setIsExpanded] = useState(false);
-  // 🎯 AJOUTER UN ÉTAT
 
-
-    // 🎯 UTILISER LA PROP AU LIEU DE L'ÉTAT LOCAL
+  // 🎯 BASCULE HISTORIQUE DES VOTES
   const handleToggleHistory = () => {
     onShowVotingHistory?.(!showVotingHistory);
   };
@@ -149,25 +147,26 @@ export function FloatingToolbar({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Dot Voting</p>
+                  <p>Dot Voting Panel</p>
                 </TooltipContent>
               </Tooltip>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={showVotingHistory ? "default" : "ghost"}
-                size="icon"
-                className="rounded-full w-10 h-10"
-                onClick={handleToggleHistory}
-              >
-                <Calendar size={18} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Voting History</p>
-            </TooltipContent>
-          </Tooltip>
+              {/* VOTING HISTORY */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={showVotingHistory ? "default" : "ghost"}
+                    size="icon"
+                    className="rounded-full w-10 h-10"
+                    onClick={handleToggleHistory}
+                  >
+                    <History size={18} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Voting History</p>
+                </TooltipContent>
+              </Tooltip>
 
               {/* ANALYTICS */}
               <Tooltip>
@@ -182,7 +181,7 @@ export function FloatingToolbar({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Analytics</p>
+                  <p>Analytics Dashboard</p>
                 </TooltipContent>
               </Tooltip>
 
@@ -274,7 +273,7 @@ export function FloatingToolbar({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Export</p>
+                      <p>Export Project</p>
                     </TooltipContent>
                   </Tooltip>
 
@@ -291,7 +290,7 @@ export function FloatingToolbar({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Import</p>
+                      <p>Import Project</p>
                     </TooltipContent>
                   </Tooltip>
 
@@ -317,7 +316,7 @@ export function FloatingToolbar({
           </div>
         </div>
 
-        {/* INDICATEURS DE STATS (EN DESSOUS) */}
+        {/* INDICATEURS DE STATS */}
         <div className="flex justify-center mt-2 gap-3">
           <Badge variant="secondary" className="text-xs">
             {stats.groupCount} groups
@@ -330,8 +329,6 @@ export function FloatingToolbar({
           </Badge>
         </div>
       </div>
-
-      
     </TooltipProvider>
   );
 }

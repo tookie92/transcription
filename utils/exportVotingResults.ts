@@ -1,9 +1,26 @@
-// utils/exportVotingResults.ts
-
+// utils/exportVotingResults.ts - VERSION AVEC TYPES STRICTS
 import { VotingHistoryItem } from "@/types";
 
+// 🎯 INTERFACE POUR LES DONNÉES D'EXPORT
+interface ExportVotingData {
+  sessionId: string;
+  date: string;
+  totalVotes: number;
+  results: Array<{
+    rank: number;
+    groupTitle: string;
+    totalVotes: number;
+    participants: number;
+    voteDetails: Array<{
+      userId: string;
+      votes: number;
+      color: string;
+    }>;
+  }>;
+}
+
 export function exportVotingResults(history: VotingHistoryItem): void {
-  const data = {
+  const data: ExportVotingData = {
     sessionId: history.sessionId,
     date: new Date(history.savedAt).toISOString(),
     totalVotes: history.results.reduce((sum, r) => sum + r.totalVotes, 0),
@@ -34,22 +51,23 @@ export function exportVotingResults(history: VotingHistoryItem): void {
   URL.revokeObjectURL(url);
 }
 
-// 🎯 VERSION CSV (ALTERNATIVE)
+// 🎯 VERSION CSV AVEC TYPES
 export function exportVotingResultsCSV(history: VotingHistoryItem): void {
   const headers = ['Rank', 'Group', 'Votes', 'Percentage', 'Participants'];
+  const totalVotes = history.results.reduce((sum, r) => sum + r.totalVotes, 0);
+  
   const rows = history.results
     .filter(result => result.totalVotes > 0)
     .sort((a, b) => b.totalVotes - a.totalVotes)
     .map((result, index) => {
-      const totalVotes = history.results.reduce((sum, r) => sum + r.totalVotes, 0);
       const percentage = totalVotes > 0 ? (result.totalVotes / totalVotes) * 100 : 0;
       
       return [
-        index + 1,
-        `"${result.groupTitle}"`,
-        result.totalVotes,
+        (index + 1).toString(),
+        `"${result.groupTitle.replace(/"/g, '""')}"`, // Échapper les guillemets
+        result.totalVotes.toString(),
         `${percentage.toFixed(1)}%`,
-        result.voteDetails.length
+        result.voteDetails.length.toString()
       ];
     });
 
@@ -57,7 +75,7 @@ export function exportVotingResultsCSV(history: VotingHistoryItem): void {
     .map(row => row.join(','))
     .join('\n');
 
-  const blob = new Blob([csvContent], { type: 'text/csv' });
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   

@@ -1684,6 +1684,7 @@ useEffect(() => {
               <VotingHistoryPanel 
                 projectId={projectId}
                 mapId={mapId}
+                groups={groups}
               />
             </motion.div>
           )}
