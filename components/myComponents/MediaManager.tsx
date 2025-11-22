@@ -21,7 +21,11 @@ import { Id } from '@/convex/_generated/dataModel';
 
 import { toast } from "sonner"; 
 
-function MediaManager() {
+interface MediaManagerProps {
+  currentProjectId: Id<"projects">;
+}
+
+export  function MediaManager({ currentProjectId }: MediaManagerProps) {
   const { transcribe, isTranscribing, error } = useTranscription();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [topic, setTopic] = useState('');
@@ -33,7 +37,7 @@ function MediaManager() {
   // Convex
   const createInterview = useMutation(api.interviews.createInterview);
   const projects = useQuery(api.projects.getUserProjects);
-  const { currentProjectId, setCurrentProject } = useCurrentProject();
+  // const { currentProjectId, setCurrentProject } = useCurrentProject();
 
   const handleFileSelect = (file: File) => {
     setSelectedFile(file);

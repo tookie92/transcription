@@ -7,6 +7,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { se } from "date-fns/locale";
 
 export function InviteUserButton({ projectId }: { projectId: Id<"projects"> }) {
 
@@ -15,7 +16,7 @@ const [name, setName] = useState("");
   const inviteUser = useMutation(api.projects.inviteUser);
 
   const handleInvite = async () => {
-    if (!email) return;
+    if (!email || !name) return;
 
     try {
       await inviteUser({
@@ -26,13 +27,15 @@ const [name, setName] = useState("");
       });
       toast.success(`Invitation sent to ${email}`);
       setEmail("");
+      setName("");
     } catch (error) {
       toast.error(`Invitation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   };
 
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-col gap-8">
+      
           <Input
         placeholder="Name (ex: Marie Curie)"
         value={name}
@@ -47,11 +50,7 @@ const [name, setName] = useState("");
       />
 
       <Button
-        onClick={() => {
-          if (!email || !name) return;
-          inviteUser({ projectId, email, name, role: "editor" });
-          setEmail(""); setName("");
-        }}
+        onClick={handleInvite}
       >
         Invite
       </Button>

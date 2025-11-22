@@ -15,6 +15,10 @@ import { useEffect, useState } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { CopyInviteLink } from "./CopyInviteLink";
 import { MemberManagerDialog } from "./MemberManagerDialog";
+import { Dialog, DialogContent } from "../ui/dialog";
+import { DialogTitle, DialogTrigger } from "@radix-ui/react-dialog";
+import { DropdownMenu } from "@radix-ui/react-dropdown-menu";
+import { DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 
 interface ProjectContentProps {
   projectId:  Id<"projects">;
@@ -33,6 +37,7 @@ const project = useQuery(api.projects.getByIdWithEmail, {
 });
   const interviews = useQuery(api.interviews.getProjectInterviews, { projectId });
   const [openManage, setOpenManage] = useState(false);
+  const [openInvite, setOpenInvite] = useState(false);
   // const allProjects = useQuery(api.projects.getUserProjects);
   // const claimInvite = useMutation(api.projects.claimInvite);
 
@@ -67,26 +72,26 @@ useEffect(() => {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-8 items-center justify-between">
+        <div className="flex items-center  w-full justify-between">
           <Button variant="outline" onClick={() => router.push("/")}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Projects
           </Button>
-          <div>
+          <div className="flex flex-col items-center justify-center">
             <h1 className="text-3xl font-bold">{project.name}</h1>
             {project.description && (
               <p className="text-gray-600 mt-1">{project.description}</p>
             )}
           </div>
+          <Button onClick={() => router.push(`/project/${projectId}/interview/`)}>
+            <Plus className="w-4 h-4" />
+            New Interview
+          </Button>
         </div>
-        
-        <Button onClick={() => router.push("/")} className="gap-2">
-          <Plus className="w-4 h-4" />
-          New Interview
-        </Button>
-        <InviteUserButton projectId={projectId} />
-                {/* <CopyInviteLink projectId={projectId} /> */}
+        <div className="flex">
+          {/* <InviteUserButton projectId={projectId} /> */}
+        </div>
       </div>
 
       {/* Project Stats */}
@@ -101,19 +106,41 @@ useEffect(() => {
           </CardContent>
         </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm font-medium">Team Members</CardTitle>
-              {project.ownerId === userId && (
-                <Button variant="outline" size="sm" onClick={() => setOpenManage(true)}>
-                  Manage
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{project.members.length}</div>
-            </CardContent>
-          </Card>
+         <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium">Team Members</CardTitle>
+            {project.ownerId === userId && (
+              <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className=" hover:text-myGreen-500">
+                      Manage
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem className=" hover:text-myGreen-500" onClick={() => setOpenManage(true)}>
+                      See members
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className=" hover:text-myGreen-500" onClick={() => setOpenInvite(true)}>
+                      Invite
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* Dialog séparé, SANS asChild */}
+                <Dialog open={openInvite} onOpenChange={setOpenInvite}>
+                  <DialogContent className="w-80">
+                  <DialogTitle>Invite a user</DialogTitle>
+                    <InviteUserButton projectId={projectId} />
+                  </DialogContent>
+                </Dialog>
+              </>
+            )}
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{project.members.length}</div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -132,11 +159,12 @@ useEffect(() => {
             <CardTitle className="text-sm font-medium">Status</CardTitle>
             <Badge variant={project.isPublic ? "default" : "secondary"}>
               {project.isPublic ? "Public" : "Private"}
+              
             </Badge>
           </CardHeader>
           <CardContent>
             <div className="text-sm text-muted-foreground">
-              {project.ownerId === "current-user-id" ? "Owner" : "Member"}
+              {project.ownerId === userId ? "Owner" : "Member"}
             </div>
           </CardContent>
         </Card>

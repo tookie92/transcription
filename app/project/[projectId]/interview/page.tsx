@@ -1,11 +1,14 @@
 "use client";
 import MediaManager from '@/components/myComponents/MediaManager';
 import TranscriptionManager from '@/components/myComponents/TranscriptionManager';
+import { Id } from '@/convex/_generated/dataModel';
 import { useCurrentProject } from '@/hooks/useCurrentProject';
+import { useParams } from 'next/navigation';
 import React, { useEffect } from 'react'
 
 const InterviewHome = () => {
-  const { currentProjectId } = useCurrentProject();
+    const {projectId} = useParams();
+    const  currentProjectId  = projectId as Id<"projects">
 
   // Redirection automatique si projet sélectionné ← OPTIONNEL
   useEffect(() => {
@@ -35,7 +38,7 @@ const InterviewHome = () => {
         )}
         
         <div className='mt-8 flex flex-col gap-6 sm:flex-row'>
-          <MediaManager />
+          <MediaManager currentProjectId={currentProjectId as Id<"projects">} />
           <TranscriptionManager />
         </div>
       </div>
