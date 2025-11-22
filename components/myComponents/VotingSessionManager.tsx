@@ -273,38 +273,41 @@ export function VotingSessionManager({
       </div>
 
       {/* 🎯 MODAL D'AIDE */}
-      <AlertDialog open={showHelp} onOpenChange={setShowHelp}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Dot Voting Instructions</AlertDialogTitle>
-            <AlertDialogDescription>
-              <div className="space-y-3 mt-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
-                    <span className="text-white text-xs">✓</span>
-                  </div>
-                  <span><strong>Your votes</strong> appear with a checkmark</span>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 bg-muted-foreground rounded-full" />
-                  <span><strong>Others{`'`} votes</strong> are {activeSession?.isSilentMode ? "hidden until revealed" : "visible"}</span>
-                </div>
-                
-                <div className="text-sm text-muted-foreground mt-4">
-                  {activeSession?.isSilentMode 
-                    ? "In silent mode, only you can see your votes until the facilitator reveals them."
-                    : "In live mode, all votes are visible to everyone."
-                  }
-                </div>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction>Got it</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+    <AlertDialog open={showHelp} onOpenChange={setShowHelp}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Dot Voting Instructions</AlertDialogTitle>
+          <AlertDialogDescription className="space-y-4 mt-2">
+            {/* 🎯 UTILISER DES SPANS AU LIEU DE DIVS */}
+            <div className="flex items-center gap-3">
+              <span className="w-6 h-6 bg-primary rounded-full flex items-center justify-center shrink-0">
+                <span className="text-white text-xs">✓</span>
+              </span>
+              <span className="text-sm">
+                <strong>Your votes</strong> appear with a checkmark
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <span className="w-6 h-6 bg-muted-foreground rounded-full shrink-0" />
+              <span className="text-sm">
+                <strong>Others{`'`} votes</strong> are {activeSession?.isSilentMode ? "hidden until revealed" : "visible"}
+              </span>
+            </div>
+            
+            <div className="text-sm text-muted-foreground pt-2 border-t">
+              {activeSession?.isSilentMode 
+                ? "In silent mode, only you can see your votes until the facilitator reveals them."
+                : "In live mode, all votes are visible to everyone."
+              }
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogAction>Got it</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
       {/* 🎯 MODAL DE CONFIRMATION FIN DE SESSION */}
       <AlertDialog open={showEndSessionDialog} onOpenChange={setShowEndSessionDialog}>

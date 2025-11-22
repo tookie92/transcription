@@ -3,7 +3,7 @@
 import { motion, PanInfo } from "framer-motion";
 import { Trash2, Vote, GripVertical, Edit, Copy, Edit3, Sparkles } from "lucide-react";
 import React, { useState, useCallback, useMemo } from "react";
-import { AffinityGroup as AffinityGroupType, Comment, Insight } from "@/types";
+import { AffinityGroup as AffinityGroupType, Comment, DotVotingSession, Insight } from "@/types";
 import { useMotionValue, useTransform } from "framer-motion";
 import {
   ContextMenu,
@@ -61,12 +61,7 @@ interface AffinityGroupProps {
 
      // 🎯 NOUVELLES PROPS POUR LE VOTE SIMPLE
   activeSessionId?: string;
-  activeSession?: { 
-    _id: string; 
-    isSilentMode: boolean; 
-    votingPhase: string;
-    createdBy: string;
-  };
+  activeSession?:DotVotingSession
 }
 
 export default function AffinityGroup({
@@ -962,31 +957,41 @@ const handleAddDot = useCallback(async (e: React.MouseEvent) => {
 
 
           {/* 🎯 DOTS DE VOTE - SIMPLES ET EFFICACES */}
-            {groupDots && groupDots.map(dot => {
-              // 🎯 LOGIQUE DE VISIBILITÉ CORRECTE
-              const isVisible = !activeSession?.isSilentMode || 
-                              activeSession.votingPhase === 'revealed' || 
-                              dot.userId === currentUserId;
+        {groupDots && groupDots.map(dot => {
+          // 🎯 LOGIQUE DE VISIBILITÉ CORRECTE
+            const isMyDot = dot.userId === currentUserId;
+              const isVisible = 
+                isMyDot || 
+                !activeSession?.isSilentMode ||
+                activeSession?.votingPhase !== 'voting'; // "setup" sera traité comme "voting"
 
-              if (!isVisible) return null;
+          console.log('🔍 Dot visibility:', {
+            dotId: dot._id,
+            isMyDot,
+            isSilentMode: activeSession?.isSilentMode,
+            votingPhase: activeSession?.votingPhase,
+            isVisible
+          });
 
-              return (
-                <div
-                  key={dot._id}
-                  className="absolute w-8 h-8 rounded-full border-3 border-white shadow-lg flex items-center justify-center z-30 transition-transform hover:scale-110"
-                  style={{
-                    left: dot.position.x,
-                    top: dot.position.y,
-                    backgroundColor: dot.color || getUserColor(dot.userId),
-                  }}
-                  title={`Vote by ${dot.userId === currentUserId ? 'you' : 'participant'}`}
-                >
-                  {dot.userId === currentUserId && (
-                    <span className="text-white text-xs font-bold">✓</span>
-                  )}
-                </div>
-              );
-            })}
+          if (!isVisible) return null;
+
+          return (
+            <div
+              key={dot._id}
+              className="absolute w-8 h-8 rounded-full border-3 border-white shadow-lg flex items-center justify-center z-30 transition-transform hover:scale-110"
+              style={{
+                left: dot.position.x,
+                top: dot.position.y,
+                backgroundColor: dot.color || getUserColor(dot.userId),
+              }}
+              title={isMyDot ? "Your vote" : "Participant vote"}
+            >
+              {isMyDot && (
+                <span className="text-white text-xs font-bold">✓</span>
+              )}
+            </div>
+          );
+        })}
 
         </motion.div>
       </ContextMenuTrigger>
