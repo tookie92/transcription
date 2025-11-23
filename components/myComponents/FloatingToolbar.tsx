@@ -13,13 +13,15 @@ import {
   ActivityIcon,
   MoreHorizontal,
   Calendar,
-  History
+  History,
+  User
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ThemeAnalysis, ConvexActivityLog } from "@/types";
+import { on } from "events";
 
 interface FloatingToolbarProps {
   // Stats
@@ -55,6 +57,9 @@ interface FloatingToolbarProps {
   // 🎯 HISTORIQUE DES VOTES
   showVotingHistory?: boolean;
   onShowVotingHistory?: (show: boolean) => void;
+  // 🎯 PERSONA GENERATOR
+  showPersonaGenerator?: boolean;
+  onShowPersonaGenerator?: (show: boolean) => void;
 }
 
 export function FloatingToolbar({
@@ -78,6 +83,8 @@ export function FloatingToolbar({
   activities,
   onShowVotingHistory,
   showVotingHistory = false,
+  showPersonaGenerator = false,
+  onShowPersonaGenerator,
 }: FloatingToolbarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -145,6 +152,23 @@ export function FloatingToolbar({
                   >
                     <Vote size={18} />
                   </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Dot Voting Panel</p>
+                </TooltipContent>
+              </Tooltip>
+
+              {/* Persona Generator */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                  variant={showPersonaGenerator ? "default" : "ghost"}
+                  size="icon"
+                  className="rounded-full w-10 h-10"
+                  onClick={()=> onShowPersonaGenerator?.(!showPersonaGenerator)}
+                >
+                  <User size={18} />
+                </Button>
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Dot Voting Panel</p>

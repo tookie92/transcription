@@ -54,20 +54,20 @@ export const logActivity = mutation({
 });
 
 export const getActivityForMap = query({
-  args: { 
-    mapId: v.id("affinityMaps"), 
-    limit: v.optional(v.number()) 
+  args: {
+    mapId: v.id("affinityMaps"), // ✅ OBLIGATOIRE
+    limit: v.optional(v.number()), // ✅ CORRECTION: number au lieu de float64
   },
-  handler: async (ctx, args): Promise<ConvexActivityLog[]> => {
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
 
     const activities = await ctx.db
       .query("activityLog")
-      .withIndex("by_map", q => q.eq("mapId", args.mapId))
+      .withIndex("by_map", (q) => q.eq("mapId", args.mapId))
       .order("desc")
       .take(args.limit || 50);
 
-    return activities as ConvexActivityLog[];
+    return activities;
   },
 });

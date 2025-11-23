@@ -40,6 +40,7 @@ import { ActivityPanel } from "./ActivityPanel";
 import { FloatingToolbar } from "./FloatingToolbar";
 import { VotingSessionManager } from "./VotingSessionManager";
 import { VotingHistoryPanel } from "./VotingHistoryPanel";
+import { PersonaGenerator } from "./PersonaGenerator";
 
 
 // 🆕 AJOUTER childGroupIds À L'INTERFACE
@@ -101,12 +102,14 @@ export default function AffinityCanvas({
 
   const projectName = useQuery(api.projects.getById, {projectId: projectId as Id<"projects">});
 
-  const upsertPresence = useMutation(api.presence.upsert);  
+  // const upsertPresence = useMutation(api.presence.upsert);  
 
-  const activities = useQuery(api.activityLog.getActivityForMap, { 
-  mapId: mapId as Id<"affinityMaps">, 
-  limit: 10 // Seulement pour le compteur
-});
+  const activities = useQuery(api.activityLog.getActivityForMap, 
+    mapId ? { 
+      mapId: mapId as Id<"affinityMaps">,
+      limit: 10 
+    } : "skip" // ✅ "skip" si affinityMap n'existe pas encore
+  );
 
   // Dans le composant :
 // const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
@@ -164,10 +167,12 @@ useEffect(() => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [sharedSelections, setSharedSelections] = useState<Record<string, string[]>>({});
   const [isPresentMode, setPresentMode] = useState(false);
-    // 🎯 AJOUTER UN ÉTAT POUR SUIVRE LA SESSION ACTIVE
-const [activeVotingSession, setActiveVotingSession] = useState<string | null>(null);
-// 🎯 AJOUTER L'ÉTAT
-const [showVotingHistory, setShowVotingHistory] = useState(false);
+  // 🎯 AJOUTER UN ÉTAT POUR SUIVRE LA SESSION ACTIVE
+  const [activeVotingSession, setActiveVotingSession] = useState<string | null>(null);
+  // 🎯 AJOUTER L'ÉTAT
+  const [showVotingHistory, setShowVotingHistory] = useState(false);
+  // Ajouter dans les états
+  const [showPersonaGenerator, setShowPersonaGenerator] = useState(false);
 
 // dans le composant :
 const [showComments, setShowComments] = useState<{
@@ -287,7 +292,7 @@ const followRect = useFollowGroupRect(showComments?.groupId ?? null, {
     history.pushState(groups, insights, action, description);
   }, [groups, insights, history]);
 
-    const getCurrentPosition = useCallback((groupId: string) => {
+  const getCurrentPosition = useCallback((groupId: string) => {
     return optimisticPositions.get(groupId) || groups.find(g => g.id === groupId)?.position;
   }, [optimisticPositions, groups]);
 
@@ -1186,6 +1191,10 @@ useEffect(() => {
       // 🎯 NOUVEAU PROP
       showVotingHistory={showVotingHistory}
       onShowVotingHistory={setShowVotingHistory}
+
+      // 🎯 NOUVEAU PROP
+      showPersonaGenerator={showPersonaGenerator}
+      onShowPersonaGenerator={setShowPersonaGenerator}
     />
   )}
       {/* HEADER AVEC RACCOURCIS */}
@@ -1724,14 +1733,24 @@ useEffect(() => {
             </motion.div>
           )}
           
-
-
-    
-
-          {/* {!isPresentMode && (
-          <ActivityFeed mapId={mapId as Id<"affinityMaps">} />
-        )} */}
         </AnimatePresence>
+
+<AnimatePresence>
+  {showPersonaGenerator && (
+    <motion.div
+      initial={{ x: 600, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={{ x: 600, opacity: 0 }}
+      className="w-[800px] bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
+    >
+      <PersonaGenerator
+        groups={groups}
+        insights={insights}
+        projectContext={projectInfo ? `PROJECT: ${projectInfo.name}` : undefined}
+      />
+    </motion.div>
+  )}
+</AnimatePresence>
 
             <AnimatePresence>
           {showActivityPanel && (
