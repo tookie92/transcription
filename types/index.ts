@@ -2,7 +2,7 @@
 
 import { Id } from "@/convex/_generated/dataModel";
 
-export type ActivePanel = 'voting' | 'analytics' | 'persona' | 'export' | 'votingHistory' | "themeDiscovery" | "activity" | "presentation" | null;
+export type ActivePanel = 'voting' | 'analytics' | 'persona' | 'export' | 'votingHistory' | "themeDiscovery" | "activity" | "presentation" | "silentSorting" | null;
 
 export type WorkspaceMode = 'grouping' | 'voting';
 
@@ -587,4 +587,23 @@ export interface ConvexUserPersona {
     groupTitles: string[];
   };
   createdAt: number;
+}
+
+export type SilentSortingPhase = 'idle' | 'preparation' | 'sorting' | 'discussion' | 'completed';
+
+export interface SilentSortingSession {
+  _id?: Id<"silentSessions">;
+  mapId: Id<"affinityMaps">;
+  phase: SilentSortingPhase;
+  duration: number;
+  timeRemaining: number;
+  participants: string[];
+  startedAt?: number;
+  completedAt?: number;
+  rules: {
+    noTalking: boolean;
+    independentSorting: boolean;
+    moveFreely: boolean;
+    createGroups: boolean;
+  };
 }

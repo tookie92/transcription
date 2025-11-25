@@ -43,6 +43,7 @@ import { VotingHistoryPanel } from "./VotingHistoryPanel";
 import { PersonaGenerator } from "./PersonaGenerator";
 
 
+
 // 🆕 AJOUTER childGroupIds À L'INTERFACE
 
 
@@ -1736,6 +1737,8 @@ useEffect(() => {
      
 
           <AnimatePresence>
+
+          
             {!isPresentMode && activePanel === 'themeDiscovery' && (
               <motion.div
                 initial={{ x: 600, opacity: 0 }}

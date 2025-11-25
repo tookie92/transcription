@@ -4,6 +4,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { ActivityDetails } from "@/types";
+import { useCallback } from "react";
 
 interface UseActivityReturn {
   logGroupCreated: (mapId: Id<"affinityMaps">, groupId: string, groupTitle: string) => void;
@@ -18,16 +19,20 @@ interface UseActivityReturn {
 }
 
 export function useActivity(): UseActivityReturn {
-  const logActivity = useMutation(api.activityLog.logActivity);
-
-  const logGroupCreated = (mapId: Id<"affinityMaps">, groupId: string, groupTitle: string) => {
-    logActivity({
+    const logActivity = useMutation(api.activityLog.logActivity);
+  
+  const logGroupCreated = useCallback((mapId: Id<"affinityMaps">, groupId: string, groupTitle: string) => {
+    if (!mapId) return; // 🎯 IMPORTANT : vérifier que mapId est défini
+    
+    return logActivity({
       mapId,
       action: "group_created",
       targetId: groupId,
       targetName: groupTitle,
     });
-  };
+  }, [logActivity]);
+  
+
 
   const logGroupMoved = (
     mapId: Id<"affinityMaps">, 

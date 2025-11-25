@@ -313,7 +313,32 @@ personas: defineTable({
   createdAt: v.number(),
 })
 .index("by_project", ["projectId"])
+.index("by_map", ["mapId"]),
+
+// convex/schema.ts - AJOUTER
+silentSessions: defineTable({
+  mapId: v.id("affinityMaps"),
+  phase: v.union(
+    v.literal("idle"),
+    v.literal("preparation"),
+    v.literal("sorting"),
+    v.literal("discussion"),
+    v.literal("completed")
+  ),
+  duration: v.number(),
+  timeRemaining: v.number(),
+  participants: v.array(v.string()),
+  startedAt: v.optional(v.number()),
+  completedAt: v.optional(v.number()),
+  rules: v.object({
+    noTalking: v.boolean(),
+    independentSorting: v.boolean(),
+    moveFreely: v.boolean(),
+    createGroups: v.boolean(),
+  }),
+})
 .index("by_map", ["mapId"])
-  
+.index("by_phase", ["phase"])
+
 });
 

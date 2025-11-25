@@ -14,7 +14,8 @@ import {
   MoreHorizontal,
   Calendar,
   History,
-  User
+  User,
+  VolumeX
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -323,6 +324,7 @@ export function FloatingToolbar({
                       <p>Import Project</p>
                     </TooltipContent>
                   </Tooltip>
+
 
                   {/* PRESENTATION */}
                   <Tooltip>
