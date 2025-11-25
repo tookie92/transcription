@@ -2,6 +2,10 @@
 
 import { Id } from "@/convex/_generated/dataModel";
 
+export type ActivePanel = 'voting' | 'analytics' | 'persona' | 'export' | 'votingHistory' | "themeDiscovery" | "activity" | "presentation" | null;
+
+export type WorkspaceMode = 'grouping' | 'voting';
+
 // Transcription types
 export interface TranscriptionSegment {
   id: number;
@@ -515,4 +519,72 @@ export interface VotingHistoryItem {
 export interface SaveVotingResultsArgs {
   sessionId: Id<"dotVotingSessions">;
   results: VotingResult[];
+}
+
+
+// types/index.ts - AJOUTER CES TYPES
+export interface UserPersona {
+  _id?: Id<"personas">;
+  _creationTime?: number;
+  projectId: Id<"projects">;
+  mapId: Id<"affinityMaps">;
+  name: string;
+  age: number;
+  occupation: string;
+  background: string;
+  goals: string[];
+  frustrations: string[];
+  behaviors: string[];
+  quote: string;
+  profileImage: string;
+  demographics: {
+    education: string;
+    income: string;
+    location: string;
+    techProficiency: 'beginner' | 'intermediate' | 'expert';
+  };
+  psychographics: {
+    motivations: string[];
+    values: string[];
+    personality: string[];
+  };
+  basedOn: {
+    groups: number;
+    insights: number;
+    groupTitles: string[];
+  };
+  createdAt: number;
+}
+
+export interface ConvexUserPersona {
+  _id: Id<"personas">;
+  _creationTime: number;
+  projectId: Id<"projects">;
+  mapId: Id<"affinityMaps">;
+  name: string;
+  age: number;
+  occupation: string;
+  background: string;
+  goals: string[];
+  frustrations: string[];
+  behaviors: string[];
+  quote: string;
+  profileImage: string;
+  demographics: {
+    education: string;
+    income: string;
+    location: string;
+    techProficiency: 'beginner' | 'intermediate' | 'expert';
+  };
+  psychographics: {
+    motivations: string[];
+    values: string[];
+    personality: string[];
+  };
+  basedOn: {
+    groups: number;
+    insights: number;
+    groupTitles: string[];
+  };
+  createdAt: number;
 }

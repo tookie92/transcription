@@ -1,6 +1,7 @@
 // hooks/useCanvasShortcuts.ts - VERSION CORRIGÉE
 "use client";
 
+import { on } from "events";
 import { useCallback, useEffect } from "react";
 
 interface CanvasShortcutsConfig {
@@ -11,8 +12,12 @@ interface CanvasShortcutsConfig {
   onArrowMove: (direction: 'up' | 'down' | 'left' | 'right', shiftKey: boolean) => void;
   onUndo: () => void;
   onRedo: () => void;
-  onToggleVotingPanel: () => void; // 🆕 AJOUT
-  onToggleAnalyticsPanel: () => void; // 🆕 AJOUT
+  onToggleVotingPanel?: () => void; // 🆕 AJOUT
+  onToggleAnalyticsPanel?: () => void; // 🆕 AJOUT
+  onTogglePersonaPanel?: () => void; // 🆕 AJOUT
+  onToggleThemeDiscoveryPanel?: () => void; // 🆕 AJOUT
+  onToggleActivityPanel?: () => void; // 🆕 AJOUT
+  onToggleExportPanel?: () => void; // 🆕 AJOUT
   selectedGroups: Set<string>;
 }
 
@@ -27,6 +32,9 @@ export function useCanvasShortcuts(config: CanvasShortcutsConfig) {
     onRedo,
     onToggleVotingPanel, // 🆕 AJOUT
     onToggleAnalyticsPanel, // 🆕 AJOUT
+    onTogglePersonaPanel, // 🆕 AJOUT
+    onToggleThemeDiscoveryPanel, // 🆕 AJOUT
+    onToggleExportPanel,
     selectedGroups 
   } = config;
 
@@ -85,6 +93,7 @@ export function useCanvasShortcuts(config: CanvasShortcutsConfig) {
       return;
     }
 
+
     // 🎯 SUPPRESSION (Delete/Backspace)
     if (e.key === 'Delete' || e.key === 'Backspace') {
       onDeleteSelected();
@@ -119,7 +128,7 @@ export function useCanvasShortcuts(config: CanvasShortcutsConfig) {
     if (e.key === 'v' && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       e.stopPropagation();
-      onToggleVotingPanel();
+      onToggleVotingPanel?.();
       return;
     }
 
@@ -127,7 +136,31 @@ export function useCanvasShortcuts(config: CanvasShortcutsConfig) {
     if (e.key === 'a' && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       e.stopPropagation();
-      onToggleAnalyticsPanel();
+      onToggleAnalyticsPanel?.();
+      return;
+    }
+
+ // 🆕 RACCOURCI POUR PERSONA PANEL (P)
+    if (e.key === 'p' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      onTogglePersonaPanel?.();
+      return;
+    }
+
+ // 🆕 RACCOURCI POUR Theme Discovery PANEL (T)
+    if (e.key === 't' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleThemeDiscoveryPanel?.();
+      return;
+    }
+
+    // 🆕 RACCOURCI POUR PRESENTATION MODE (CTRL+P)
+    if((e.ctrlKey || e.metaKey) && e.key === 'e'){
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleExportPanel?.();
       return;
     }
 

@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Search, CheckCircle, AlertTriangle, Lightbulb, Users, Sparkles, Plus } from "lucide-react";
+import { Search, CheckCircle, AlertTriangle, Lightbulb, Users, Sparkles, Plus, Trash } from "lucide-react";
 import { AffinityGroup, ConvexProject, Insight, Project } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { GroupSuggestion, useGroupSuggestions } from "@/hooks/useGroupSuggestions";
 import { toast } from "sonner";
 import { AISuggestionsPanel } from "./AISuggestionsPanel";
+import { api } from "@/convex/_generated/api";
+import { useMutation } from "convex/react";
+import { Id } from "@/convex/_generated/dataModel";
 
 interface ProjectInfo {
   name: string;
@@ -271,7 +274,7 @@ useEffect(() => {
   };
 
   // 🎯 COMPOSANT CARTE D'INSIGHT
-  const InsightCard = ({ insight, isProblematic = false }: { insight: Insight; isProblematic?: boolean }) => {
+  const InsightCard = ({ insight, isProblematic = false , onDelete }: { insight: Insight; isProblematic?: boolean; onDelete?: () => void }) => {
     const suggestedGroup = findSuggestedGroup(insight);
 
     return (
@@ -319,7 +322,17 @@ useEffect(() => {
               </TooltipProvider>
             )}
             {insight.source === 'manual' && (
-              <span className="text-xs text-gray-400">Manual</span>
+              <div className="flex gap-2 items-center">
+                <span className="text-xs text-gray-400">Manual</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="w-4 h-4 ml-1"
+                  onClick={onDelete}
+                >
+                  <Trash size={14} />
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -364,6 +377,19 @@ useEffect(() => {
     );
   };
 
+    const deleteInsight = useMutation(api.insights.deleteInsight);
+  
+const handleDeleteInsight = async (insightId: string) => {
+  if (!insightId) return;
+  
+  try {
+    await deleteInsight({ insightId: insightId as Id<"insights"> });
+    toast.success("Insight deleted");
+  } catch (error) {
+    console.error("Failed to delete insight:", error);
+    toast.error("Failed to delete insight");
+  }
+};
   return (
     <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full">
       {/* HEADER UNIFIÉ */}
@@ -558,7 +584,7 @@ useEffect(() => {
                 </Badge>
               </div>
               {readyInsights.map(insight => (
-                <InsightCard key={insight.id} insight={insight} />
+                <InsightCard key={insight.id} insight={insight} onDelete={()=>handleDeleteInsight(insight.id)} />
               ))}
             </div>
           )}

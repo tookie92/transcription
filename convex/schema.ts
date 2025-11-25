@@ -280,6 +280,40 @@ votingHistory: defineTable({
 })
 .index("by_session", ["sessionId"])
 .index("by_date", ["savedAt"]),
+
+// convex/schema.ts - AJOUTER CETTE TABLE
+personas: defineTable({
+  projectId: v.id("projects"),
+  mapId: v.id("affinityMaps"),
+  name: v.string(),
+  age: v.number(),
+  occupation: v.string(),
+  background: v.string(),
+  goals: v.array(v.string()),
+  frustrations: v.array(v.string()),
+  behaviors: v.array(v.string()),
+  quote: v.string(),
+  profileImage: v.string(),
+  demographics: v.object({
+    education: v.string(),
+    income: v.string(),
+    location: v.string(),
+    techProficiency: v.union(v.literal("beginner"), v.literal("intermediate"), v.literal("expert")),
+  }),
+  psychographics: v.object({
+    motivations: v.array(v.string()),
+    values: v.array(v.string()),
+    personality: v.array(v.string()),
+  }),
+  basedOn: v.object({
+    groups: v.number(),
+    insights: v.number(),
+    groupTitles: v.array(v.string()),
+  }),
+  createdAt: v.number(),
+})
+.index("by_project", ["projectId"])
+.index("by_map", ["mapId"])
   
 });
 

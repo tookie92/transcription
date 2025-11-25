@@ -19,6 +19,7 @@ import type * as insights from "../insights.js";
 import type * as interviews from "../interviews.js";
 import type * as notificationService from "../notificationService.js";
 import type * as notifications from "../notifications.js";
+import type * as personas from "../personas.js";
 import type * as presence from "../presence.js";
 import type * as projects from "../projects.js";
 import type * as typingIndicators from "../typingIndicators.js";
@@ -49,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   interviews: typeof interviews;
   notificationService: typeof notificationService;
   notifications: typeof notifications;
+  personas: typeof personas;
   presence: typeof presence;
   projects: typeof projects;
   typingIndicators: typeof typingIndicators;

@@ -1,7 +1,7 @@
 // components/FloatingToolbar.tsx - CORRECTION FINALE
 "use client";
 
-import { useState } from "react";
+import { act, useState } from "react";
 import { 
   Users, 
   Vote, 
@@ -20,8 +20,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ThemeAnalysis, ConvexActivityLog } from "@/types";
+import { ThemeAnalysis, ConvexActivityLog, ActivePanel, WorkspaceMode } from "@/types";
+import { motion, AnimatePresence } from "framer-motion";
 import { on } from "events";
+import { toast } from "sonner";
 
 interface FloatingToolbarProps {
   // Stats
@@ -32,10 +34,10 @@ interface FloatingToolbarProps {
   };
   
   // États
-  workspaceMode: 'grouping' | 'voting';
-  setWorkspaceMode: (mode: 'grouping' | 'voting') => void;
-  activePanel: 'voting' | 'analytics' | null;
-  setActivePanel: (panel: 'voting' | 'analytics' | null) => void;
+  workspaceMode: WorkspaceMode;
+  setWorkspaceMode: (mode: WorkspaceMode) => void;
+  activePanel: ActivePanel;
+  setActivePanel: (panel: ActivePanel) => void;
   showThemeDiscovery: boolean;
   setShowThemeDiscovery: (show: boolean) => void;
   showExportPanel: boolean;
@@ -68,14 +70,10 @@ export function FloatingToolbar({
   setWorkspaceMode,
   activePanel,
   setActivePanel,
-  showThemeDiscovery,
-  setShowThemeDiscovery,
-  showExportPanel,
-  setShowExportPanel,
+ 
   showImportModal,
   setShowImportModal,
-  showActivityPanel,
-  setShowActivityPanel,
+ 
   onEnterPresentation,
   onAnalyzeThemes,
   themeAnalysis,
@@ -83,8 +81,7 @@ export function FloatingToolbar({
   activities,
   onShowVotingHistory,
   showVotingHistory = false,
-  showPersonaGenerator = false,
-  onShowPersonaGenerator,
+
 }: FloatingToolbarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -95,7 +92,15 @@ export function FloatingToolbar({
 
   return (
     <TooltipProvider>
-      <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40">
+      <motion.div
+          initial={{ opacity: 0, y: 10, x: 0 }}
+          animate={{ 
+            opacity: activePanel === 'analytics' || activePanel === 'persona' ? .5 : 1,
+            y: 0,
+            x: activePanel === 'analytics' || activePanel === 'persona' ? -250 : 0,
+          }}
+          transition={{ ease: "easeInOut", duration: 0.3 }}
+      className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40">
         {/* BARRE PRINCIPALE */}
         <div className={`
           bg-white/95 backdrop-blur-sm border border-gray-200 rounded-full shadow-xl
@@ -110,6 +115,7 @@ export function FloatingToolbar({
               onValueChange={(value: string) => {
                 if (value === 'grouping' || value === 'voting') {
                   setWorkspaceMode(value);
+                  
                 }
               }}
               className="flex items-center"
@@ -141,7 +147,7 @@ export function FloatingToolbar({
 
             {/* OUTILS PRINCIPAUX */}
             <div className="flex items-center gap-1">
-              {/* DOT VOTING */}
+              {/* DOT VOTING
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -156,16 +162,16 @@ export function FloatingToolbar({
                 <TooltipContent>
                   <p>Dot Voting Panel</p>
                 </TooltipContent>
-              </Tooltip>
+              </Tooltip> */}
 
               {/* Persona Generator */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                  variant={showPersonaGenerator ? "default" : "ghost"}
+                  variant={activePanel === 'persona' ? "default" : "ghost"}
                   size="icon"
                   className="rounded-full w-10 h-10"
-                  onClick={()=> onShowPersonaGenerator?.(!showPersonaGenerator)}
+                  onClick={()=> setActivePanel(activePanel === 'persona' ? null : 'persona')}
                 >
                   <User size={18} />
                 </Button>
@@ -179,10 +185,10 @@ export function FloatingToolbar({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant={showVotingHistory ? "default" : "ghost"}
+                    variant={activePanel === 'votingHistory' ? "default" : "ghost"}
                     size="icon"
                     className="rounded-full w-10 h-10"
-                    onClick={handleToggleHistory}
+                    onClick={() => setActivePanel(activePanel === 'votingHistory' ? null : 'votingHistory')}
                   >
                     <History size={18} />
                   </Button>
@@ -213,16 +219,16 @@ export function FloatingToolbar({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant={showThemeDiscovery ? "default" : "ghost"}
+                    variant={activePanel === 'themeDiscovery' ? "default" : "ghost"}
                     size="icon"
                     className="rounded-full w-10 h-10 relative"
                     onClick={() => {
-                      if (showThemeDiscovery) {
-                        setShowThemeDiscovery(false);
-                      } else {
-                        setShowThemeDiscovery(true);
-                        onAnalyzeThemes();
-                      }
+                     if (activePanel === 'themeDiscovery') {
+                       setActivePanel(null);
+                     }else{
+                       setActivePanel('themeDiscovery');
+                       onAnalyzeThemes();
+                     }  
                     }}
                     disabled={stats.groupCount < 2}
                   >
@@ -246,10 +252,10 @@ export function FloatingToolbar({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant={showActivityPanel ? "default" : "ghost"}
+                    variant={activePanel === 'activity' ? "default" : "ghost"}
                     size="icon"
                     className="rounded-full w-10 h-10 relative"
-                    onClick={() => setShowActivityPanel(!showActivityPanel)}
+                    onClick={() => setActivePanel(activePanel === 'activity' ? null : 'activity')}
                   >
                     <ActivityIcon size={18} />
                     {activities && activities.length > 0 && (
@@ -288,10 +294,10 @@ export function FloatingToolbar({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        variant={showExportPanel ? "default" : "ghost"}
+                        variant={ activePanel === 'export' ? "default" : "ghost"}
                         size="icon"
                         className="rounded-full w-8 h-8"
-                        onClick={() => setShowExportPanel(!showExportPanel)}
+                        onClick={   () => setActivePanel(activePanel === 'export' ? null : 'export')}
                       >
                         <Download size={16} />
                       </Button>
@@ -352,7 +358,7 @@ export function FloatingToolbar({
             {stats.completion}% complete
           </Badge>
         </div>
-      </div>
+      </motion.div>
     </TooltipProvider>
   );
 }

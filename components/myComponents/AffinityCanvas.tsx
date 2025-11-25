@@ -1,11 +1,11 @@
 // components/AffinityCanvas.tsx - VERSION COMPLÈTE ET SIMPLIFIÉE
 "use client";
 
-import { useRef, useEffect, useState, useCallback, useMemo } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo, use } from "react";
 import AffinityGroup from "./AffinityGroup";
 import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo, ChevronRight, ChevronLeft, BarChart3, Sparkles, Move, Upload, Presentation, Eye, ActivityIcon } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AffinityGroup as AffinityGroupType, DotVotingSession, Insight } from "@/types";
+import { ActivePanel, AffinityGroup as AffinityGroupType, DotVotingSession, Insight, WorkspaceMode } from "@/types";
 import { toast } from "sonner";
 import { useCanvasShortcuts } from "@/hooks/useCanvasShortcuts";
 import { useHistory } from "@/hooks/useHistory";
@@ -147,7 +147,7 @@ useEffect(() => {
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
-  const [workspaceMode, setWorkspaceMode] = useState<'grouping' | 'voting'>('grouping');
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('grouping');
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [isMovingWithArrows, setIsMovingWithArrows] = useState(false);
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
@@ -156,7 +156,7 @@ useEffect(() => {
   const [pendingParentGroup, setPendingParentGroup] = useState<PendingGroupData | null>(null);
   const [applyingAction, setApplyingAction] = useState<string | null>(null);
   const [highlightedGroups, setHighlightedGroups] = useState<Set<string>>(new Set());
-  const [activePanel, setActivePanel] = useState<'voting' | 'analytics' | null>(null);
+  const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const [optimisticPositions, setOptimisticPositions] = useState<Map<string, {x: number, y: number}>>(new Map());
   const [renderKey, setRenderKey] = useState(0);
   const [isInputFocused, setIsInputFocused] = useState(false);
@@ -620,12 +620,34 @@ const handleGroupMoveOptimistic = useCallback((groupId: string, newPosition: { x
 
   
 
-  const toggleVotingPanel = useCallback(() => {
-    setActivePanel(prev => prev === 'voting' ? null : 'voting');
-  }, []);
+  // const toggleVotingPanel = useCallback(() => {
+  //   setActivePanel(prev => prev === 'voting' ? null : 'voting');
+  // }, []);
 
   const toggleAnalyticsPanel = useCallback(() => {
     setActivePanel(prev => prev === 'analytics' ? null : 'analytics');
+  }, []);
+
+  const togglePersonaPanel = useCallback(() => {
+    setActivePanel(prev => prev === 'persona' ? null : 'persona');
+  }, []);
+
+  const toggleExportPanel = useCallback(() => {
+    setActivePanel(prev => prev === 'export' ? null : 'export');
+  }, []);
+
+
+
+  const toggleVotingHistoryPanel = useCallback(() => {
+    setActivePanel(prev => prev === 'votingHistory' ? null : 'votingHistory');
+  }, []);
+
+  const toggleThemeDiscoveryPanel = useCallback(() => {
+    setActivePanel(prev => prev === 'themeDiscovery' ? null : 'themeDiscovery');
+  }, []);
+
+  const toggleActivityPanel = useCallback(() => {
+    setActivePanel(prev => prev === 'activity' ? null : 'activity');
   }, []);
 
   const handleThemeSelect = useCallback((theme: DetectedTheme) => {
@@ -1050,10 +1072,21 @@ useEffect(() => {
       e.preventDefault();
       setPresentMode(false);
     }
+
+    if(e.key === 'v'){
+      e.preventDefault();
+      setWorkspaceMode('voting');
+    }
+
+    if(e.key === 'Escape' && workspaceMode === 'voting' && !isPresentMode){
+      e.preventDefault();
+      setWorkspaceMode('grouping');
+      toast.info("Voting mode disabled");
+    }
   };
   document.addEventListener('keydown', handleEsc);
   return () => document.removeEventListener('keydown', handleEsc);
-}, [isPresentMode]);
+}, [isPresentMode, workspaceMode]);
 
   // ==================== HOOKS PERSONNALISÉS ====================
   useCanvasShortcuts({
@@ -1086,8 +1119,12 @@ useEffect(() => {
     onArrowMove: handleArrowKeys,
     onUndo: handleUndo,
     onRedo: handleRedo,
-    onToggleVotingPanel: toggleVotingPanel,
+    // onToggleVotingPanel: toggleVotingPanel,
     onToggleAnalyticsPanel: toggleAnalyticsPanel,
+    onTogglePersonaPanel: togglePersonaPanel,
+    onToggleThemeDiscoveryPanel: toggleThemeDiscoveryPanel,
+    onToggleActivityPanel: toggleActivityPanel,
+    onToggleExportPanel: toggleExportPanel,
     selectedGroups,
   });
 
@@ -1122,6 +1159,22 @@ useEffect(() => {
     }
   });
 
+  useEffect(() => {
+    const handleQuitPanel = (e: KeyboardEvent) => {
+
+      if (e.key === 'Escape' || activePanel) {
+        setActivePanel(null);
+        return;
+      }
+        return;
+      }
+
+      document.addEventListener('keydown', handleQuitPanel);
+      return () => document.removeEventListener('keydown', handleQuitPanel);
+    }, [activePanel]);
+    
+  
+
   // ==================== DEBUG ====================
   // console.log('🔍 AffinityCanvas render - detectedThemes:', detectedThemes.length);
 // const { userId } = useAuth();
@@ -1150,7 +1203,7 @@ useEffect(() => {
 )}
 
 {/* VOTING SESSION MANAGER */}
-    {!isPresentMode && (
+    {!isPresentMode && workspaceMode === 'voting' && (
       <VotingSessionManager
         mapId={mapId}
         projectId={projectId}
@@ -1682,25 +1735,8 @@ useEffect(() => {
         </div>
      
 
-        <AnimatePresence>
-          {showVotingHistory && (
-            <motion.div
-              initial={{ x: 600, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 600, opacity: 0 }}
-              className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
-            >
-              <VotingHistoryPanel 
-                projectId={projectId}
-                mapId={mapId}
-                groups={groups}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-
           <AnimatePresence>
-            {!isPresentMode && showThemeDiscovery && (
+            {!isPresentMode && activePanel === 'themeDiscovery' && (
               <motion.div
                 initial={{ x: 600, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
@@ -1732,29 +1768,25 @@ useEffect(() => {
               />
             </motion.div>
           )}
-          
-        </AnimatePresence>
 
-<AnimatePresence>
-  {showPersonaGenerator && (
-    <motion.div
-      initial={{ x: 600, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      exit={{ x: 600, opacity: 0 }}
-      className="w-[800px] bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
-    >
-      <PersonaGenerator
-        groups={groups}
-        insights={insights}
-        projectContext={projectInfo ? `PROJECT: ${projectInfo.name}` : undefined}
-      />
-    </motion.div>
-  )}
-</AnimatePresence>
-
-            <AnimatePresence>
-          {showActivityPanel && (
+          {!isPresentMode && activePanel === 'persona' && (
             <motion.div
+            initial={{ x: 600, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 600, opacity: 0 }}
+            className="w-[800px] bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
+          >
+            <PersonaGenerator
+              projectId={projectId}
+              mapId={mapId}
+              groups={groups}
+              insights={insights}
+              projectContext={projectInfo ? `PROJECT: ${projectInfo.name}` : undefined}
+            />
+          </motion.div>
+          )}
+          {!isPresentMode && activePanel === 'activity' && (
+             <motion.div
               initial={{ x: 600, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 600, opacity: 0 }}
@@ -1762,15 +1794,45 @@ useEffect(() => {
             >
               <ActivityPanel
                 mapId={mapId as Id<"affinityMaps">}
-                isOpen={showActivityPanel}
-                onClose={() => setShowActivityPanel(false)}
+                isOpen={activePanel === 'activity'}
+                onClose={() => setActivePanel(null)}
               />
             </motion.div>
           )}
+          {!isPresentMode && activePanel === 'votingHistory' && (
+              <motion.div
+              initial={{ x: 600, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 600, opacity: 0 }}
+              className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
+            >
+              <VotingHistoryPanel 
+                projectId={projectId}
+                mapId={mapId}
+                groups={groups}
+              />
+            </motion.div>
+          )}
+          {!isPresentMode && activePanel === 'export' && (
+              <motion.div
+              initial={{ x: 600, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 600, opacity: 0 }}
+              className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
+            >
+              <ExportPanel
+                mapId={mapId}
+                projectId={projectId}
+                onClose={() => setActivePanel(null)}
+              />
+            </motion.div>
+          )}
+          
         </AnimatePresence>
 
-              {/* 🎯 RENDU DES DOTS SUR LE CANVAS */}
-              
+
+
+                         
 
 
       </div>
