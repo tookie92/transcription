@@ -7,6 +7,9 @@ import { ClerkProvider } from "@clerk/nextjs";
 import ConvexClientProvider from "@/components/ConvexClientProvider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/ui/app-sidebar";
+import { ThemeProvider } from "next-themes";
+import { shadcn } from '@clerk/themes'
+
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,20 +32,27 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} bg-myBackground antialiased`}>
-        <ClerkProvider>
-          <ConvexClientProvider>
-            <SidebarProvider defaultOpen={false} >
-              <AppSidebar />
-              <main className="flex w-full min-h-dvh">
-                <SidebarTrigger />
-                {children}
-              </main>
-            </SidebarProvider>
-            <Toaster/>
-          </ConvexClientProvider>
-        </ClerkProvider>
+        <ThemeProvider
+          attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+        >
+          <ClerkProvider
+             appearance={{
+                baseTheme: shadcn,
+              }}
+          >
+            <ConvexClientProvider>
+                <main className="flex w-full min-h-dvh ">
+                  {children}
+                </main>
+              <Toaster/>
+            </ConvexClientProvider>
+          </ClerkProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

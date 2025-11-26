@@ -165,6 +165,7 @@ useEffect(() => {
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [draggedInsightId, setDraggedInsightId] = useState<string | null>(null);
   const [dragSourceGroupId, setDragSourceGroupId] = useState<string | null>(null);
+  const [lastSelectedGroup, setLastSelectedGroup] = useState<string | null>(null);
    // 🆕 AJOUTER CES STATES POUR EXPORT/IMPORT
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -232,6 +233,66 @@ const [showActivityPanel, setShowActivityPanel] = useState(false);
 const activity = useActivity();
 
   // ==================== useCallback ====================
+
+  // 🆕 AJOUTER CETTE FONCTION POUR GÉRER LA SÉLECTION DES GROUPES
+const handleGroupSelect = useCallback((groupId: string, e: React.MouseEvent) => {
+  if (isPresentMode) {
+    e.stopPropagation();
+    return;
+  }
+
+  const isTaken = Object.entries(sharedSelections || {}).some(
+    ([userId, groupIds]) =>
+      userId !== currentUserId && (groupIds as string[]).includes(groupId)
+  );
+  
+  if (isTaken) {
+    return;
+  }
+  
+  e.stopPropagation();
+  
+  // 🆕 LOGIQUE POUR SHIFT+CLIC
+  if (e.shiftKey && lastSelectedGroup && lastSelectedGroup !== groupId) {
+    // Trouver tous les groupes entre lastSelectedGroup et groupId
+    const groupIds = groups.map(g => g.id);
+    const startIndex = groupIds.indexOf(lastSelectedGroup);
+    const endIndex = groupIds.indexOf(groupId);
+    
+    if (startIndex !== -1 && endIndex !== -1) {
+      const start = Math.min(startIndex, endIndex);
+      const end = Math.max(startIndex, endIndex);
+      const groupsToSelect = groupIds.slice(start, end + 1);
+      
+      setSelectedGroups(prev => {
+        const newSelection = new Set(prev);
+        groupsToSelect.forEach(id => newSelection.add(id));
+        return newSelection;
+      });
+      
+      toast.info(`Selected ${groupsToSelect.length} groups with Shift+click`);
+      return;
+    }
+  }
+  
+  // Comportement normal (Ctrl/Cmd+clic ou clic simple)
+  if (e.ctrlKey || e.metaKey) {
+    setSelectedGroups(prev => {
+      const newSelection = new Set(prev);
+      if (newSelection.has(groupId)) {
+        newSelection.delete(groupId);
+        setLastSelectedGroup(null);
+      } else {
+        newSelection.add(groupId);
+        setLastSelectedGroup(groupId);
+      }
+      return newSelection;
+    });
+  } else {
+    setSelectedGroups(new Set([groupId]));
+    setLastSelectedGroup(groupId);
+  }
+}, [groups, lastSelectedGroup, isPresentMode, sharedSelections, currentUserId]);
 
 // AffinityCanvas.tsx
 const handleOpenComments = useCallback((groupId: string, position: { x: number; y: number }) => {
@@ -959,6 +1020,16 @@ useEffect(() => {
  
 //! end const currentUserId = userId!; // déjà récupéré via useAuth
   // ==================== EFFETS ====================
+useEffect(() => {
+  if (selectedGroups.size === 0) {
+    setLastSelectedGroup(null);
+  } else if (selectedGroups.size === 1) {
+    // Garder le dernier groupe sélectionné comme référence
+    const singleGroup = Array.from(selectedGroups)[0];
+    setLastSelectedGroup(singleGroup);
+  }
+}, [selectedGroups]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas) {
@@ -1501,8 +1572,8 @@ useEffect(() => {
                 className="absolute inset-0 canvas-background"
                 style={{
                   backgroundImage: `
-                    linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px),
-                    linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px)
+                    linear-gradient(rgba(217, 243, 230, 1) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(217, 243, 230, 1) 1px, transparent 1px)
                   `,
                   backgroundSize: '40px 40px',
                 }}
@@ -1569,33 +1640,7 @@ useEffect(() => {
                         }
                       }}
                       
-                      onSelect={(groupId, e) => {
-                        // 🎯 EN MODE PRÉSENTATION: NAVIGATION AU CLICK
-                        if (presentationState.isActive) {
-                          e.stopPropagation();
-                          setPresentationState(prev => ({
-                            ...prev,
-                            currentGroupIndex: index,
-                            isOverview: false
-                          }));
-                          return;
-                        }
-                        
-                        // 👇 COMPORTEMENT NORMAL HORS PRÉSENTATION
-                        if (e.ctrlKey || e.metaKey) {
-                          setSelectedGroups(prev => {
-                            const newSelection = new Set(prev);
-                            if (newSelection.has(groupId)) {
-                              newSelection.delete(groupId);
-                            } else {
-                              newSelection.add(groupId);
-                            }
-                            return newSelection;
-                          });
-                        } else {
-                          setSelectedGroups(new Set([groupId]));
-                        }
-                      }}
+                      onSelect={handleGroupSelect}
                       
                       // 🎯 PROPS CONDITIONNELLES - TOUJOURS DÉFINIES
                       isSelected={presentationState.isActive ? false : selectedGroups.has(group.id)}

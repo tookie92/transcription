@@ -16,11 +16,12 @@ import { useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { Folder } from "lucide-react"
 import Link from "next/link"
+import { ModeToggle } from "../ModeToggle"
 
 export function AppSidebar() {
     const projects = useQuery(api.projects.getUserProjects)
   return (
-    <Sidebar>
+    <Sidebar >
       <SidebarHeader className="border-b">
         <div className="p-4">
           <h2 className="text-lg font-semibold">Projects</h2>
@@ -55,6 +56,7 @@ export function AppSidebar() {
 
       <SidebarFooter >
         <ButtonFooter />
+        <ModeToggle />
       </SidebarFooter>
     </Sidebar>
   )

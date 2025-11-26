@@ -4,9 +4,13 @@ import { useCurrentProject } from '@/hooks/useCurrentProject';
 import { useEffect } from 'react';
 import MediaManager from "@/components/myComponents/MediaManager";
 import TranscriptionManager from "@/components/myComponents/TranscriptionManager";
+import { ClerkLoaded, SignedIn, SignedOut } from '@clerk/nextjs';
+import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 
 export default function Home() {
   const { currentProjectId } = useCurrentProject();
+  const route = useRouter()
 
   // Redirection automatique si projet sélectionné ← OPTIONNEL
   useEffect(() => {
@@ -26,15 +30,21 @@ export default function Home() {
           <p className='mt-1 ml-3'>made for our interview(no need to comment about the name of the app 🤪)</p>
         </div>
         
-        {/* Message si projet sélectionné ← OPTIONNEL */}
-        {currentProjectId && (
-          <div className="mt-4 text-center">
-            <p className="text-gray-600">
-              Working on project. <a href={`/project/${currentProjectId}`} className="text-blue-600 hover:underline">View project page</a>
-            </p>
-          </div>
-        )}
-        
+       <div className="flex">
+        <ClerkLoaded>
+            <SignedIn>
+                <div className='mt-8 flex  justify-center w-full flex-col gap-3 sm:flex-row'>
+                  <Button onClick={()=> route.push("/project")} >
+                    Get Started
+                  </Button>
+                 
+                </div>
+            </SignedIn>
+            <SignedOut>
+                <p>Signed out</p>
+            </SignedOut>
+        </ClerkLoaded>
+       </div>
 
       </div>
     </section>
