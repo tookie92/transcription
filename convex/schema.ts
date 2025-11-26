@@ -315,30 +315,18 @@ personas: defineTable({
 .index("by_project", ["projectId"])
 .index("by_map", ["mapId"]),
 
-// convex/schema.ts - AJOUTER
-silentSessions: defineTable({
+// convex/schema.ts - AJOUTER CETTE TABLE
+silentSortingSessions: defineTable({
   mapId: v.id("affinityMaps"),
-  phase: v.union(
-    v.literal("idle"),
-    v.literal("preparation"),
-    v.literal("sorting"),
-    v.literal("discussion"),
-    v.literal("completed")
-  ),
+  isActive: v.boolean(),
   duration: v.number(),
-  timeRemaining: v.number(),
+  startTime: v.number(),
+  endTime: v.number(),
+  createdBy: v.string(),
   participants: v.array(v.string()),
-  startedAt: v.optional(v.number()),
-  completedAt: v.optional(v.number()),
-  rules: v.object({
-    noTalking: v.boolean(),
-    independentSorting: v.boolean(),
-    moveFreely: v.boolean(),
-    createGroups: v.boolean(),
-  }),
 })
 .index("by_map", ["mapId"])
-.index("by_phase", ["phase"])
+.index("by_active", ["isActive"])
 
 });
 

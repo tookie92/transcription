@@ -41,6 +41,7 @@ import { FloatingToolbar } from "./FloatingToolbar";
 import { VotingSessionManager } from "./VotingSessionManager";
 import { VotingHistoryPanel } from "./VotingHistoryPanel";
 import { PersonaGenerator } from "./PersonaGenerator";
+import { useSilentSorting } from "@/hooks/useSilentSorting";
 
 
 
@@ -102,6 +103,7 @@ export default function AffinityCanvas({
   const { userId: currentUserId } = useAuth();
 
   const projectName = useQuery(api.projects.getById, {projectId: projectId as Id<"projects">});
+    const { isSilentSortingActive, groupTimeLeft, personalTimeLeft, currentPhase } = useSilentSorting(mapId);
 
   // const upsertPresence = useMutation(api.presence.upsert);  
 
@@ -1666,6 +1668,18 @@ useEffect(() => {
                 <DebugSecondUser mapId={mapId} />
               )} */}
           </div>
+
+          {isSilentSortingActive && (
+        <div className={`absolute top-4 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2 rounded-full text-sm font-medium shadow-lg ${
+          currentPhase === 'group-sorting' ? 'bg-yellow-500 text-white' :
+          currentPhase === 'personal-review' ? 'bg-blue-500 text-white' :
+          'bg-green-500 text-white'
+        }`}>
+          {currentPhase === 'group-sorting' && `🔇 Group Sorting - ${Math.floor(groupTimeLeft / 60)}:${(groupTimeLeft % 60).toString().padStart(2, '0')}`}
+          {currentPhase === 'personal-review' && `✏️ Personal Review - ${Math.floor(personalTimeLeft / 60)}:${(personalTimeLeft % 60).toString().padStart(2, '0')}`}
+          {currentPhase === 'discussion' && `💬 Discussion Phase - Start talking!`}
+        </div>
+      )}
 
           {/* 🎯 COUCHE 3: INDICATEURS UI (PAR-DESSUS TOUT) */}
         {isPlacingDot && (

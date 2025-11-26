@@ -589,21 +589,16 @@ export interface ConvexUserPersona {
   createdAt: number;
 }
 
-export type SilentSortingPhase = 'idle' | 'preparation' | 'sorting' | 'discussion' | 'completed';
-
 export interface SilentSortingSession {
-  _id?: Id<"silentSessions">;
+  _id?: Id<"silentSortingSessions">;
+  _creationTime?: number;
   mapId: Id<"affinityMaps">;
-  phase: SilentSortingPhase;
-  duration: number;
-  timeRemaining: number;
+  isActive: boolean;
+  duration: number; // en secondes
+  startTime: number;
+  endTime: number;
+  createdBy: string;
   participants: string[];
-  startedAt?: number;
-  completedAt?: number;
-  rules: {
-    noTalking: boolean;
-    independentSorting: boolean;
-    moveFreely: boolean;
-    createGroups: boolean;
-  };
 }
+
+export type SilentSortingPhase = 'not-started' | 'sorting' | 'review' | 'completed';

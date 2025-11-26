@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, PanInfo } from "framer-motion";
-import { Trash2, Vote, GripVertical, Edit, Copy, Edit3, Sparkles } from "lucide-react";
+import { Trash2, Vote, GripVertical, Edit, Copy, Edit3, Sparkles, VolumeX } from "lucide-react";
 import React, { useState, useCallback, useMemo } from "react";
 import { AffinityGroup as AffinityGroupType, Comment, DotVotingSession, Insight } from "@/types";
 import { useMotionValue, useTransform } from "framer-motion";
@@ -20,6 +20,7 @@ import { CommentPanel } from "./CommentPanel";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { useSilentSorting } from "@/hooks/useSilentSorting";
 
 interface AffinityGroupProps {
   group: AffinityGroupType;
@@ -159,6 +160,12 @@ const sharedUser = Object.entries(sharedSelections || {}).find(
   );
 // 🎯 CORRECTION : Utiliser groupInsights.length directement
 const hasInsights = groupInsights.length > 0;
+
+// Sorting
+  const { isSilentSortingActive, currentPhase } = useSilentSorting(mapId);
+  
+  // 🎯 RESTREINDRE LES INTERACTIONS PENDANT LE SILENT SORTING
+  const canInteract = !isSilentSortingActive || currentPhase === 'discussion';
 
 
 
@@ -669,7 +676,11 @@ const handleAddDot = useCallback(async (e: React.MouseEvent) => {
           isPresentationMode 
             ? 'cursor-default' 
             : 'cursor-grab active:cursor-grabbing'
-        } ${isPlacingDot ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}`} // 🆕 EFFET VISUEL
+        } ${isPlacingDot ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}
+         ${
+        !canInteract ? 'opacity-80 cursor-not-allowed' : 'cursor-grab'
+      }
+        `} // 🆕 EFFET VISUEL
         >
 
         {/* {showComments && (
@@ -680,7 +691,15 @@ const handleAddDot = useCallback(async (e: React.MouseEvent) => {
           />
         )} */}
 
-
+          {!canInteract && isSilentSortingActive && (
+        <div className="absolute inset-0 bg-white/50 rounded-xl flex items-center justify-center z-10">
+          <div className="text-center p-4">
+            <VolumeX className="w-8 h-8 mx-auto mb-2 text-gray-500" />
+            <p className="text-sm text-gray-600">Silent sorting in progress</p>
+            <p className="text-xs text-gray-500">No discussion allowed</p>
+          </div>
+        </div>
+      )}
         {unreadCount && unreadCount > 0 ? (
           <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white shadow-sm" />
         ) : null}

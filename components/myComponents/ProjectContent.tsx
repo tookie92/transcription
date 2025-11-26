@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Plus, Users, Calendar, ArrowLeft } from "lucide-react";
+import { FileText, Plus, Users, Calendar, ArrowLeft, CircuitBoard } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 import { InviteUserButton } from "./InviteUserButton";
@@ -84,10 +84,16 @@ useEffect(() => {
               <p className="text-gray-600 mt-1">{project.description}</p>
             )}
           </div>
-          <Button onClick={() => router.push(`/project/${projectId}/interview/`)}>
-            <Plus className="w-4 h-4" />
-            New Interview
-          </Button>
+          <div className="flex gap-x-3">
+              <Button onClick={() => router.push(`/project/${projectId}/interview/`)}>
+                <Plus className="w-4 h-4" />
+                New Interview
+              </Button> 
+               <Button onClick={() => router.push(`/project/${projectId}/affinity/`)}>
+                <CircuitBoard className="w-4 h-4" />
+                Affinity Map
+              </Button> 
+          </div>
         </div>
         <div className="flex">
           {/* <InviteUserButton projectId={projectId} /> */}

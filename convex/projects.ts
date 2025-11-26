@@ -60,6 +60,39 @@ export const createProject = mutation({
 });
 
 // Récupérer les projets de l'utilisateur
+// export const getUserProjects = query({
+//   handler: async (ctx) => {
+//     const identity = await ctx.auth.getUserIdentity();
+//     if (!identity) {
+//       console.log("🚫 No user identity - returning empty array");
+//       return [];
+//     }
+
+//     console.log("🔐 User authenticated:", identity.subject);
+
+//     // Récupérer tous les projets où l'user est membre
+//     const projects = await ctx.db
+//       .query("projects")
+//       .filter(q => 
+//         q.or(
+//           q.eq(q.field("ownerId"), identity.subject), // Propriétaire
+//           q.eq(q.field("isPublic"), true), // Ou projet public
+//           // Ou membre du projet - on vérifie manuellement
+//         )
+//       )
+//       .collect();
+
+//     // Filtrer manuellement pour les membres
+//     const userProjects = projects.filter(project => 
+//       project.ownerId === identity.subject || 
+//       project.isPublic ||
+//       project.members.some(member => member.userId === identity.subject)
+//     );
+
+//     console.log("📁 User projects found:", userProjects.length);
+//     return userProjects;
+//   },
+// });
 export const getUserProjects = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -70,20 +103,13 @@ export const getUserProjects = query({
 
     console.log("🔐 User authenticated:", identity.subject);
 
-    // Récupérer tous les projets où l'user est membre
-    const projects = await ctx.db
+    // Récupérer TOUS les projets (sans filtre initial)
+    const allProjects = await ctx.db
       .query("projects")
-      .filter(q => 
-        q.or(
-          q.eq(q.field("ownerId"), identity.subject), // Propriétaire
-          q.eq(q.field("isPublic"), true), // Ou projet public
-          // Ou membre du projet - on vérifie manuellement
-        )
-      )
       .collect();
 
-    // Filtrer manuellement pour les membres
-    const userProjects = projects.filter(project => 
+    // Filtrer manuellement pour trouver les projets de l'utilisateur
+    const userProjects = allProjects.filter(project => 
       project.ownerId === identity.subject || 
       project.isPublic ||
       project.members.some(member => member.userId === identity.subject)
@@ -93,6 +119,8 @@ export const getUserProjects = query({
     return userProjects;
   },
 });
+
+
 
 
 // convex/projects.ts

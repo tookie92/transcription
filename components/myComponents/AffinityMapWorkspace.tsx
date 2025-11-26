@@ -16,6 +16,7 @@ import { useActivity } from "@/hooks/useActivity";
 import { ActivityPanel } from "./ActivityPanel";
 import { NotificationBell } from "./NotificationBell";
 import { SilentSortingSession } from "./SilentSortingSession"; // 🆕 AJOUTER
+import { SilentSortingCommand } from "./SilentSortingCommand";
 
 interface AffinityMapWorkspaceProps {
   projectId: Id<"projects">;
@@ -373,7 +374,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           {/* 🆕 BELL NOTIFICATIONS */}
           <NotificationBell />
           
-          {/* 🆕 BOUTON SILENT SORTING */}
+          {/* 🆕 BOUTON SILENT SORTING
           <button
             onClick={() => setShowSilentSorting(!showSilentSorting)}
             className={`px-3 py-2 rounded-lg border flex items-center gap-2 ${
@@ -384,7 +385,15 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           >
             <span>🔇</span>
             Silent Sorting
-          </button>
+          </button> */}
+
+          {/* 🆕 PANEL SILENT SORTING */}
+          {affinityMap && userId && (
+            <SilentSortingCommand 
+              mapId={affinityMap._id} 
+              currentUserId={userId} 
+            />
+          )}
 
           {/* 🆕 BOUTON ACTIVITÉ */}
           <button
@@ -432,15 +441,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           onGroupsReplace={handleGroupsReplace}
         />
         
-        {/* 🆕 PANEL SILENT SORTING */}
-        {showSilentSorting && affinityMap && (
-          <div className="absolute top-4 right-4 z-40">
-            <SilentSortingSession
-              mapId={affinityMap._id}
-              currentUserId={userId!}
-            />
-          </div>
-        )}
+        
         
         {/* 🆕 PANEL ACTIVITÉ */}
         {showActivityPanel && affinityMap && (
