@@ -8,18 +8,13 @@ import { Button } from '../ui/button';
 import { useTranscription } from '@/hooks/useTranscription';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
-import { useCurrentProject } from '@/hooks/useCurrentProject';
+
 import { Upload, Loader2, FolderOpen } from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import { Id } from '@/convex/_generated/dataModel';
 
 import { toast } from "sonner"; 
+import { useRouter } from 'next/navigation';
 
 interface MediaManagerProps {
   currentProjectId: Id<"projects">;
@@ -32,7 +27,7 @@ export  function MediaManager({ currentProjectId }: MediaManagerProps) {
   const [title, setTitle] = useState('');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // const [recentlyCreated, setRecentlyCreated] = useState(false);
+  const router = useRouter();
 
   // Convex
   const createInterview = useMutation(api.interviews.createInterview);
@@ -72,7 +67,8 @@ const handleTranscribe = async () => {
 
     toast.loading("Saving interview to project...", { id: toastId });
 
-    await createInterview({
+    // 🎯 CORRECTION: Récupérer et utiliser l'ID Convex retourné par la mutation
+    const interviewId = await createInterview({
       projectId: currentProjectId as Id<"projects">,
       title: interview.title,
       topic: interview.topic,
@@ -81,23 +77,14 @@ const handleTranscribe = async () => {
       duration: interview.duration,
     });
 
-    // ✅ SUPPRIME LA REDIRECTION - Garde l'user sur place
+    // 🎯 MAINTENANT utiliser l'ID Convex valide pour la redirection
     toast.success("Interview created successfully!", { 
       id: toastId,
-      duration: 3000,
     });
 
-    // Reset le formulaire MAIS garde l'audio pour référence
-    // handleReset(); ← On ne reset plus automatiquement
-    
-    toast.success("Interview ready! You can now analyze it.", {
-      id: toastId,
-      duration: 3000,
-    });
+    // 🎯 REDIRECTION AVEC LE VRAI ID CONVEX
+    router.push(`/project/${currentProjectId}/interview/${interviewId}`);
 
-    // Reset le formulaire mais garde un bouton de navigation
-    handleReset();
-    
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "Transcription failed";
     toast.error(`Transcription failed: ${errorMessage}`, { 
@@ -107,6 +94,8 @@ const handleTranscribe = async () => {
     console.error('Transcription failed:', err);
   }
 };
+
+
   const handleReset = () => {
     setSelectedFile(null);
     setAudioUrl(null);
@@ -133,24 +122,9 @@ const handleTranscribe = async () => {
   }
 
   return (
-    <Card className="bg-white rounded-2xl shadow-lg p-8 w-1/2">
+    <Card className="bg-white rounded-2xl shadow-lg p-8 w-full">
       <CardContent className="space-y-6">
-        {/* Project Selection
-        <div className="space-y-2">
-          <Label htmlFor="project">Select Project</Label>
-          <Select value={currentProjectId || ""} onValueChange={setCurrentProject}>
-            <SelectTrigger>
-              <SelectValue placeholder="Choose a project" />
-            </SelectTrigger>
-            <SelectContent>
-              {projects?.map((project) => (
-                <SelectItem key={project._id} value={project._id}>
-                  {project.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div> */}
+
 
         {/* Rest of your existing MediaManager code */}
         {audioUrl ? (

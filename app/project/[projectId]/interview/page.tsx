@@ -39,7 +39,7 @@ const InterviewHome = () => {
         
         <div className='mt-8 flex flex-col gap-6 sm:flex-row'>
           <MediaManager currentProjectId={currentProjectId as Id<"projects">} />
-          <TranscriptionManager />
+          {/* <TranscriptionManager /> */}
         </div>
       </div>
     </section>

@@ -602,3 +602,24 @@ export interface SilentSortingSession {
 }
 
 export type SilentSortingPhase = 'not-started' | 'sorting' | 'review' | 'completed';
+
+// Dans types/index.ts - AJOUTER CES TYPES
+export interface InterviewSummary {
+  executiveSummary: string;
+  keyPoints: string[];
+  recommendations: string[];
+  mainThemes: string[];
+  criticalIssues: string[];
+  generatedAt: number;
+}
+
+export interface SummaryRequest {
+  transcription: string;
+  topic?: string;
+  insights: Insight[];
+  projectContext?: string;
+}
+
+export interface SummaryResponse {
+  summary: InterviewSummary;
+}

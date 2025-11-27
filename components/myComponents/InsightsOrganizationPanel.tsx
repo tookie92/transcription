@@ -92,7 +92,6 @@ PROJECT DESCRIPTION: ${projectInfo.description || 'No description available'}
   };
 
  // Dans InsightsOrganizationPanel.tsx - REMPLACER handleApplySuggestion
-// Dans InsightsOrganizationPanel.tsx - AJOUTER UNE VÉRIFICATION
 const handleApplySuggestion = (suggestion: GroupSuggestion) => {
   if (suggestion.action === 'create_new' && suggestion.newGroupTitle) {
     

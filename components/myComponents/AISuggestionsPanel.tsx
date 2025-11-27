@@ -68,7 +68,7 @@ export function AISuggestionsPanel({
   };
 
   return (
-    <div className="border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+    <div className="border-b border-gray-200 bg-linear-to-r from-blue-50 to-indigo-50">
       <div className="p-4">
         <div className="flex items-center gap-2 mb-3">
           <Sparkles size={18} className="text-blue-600" />

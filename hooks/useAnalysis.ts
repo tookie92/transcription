@@ -1,3 +1,4 @@
+// hooks/useAnalysis.ts
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -5,6 +6,7 @@ import { Insight, SimpleSegment } from "@/types";
 
 export function useAnalysis() {
   const createInsights = useMutation(api.insights.createInsights);
+  const updateSummary = useMutation(api.interviews.updateSummary);
 
   const analyzeInterview = async (
     interviewId: string,
@@ -41,7 +43,6 @@ export function useAnalysis() {
         type: insight.type,
         text: insight.text,
         timestamp: insight.timestamp,
-        // Supprimer createdAt, id, et autres champs non attendus
       }));
 
       // Stocker les insights dans Convex
@@ -63,7 +64,55 @@ export function useAnalysis() {
     }
   };
 
+  const generateInterviewSummary = async (
+    interviewId: string,
+    projectId: string,
+    transcription: string,
+    topic?: string,
+    insights?: Insight[]
+  ) => {
+    try {
+      console.log('📝 Starting summary generation...', { interviewId, projectId });
+      
+      const response = await fetch('/api/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          transcription,
+          topic,
+          insights: insights || [],
+          projectContext: `Project ID: ${projectId}`,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Summary generation failed');
+      }
+
+      const data = await response.json();
+      console.log('✅ Summary generation complete');
+
+      // Stocker le résumé dans Convex
+      await updateSummary({
+        interviewId: interviewId as Id<"interviews">,
+        summary: data.summary,
+      });
+
+      return data.summary;
+    } catch (error) {
+      console.error('💥 Summary generation error:', error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Summary generation failed');
+    }
+  };
+
   return {
     analyzeInterview,
+    generateInterviewSummary,
   };
 }

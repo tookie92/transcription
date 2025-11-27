@@ -1,3 +1,4 @@
+// components/InterviewContent.tsx - VERSION CORRIGÉE
 "use client";
 
 import { useQuery } from "convex/react";
@@ -13,6 +14,7 @@ import { ExportDialog } from "./ExportDialog";
 import { useState } from "react";
 import { ExportInterview } from "@/types";
 import { Id } from "@/convex/_generated/dataModel";
+import { toast } from "sonner";
 
 interface InterviewContentProps {
   projectId: Id<"projects">;
@@ -21,9 +23,11 @@ interface InterviewContentProps {
 
 export function InterviewContent({ projectId, interviewId }: InterviewContentProps) {
   const router = useRouter();
-  const { analyzeInterview } = useAnalysis();
+  const { analyzeInterview, generateInterviewSummary } = useAnalysis();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   // Récupérer les données
   const project = useQuery(api.projects.getById, { projectId });
@@ -31,6 +35,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
   const insights = useQuery(api.insights.getByInterview, { interviewId });
   const projectInterviews = useQuery(api.interviews.getProjectInterviews, { projectId });
 
+  // Gérer le cas où l'interview n'est pas trouvée
   if (!interview || !project) {
     return (
       <div className="container mx-auto p-6">
@@ -62,7 +67,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
       createdAt: new Date(insight.createdAt).toISOString(),
     })) || [],
     isAnalyzing: false,
-    createdAt: new Date(interview.createdAt).toISOString(),
+    createdAt: new Date(interview._creationTime).toISOString(),
   };
 
   const handleAnalyze = async () => {
@@ -77,11 +82,49 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
         interview.topic,
         interview.segments
       );
+      toast.success("Analysis completed successfully");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Analysis failed';
       setAnalysisError(errorMessage);
+      toast.error("Analysis failed");
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleGenerateSummary = async () => {
+    setIsGeneratingSummary(true);
+    setSummaryError(null);
+
+    try {
+      if (!projectId) {
+        throw new Error('Project ID is required');
+      }
+
+      await generateInterviewSummary(
+        interview._id,
+        projectId,
+        interview.transcription,
+        interview.topic,
+        insights?.map(insight => ({
+          id: insight._id,
+          type: insight.type,
+          text: insight.text,
+          timestamp: insight.timestamp,
+          source: insight.source,
+          createdBy: insight.createdBy,
+          createdAt: new Date(insight._creationTime).toISOString(),
+          projectId: insight.projectId,
+          interviewId: insight.interviewId,
+        })) || []
+      );
+      toast.success("Summary generated successfully");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Summary generation failed';
+      setSummaryError(errorMessage);
+      toast.error("Failed to generate summary");
+    } finally {
+      setIsGeneratingSummary(false);
     }
   };
 
@@ -179,7 +222,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                   {interview.segments.length} segments
                 </span>
                 <span>
-                  {new Date(interview.createdAt).toLocaleDateString()}
+                  {new Date(interview._creationTime).toLocaleDateString()}
                 </span>
               </div>
             </div>
@@ -289,7 +332,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                         <p className="text-gray-700">{insight.text}</p>
                         <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
                           <span>Source: {insight.source}</span>
-                          <span>{new Date(insight.createdAt).toLocaleDateString()}</span>
+                          <span>{new Date(insight._creationTime).toLocaleDateString()}</span>
                         </div>
                       </CardContent>
                     </Card>
@@ -303,54 +346,162 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
         {/* Summary Tab */}
         <TabsContent value="summary">
           <div className="grid gap-6">
-            {/* Statistics */}
+            {summaryError && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-600 text-sm">{summaryError}</p>
+              </div>
+            )}
+
+            {/* Header avec bouton de génération */}
             <Card>
               <CardHeader>
-                <CardTitle>Interview Statistics</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-[#3D7C6F]">
-                      {Math.floor(interview.duration / 60)}m {Math.floor(interview.duration % 60)}s
-                    </div>
-                    <div className="text-sm text-gray-500">Duration</div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Interview Summary</CardTitle>
+                    <CardDescription>
+                      AI-generated executive summary and key findings
+                    </CardDescription>
                   </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-[#3D7C6F]">
-                      {interview.segments.length}
-                    </div>
-                    <div className="text-sm text-gray-500">Segments</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-[#3D7C6F]">
-                      {interview.transcription.split(' ').length}
-                    </div>
-                    <div className="text-sm text-gray-500">Words</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-[#3D7C6F]">
-                      {insights?.length || 0}
-                    </div>
-                    <div className="text-sm text-gray-500">Insights</div>
-                  </div>
+                  {!interview.summary && (
+                    <Button
+                      onClick={handleGenerateSummary}
+                      disabled={isGeneratingSummary}
+                      className="flex items-center gap-2 bg-[#3D7C6F] hover:bg-[#2d5f54]"
+                    >
+                      {isGeneratingSummary ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4" />
+                          Generate Summary
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
-              </CardContent>
+              </CardHeader>
             </Card>
 
-            {/* Full Text */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Complete Transcription Text</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="prose max-w-none">
-                  <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
-                    {interview.transcription}
+            {/* Affichage du résumé */}
+            {interview.summary ? (
+              <>
+                {/* Executive Summary */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Executive Summary</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="prose max-w-none">
+                      <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                        {interview.summary.executiveSummary}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Key Points */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Key Points</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      {interview.summary.keyPoints.map((point, index) => (
+                        <li key={index} className="flex items-start gap-3">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
+                          <span className="text-gray-700">{point}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                {/* Recommendations */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Recommendations</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-3">
+                      {interview.summary.recommendations.map((recommendation, index) => (
+                        <li key={index} className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+                          <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0" />
+                          <span className="text-gray-700">{recommendation}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                {/* Main Themes */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Main Themes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {interview.summary.mainThemes.map((theme, index) => (
+                        <Badge key={index} variant="secondary" className="text-sm">
+                          {theme}
+                        </Badge>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Critical Issues */}
+                {interview.summary.criticalIssues.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-red-600">Critical Issues</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2">
+                        {interview.summary.criticalIssues.map((issue, index) => (
+                          <li key={index} className="flex items-start gap-3 p-3 bg-red-50 rounded-lg">
+                            <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0" />
+                            <span className="text-red-700">{issue}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            ) : (
+              // État vide - pas de résumé
+              <Card>
+                <CardContent className="text-center py-12">
+                  <FileSpreadsheet className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                  <h3 className="text-lg font-semibold text-gray-600 mb-2">
+                    No Summary Yet
+                  </h3>
+                  <p className="text-gray-500 mb-6 max-w-md mx-auto">
+                    Generate an AI-powered summary to get executive insights, key findings, and actionable recommendations from this interview.
                   </p>
-                </div>
-              </CardContent>
-            </Card>
+                  <Button 
+                    onClick={handleGenerateSummary} 
+                    disabled={isGeneratingSummary}
+                    className="bg-[#3D7C6F] hover:bg-[#2d5f54]"
+                  >
+                    {isGeneratingSummary ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Generating Summary...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Generate AI Summary
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </TabsContent>
       </Tabs>

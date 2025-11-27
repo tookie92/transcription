@@ -101,3 +101,85 @@ export const getById = query({
     return hasAccess ? interview : null;
   },
 });
+// Dans convex/interviews.ts - AJOUTER CES MUTATIONS
+// Dans convex/interviews.ts - AJOUTER CES MUTATIONS
+export const generateSummary = mutation({
+  args: {
+    interviewId: v.id("interviews"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const interview = await ctx.db.get(args.interviewId);
+    if (!interview) throw new Error("Interview not found");
+
+    // Récupérer les insights de l'interview
+    const insights = await ctx.db
+      .query("insights")
+      .filter(q => q.eq(q.field("interviewId"), args.interviewId))
+      .collect();
+
+    // Récupérer le contexte du projet
+    const project = await ctx.db.get(interview.projectId);
+    if (!project) throw new Error("Project not found");
+
+    const projectContext = `Project: ${project.name}${project.description ? ` - ${project.description}` : ''}`;
+
+    // Appeler l'API de résumé
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/summarize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        transcription: interview.transcription,
+        topic: interview.topic,
+        insights: insights.map(insight => ({
+          type: insight.type,
+          text: insight.text,
+          timestamp: insight.timestamp,
+        })),
+        projectContext,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Summary generation failed');
+    }
+
+    const data = await response.json();
+    
+    // Mettre à jour l'interview avec le résumé
+    await ctx.db.patch(args.interviewId, {
+      summary: data.summary,
+    });
+
+    return data.summary;
+  },
+});
+
+export const updateSummary = mutation({
+  args: {
+    interviewId: v.id("interviews"),
+    summary: v.object({
+      executiveSummary: v.string(),
+      keyPoints: v.array(v.string()),
+      recommendations: v.array(v.string()),
+      mainThemes: v.array(v.string()),
+      criticalIssues: v.array(v.string()),
+      generatedAt: v.number(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    await ctx.db.patch(args.interviewId, {
+      summary: args.summary,
+    });
+
+    return { success: true };
+  },
+});

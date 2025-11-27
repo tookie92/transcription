@@ -39,6 +39,14 @@ export default defineSchema({
       v.literal("analyzing"),
       v.literal("ready")
     ),
+    summary: v.optional(v.object({ // 🆕 NOUVEAU CHAMP
+    executiveSummary: v.string(),
+    keyPoints: v.array(v.string()),
+    recommendations: v.array(v.string()),
+    mainThemes: v.array(v.string()),
+    criticalIssues: v.array(v.string()),
+    generatedAt: v.number(),
+    })),
     createdAt: v.number(),
   }),
 
