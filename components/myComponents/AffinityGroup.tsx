@@ -522,7 +522,7 @@ const amIMentioned = myMentions?.includes(group.id);
    * 🎯 GESTION DU DRAG - DÉSACTIVÉ EN MODE PRÉSENTATION
    * On empêche de déplacer les groupes pendant une présentation
    */
-  const canDrag = !isSelectedByOther && !isPresentationMode;
+  // const canDrag = !isSelectedByOther && !isPresentationMode;
 
   // ==================== GESTION DES INTERACTIONS ====================
   

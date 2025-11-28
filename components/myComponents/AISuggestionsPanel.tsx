@@ -21,6 +21,10 @@ export function AISuggestionsPanel({
   onApplySuggestion,
   onDismissSuggestion,
 }: AISuggestionsPanelProps) {
+
+  const handleDismissSingle = (suggestion: GroupSuggestion) => {
+  onDismissSuggestion(suggestion);
+};
   if (isLoading) {
     return (
       <div className="p-4 border-b border-gray-200 bg-blue-50">
@@ -140,6 +144,14 @@ export function AISuggestionsPanel({
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-7"
+                  onClick={() => handleDismissSingle(suggestion)}
+                >
+                  Hide
+                </Button>
               </div>
             </motion.div>
           ))}

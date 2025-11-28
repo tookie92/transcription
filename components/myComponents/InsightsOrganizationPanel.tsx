@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Search, CheckCircle, AlertTriangle, Lightbulb, Users, Sparkles, Plus, Trash } from "lucide-react";
+import { Search, CheckCircle, AlertTriangle, Lightbulb, Users, Sparkles, Plus, Trash, RefreshCw, X, HelpCircle } from "lucide-react";
 import { AffinityGroup, ConvexProject, Insight, Project } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -65,31 +65,169 @@ export function InsightsOrganizationPanel({
     const pendingInsightsRef = useRef<PendingInsights | null>(null);
 
  // 🆕 AJOUTER LES SUGGESTIONS IA
-  const { suggestions, isLoading, generateSuggestions, clearSuggestions } = useGroupSuggestions();
+  const { suggestions, isLoading,isRefreshing, generateSuggestions, clearSuggestions, markSuggestionApplied, refreshSuggestions } = useGroupSuggestions();
+
+
+    // 🎯 CALCUL DE SIMILARITÉ SIMPLIFIÉ
+  const calculateSimilarity = (text1: string, text2: string): number => {
+    const words1 = new Set(text1.toLowerCase().split(/\W+/));
+    const words2 = new Set(text2.toLowerCase().split(/\W+/));
+    
+    const intersection = new Set([...words1].filter(x => words2.has(x)));
+    const union = new Set([...words1, ...words2]);
+    
+    return intersection.size / union.size;
+  };
+
+  // 🆕 FONCTION DE SCORE DE SIMILARITÉ AMÉLIORÉE
+const calculateSimilarityScore = (insight: Insight, group: AffinityGroup): number => {
+  const groupInsights = insights.filter(i => group.insightIds.includes(i.id));
+  
+  if (groupInsights.length === 0) return 0;
+  
+  // Calculer la similarité moyenne avec tous les insights du groupe
+  const similarities = groupInsights.map(groupInsight => 
+    calculateSimilarity(insight.text, groupInsight.text)
+  );
+  
+  return Math.max(...similarities); // Retourner la similarité la plus élevée
+};
+
+  // 🆕 AMÉLIORER LA FONCTION DE RECHERCHE DE GROUPE SIMILAIRE
+const findSuggestedGroup = (insight: Insight) => {
+  const similarGroups = groups.filter(group => {
+    // Vérifier la similarité avec les insights existants du groupe
+    const groupInsights = insights.filter(i => group.insightIds.includes(i.id));
+    
+    return groupInsights.some(existingInsight => {
+      const similarity = calculateSimilarity(existingInsight.text, insight.text);
+      // 🆕 AUGMENTER LE SEUIL DE SIMILARITÉ POUR ÉVITER LES FAUX POSITIFS
+      return similarity > 0.4 && existingInsight.type === insight.type;
+    });
+  });
+
+  // 🆕 RETOURNER LE GROUPE LE PLUS SIMILAIRE
+  return similarGroups.length > 0 ? similarGroups[0] : null;
+};
+
+
+  // 🎯 CRÉATION RAPIDE DE GROUPE
+ // Dans InsightsOrganizationPanel.tsx - MODIFIER handleCreateGroupForInsight
+// 🎯 SOLUTION SIMPLE ET FIABLE - CRÉER DIRECTEMENT LE GROUPE AVEC LE TITRE
+const handleCreateGroupForInsight = (insight: Insight) => {
+  const position = {
+    x: Math.random() * 300 + 100,
+    y: Math.random() * 300 + 100
+  };
+  
+  // 🎯 GÉNÉRER LE TITRE D'ABORD
+  const groupTitle = generateGroupTitleFromInsight(insight);
+  
+  // 🎯 CRÉER UN GROUPE AVEC LE BON TITRE DIRECTEMENT
+  // (Supposons que vous ayez accès à une fonction qui crée un groupe avec titre)
+  
+  // Si vous ne pouvez pas créer avec titre directement, utilisez cette approche :
+  console.log('Creating group for insight:', insight.text);
+  
+  // 🎯 APPROCHE 1: Utiliser le pending system comme pour les suggestions IA
+  pendingInsightsRef.current = {
+    groupTitle: groupTitle,
+    insightIds: [insight.id], // 🎯 UN SEUL INSIGHT POUR COMMENCER
+    tempGroupId: `temp-${Date.now()}`,
+    createdAt: Date.now()
+  };
+  
+  // 🎯 CRÉER LE GROUPE
+  onGroupCreate(position);
+  
+  toast.info(`Creating "${groupTitle}"...`);
+};
+
+// =================== useMemo ===================
+  // 🎯 CALCUL DES CATÉGORIES
+// 🆕 AMÉLIORER LA CATÉGORISATION DANS LE useMemo
+const { readyInsights, problematicInsights, stats } = useMemo(() => {
+  const availableInsights = insights.filter(insight => {
+    const usedInsightIds = new Set(groups.flatMap(group => group.insightIds));
+    return !usedInsightIds.has(insight.id);
+  });
+
+  const filtered = availableInsights.filter(insight =>
+    insight.text.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const ready = [];
+  const problematic = [];
+
+  for (const insight of filtered) {
+    const wordCount = insight.text.split(' ').length;
+    const isAtypicalLength = wordCount > 50 || wordCount < 3;
+    
+    const technicalTerms = ['API', 'backend', 'framework', 'database', 'integration', 'component', 'module'];
+    const hasTechnicalTerms = technicalTerms.some(term => 
+      insight.text.toLowerCase().includes(term.toLowerCase())
+    );
+
+    const isComplex = insight.text.includes('?') || 
+                     insight.text.includes(' but ') || 
+                     insight.text.includes(' however ') ||
+                     insight.text.includes(' although ');
+
+    const hasPotentialMatch = findSuggestedGroup(insight) !== null;
+
+    // 🆕 LOGIQUE AMÉLIORÉE : 
+    // - Les insights avec matches vont dans "Ready"
+    // - Les insights complexes/techniques vont dans "Need Attention"
+    if (hasPotentialMatch) {
+      ready.push(insight);
+    } else if (isAtypicalLength || hasTechnicalTerms || isComplex) {
+      problematic.push(insight);
+    } else {
+      ready.push(insight);
+    }
+  }
+
+  return {
+    readyInsights: ready,
+    problematicInsights: problematic,
+    stats: {
+      total: availableInsights.length,
+      ready: ready.length,
+      problematic: problematic.length,
+      completionRate: insights.length > 0 ? 
+        ((insights.length - availableInsights.length) / insights.length) * 100 : 0
+    }
+  };
+}, [groups, insights, searchTerm]);
+
 
 
     // 🆕 BOUTON POUR GÉNÉRER LES SUGGESTIONS
-  const handleGenerateSuggestions = () => {
-    const availableInsights = insights.filter(insight => {
-      const usedInsightIds = new Set(groups.flatMap(group => group.insightIds));
-      return !usedInsightIds.has(insight.id);
-    });
-    
-    if (availableInsights.length === 0) {
-      toast.info('No ungrouped insights to analyze');
-      return;
-    }
+const handleGenerateSuggestions = () => {
+  const availableInsights = insights.filter(insight => {
+    const usedInsightIds = new Set(groups.flatMap(group => group.insightIds));
+    return !usedInsightIds.has(insight.id);
+  });
+  
+  if (availableInsights.length === 0) {
+    toast.info('No ungrouped insights to analyze');
+    return;
+  }
 
-    // 🎯 CONTEXTE AVEC projectInfo
-    const projectContext = projectInfo ? `
+  const projectContext = projectInfo ? `
 PROJECT NAME: ${projectInfo.name}
 PROJECT DESCRIPTION: ${projectInfo.description || 'No description available'}
-    `.trim() : 'General user research project';
+  `.trim() : 'General user research project';
 
-    console.log('📋 Project context for AI:', projectContext);
+  console.log('📋 Project context for AI:', projectContext);
 
-    generateSuggestions(availableInsights, groups, projectContext);
-  };
+  // 🆕 APPELER SANS LE PARAMÈTRE isRefresh (utilisera isLoading)
+  generateSuggestions(availableInsights, groups, projectContext);
+};;
+
+
+
+
 
  // Dans InsightsOrganizationPanel.tsx - REMPLACER handleApplySuggestion
 const handleApplySuggestion = (suggestion: GroupSuggestion) => {
@@ -125,77 +263,60 @@ const handleApplySuggestion = (suggestion: GroupSuggestion) => {
     
     onGroupCreate(position);
     toast.info(`Creating group "${suggestion.newGroupTitle}"...`);
+    markSuggestionApplied(suggestion);
   }
   
-  clearSuggestions();
+  // clearSuggestions();
 };
 
-  // 🎯 CALCUL DES CATÉGORIES
-  const { readyInsights, problematicInsights, stats } = useMemo(() => {
-    const availableInsights = insights.filter(insight => {
-      const usedInsightIds = new Set(groups.flatMap(group => group.insightIds));
-      return !usedInsightIds.has(insight.id);
-    });
 
-    // Filtrage par recherche
-    const filtered = availableInsights.filter(insight =>
-      insight.text.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+// 🆕 AJOUTER UN BOUTON DE RAFRAÎCHISSEMENT MANUEL
+const handleRefreshSuggestions = () => {
+  const availableInsights = insights.filter(insight => {
+    const usedInsightIds = new Set(groups.flatMap(group => group.insightIds));
+    return !usedInsightIds.has(insight.id);
+  });
+  
+  if (availableInsights.length === 0) {
+    toast.info('No ungrouped insights to analyze');
+    return;
+  }
 
-    // Catégorisation intelligente
-    const ready = [];
-    const problematic = [];
+  const projectContext = projectInfo ? `
+PROJECT NAME: ${projectInfo.name}
+PROJECT DESCRIPTION: ${projectInfo.description || 'No description available'}
+  `.trim() : 'General user research project';
 
-    for (const insight of filtered) {
-      const wordCount = insight.text.split(' ').length;
-      const isAtypicalLength = wordCount > 50 || wordCount < 3;
-      
-      const technicalTerms = ['API', 'backend', 'framework', 'database', 'integration', 'component', 'module'];
-      const hasTechnicalTerms = technicalTerms.some(term => 
-        insight.text.toLowerCase().includes(term.toLowerCase())
-      );
+  // 🆕 CET APPEL UTILISERA isRefreshing
+  refreshSuggestions(availableInsights, groups, projectContext);
+};
 
-      const isComplex = insight.text.includes('?') || insight.text.includes(' but ') || insight.text.includes(' however ');
 
-      if (isAtypicalLength || hasTechnicalTerms || isComplex) {
-        problematic.push(insight);
-      } else {
-        ready.push(insight);
-      }
-    }
 
-    return {
-      readyInsights: ready,
-      problematicInsights: problematic,
-      stats: {
-        total: availableInsights.length,
-        ready: ready.length,
-        problematic: problematic.length,
-        completionRate: insights.length > 0 ? 
-          ((insights.length - availableInsights.length) / insights.length) * 100 : 0
-      }
-    };
-  }, [groups, insights, searchTerm]);
+
+
 
 
   // Dans InsightsOrganizationPanel.tsx - AJOUTER APRÈS LES useMemo
 // 🎯 VERSION SYNCHRONE SANS ANY
 // Dans InsightsOrganizationPanel.tsx - METTRE À JOUR LE useEffect
+// 🎯 METTRE À JOUR LE useEffect EXISTANT POUR GÉRER TOUS LES PENDING INSIGHTS
 useEffect(() => {
   const processPendingInsights = async () => {
     if (pendingInsightsRef.current && groups.length > 0) {
       const pending = pendingInsightsRef.current;
       
+      // 🎯 CHERCHER UN GROUPE QUI CORRESPOND AU TITRE ATTENDU
       const newGroup = groups.find(group => 
         group.title === "New Theme" || 
-        group.title === "New Group"
+        group.title === "New Group" ||
+        group.title === pending.groupTitle // 🎯 OU LE TITRE ATTENDU
       );
       
       if (newGroup) {
         console.log("🎯 Adding insights to group:", newGroup.id);
         
         try {
-          // 🎯 AJOUTER CHAQUE INSIGHT AVEC GESTION D'ERREUR
           let successCount = 0;
           
           for (const insightId of pending.insightIds) {
@@ -209,14 +330,14 @@ useEffect(() => {
           }
           
           // 🎯 RENOMMER LE GROUPE
-          if (onGroupTitleUpdate) {
+          if (onGroupTitleUpdate && pending.groupTitle) {
             onGroupTitleUpdate(newGroup.id, pending.groupTitle);
           }
           
           if (successCount > 0) {
-            toast.success(`Created "${pending.groupTitle}" with ${successCount} insights`);
+            toast.success(`Created "${pending.groupTitle}" with ${successCount} insight${successCount > 1 ? 's' : ''}`);
           } else {
-            toast.error('Failed to add any insights to the group');
+            toast.error('Failed to add insights to the group');
           }
           
           pendingInsightsRef.current = null;
@@ -241,60 +362,76 @@ useEffect(() => {
 
 
   // 🎯 TROUVER UN GROUPE SUGGÉRÉ
-  const findSuggestedGroup = (insight: Insight) => {
-    return groups.find(group => 
-      group.insightIds.some(insightId => {
-        const existingInsight = insights.find(i => i.id === insightId);
-        return existingInsight && 
-               existingInsight.type === insight.type &&
-               calculateSimilarity(existingInsight.text, insight.text) > 0.2;
-      })
-    );
-  };
+  // const findSuggestedGroup = (insight: Insight) => {
+  //   return groups.find(group => 
+  //     group.insightIds.some(insightId => {
+  //       const existingInsight = insights.find(i => i.id === insightId);
+  //       return existingInsight && 
+  //              existingInsight.type === insight.type &&
+  //              calculateSimilarity(existingInsight.text, insight.text) > 0.2;
+  //     })
+  //   );
+  // };
 
-  // 🎯 CALCUL DE SIMILARITÉ SIMPLIFIÉ
-  const calculateSimilarity = (text1: string, text2: string): number => {
-    const words1 = new Set(text1.toLowerCase().split(/\W+/));
-    const words2 = new Set(text2.toLowerCase().split(/\W+/));
-    
-    const intersection = new Set([...words1].filter(x => words2.has(x)));
-    const union = new Set([...words1, ...words2]);
-    
-    return intersection.size / union.size;
-  };
 
-  // 🎯 CRÉATION RAPIDE DE GROUPE
-  const handleCreateGroupForInsight = (insight: Insight) => {
-    const position = {
-      x: Math.random() * 300 + 100,
-      y: Math.random() * 300 + 100
-    };
-    onGroupCreate(position);
-  };
 
-  // 🎯 COMPOSANT CARTE D'INSIGHT
-  const InsightCard = ({ insight, isProblematic = false , onDelete }: { insight: Insight; isProblematic?: boolean; onDelete?: () => void }) => {
-    const suggestedGroup = findSuggestedGroup(insight);
 
-    return (
-      <motion.div
-        layout
-        draggable
-        onDragStart={(e) => {
+
+
+
+// 🆕 FONCTION POUR GÉNÉRER UN TITRE AUTOMATIQUE
+const generateGroupTitleFromInsight = (insight: Insight): string => {
+  const text = insight.text.toLowerCase();
+  
+  // Extraire les mots-clés importants
+  if (text.includes('frustrat') || text.includes('problem') || text.includes('difficult')) {
+    return "User Frustrations";
+  }
+  if (text.includes('like') || text.includes('love') || text.includes('appreciate')) {
+    return "Positive Feedback";
+  }
+  if (text.includes('suggest') || text.includes('recommend') || text.includes('improve')) {
+    return "Improvement Suggestions";
+  }
+  if (text.includes('confus') || text.includes('understand') || text.includes('clear')) {
+    return "Clarity Issues";
+  }
+  
+  // Titre par défaut basé sur le type
+  switch (insight.type) {
+    case 'pain-point': return "Pain Points";
+    case 'quote': return "User Quotes";
+    case 'insight': return "Key Insights";
+    case 'follow-up': return "Follow-up Items";
+    default: return "New Group";
+  }
+};
+
+
+
+// 🆕 COMPOSANT CARTE D'INSIGHT AMÉLIORÉ
+const InsightCard = ({ insight, isProblematic = false, onDelete }: { insight: Insight; isProblematic?: boolean; onDelete?: () => void }) => {
+  const suggestedGroup = findSuggestedGroup(insight);
+  const similarityScore = suggestedGroup ? calculateSimilarityScore(insight, suggestedGroup) : 0;
+
+  return (
+    <motion.div
+      layout
+      draggable
+      onDragStart={(e) => {
         const data = e as unknown as React.DragEvent;
         data.dataTransfer.effectAllowed = 'move';
         data.dataTransfer.setData('text/plain', insight.id);
-        //   e.dataTransfer.effectAllowed = 'move';
-        //   e.dataTransfer.setData('text/plain', insight.id);
-        }}
-        className={`p-3 rounded-lg border cursor-move transition-all group relative ${
-          isProblematic 
-            ? 'bg-orange-50 border-orange-200 hover:border-orange-300' 
-            : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm'
-        }`}
-      >
-        {/* EN-TÊTE */}
-        <div className="flex items-start justify-between mb-2">
+      }}
+      className={`p-3 rounded-lg border cursor-move transition-all group relative ${
+        isProblematic 
+          ? 'bg-orange-50 border-orange-200 hover:border-orange-300' 
+          : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm'
+      } ${suggestedGroup ? 'ring-1 ring-blue-200' : ''}`} // 🆕 EFFET VISUEL POUR LES MATCHS
+    >
+      {/* EN-TÊTE AMÉLIORÉE */}
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-2">
           <span className={`text-xs px-2 py-1 rounded-full font-medium ${
             insight.type === 'pain-point' ? 'bg-red-100 text-red-700' :
             insight.type === 'quote' ? 'bg-blue-100 text-blue-700' :
@@ -304,77 +441,101 @@ useEffect(() => {
             {insight.type}
           </span>
           
-          <div className="flex items-center gap-1">
-            {suggestedGroup && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant="outline" className="text-xs bg-blue-50">
-                      <Sparkles size={10} className="mr-1" />
-                      Match
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Similar to {`"${suggestedGroup.title}"`}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-            {insight.source === 'manual' && (
-              <div className="flex gap-2 items-center">
-                <span className="text-xs text-gray-400">Manual</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="w-4 h-4 ml-1"
-                  onClick={onDelete}
-                >
-                  <Trash size={14} />
-                </Button>
-              </div>
-            )}
-          </div>
+          {/* 🆕 BADGE MATCH AMÉLIORÉ */}
+          {suggestedGroup && similarityScore > 0.5 && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                    <Sparkles size={10} className="mr-1" />
+                    {Math.round(similarityScore * 100)}% Match
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Similar to {`"${suggestedGroup.title}"`}</p>
+                  <p className="text-xs text-gray-500">Click to add automatically</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </div>
-
-        {/* TEXTE */}
-        <p className="text-sm text-gray-700 leading-snug mb-3">
-          {insight.text}
-        </p>
-
-        {/* ACTIONS */}
-        {isProblematic && (
-          <div className="flex gap-2">
-            {suggestedGroup ? (
+        
+        <div className="flex items-center gap-1">
+          {insight.source === 'manual' && (
+            <div className="flex gap-2 items-center">
+              <span className="text-xs text-gray-400">Manual</span>
               <Button
-                size="sm"
-                variant="outline"
-                className="text-xs h-7 flex-1"
-                onClick={() => onInsightDrop(insight.id, suggestedGroup.id)}
+                variant="ghost"
+                size="icon"
+                className="w-4 h-4 ml-1"
+                onClick={onDelete}
               >
-                <Users size={12} className="mr-1" />
-                Add to {suggestedGroup.title.length > 12 ? 
-                  suggestedGroup.title.substring(0, 12) + '...' : suggestedGroup.title}
+                <Trash size={14} />
               </Button>
-            ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-xs h-7 flex-1"
-                onClick={() => handleCreateGroupForInsight(insight)}
-              >
-                <Lightbulb size={12} className="mr-1" />
-                Create Group
-              </Button>
-            )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* TEXTE */}
+      <p className="text-sm text-gray-700 leading-snug mb-3">
+        {insight.text}
+      </p>
+
+      {/* 🆕 ACTIONS AMÉLIORÉES */}
+      <div className="flex gap-2">
+        {suggestedGroup && similarityScore > 0.5 ? (
+          // 🆕 BOUTON "ADD TO MATCHED GROUP" - ACTION DIRECTE
+          <Button
+            size="sm"
+            variant="default"
+            className="text-xs h-7 flex-1 bg-green-600 hover:bg-green-700"
+            onClick={() => {
+              onInsightDrop(insight.id, suggestedGroup.id);
+              toast.success(`Added to "${suggestedGroup.title}"`);
+            }}
+          >
+            <Users size={12} className="mr-1" />
+            Add to {suggestedGroup.title.length > 12 ? 
+              suggestedGroup.title.substring(0, 12) + '...' : suggestedGroup.title}
+          </Button>
+        ) : isProblematic ? (
+          // BOUTON "CREATE GROUP" POUR LES INSIGHTS PROBLÉMATIQUES
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs h-7 flex-1"
+            onClick={() => handleCreateGroupForInsight(insight)}
+          >
+            <Lightbulb size={12} className="mr-1" />
+            Create Group
+          </Button>
+        ) : (
+          // INDICATEUR DRAG POUR LES INSIGHTS NORMAUX
+          <div className="flex-1 text-center">
+            <p className="text-xs text-gray-400">Drag to any group</p>
           </div>
         )}
-
-        {!isProblematic && (
-          <p className="text-xs text-gray-400 mt-1">Drag to group</p>
+        
+        {/* 🆕 BOUTON "IGNORE MATCH" POUR LES FAUX POSITIFS */}
+        {suggestedGroup && similarityScore <= 0.5 && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-xs h-7"
+            onClick={() => {
+              // 🆕 LOGIQUE POUR IGNORER CE MATCH (à implémenter si besoin)
+              toast.info("Match ignored");
+            }}
+          >
+            <X size={12} />
+          </Button>
         )}
-      </motion.div>
-    );
-  };
+      </div>
+    </motion.div>
+  );
+};
+
 
     const deleteInsight = useMutation(api.insights.deleteInsight);
   
@@ -408,25 +569,45 @@ const handleDeleteInsight = async (insightId: string) => {
               </Badge>
             )}
 
-              {/* 🆕 BOUTON IA */}
-                <TooltipProvider>
-                    <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button
-                        onClick={handleGenerateSuggestions}
-                        disabled={stats.total === 0 || isLoading}
-                        variant="outline"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        >
-                        <Sparkles size={14} className={isLoading ? "animate-spin" : ""} />
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>Get AI grouping suggestions</p>
-                    </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
+          {/* 🆕 BOUTON IA - UTILISE isLoading */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleGenerateSuggestions}
+                    disabled={stats.total === 0 || isLoading} // 🆕 isLoading ici
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                  >
+                    <Sparkles size={14} className={isLoading ? "animate-spin" : ""} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Get AI grouping suggestions (uses cache)</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* 🆕 BOUTON REFRESH - UTILISE isRefreshing */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleRefreshSuggestions}
+                    disabled={stats.total === 0 || isRefreshing} // 🆕 isRefreshing ici
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                  >
+                    <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Refresh AI suggestions (new request)</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
 
@@ -589,20 +770,31 @@ const handleDeleteInsight = async (insightId: string) => {
           )}
 
           {/* SECTION "BESOIN D'ATTENTION" */}
-          {(activeFilter === 'all' || activeFilter === 'problematic') && problematicInsights.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-orange-700">
-                <AlertTriangle size={16} />
-                <span>Need attention</span>
-                <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-200">
-                  {problematicInsights.length}
-                </Badge>
-              </div>
-              {problematicInsights.map(insight => (
-                <InsightCard key={insight.id} insight={insight} isProblematic={true} />
-              ))}
-            </div>
-          )}
+{(activeFilter === 'all' || activeFilter === 'problematic') && problematicInsights.length > 0 && (
+  <div className="space-y-3">
+    <div className="flex items-center gap-2 text-sm font-medium text-orange-700">
+      <AlertTriangle size={16} />
+      <span>Need attention</span>
+      <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-200">
+        {problematicInsights.length}
+      </Badge>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <HelpCircle size={14} className="text-orange-400 cursor-help" />
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs">
+            <p>These insights are complex, technical, or need manual review.</p>
+            <p className="text-xs mt-1">They may require creating new groups.</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+    {problematicInsights.map(insight => (
+      <InsightCard key={insight.id} insight={insight} isProblematic={true} />
+    ))}
+  </div>
+)}
 
           {/* ÉTAT VIDE */}
           {stats.total === 0 && (

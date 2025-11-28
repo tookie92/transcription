@@ -172,7 +172,10 @@ Respond with valid JSON only:
       parsedResponse = JSON.parse(content);
     } catch (parseError) {
       console.error('❌ Failed to parse AI response:', content);
-      throw new Error('Invalid response format from AI');
+      return NextResponse.json({ 
+        suggestions: [] 
+      });
+      
     }
 
     if (!parsedResponse.suggestions || !Array.isArray(parsedResponse.suggestions)) {
