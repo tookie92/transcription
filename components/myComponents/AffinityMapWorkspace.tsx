@@ -40,7 +40,6 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const removeInsightFromGroup = useMutation(api.affinityMaps.removeInsightFromGroup);
   const replaceAllGroups = useMutation(api.affinityMaps.replaceAllGroups);
   const createManualInsight = useMutation(api.affinityMaps.createManualInsight);
-  const claimInvite = useMutation(api.projects.claimInvite);
   
   const { userId } = useAuth();
   const { user } = useUser();

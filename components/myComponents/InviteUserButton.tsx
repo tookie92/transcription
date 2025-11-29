@@ -7,7 +7,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { se } from "date-fns/locale";
+
 
 export function InviteUserButton({ projectId }: { projectId: Id<"projects"> }) {
 
@@ -15,23 +15,37 @@ export function InviteUserButton({ projectId }: { projectId: Id<"projects"> }) {
 const [name, setName] = useState("");
   const inviteUser = useMutation(api.projects.inviteUser);
 
-  const handleInvite = async () => {
-    if (!email || !name) return;
+const handleInvite = async () => {
+  if (!email || !name) return;
 
-    try {
-      await inviteUser({
-        projectId,
-        email,
-        role: "editor",
-        name
-      });
-      toast.success(`Invitation sent to ${email}`);
-      setEmail("");
-      setName("");
-    } catch (error) {
-      toast.error(`Invitation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
-    }
-  };
+  console.log("📧 TEST INVITATION:", { 
+    projectId, 
+    email, 
+    name,
+    currentTime: Date.now() 
+  });
+
+  try {
+    const result = await inviteUser({
+      projectId,
+      email,
+      role: "editor",
+      name
+    });
+    
+    console.log("✅ INVITATION SUCCESS:", result);
+    
+    // Recharger les données du projet
+    // Vous devrez peut-être forcer un re-fetch ici
+    
+    toast.success(`Invitation sent to ${email}`);
+    setEmail("");
+    setName("");
+  } catch (error) {
+    console.error("❌ INVITATION FAILED:", error);
+    toast.error(`Invitation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+  }
+};
 
   return (
     <div className="flex flex-col gap-8">

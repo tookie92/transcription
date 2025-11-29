@@ -4,20 +4,34 @@ import { v } from "convex/values";
 
 
 // convex/projects.ts
+// Dans projects.ts - AJOUTER des logs pour debug
 export const claimInvite = mutation({
   args: { projectId: v.id("projects"), email: v.string() },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
+    console.log("🔐 Claiming invite:", {
+      projectId: args.projectId,
+      email: args.email,
+      userId: identity.subject
+    });
+
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
 
-    // 🔒 on cherche l’email dans la liste des membres
-    const invited = project.members.find(m => m.userId === args.email);
-    if (!invited) throw new Error("You were not invited");
+    console.log("📋 Project members:", project.members);
 
-    // on remplace l’email par le vrai userId Clerk
+    // Chercher l'invitation par email
+    const invited = project.members.find(m => m.userId === args.email);
+    if (!invited) {
+      console.log("❌ No invitation found for email:", args.email);
+      throw new Error("You were not invited with this email");
+    }
+
+    console.log("✅ Invitation found, replacing with userId:", identity.subject);
+
+    // Remplacer l'email par le vrai userId Clerk
     await ctx.db.patch(args.projectId, {
       members: project.members.map(m =>
         m.userId === args.email ? { ...m, userId: identity.subject } : m
@@ -212,37 +226,57 @@ export const inviteToProject = mutation({
   },
 });
 
+// Dans projects.ts - AJOUTER cette query
+export const getProjectForInvite = query({
+  args: {
+    projectId: v.id("projects"),
+  },
+  handler: async (ctx, args) => {
+    // Retourner le projet même si l'utilisateur n'a pas accès
+    const project = await ctx.db.get(args.projectId);
+    return project;
+  },
+});
+
+// Dans projects.ts - AJOUTER des logs
 export const inviteUser = mutation({
   args: {
     projectId: v.id("projects"),
     email: v.string(),
     role: v.union(v.literal("editor"), v.literal("viewer")),
     name: v.string(),
-
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
+    console.log("🎯 Starting invitation process:", { 
+      inviter: identity.subject, 
+      invitee: args.email,
+      projectId: args.projectId 
+    });
+
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
 
-    // Seul le propriétaire peut inviter
     if (project.ownerId !== identity.subject) {
       throw new Error("Only the project owner can invite users");
     }
 
-    // Vérifie que l’email n’est pas déjà membre
+    // Vérifier si déjà membre
     const alreadyMember = project.members.some(m => m.userId === args.email);
+    console.log("📋 Current members:", project.members);
+    console.log("❓ Already member?", alreadyMember);
+
     if (alreadyMember) {
       throw new Error("User already a member");
     }
 
-    // Ajoute l’utilisateur (on utilise l’email comme userId temporaire)
+    // Ajouter l'utilisateur
     const updatedMembers = [
       ...project.members,
       {
-        userId: args.email, // ✅ on utilisera l’email comme identifiant temporaire
+        userId: args.email, // ← C'EST ICI LE PROBLÈME POTENTIEL
         role: args.role,
         joinedAt: Date.now(),
         name: args.name,
@@ -250,11 +284,14 @@ export const inviteUser = mutation({
       },
     ];
 
+    console.log("➕ Updated members will be:", updatedMembers);
+
     await ctx.db.patch(args.projectId, {
       members: updatedMembers,
       updatedAt: Date.now(),
     });
 
+    console.log("✅ Invitation completed successfully");
     return { success: true };
   },
 });

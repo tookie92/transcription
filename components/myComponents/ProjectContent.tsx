@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, Plus, Users, Calendar, ArrowLeft, CircuitBoard } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
-import { InviteUserButton } from "./InviteUserButton";
+
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
@@ -19,6 +19,7 @@ import { Dialog, DialogContent } from "../ui/dialog";
 import { DialogTitle, DialogTrigger } from "@radix-ui/react-dialog";
 import { DropdownMenu } from "@radix-ui/react-dropdown-menu";
 import { DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
+import { InviteUserButton } from "./InviteUserButton";
 
 interface ProjectContentProps {
   projectId:  Id<"projects">;
@@ -31,27 +32,39 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
   
   // Récupérer les données du projet
 const userEmail = user?.emailAddresses?.[0]?.emailAddress || "";
-const project = useQuery(api.projects.getByIdWithEmail, {
-  projectId,
-  userEmail,
-});
+// Remplacer la query actuelle
+const project = useQuery(api.projects.getProjectForInvite, { projectId });
+
+
   const interviews = useQuery(api.interviews.getProjectInterviews, { projectId });
   const [openManage, setOpenManage] = useState(false);
   const [openInvite, setOpenInvite] = useState(false);
   // const allProjects = useQuery(api.projects.getUserProjects);
   // const claimInvite = useMutation(api.projects.claimInvite);
 
+// Dans ProjectContent.tsx - MODIFIER le useEffect
 useEffect(() => {
   if (!project || !userId || !user?.emailAddresses?.[0]?.emailAddress) return;
 
-  const invitedEmail = user.emailAddresses[0].emailAddress;
-  const isInvited = project.members.some(m => m.userId === invitedEmail);
+  const userEmail = user.emailAddresses[0].emailAddress;
+  
+  console.log("🔍 CHECKING INVITATION:", {
+    userId,
+    userEmail, 
+    projectMembers: project.members
+  });
+
+  // Vérifier si déjà membre par userId
   const isMember = project.members.some(m => m.userId === userId);
+  
+  // Vérifier si invité par email
+  const isInvitedByEmail = project.members.some(m => m.userId === userEmail);
 
-  console.log("🔍 check invite", { invitedEmail, isInvited, isMember }); // ← ajoute ça
+  console.log("📊 RESULTS:", { isMember, isInvitedByEmail });
 
-  if (isInvited && !isMember) {
-    router.push(`/invite/${projectId}?email=${encodeURIComponent(invitedEmail)}`);
+  if (isInvitedByEmail && !isMember) {
+    console.log("🔄 Redirecting to invite page");
+    router.push(`/invite/${projectId}?email=${encodeURIComponent(userEmail)}`);
   }
 }, [project, userId, user, projectId, router]);
 

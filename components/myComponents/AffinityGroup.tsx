@@ -30,7 +30,6 @@ interface AffinityGroupProps {
   workspaceMode: 'grouping' | 'voting';
   projectContext?: string;
   
-  // 🎯 CORRECTION: RENDRE LES PROPS OBLIGATOIRES OU DONNER DES VALEURS PAR DÉFAUT
   onMove: (groupId: string, position: { x: number; y: number }) => void;
   onDelete?: (groupId: string) => void;
   onTitleUpdate?: (groupId: string, title: string) => void;
@@ -39,7 +38,6 @@ interface AffinityGroupProps {
   isSelected: boolean;
   isHighlighted?: boolean;
   
-  // 🎯 DRAG & DROP - RENDRE OBLIGATOIRES AVEC FONCTIONS VIDES PAR DÉFAUT
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent) => void;
@@ -48,21 +46,17 @@ interface AffinityGroupProps {
   onInsightDrop?: (insightId: string, targetGroupId: string) => void;
   sharedSelections?: Record<string, string[]>;
   currentUserId?: string;
-    onOpenComments?: ( groupId: string, position: { x: number; y: number }, groupTitle: string) => void;
+  onOpenComments?: ( groupId: string, position: { x: number; y: number }, groupTitle: string) => void;
   mapId: string;
   commentCounts?: Record<string, number>;
   comments?: Comment[];
   
-  // 🎯 NOUVELLES PROPS POUR LA PRÉSENTATION
   isPresentationMode?: boolean;
   isFocusedInPresentation?: boolean;
   presentationScale?: number;
-
-   isPlacingDot?: boolean; // 🆕 AJOUTER CETTE PROP
-
-     // 🎯 NOUVELLES PROPS POUR LE VOTE SIMPLE
+  isPlacingDot?: boolean;
   activeSessionId?: string;
-  activeSession?:DotVotingSession
+  activeSession?: DotVotingSession;
 }
 
 export default function AffinityGroup({
@@ -79,7 +73,7 @@ export default function AffinityGroup({
   onSelect,
   onDragOver,
   onDragLeave,
-  onDrop, // 🎯 MAINTENANT OBLIGATOIRE
+  onDrop,
   onInsightDragStart,
   onInsightDrop,
   workspaceMode,
@@ -90,48 +84,38 @@ export default function AffinityGroup({
   mapId,
   commentCounts,
   comments,
-  
-  // 🎯 NOUVELLES PROPS
   isPresentationMode = false,
   isFocusedInPresentation = false,
   presentationScale = 1,
-    // 🎯 NOUVELLES PROPS
   isPlacingDot = false,
   activeSessionId,
   activeSession,
 }: AffinityGroupProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempTitle, setTempTitle] = useState(group.title);
-  // 🆕 AJOUTER APRÈS LES AUTRES useStates DANS AffinityCanvas.tsx
-const [applyingAction, setApplyingAction] = useState<string | null>(null);
-const [highlightedGroups, setHighlightedGroups] = useState<Set<string>>(new Set());
-// const [showComments, setShowComments] = useState(false);
+  const [applyingAction, setApplyingAction] = useState<string | null>(null);
+  const [highlightedGroups, setHighlightedGroups] = useState<Set<string>>(new Set());
+  const [showComments, setShowComments] = useState<{
+    groupId: string;
+    screenRect: DOMRect;
+    groupTitle: string;
+  } | null>(null);
+  const { user } = useUser();
 
-const [showComments, setShowComments] = useState<{
-  groupId: string;
-  screenRect: DOMRect;
-  groupTitle: string;
-} | null>(null);
-const { user } = useUser();
+  const isNew = comments?.some(
+    (c) => Date.now() - c.createdAt < 5 * 60 * 1000
+  );
 
+  const unreadCount = useQuery(api.comments.getUnreadCount, {
+    groupId: group.id,
+    userId: currentUserId!,
+    mapId: mapId as Id<"affinityMaps">,
+  });
 
-const isNew = comments?.some(
-  (c) => Date.now() - c.createdAt < 5 * 60 * 1000 // ✅ 5 minutes
-);
-
-
-const unreadCount = useQuery(api.comments.getUnreadCount, {
-  groupId: group.id,
-  userId: currentUserId!,
-  mapId: mapId as Id<"affinityMaps">,
-});
-
-
-// 🎯 Trouve qui a sélectionné ce groupe (autre que moi)
-const sharedUser = Object.entries(sharedSelections || {}).find(
-  ([userId, groupIds]) =>
-    userId !== currentUserId && (groupIds as string[]).includes(group.id)
-);
+  const sharedUser = Object.entries(sharedSelections || {}).find(
+    ([userId, groupIds]) =>
+      userId !== currentUserId && (groupIds as string[]).includes(group.id)
+  );
 
   const [isDragging, setIsDragging] = useState(false);
 
@@ -141,7 +125,6 @@ const sharedUser = Object.entries(sharedSelections || {}).find(
   const rotateX = useTransform(y, [-100, 0, 100], [1, 0, -1]);
   const rotateY = useTransform(x, [-100, 0, 100], [-1, 0, 1]);
 
-    // 🎯 QUERIES POUR LES DOTS DU GROUPE
   const groupDots = useQuery(api.dotVoting.getDotsByTarget, 
     activeSessionId ? {
       sessionId: activeSessionId as Id<"dotVotingSessions">,
@@ -150,31 +133,78 @@ const sharedUser = Object.entries(sharedSelections || {}).find(
     } : "skip"
   );
 
-    // 🎯 MUTATION POUR PLACER UN DOT
   const placeDot = useMutation(api.dotVoting.placeDot);
 
-  // 🎯 CALCULER LES INSIGHTS DU GROUPE
   const groupInsights = useMemo(() => 
     insights.filter(insight => group.insightIds.includes(insight.id)),
     [insights, group.insightIds]
   );
-// 🎯 CORRECTION : Utiliser groupInsights.length directement
-const hasInsights = groupInsights.length > 0;
 
-// Sorting
+  const hasInsights = groupInsights.length > 0;
+
   const { isSilentSortingActive, currentPhase } = useSilentSorting(mapId);
-  
-  // 🎯 RESTREINDRE LES INTERACTIONS PENDANT LE SILENT SORTING
   const canInteract = !isSilentSortingActive || currentPhase === 'discussion';
 
+  // ==================== GAMIFIED STYLES ====================
 
+  const getGamifiedStyles = () => {
+    const baseColor = group.color;
+    
+    return {
+      // 🎮 Container avec effet de carte de jeu
+      container: {
+        background: `linear-gradient(135deg, ${baseColor}08, ${baseColor}15)`,
+        border: `3px solid ${baseColor}40`,
+        borderRadius: '20px',
+        boxShadow: isSelected 
+          ? `0 8px 32px ${baseColor}40, 0 0 0 3px ${baseColor}80`
+          : isHighlighted
+          ? `0 6px 24px ${baseColor}30, 0 0 0 2px ${baseColor}60`
+          : `0 4px 20px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.05)`,
+        backdropFilter: 'blur(10px)',
+        transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      },
+      
+      // 🎮 Header avec effet badge
+      header: {
+        background: `linear-gradient(135deg, ${baseColor}20, ${baseColor}30)`,
+        borderBottom: `2px solid ${baseColor}30`,
+        borderRadius: '17px 17px 0 0',
+      },
+      
+      // 🎮 Insights avec effet de carte empilée
+      insightCard: {
+        background: `linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7))`,
+        border: `1px solid ${baseColor}20`,
+        borderRadius: '12px',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+      },
+      
+      // 🎮 Badge de compteur
+      counterBadge: {
+        background: `linear-gradient(135deg, ${baseColor}, ${baseColor}CC)`,
+        color: 'white',
+        borderRadius: '12px',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+      },
+      
+      // 🎮 Boutons avec effet glossy
+      buttonGlossy: {
+        background: `linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.6))`,
+        border: `1px solid ${baseColor}20`,
+        borderRadius: '8px',
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+      }
+    };
+  };
 
-// ==================== handle events ====================
+  const styles = getGamifiedStyles();
 
+  // ==================== EVENT HANDLERS ====================
 
-// 🎯 FONCTIONS PAR DÉFAUT POUR LES PROPS OPTIONNELLES
   const handleDelete = useCallback((groupId: string) => {
-    onDelete?.(groupId); // 🎯 APPEL SEULEMENT SI LA FONCTION EXISTE
+    onDelete?.(groupId);
   }, [onDelete]);
 
   const handleTitleUpdate = useCallback((groupId: string, title: string) => {
@@ -185,83 +215,63 @@ const hasInsights = groupInsights.length > 0;
     onRemoveInsight?.(insightId, groupId);
   }, [onRemoveInsight]);
 
-const handleInsightDragStart = useCallback((e: React.DragEvent, insightId: string) => {
-  if (isPresentationMode) return;
-  
-  e.stopPropagation();
-  console.log('🧩 Starting to drag insight:', insightId, 'from group:', group.id);
-  
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', insightId);
-  e.dataTransfer.setData('application/group-id', group.id);
-  e.dataTransfer.setData('application/insight-drag', 'true');
-  
-  onInsightDragStart?.(insightId, group.id);
-  
-  const element = e.currentTarget as HTMLElement;
-  element.style.opacity = '0.4';
-  e.stopPropagation();
-}, [group.id, isPresentationMode, onInsightDragStart]);
+  const handleInsightDragStart = useCallback((e: React.DragEvent, insightId: string) => {
+    if (isPresentationMode) return;
+    
+    e.stopPropagation();
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', insightId);
+    e.dataTransfer.setData('application/group-id', group.id);
+    e.dataTransfer.setData('application/insight-drag', 'true');
+    
+    onInsightDragStart?.(insightId, group.id);
+    
+    const element = e.currentTarget as HTMLElement;
+    element.style.opacity = '0.4';
+  }, [group.id, isPresentationMode, onInsightDragStart]);
 
-const handleInsightDrop = useCallback((e: React.DragEvent, targetGroupId: string) => {
-  if (isPresentationMode) return;
-  
-  e.stopPropagation();
-  e.preventDefault();
-  
-  const insightId = e.dataTransfer.getData('text/plain');
-  const sourceGroupId = e.dataTransfer.getData('application/group-id');
-  
-  console.log('🎯 Dropping insight:', {
-    insightId,
-    fromGroup: sourceGroupId,
-    toGroup: targetGroupId
-  });
-  
-  const element = e.currentTarget as HTMLElement;
-  element.style.backgroundColor = '';
-  element.style.borderColor = '';
-  
-  const isValidDrop = !sourceGroupId || sourceGroupId !== targetGroupId;
-  
-  if (isValidDrop && insightId) {
-    onInsightDrop?.(insightId, targetGroupId);
-  }
-}, [isPresentationMode, onInsightDrop]);
+  const handleInsightDrop = useCallback((e: React.DragEvent, targetGroupId: string) => {
+    if (isPresentationMode) return;
+    
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const insightId = e.dataTransfer.getData('text/plain');
+    const sourceGroupId = e.dataTransfer.getData('application/group-id');
+    
+    const element = e.currentTarget as HTMLElement;
+    element.style.backgroundColor = '';
+    element.style.borderColor = '';
+    
+    const isValidDrop = !sourceGroupId || sourceGroupId !== targetGroupId;
+    
+    if (isValidDrop && insightId) {
+      onInsightDrop?.(insightId, targetGroupId);
+    }
+  }, [isPresentationMode, onInsightDrop]);
 
+  const handleOpenComments = useCallback((
+    groupId: string, 
+    position: { x: number; y: number }, 
+    groupTitle: string
+  ) => {
+    const rect = new DOMRect(position.x, position.y, 0, 0);
+    setShowComments({ 
+      groupId, 
+      screenRect: rect,
+      groupTitle
+    });
+  }, []);
 
+  const [localDots, setLocalDots] = useState<Array<{id: string, x: number, y: number, color: string}>>([]);
 
-// 🆕 MODIFIER handleOpenComments POUR INCLURE LE TITRE
-const handleOpenComments = useCallback((
-  groupId: string, 
-  position: { x: number; y: number }, 
-  groupTitle: string
-) => {
-  const rect = new DOMRect(position.x, position.y, 0, 0);
-  setShowComments({ 
-    groupId, 
-    screenRect: rect,
-    groupTitle // 🆕 TITRE REÇU DIRECTEMENT
-  });
-}, []);
-// 🎯 AJOUTER CES ÉTATS LOCAUX EN HAUT DU COMPOSANT
-const [localDots, setLocalDots] = useState<Array<{id: string, x: number, y: number, color: string}>>([]);
+  const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    setIsDragging(false);
+    const finalX = group.position.x + info.offset.x / scale;
+    const finalY = group.position.y + info.offset.y / scale;
+    onMove(group.id, { x: finalX, y: finalY });
+  }, [group.position.x, group.position.y, group.id, scale, onMove]); 
 
-// ==================== handle fin ==================== 
-
-
-
-const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-  setIsDragging(false);
-  // onDragStateChange?.(false); // ✅ Optionnel - pas besoin de dépendance
-  
-  const finalX = group.position.x + info.offset.x / scale;
-  const finalY = group.position.y + info.offset.y / scale;
-  
-  onMove(group.id, { x: finalX, y: finalY });
-}, [group.position.x, group.position.y, group.id, scale, onMove]); 
-
-  // 🎯 SAUVEGARDE DU TITRE
   const handleTitleSave = () => {
     if (tempTitle.trim() && tempTitle !== group.title) {
       onTitleUpdate?.(group.id, tempTitle.trim());
@@ -269,14 +279,12 @@ const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, in
     setIsEditing(false);
   };
 
-  // 🎯 CLICK SUR LE TITRE POUR ÉDITER
   const handleTitleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setTempTitle(group.title);
     setIsEditing(true);
   };
 
-    // 🎯 GESTION DES TOUCHES
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleTitleSave();
@@ -286,323 +294,130 @@ const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, in
     }
   };
 
-  // 🆕 HANDLERS CONTEXT MENU
-const handleRename = useCallback(() => {
-  if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
-  setTempTitle(group.title);
-  setIsEditing(true);
-}, [group.title, isPresentationMode]);
+  const handleRename = useCallback(() => {
+    if (isPresentationMode) return;
+    setTempTitle(group.title);
+    setIsEditing(true);
+  }, [group.title, isPresentationMode]);
 
-const handleDuplicate = useCallback(() => {
-  if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
-  // Logique de duplication (à implémenter si besoin)
-  console.log("Duplicate group:", group.id);
-  toast.info("Duplicate functionality coming soon");
-}, [group.id, isPresentationMode]);
+  const handleDuplicate = useCallback(() => {
+    if (isPresentationMode) return;
+    toast.info("Duplicate functionality coming soon");
+  }, [group.id, isPresentationMode]);
 
-
-  // const handleDelete = useCallback(() => {
-  //   onDelete?.(group.id);
-  // }, [group.id, onDelete]);
-
-    // Handler pour le drop sur le groupe entier
   const handleGroupDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    const insightId = e.dataTransfer.getData('text/plain');
-    console.log('🎯 Group drop received:', insightId);
-    
-    // Appeler le handler parent
     onDrop(e);
   };
 
-// ====================== Gestionnaires conditionnels ======================
-
- /**
-   * 🎯 GESTIONNAIRE DE MOUVEMENT - DÉSACTIVÉ EN PRÉSENTATION
-   */
   const handleMove = useCallback((groupId: string, position: { x: number; y: number }) => {
-    if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
+    if (isPresentationMode) return;
     onMove(groupId, position);
   }, [onMove, isPresentationMode]);
 
-  /**
-   * 🎯 GESTIONNAIRE DE DROP - DÉSACTIVÉ EN PRÉSENTATION
-   */
   const handleDrop = useCallback((e: React.DragEvent) => {
-    if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
+    if (isPresentationMode) return;
     onDrop(e);
   }, [onDrop, isPresentationMode]);
 
-  /**
-   * 🎯 GESTIONNAIRE DE DRAG OVER - DÉSACTIVÉ EN PRÉSENTATION
-   */
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
+    if (isPresentationMode) return;
     onDragOver(e);
   }, [onDragOver, isPresentationMode]);
 
-  /**
-   * 🎯 GESTIONNAIRE DE DRAG LEAVE - DÉSACTIVÉ EN PRÉSENTATION
-   */
   const handleDragLeave = useCallback(() => {
-    if (isPresentationMode) return; // 🚫 DÉSACTIVÉ EN PRÉSENTATION
+    if (isPresentationMode) return;
     onDragLeave();
   }, [onDragLeave, isPresentationMode]);
 
+  const handleInsightDragOver = useCallback((e: React.DragEvent) => {
+    if (isPresentationMode) return;
+    
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const sourceGroupId = e.dataTransfer.getData('application/group-id');
+    if (sourceGroupId && sourceGroupId !== group.id) {
+      e.dataTransfer.dropEffect = 'move';
+      
+      const element = e.currentTarget as HTMLElement;
+      element.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+      element.style.borderColor = '#3B82F6';
+    }
+  }, [group.id, isPresentationMode]);
 
-//=========== Drag & Drop ===========
-// Dans AffinityGroup.tsx - AJOUTER CES HANDLERS :
-
-// 🆕 Handler quand on commence à drag un insight
-// 🆕 Handler amélioré pour le drag d'insight
-// const handleInsightDragStart = (e: React.DragEvent, insightId: string) => {
-//   e.stopPropagation();
-//   console.log('🧩 Starting to drag insight:', insightId, 'from group:', group.id);
-  
-//   e.dataTransfer.effectAllowed = 'move';
-//   e.dataTransfer.setData('text/plain', insightId);
-//   e.dataTransfer.setData('application/group-id', group.id);
-//   e.dataTransfer.setData('application/insight-drag', 'true'); // 🆕 Identifier que c'est un insight qu'on drag
-  
-//   // Notifier le parent
-//   onInsightDragStart?.(insightId, group.id);
-  
-//   // Style visuel
-//   const element = e.currentTarget as HTMLElement;
-//   element.style.opacity = '0.4';
-  
-//   // 🆕 IMPORTANT: Empêcher la propagation pour éviter le drag du groupe
-//   e.stopPropagation();
-// };
-
-// 🆕 Handler quand on drag over un insight
-const handleInsightDragOver = useCallback((e: React.DragEvent) => {
-  if (isPresentationMode) return;
-  
-  e.stopPropagation();
-  e.preventDefault();
-  
-  const sourceGroupId = e.dataTransfer.getData('application/group-id');
-  if (sourceGroupId && sourceGroupId !== group.id) {
-    e.dataTransfer.dropEffect = 'move';
+  const handleInsightDragLeave = useCallback((e: React.DragEvent) => {
+    if (isPresentationMode) return;
+    
+    e.stopPropagation();
     
     const element = e.currentTarget as HTMLElement;
-    element.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
-    element.style.borderColor = '#3B82F6';
-  }
-}, [group.id, isPresentationMode]);
+    element.style.backgroundColor = '';
+    element.style.borderColor = '';
+  }, [isPresentationMode]);
 
-// 🆕 Handler quand on quitte le drag
-const handleInsightDragLeave = useCallback((e: React.DragEvent) => {
-  if (isPresentationMode) return;
-  
-  e.stopPropagation();
-  
-  const element = e.currentTarget as HTMLElement;
-  element.style.backgroundColor = '';
-  element.style.borderColor = '';
-}, [isPresentationMode]);
-
-// 🆕 Handler quand on drop un insight
-// const handleInsightDrop = (e: React.DragEvent, targetGroupId: string) => {
-//   e.stopPropagation();
-//   e.preventDefault();
-  
-//   const insightId = e.dataTransfer.getData('text/plain');
-//   const sourceGroupId = e.dataTransfer.getData('application/group-id');
-  
-//   console.log('🎯 Dropping insight:', {
-//     insightId,
-//     fromGroup: sourceGroupId,
-//     toGroup: targetGroupId
-//   });
-  
-//   // Reset du style
-//   const element = e.currentTarget as HTMLElement;
-//   element.style.backgroundColor = '';
-//   element.style.borderColor = '';
-  
-//   // Only process if it's from a different group
-//   if (sourceGroupId && sourceGroupId !== targetGroupId && insightId) {
-//     onInsightDrop?.(insightId, targetGroupId);
-//   }
-// };
-
-// 🆕 Handler de fin de drag
-const handleInsightDragEnd = useCallback((e: React.DragEvent) => {
-  if (isPresentationMode) return;
-  
-  e.stopPropagation();
-  
-  const element = e.currentTarget as HTMLElement;
-  element.style.opacity = '1';
-  element.style.backgroundColor = '';
-  element.style.borderColor = '';
-}, [isPresentationMode]);
-
-
-
-
-//
-  const inputStyle = {
-  color: group.color,
-  border: `1px solid ${group.color}40`,
-  backgroundColor: 'white'
-};
-
-
-
-
-// 🎯 Est-ce que quelqu’un d’autre a sélectionné ce groupe ?
-const isSelectedByOther = Object.entries(sharedSelections || {}).some(
-  ([userId, groupIds]) =>
-    userId !== currentUserId && (groupIds as string[]).includes(group.id)
-);
-
-// console.log("🧪 sharedSelections :", sharedSelections);
-// console.log("🧪 currentUserId :", currentUserId)
-
-
-
-const myMentions = useQuery(api.comments.getMentionsForUser, {
-  mapId : mapId as Id<"affinityMaps">,
-  userName: user?.fullName || user?.firstName || "",
-});
-
-const amIMentioned = myMentions?.includes(group.id);
-
-// ==================== EFFETS VISUELS POUR LA PRÉSENTATION ====================
-  
-  /**
-   * 🎯 CALCUL DU STYLE SPÉCIAL PENDANT LA PRÉSENTATION
-   * Quand isFocusedInPresentation = true, on applique des effets visuels
-   * pour mettre ce groupe en avant devant tous les autres
-   */
-  const getPresentationStyles = () => {
-    if (!isPresentationMode) return {};
+  const handleInsightDragEnd = useCallback((e: React.DragEvent) => {
+    if (isPresentationMode) return;
     
-    return {
-      // 🎯 EFFET DE ZOOM SUR LE GROUPE FOCUS
-      transform: `scale(${isFocusedInPresentation ? presentationScale : 1})`,
-      
-      // 🎯 ANIMATION DOUCE POUR LES TRANSITIONS
-      transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-      
-      // 🎯 SURBRILLANCE AVEC OMBRE PORTÉE
-      boxShadow: isFocusedInPresentation 
-        ? '0 25px 50px -12px rgba(59, 130, 246, 0.5), 0 0 0 4px rgba(59, 130, 246, 0.3)' 
-        : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-      
-      // 🎯 COUCHE Z-INDEX POUR QUE LE GROUPE FOCUS SOIT AU-DESSUS
-      zIndex: isFocusedInPresentation ? 1000 : 20,
-      
-      // 🎯 OPACITÉ RÉDUITE POUR LES GROUPES NON FOCUS
-      opacity: isFocusedInPresentation ? 1 : 0.4,
+    e.stopPropagation();
+    
+    const element = e.currentTarget as HTMLElement;
+    element.style.opacity = '1';
+    element.style.backgroundColor = '';
+    element.style.borderColor = '';
+  }, [isPresentationMode]);
+
+  const getUserColor = useCallback((userId: string) => {
+    const colors = ["#EF4444", "#F59E0B", "#10B981", "#3B82F6", "#8B5CF6", "#EC4899"];
+    const hash = userId.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+    return colors[hash % colors.length];
+  }, []);
+
+  const handleAddDot = useCallback(async (e: React.MouseEvent) => {
+    if (!isPlacingDot || !activeSessionId || !currentUserId) return;
+    
+    e.stopPropagation();
+    e.preventDefault();
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const position = {
+      x: e.clientX - rect.left - 12,
+      y: e.clientY - rect.top - 12
     };
-  };
 
-  /**
-   * 🎯 COULEUR DE BORDURE SPÉCIALE PENDANT LA PRÉSENTATION
-   * On utilise une bordure bleue plus épaisse pour le groupe focus
-   */
-  const getBorderColor = () => {
-    // Si on est en mode présentation ET ce groupe est focus → bordure bleue
-    if (isPresentationMode && isFocusedInPresentation) return "#3B82F6";
+    const userColor = getUserColor(currentUserId!);
+    const tempDotId = `local-${Date.now()}-${Math.random()}`;
     
-    // Sinon, on garde le comportement normal
-    if (isDragOver) return "#3B82F6";
-    if (isSelected) return "#F59E0B"; 
-    if (isHighlighted) return "#10B981";
-    return group.color;
-  };
+    setLocalDots(prev => [...prev, {
+      id: tempDotId,
+      x: position.x,
+      y: position.y,
+      color: userColor
+    }]);
 
-  /**
-   * 🎯 GESTION DU DRAG - DÉSACTIVÉ EN MODE PRÉSENTATION
-   * On empêche de déplacer les groupes pendant une présentation
-   */
-  // const canDrag = !isSelectedByOther && !isPresentationMode;
-
-  // ==================== GESTION DES INTERACTIONS ====================
-  
-
-  // 🎯 FONCTION POUR GÉNÉRER UNE COULEUR UNIQUE PAR UTILISATEUR
-const getUserColor = useCallback((userId: string) => {
-  const colors = ["#EF4444", "#F59E0B", "#10B981", "#3B82F6", "#8B5CF6", "#EC4899"];
-  const hash = userId.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
-  return colors[hash % colors.length];
-}, []);
-  /**
-   * 🎯 CLICK SUR UN GROUPE - COMPORTEMENT DIFFÉRENT EN PRÉSENTATION
-   * En mode normal: sélectionne le groupe
-   * En mode présentation: navigation vers ce groupe
-   */
- // 🎯 FONCTION SIMPLIFIÉE POUR AJOUTER UN DOT
-// 🎯 FONCTION ULTRA-SIMPLE POUR AJOUTER UN DOT
-const handleAddDot = useCallback(async (e: React.MouseEvent) => {
- console.log('🎯 [START] handleAddDot called', { isPlacingDot, activeSessionId, currentUserId });
-
-  if (!isPlacingDot || !activeSessionId || !currentUserId) {
-    console.log('❌ [STOP] Conditions not met', { isPlacingDot, activeSessionId, currentUserId });
-    return;
-  }
-  e.stopPropagation();
-  e.preventDefault();
-
-  // 🎯 POSITION RELATIVE SIMPLE
-  const rect = e.currentTarget.getBoundingClientRect();
-  const position = {
-    x: e.clientX - rect.left - 12,
-    y: e.clientY - rect.top - 12
-  };
-
-  // 🎯 COULEUR FIXE POUR TEST (on simplifie)
-  const userColor = getUserColor(currentUserId!); // Bleu fixe pour test
-
-  console.log('🎯 Adding dot locally:', { position, groupId: group.id });
-
-  // 🎯 1. AJOUTER LOCALEMENT IMMÉDIATEMENT
-  const tempDotId = `local-${Date.now()}-${Math.random()}`;
-  setLocalDots(prev => [...prev, {
-    id: tempDotId,
-    x: position.x,
-    y: position.y,
-    color: userColor
-  }]);
-
-  // 🎯 2. ENVOYER À LA BASE (sans attendre)
-  try {
-    const result = await placeDot({
-      sessionId: activeSessionId as Id<"dotVotingSessions">,
-      targetType: 'group',
-      targetId: group.id,
-      position,
-    });
-    
-    if (result.success) {
-      console.log('✅ Dot saved to database');
-      // 🎯 REMPLACER LE DOT TEMPORAIRE PAR LE VRAI
-      setLocalDots(prev => prev.filter(dot => dot.id !== tempDotId));
-    } else {
-      console.log('❌ Max dots reached');
-      // Garder le dot local
+    try {
+      const result = await placeDot({
+        sessionId: activeSessionId as Id<"dotVotingSessions">,
+        targetType: 'group',
+        targetId: group.id,
+        position,
+      });
+      
+      if (result.success) {
+        setLocalDots(prev => prev.filter(dot => dot.id !== tempDotId));
+      }
+    } catch (error) {
+      console.error('Failed to save dot:', error);
     }
-  } catch (error) {
-    console.error('❌ Failed to save dot:', error);
-    // Garder le dot local
-  }
-}, [isPlacingDot, activeSessionId, currentUserId, placeDot, group.id]);
+  }, [isPlacingDot, activeSessionId, currentUserId, placeDot, group.id, getUserColor]);
 
-
- const handleClick = useCallback((e: React.MouseEvent) => {
-    // 🎯 EN MODE VOTE, UTILISER handleAddDot
+  const handleClick = useCallback((e: React.MouseEvent) => {
     if (isPlacingDot) {
       handleAddDot(e);
       return;
     }
     
-    // COMPORTEMENT NORMAL
     if (isPresentationMode) {
       e.stopPropagation();
       return;
@@ -613,38 +428,40 @@ const handleAddDot = useCallback(async (e: React.MouseEvent) => {
         userId !== currentUserId && (groupIds as string[]).includes(group.id)
     );
     
-    if (isTaken) {
-      return;
-    }
+    if (isTaken) return;
     
     e.stopPropagation();
     onSelect(group.id, e);
   }, [isPlacingDot, isPresentationMode, sharedSelections, currentUserId, group.id, onSelect, handleAddDot]);
 
-  /**
-   * 🎯 DRAG START - DÉSACTIVÉ EN PRÉSENTATION
-   */
   const handleDragStart = useCallback(() => {
-    if (isPresentationMode) return; // 🚫 Pas de drag en présentation
+    if (isPresentationMode) return;
     setIsDragging(true);
   }, [isPresentationMode]);
 
-// console.log("🎨 Surbrillance render pour groupe :", group.id);
+  const isSelectedByOther = Object.entries(sharedSelections || {}).some(
+    ([userId, groupIds]) =>
+      userId !== currentUserId && (groupIds as string[]).includes(group.id)
+  );
 
+  const myMentions = useQuery(api.comments.getMentionsForUser, {
+    mapId: mapId as Id<"affinityMaps">,
+    userName: user?.fullName || user?.firstName || "",
+  });
 
+  const amIMentioned = myMentions?.includes(group.id);
 
-// ====================== RENDU ======================
+  // ==================== RENDER ====================
 
   return (
     <ContextMenu>
       <ContextMenuTrigger>
-     <motion.div
+        <motion.div
           data-group-id={group.id}
           drag={!isSelectedByOther && !isPresentationMode}
           dragMomentum={false}
           dragElastic={0}
           
-          // 🎯 UTILISER LES GESTIONNAIRES CONDITIONNELS
           onDragStart={(e) => {
             if (isPresentationMode) return;
             const data = e as unknown as React.DragEvent;
@@ -656,103 +473,47 @@ const handleAddDot = useCallback(async (e: React.MouseEvent) => {
           onDragEnd={isPresentationMode ? undefined : handleDragEnd}
           onClick={handleClick}
           
-          // 🎯 GESTIONNAIRES DE DRAG CORRIGÉS
-          onDragOver={handleDragOver} // 🎯 TOUJOURS DÉFINI MAINTENANT
-          onDragLeave={handleDragLeave} // 🎯 TOUJOURS DÉFINI MAINTENANT
-          onDrop={handleDrop} // 🎯 TOUJOURS DÉFINI MAINTENANT
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
           
           style={{ 
-            ...getPresentationStyles(),
+            ...styles.container,
             x, 
             y,
             rotateX: isDragging ? rotateX : 0,
             rotateY: isDragging ? rotateY : 0,
-            borderColor: getBorderColor(),
-            borderWidth: (isPresentationMode && isFocusedInPresentation) ? '4px' : '2px',
             pointerEvents: isPresentationMode ? 'none' : 'auto'
           }}
           
-      className={`absolute bg-white rounded-xl shadow-lg border-2 min-w-80 max-w-96 ${
-          isPresentationMode 
-            ? 'cursor-default' 
-            : 'cursor-grab active:cursor-grabbing'
-        } ${isPlacingDot ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}
-         ${
-        !canInteract ? 'opacity-80 cursor-not-allowed' : 'cursor-grab'
-      }
-        `} // 🆕 EFFET VISUEL
+          className={`absolute min-w-80 max-w-96 ${
+            isPresentationMode 
+              ? 'cursor-default' 
+              : 'cursor-grab active:cursor-grabbing'
+          } ${isPlacingDot ? 'ring-4 ring-blue-400 ring-opacity-60 animate-pulse' : ''}
+          ${!canInteract ? 'opacity-80 cursor-not-allowed' : 'cursor-grab'}`}
         >
 
-        {/* {showComments && (
-          <CommentPanel
-            mapId={mapId}
-            groupId={group.id}
-            onClose={() => setShowComments(false)}
-          />
-        )} */}
-
           {!canInteract && isSilentSortingActive && (
-        <div className="absolute inset-0 bg-white/50 rounded-xl flex items-center justify-center z-10">
-          <div className="text-center p-4">
-            <VolumeX className="w-8 h-8 mx-auto mb-2 text-gray-500" />
-            <p className="text-sm text-gray-600">Silent sorting in progress</p>
-            <p className="text-xs text-gray-500">No discussion allowed</p>
-          </div>
-        </div>
-      )}
-        {unreadCount && unreadCount > 0 ? (
-          <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white shadow-sm" />
-        ) : null}
+            <div className="absolute inset-0 bg-white/70 rounded-2xl flex items-center justify-center z-10 backdrop-blur-sm">
+              <div className="text-center p-4" style={styles.buttonGlossy}>
+                <VolumeX className="w-8 h-8 mx-auto mb-2 text-gray-500" />
+                <p className="text-sm text-gray-600 font-medium">Silent Sorting</p>
+                <p className="text-xs text-gray-500">Discussion paused</p>
+              </div>
+            </div>
+          )}
 
-        {/* 🎯 Surbrillance partagée (autre utilisateur) */}
-        {Object.entries(sharedSelections || {}).some(
-          ([userId, groupIds]) =>
-            userId !== currentUserId && (groupIds as string[]).includes(group.id)
-        ) && (
-          <div
-            className="absolute inset-0 rounded-xl border-2 pointer-events-none"
-            style={{
-              borderColor: `hsl(${Math.abs(group.id.split("").reduce((a, b) => a + b.charCodeAt(0), 0)) % 360}, 70%, 60%)`,
-            }}
-          />
-        )}
-        {/* 🎯 Ma sélection perso (bleue) */}
-        {isSelected && (
-          <div className="absolute inset-0 rounded-xl border-2 border-blue-500 pointer-events-none" />
-        )}
-
-        {/* 🎯 Verrou visuel si pris */}
-        {Object.entries(sharedSelections || {}).some(
-          ([userId, groupIds]) =>
-            userId !== currentUserId && (groupIds as string[]).includes(group.id)
-        ) && (
-          <div className="absolute top-2 right-2 text-xs bg-red-500 text-white px-2 py-1 rounded pointer-events-none">
-            🔒
-          </div>
-        )}
-       {isSelectedByOther && (
-          <div className="absolute top-2 right-2 text-xs bg-red-500 text-white px-2 py-1 rounded-full font-semibold pointer-events-none z-10">
-            🔒 Locked
+        {unreadCount !== undefined && unreadCount > 0 && (
+          <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-20 animate-bounce">
+            <span className="text-white text-xs font-bold">{unreadCount}</span>
           </div>
         )}
 
-            {sharedUser && (
-                <div
-                 className="absolute inset-0 rounded-xl border-2 pointer-events-none"
-                 style={{
-                   borderColor: `hsl(${hashCode(sharedUser[0]) % 360}, 70%, 60%)`,
-                   boxShadow: `0 0 0 3px hsl(${hashCode(sharedUser[0]) % 360}, 70%, 60%, 0.3)`,
-                 }}
-               />
-               )}
-          {/* HEADER DRAGGABLE */}
-        <div 
-            className="flex items-center gap-2 px-3 py-2 border-b cursor-grab active:cursor-grabbing relative"
-            style={{ 
-              backgroundColor: `${group.color}15`,
-              borderColor: group.color,
-              cursor: isPlacingDot ? 'crosshair' : 'grab'
-            }}
+          {/* 🎮 HEADER AVEC STYLE GAMIFIÉ */}
+          <div 
+            className="flex items-center gap-3 px-4 py-3 cursor-grab active:cursor-grabbing relative"
+            style={styles.header}
             onMouseDown={(e) => {
               if (isPresentationMode) {
                 e.preventDefault();
@@ -763,35 +524,33 @@ const handleAddDot = useCallback(async (e: React.MouseEvent) => {
             onClick={handleAddDot}
           >
             
-
-              
             {/* INDICATEUR PRÉSENTATION */}
             {isPresentationMode && isFocusedInPresentation && (
-              <div className="absolute -top-2 -left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-semibold animate-pulse">
-                🎯 Focus
-              </div>
-            )}
-            {/* 🎯 INDICATEUR MODE VOTE */}
-            {isPlacingDot && (
-              <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center animate-pulse z-10">
-                <span className="text-white text-xs">+</span>
+              <div className="absolute -top-3 -left-3 bg-linear-to-r from-blue-500 to-purple-600 text-white text-xs px-3 py-1 rounded-full font-bold animate-pulse shadow-lg">
+                🎯 FOCUS
               </div>
             )}
 
+            {/* INDICATEUR VOTE */}
+            {isPlacingDot && (
+              <div className="absolute -top-3 -right-3 w-7 h-7 bg-linear-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center animate-ping z-10 shadow-lg">
+                <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center">
+                  <span className="text-green-600 text-xs font-bold">+</span>
+                </div>
+              </div>
+            )}
+
+            {/* GRIP ICON */}
             <GripVertical 
-              size={16} 
+              size={18} 
               style={{ 
                 color: group.color,
-                opacity: isPresentationMode ? 0.3 : 1,
-                cursor: isPresentationMode ? 'default' : 'grab'
-               }} 
+                opacity: isPresentationMode ? 0.3 : 0.8,
+              }} 
               className="shrink-0"
-              // 🎯 GRIP VISIBLE SEULEMENT HORS PRÉSENTATION
-
             />
 
-              {/* TITRE - ÉDITION MANUELLE OU AFFICHAGE */}
-  {/* TITRE */}
+            {/* TITRE */}
             {isEditing ? (
               <input
                 type="text"
@@ -799,14 +558,18 @@ const handleAddDot = useCallback(async (e: React.MouseEvent) => {
                 onChange={(e) => setTempTitle(e.target.value)}
                 onBlur={handleTitleSave}
                 onKeyDown={handleKeyDown}
-                className="flex-1 font-semibold text-sm bg-white border outline-none px-2 py-1 rounded transition-all"
-                style={inputStyle}
+                className="flex-1 font-bold text-base bg-white/80 border-2 outline-none px-3 py-2 rounded-xl transition-all shadow-inner"
+                style={{
+                  color: group.color,
+                  border: `2px solid ${group.color}40`,
+                  backgroundColor: 'rgba(255, 255, 255, 0.9)'
+                }}
                 autoFocus
                 readOnly={isPresentationMode}
               />
             ) : (
               <h3 
-                className="flex-1 font-semibold text-sm cursor-text select-text hover:bg-gray-50 px-2 py-1 rounded transition-colors"
+                className="flex-1 font-bold text-base cursor-text select-text hover:bg-white/30 px-3 py-2 rounded-xl transition-all"
                 style={{ color: group.color }}
                 onClick={(e) => {
                   if (isPresentationMode || isPlacingDot) return;
@@ -815,17 +578,25 @@ const handleAddDot = useCallback(async (e: React.MouseEvent) => {
                 title={isPresentationMode ? "" : "Click to edit title"}
               >
                 {group.title}
-                {isPlacingDot && " - Click to vote"}
+                {isPlacingDot && (
+                  <span className="block text-xs font-normal text-gray-500 mt-1">
+                    Click anywhere to vote!
+                  </span>
+                )}
               </h3>
             )}
 
             {/* BOUTONS D'ACTION */}
             <div className="flex items-center gap-2">
-              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+              {/* COMPTEUR D'INSIGHTS */}
+              <span 
+                className="text-sm font-bold text-white px-3 py-1.5 rounded-xl shadow-lg"
+                style={styles.counterBadge}
+              >
                 {groupInsights.length}
               </span>
 
-              {/* BOUTON IA */}
+              {/* ASSISTANT IA */}
               {hasInsights && !isPresentationMode && !isPlacingDot && (
                 <GroupNameAssistant
                   group={group}
@@ -845,10 +616,11 @@ const handleAddDot = useCallback(async (e: React.MouseEvent) => {
                     e.stopPropagation();
                     handleDelete(group.id);
                   }}
-                  className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                  className="p-2 text-gray-400 hover:text-red-500 transition-all hover:scale-110 rounded-lg"
+                  style={styles.buttonGlossy}
                   title="Delete group"
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={16} />
                 </button>
               )}
 
@@ -865,43 +637,35 @@ const handleAddDot = useCallback(async (e: React.MouseEvent) => {
                       onOpenComments(group.id, { x: rect.right, y: rect.top }, group.title);
                     }
                   }}
-                  className="p-1 text-gray-400 hover:text-blue-500 transition-colors relative"
+                  className="p-2 text-gray-400 hover:text-blue-500 transition-all hover:scale-110 rounded-lg relative"
+                  style={styles.buttonGlossy}
                   title="Add comment"
                 >
-                  💬
+                  <span className="text-lg">💬</span>
                   {amIMentioned && (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white animate-pulse" />
                   )}
                 </button>
               )}
             </div>
-          
           </div>
 
-          {/* INSIGHTS CONTENT */}
-
-          <div className={`p-3 space-y-2 max-h-60 overflow-y-auto ${
-            isPresentationMode && isFocusedInPresentation 
-              ? 'bg-blue-50 border-blue-200' 
-              : 'bg-white'
-          }`}
-            // 🎯 GESTIONNAIRES DE DRAG POUR LE CONTENU
+          {/* CONTENU DES INSIGHTS */}
+          <div 
+            className={`p-4 space-y-3 max-h-60 overflow-y-auto ${
+              isPresentationMode && isFocusedInPresentation 
+                ? 'bg-linear-to-br from-blue-50 to-indigo-50' 
+                : 'bg-white/50'
+            } rounded-b-2xl`}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-          {/* onWheel={(e) => {
-            // 🎯 EMPÊCHER LA PROPAGATION DU SCROLL AU CANVAS
-            e.stopPropagation();
-          }}
-          onTouchMove={(e) => {
-            // 🎯 POUR MOBILE AUSSI
-            e.stopPropagation();
-          }} */}
-        {groupInsights.map(insight => (
+            {groupInsights.map(insight => (
               <div
                 key={insight.id}
-                className="p-2 bg-gray-50 rounded border border-gray-100 text-sm text-gray-700 cursor-move transition-all hover:bg-gray-100"
+                className="p-3 rounded-xl transition-all hover:scale-[1.02] hover:shadow-md cursor-move group"
+                style={styles.insightCard}
                 draggable={workspaceMode === 'grouping' && !isSelectedByOther && !isPresentationMode && !isPlacingDot}
                 onDragStart={(e) => {
                   if (isPresentationMode || isPlacingDot) return;
@@ -916,15 +680,15 @@ const handleAddDot = useCallback(async (e: React.MouseEvent) => {
                 onDragEnd={handleInsightDragEnd}
               >
                 <div className="flex items-start justify-between">
-                  <span className={`text-xs px-1.5 py-0.5 rounded mr-2 ${
-                    insight.type === 'pain-point' ? 'bg-red-100 text-red-700' :
-                    insight.type === 'quote' ? 'bg-blue-100 text-blue-700' :
-                    insight.type === 'insight' ? 'bg-purple-100 text-purple-700' :
-                    'bg-green-100 text-green-700'
+                  <span className={`text-xs font-bold px-2 py-1 rounded-lg mr-3 shadow-sm ${
+                    insight.type === 'pain-point' ? 'bg-linear-to-r from-red-100 to-red-200 text-red-700' :
+                    insight.type === 'quote' ? 'bg-linear-to-r from-blue-100 to-blue-200 text-blue-700' :
+                    insight.type === 'insight' ? 'bg-linear-to-r from-purple-100 to-purple-200 text-purple-700' :
+                    'bg-linear-to-r from-green-100 to-green-200 text-green-700'
                   }`}>
                     {insight.type.charAt(0).toUpperCase()}
                   </span>
-                  <span className="flex-1 text-sm">{insight.text}</span>
+                  <span className="flex-1 text-sm leading-relaxed">{insight.text}</span>
                   
                   {workspaceMode === 'grouping' && onRemoveInsight && !isPresentationMode && !isPlacingDot && (
                     <button
@@ -932,154 +696,156 @@ const handleAddDot = useCallback(async (e: React.MouseEvent) => {
                         e.stopPropagation();
                         handleRemoveInsight(insight.id, group.id);
                       }}
-                      className="ml-2 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                      className="ml-2 text-gray-400 hover:text-red-500 transition-all hover:scale-110 opacity-0 group-hover:opacity-100 p-1 rounded"
                       title="Remove from group"
                     >
-                      <Trash2 size={12} />
+                      <Trash2 size={14} />
                     </button>
                   )}
                 </div>
               </div>
             ))}
 
-         {groupInsights.length === 0 && (
-              <div className={`text-center py-4 text-sm ${
-                isDragOver ? 'text-blue-600 font-medium' : 'text-gray-400'
-              }`}>
+            {groupInsights.length === 0 && (
+              <div className={`text-center py-6 text-sm rounded-xl ${
+                isDragOver 
+                  ? 'bg-linear-to-r from-blue-50 to-indigo-50 text-blue-600 font-bold border-2 border-dashed border-blue-300' 
+                  : 'text-gray-400 bg-gray-50/50'
+              } transition-all`}>
                 {workspaceMode === 'grouping' && !isPlacingDot
                   ? (isDragOver 
-                      ? '✨ Drop insights here!' 
-                      : '↓ Drag insights here to group them')
-                  : 'No insights in this group'
+                      ? '🎉 Drop insights here!' 
+                      : '✨ Drag insights here to group them')
+                  : 'No insights yet'
                 }
-                {isPlacingDot && 'Click to place your vote'}
+                {isPlacingDot && (
+                  <div className="mt-2 text-xs text-gray-500">
+                    Click to place your vote dot!
+                  </div>
+                )}
               </div>
             )}
-        </div>
-
-
-         {/* 🎯 DOTS LOCAUX - TOUJOURS VISIBLES */}
-        {localDots.map(dot => (
-          <div
-            key={dot.id}
-            className="absolute w-8 h-8 rounded-full border-3 border-white shadow-lg flex items-center justify-center z-40 animate-bounce"
-            style={{
-              left: dot.x,
-              top: dot.y,
-              backgroundColor: dot.color,
-            }}
-            title="Your vote"
-          >
-            <span className="text-white text-xs font-bold">✓</span>
           </div>
-        ))}
 
-
-          {/* 🎯 DOTS DE VOTE - SIMPLES ET EFFICACES */}
-        {groupDots && groupDots.map(dot => {
-          // 🎯 LOGIQUE DE VISIBILITÉ CORRECTE
-            const isMyDot = dot.userId === currentUserId;
-              const isVisible = 
-                isMyDot || 
-                !activeSession?.isSilentMode ||
-                activeSession?.votingPhase !== 'voting'; // "setup" sera traité comme "voting"
-
-          console.log('🔍 Dot visibility:', {
-            dotId: dot._id,
-            isMyDot,
-            isSilentMode: activeSession?.isSilentMode,
-            votingPhase: activeSession?.votingPhase,
-            isVisible
-          });
-
-          if (!isVisible) return null;
-
-          return (
+          {/* DOTS DE VOTE LOCAUX */}
+          {localDots.map(dot => (
             <div
-              key={dot._id}
-              className="absolute w-8 h-8 rounded-full border-3 border-white shadow-lg flex items-center justify-center z-30 transition-transform hover:scale-110"
+              key={dot.id}
+              className="absolute w-10 h-10 rounded-full border-4 border-white shadow-2xl flex items-center justify-center z-40 animate-pop-in"
               style={{
-                left: dot.position.x,
-                top: dot.position.y,
-                backgroundColor: dot.color || getUserColor(dot.userId),
+                left: dot.x,
+                top: dot.y,
+                background: `radial-gradient(circle, ${dot.color}, ${dot.color}CC)`,
+                filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
               }}
-              title={isMyDot ? "Your vote" : "Participant vote"}
+              title="Your vote"
             >
-              {isMyDot && (
-                <span className="text-white text-xs font-bold">✓</span>
-              )}
+              <span className="text-white text-sm font-bold">✓</span>
             </div>
-          );
-        })}
+          ))}
+
+          {/* DOTS DE VOTE DE LA BASE */}
+          {groupDots && groupDots.map(dot => {
+            const isMyDot = dot.userId === currentUserId;
+            const isVisible = 
+              isMyDot || 
+              !activeSession?.isSilentMode ||
+              activeSession?.votingPhase !== 'voting';
+
+            if (!isVisible) return null;
+
+            return (
+              <div
+                key={dot._id}
+                className="absolute w-10 h-10 rounded-full border-4 border-white shadow-2xl flex items-center justify-center z-30 transition-all hover:scale-125 hover:rotate-12"
+                style={{
+                  left: dot.position.x,
+                  top: dot.position.y,
+                  background: `radial-gradient(circle, ${dot.color || getUserColor(dot.userId)}, ${dot.color || getUserColor(dot.userId)}CC)`,
+                  filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
+                }}
+                title={isMyDot ? "Your vote" : "Participant vote"}
+              >
+                {isMyDot && (
+                  <span className="text-white text-sm font-bold animate-pulse">✓</span>
+                )}
+              </div>
+            );
+          })}
 
         </motion.div>
       </ContextMenuTrigger>
 
-      {/* 🆕 CONTEXT MENU SHADCN */}
-{!isPresentationMode && (
-  <ContextMenuContent className="w-64">
-    <div className="px-2 py-1.5 text-sm font-semibold text-gray-900 border-b">
-      {group.title}
-    </div>
-    
-    {/* RENAME */}
-    <ContextMenuItem 
-      onClick={(e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        handleRename();
-      }}
-      className="flex items-center gap-2 cursor-pointer"
-    >
-      <Edit3 size={14} />
-      Rename Group
-    </ContextMenuItem>
-    
-    {/* AI SUGGESTIONS - SEULEMENT SI DES INSIGHTS */}
-    {hasInsights && (
-      <ContextMenuItem 
-        onClick={(e: React.MouseEvent) => {
-          e.preventDefault();
-          e.stopPropagation();
-          // Logique pour ouvrir le popover IA
-          // (le composant GroupNameAssistant est déjà visible dans le header)
-        }}
-        className="flex items-center gap-2 cursor-pointer"
-      >
-        <Sparkles size={14} />
-        AI Name Suggestions
-      </ContextMenuItem>
-    )}
-    
-    {/* DUPLICATE */}
-    <ContextMenuItem 
-      onClick={(e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        handleDuplicate();
-      }}
-      className="flex items-center gap-2 cursor-pointer"
-    >
-      <Copy size={14} />
-      Duplicate Group
-    </ContextMenuItem>
-    
-    <ContextMenuSeparator />
-    
-    {/* DELETE */}
-    <ContextMenuItem 
-      onClick={(e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        handleDelete(group.id);
-      }}
-      className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
-    >
-      <Trash2 size={14} />
-      Delete Group
-    </ContextMenuItem>
-  </ContextMenuContent>
-)}
+      {/* CONTEXT MENU GAMIFIÉ */}
+      {!isPresentationMode && (
+        <ContextMenuContent className="w-72 rounded-2xl shadow-2xl border-0 overflow-hidden">
+          <div 
+            className="px-4 py-3 text-sm font-bold text-white border-b"
+            style={{ 
+              background: `linear-gradient(135deg, ${group.color}, ${group.color}CC)`,
+            }}
+          >
+            {group.title}
+          </div>
+          
+          <div className="p-2 bg-white/95 backdrop-blur-sm">
+            <ContextMenuItem 
+              onClick={(e: React.MouseEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleRename();
+              }}
+              className="flex items-center gap-3 cursor-pointer p-3 rounded-xl hover:bg-gray-50 transition-all mb-1"
+            >
+              <div className="p-2 rounded-lg bg-blue-50">
+                <Edit3 size={16} className="text-blue-600" />
+              </div>
+              <span className="font-medium">Rename Group</span>
+            </ContextMenuItem>
+            
+            {hasInsights && (
+              <ContextMenuItem 
+                className="flex items-center gap-3 cursor-pointer p-3 rounded-xl hover:bg-gray-50 transition-all mb-1"
+              >
+                <div className="p-2 rounded-lg bg-purple-50">
+                  <Sparkles size={16} className="text-purple-600" />
+                </div>
+                <span className="font-medium">AI Name Suggestions</span>
+              </ContextMenuItem>
+            )}
+            
+            <ContextMenuItem 
+              onClick={(e: React.MouseEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleDuplicate();
+              }}
+              className="flex items-center gap-3 cursor-pointer p-3 rounded-xl hover:bg-gray-50 transition-all mb-1"
+            >
+              <div className="p-2 rounded-lg bg-green-50">
+                <Copy size={16} className="text-green-600" />
+              </div>
+              <span className="font-medium">Duplicate Group</span>
+            </ContextMenuItem>
+            
+            <div className="border-t my-2"></div>
+            
+            <ContextMenuItem 
+              onClick={(e: React.MouseEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleDelete(group.id);
+              }}
+              className="flex items-center gap-3 cursor-pointer p-3 rounded-xl hover:bg-red-50 transition-all text-red-600"
+            >
+              <div className="p-2 rounded-lg bg-red-50">
+                <Trash2 size={16} className="text-red-600" />
+              </div>
+              <span className="font-medium">Delete Group</span>
+            </ContextMenuItem>
+          </div>
+        </ContextMenuContent>
+      )}
     </ContextMenu>
   );
 }
