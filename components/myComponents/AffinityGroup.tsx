@@ -149,53 +149,53 @@ export default function AffinityGroup({
 
   const getGamifiedStyles = () => {
     const baseColor = group.color;
-    
     return {
-      // 🎮 Container avec effet de carte de jeu
+      // Container simple, très arrondi, fond blanc, ombre douce
       container: {
-        background: `linear-gradient(135deg, ${baseColor}08, ${baseColor}15)`,
-        border: `3px solid ${baseColor}40`,
-        borderRadius: '20px',
-        boxShadow: isSelected 
-          ? `0 8px 32px ${baseColor}40, 0 0 0 3px ${baseColor}80`
+        background: '#fff',
+        border: `2px solid ${baseColor}30`,
+        borderRadius: '28px',
+        boxShadow: isSelected
+          ? `0 4px 24px ${baseColor}33, 0 0 0 3px ${baseColor}`
           : isHighlighted
-          ? `0 6px 24px ${baseColor}30, 0 0 0 2px ${baseColor}60`
-          : `0 4px 20px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.05)`,
-        backdropFilter: 'blur(10px)',
-        transform: isSelected ? 'scale(1.02)' : 'scale(1)',
-        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          ? `0 2px 12px ${baseColor}22, 0 0 0 2px ${baseColor}77`
+          : `0 2px 12px rgba(0,0,0,0.08)`,
+        transform: isSelected ? 'scale(1.03)' : 'scale(1)',
+        transition: 'all 0.22s cubic-bezier(.4,0,.2,1)',
       },
-      
-      // 🎮 Header avec effet badge
+      // Header coloré, arrondi, plus épais
       header: {
-        background: `linear-gradient(135deg, ${baseColor}20, ${baseColor}30)`,
-        borderBottom: `2px solid ${baseColor}30`,
-        borderRadius: '17px 17px 0 0',
+        background: baseColor + '18',
+        borderBottom: `1.5px solid ${baseColor}33`,
+        borderRadius: '24px 24px 0 0',
+        minHeight: '48px',
       },
-      
-      // 🎮 Insights avec effet de carte empilée
+      // Insights façon sticky note
       insightCard: {
-        background: `linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7))`,
-        border: `1px solid ${baseColor}20`,
-        borderRadius: '12px',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+        background: '#fef9c3',
+        border: '1.5px solid #fde68a',
+        borderRadius: '10px',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+        fontSize: '1rem',
+        color: '#7c6512',
+        fontFamily: 'Inter, sans-serif',
       },
-      
-      // 🎮 Badge de compteur
+      // Badge compteur simple
       counterBadge: {
-        background: `linear-gradient(135deg, ${baseColor}, ${baseColor}CC)`,
+        background: baseColor,
         color: 'white',
-        borderRadius: '12px',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+        borderRadius: '10px',
+        fontWeight: 700,
+        fontSize: '0.95rem',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
       },
-      
-      // 🎮 Boutons avec effet glossy
+      // Boutons ronds discrets
       buttonGlossy: {
-        background: `linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.6))`,
-        border: `1px solid ${baseColor}20`,
-        borderRadius: '8px',
-        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-      }
+        background: '#f3f4f6',
+        border: 'none',
+        borderRadius: '50%',
+        boxShadow: 'none',
+      },
     };
   };
 
