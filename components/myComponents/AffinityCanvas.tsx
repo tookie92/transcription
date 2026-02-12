@@ -1,7 +1,9 @@
-// components/AffinityCanvas.tsx - VERSION COMPLÈTE ET SIMPLIFIÉE
 "use client";
 
-import { useRef, useEffect, useState, useCallback, useMemo, use } from "react";
+// components/AffinityCanvas.tsx - VERSION COMPLÈTE ET SIMPLIFIÉE
+
+import { useRef, useEffect, useState, useCallback, useMemo } from "react";
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import AffinityGroup from "./AffinityGroup";
 import { Plus, Users, Vote, Download, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Undo, Redo, ChevronRight, ChevronLeft, BarChart3, Sparkles, Move, Upload, Presentation, Eye, ActivityIcon } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -40,11 +42,18 @@ import { VotingHistoryPanel } from "./VotingHistoryPanel";
 import { PersonaGenerator } from "./PersonaGenerator";
 import { useSilentSorting } from "@/hooks/useSilentSorting";
 
+// ==================== INTERFACES ====================
 
-
-// 🆕 AJOUTER childGroupIds À L'INTERFACE
-
-
+interface PresenceUser {
+  userId: string;
+  cursor: { x: number; y: number };
+  selection: string[];
+  user: {
+    id: string;
+    name: string;
+    avatar?: string;
+  };
+}
 
 interface PendingGroupData {
   groupTitle: string;
@@ -62,7 +71,7 @@ interface AffinityCanvasProps {
     name: string;
     description?: string;
   };
-  mapId: string;     // ← AJOUTER mapId
+  mapId: string;
   onGroupMove: (groupId: string, position: { x: number; y: number }) => void;
   onGroupCreate: (position: { x: number; y: number }) => void;
   onInsightDrop: (insightId: string, groupId: string) => void;
@@ -73,56 +82,51 @@ interface AffinityCanvasProps {
   onGroupsReplace?: (groups: AffinityGroupType[]) => void;
 }
 
-export default function AffinityCanvas({ 
-  groups, 
-  insights,
-  projectId,
-  mapId,
-  projectInfo,
-  onGroupMove, 
-  onGroupCreate,
-  onInsightDrop,
-  onInsightRemoveFromGroup,
-  onGroupDelete,
-  onManualInsightCreate,
-  onGroupTitleUpdate,
-  onGroupsReplace
-}: AffinityCanvasProps) {
+export default function AffinityCanvas(props: AffinityCanvasProps) {
+  // Destructure props
+  const {
+    groups,
+    insights,
+    projectId,
+    projectInfo,
+    mapId,
+    onGroupMove,
+    onGroupCreate,
+    onInsightDrop,
+    onInsightRemoveFromGroup,
+    onGroupDelete,
+    onManualInsightCreate,
+    onGroupTitleUpdate,
+    onGroupsReplace
+  } = props;
 
-  // const [draggedInsightId, setDraggedInsightId] = useState<string | null>(null);
-  
-  // const [newInsightText, setNewInsightText] = useState("");
-  // const [newInsightType, setNewInsightType] = useState<Insight['type']>('insight');
-  // const [showAddInsight, setShowAddInsight] = useState(false);
+  // ==================== HOOKS CLERK ====================
+  const { userId } = useAuth();
+  const { user } = useUser();
+  const currentUserId = userId || "anonymous";
 
-
-  // ==================== QUERIES ====================
-  const { userId: currentUserId } = useAuth();
-
-  const projectName = useQuery(api.projects.getById, {projectId: projectId as Id<"projects">});
-    const { isSilentSortingActive, groupTimeLeft, personalTimeLeft, currentPhase } = useSilentSorting(mapId);
-
-  // const upsertPresence = useMutation(api.presence.upsert);  
-
-  const activities = useQuery(api.activityLog.getActivityForMap, 
-    mapId ? { 
-      mapId: mapId as Id<"affinityMaps">,
-      limit: 10 
-    } : "skip" // ✅ "skip" si affinityMap n'existe pas encore
-  );
-
-  // Dans le composant :
-// const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
-const updatePresence = usePresence(mapId);
-const otherUsers = useQuery(api.presence.getByMap, { mapId: mapId as Id<"affinityMaps"> });
-
-useEffect(() => {
-  const selections: Record<string, string[]> = {};
-  otherUsers?.forEach(user => {
-    selections[user.userId] = user.selection || [];
+  // ==================== HOOKS PRESENCE ====================
+  const updatePresence = usePresence(mapId as Id<"affinityMaps">);
+  const otherUsers = useQuery(api.presence.getByMap, {
+    mapId: mapId as Id<"affinityMaps">
   });
-  setSharedSelections(selections);
-}, [otherUsers]);
+
+  // ==================== HOOKS SILENT SORTING ====================
+  const { 
+    isSilentSortingActive, 
+    currentPhase, 
+    groupTimeLeft, 
+    personalTimeLeft 
+  } = useSilentSorting(mapId as Id<"affinityMaps">);
+
+  // Initialize shared selections from other users
+  useEffect(() => {
+    const selections: Record<string, string[]> = {};
+    otherUsers?.forEach(user => {
+      selections[user.userId] = user.selection || [];
+    });
+    setSharedSelections(selections);
+  }, [otherUsers]);
 
   // ==================== HOOKS EXTERNES ====================
   const { 
@@ -142,9 +146,6 @@ useEffect(() => {
   const clickCountRef = useRef(0);
 
   // ==================== useState ====================
-  const [scale, setScale] = useState(1);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('grouping');
@@ -225,9 +226,14 @@ DESCRIPTION: ${projectInfo.description || 'No description'}
 
 // 🆕 AJOUTER CE STATE
 const [showActivityPanel, setShowActivityPanel] = useState(false);
+const [isPanning, setIsPanning] = useState(false);
+const [scale, setScale] = useState(1);
+const [position, setPosition] = useState({ x: 0, y: 0 });
 
 // 🆕 INITIALISER LE HOOK
 const activity = useActivity();
+const activities = activity ? [] : []; // Placeholder for activities list
+const projectName = projectInfo; // Use projectInfo directly
 
   // ==================== useCallback ====================
 
@@ -306,7 +312,7 @@ const handleOpenComments = useCallback((groupId: string, position: { x: number; 
 
 
 const presenceUsers = useMemo(
-  () => otherUsers?.map(u => ({ id: u.userId, name: u.user.name })) ?? [],
+  () => otherUsers?.map((u: PresenceUser) => ({ id: u.userId, name: u.user?.name || "Unknown" })) ?? [],
   [otherUsers]
 );
 
@@ -679,7 +685,29 @@ const handleGroupMoveOptimistic = useCallback((groupId: string, newPosition: { x
     }
   }, [history, onGroupsReplace]);
 
-  
+  // ==================== ZOOM/PAN FUNCTIONS ====================
+  const zoomIn = useCallback(() => {
+    setScale(prev => Math.min(prev * 1.2, 3));
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    setScale(prev => Math.max(prev / 1.2, 0.5));
+  }, []);
+
+  const resetTransform = useCallback(() => {
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
+  }, []);
+
+  const centerView = useCallback(() => {
+    if (canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      setPosition({
+        x: rect.width / 2,
+        y: rect.height / 2
+      });
+    }
+  }, []);
 
   // const toggleVotingPanel = useCallback(() => {
   //   setActivePanel(prev => prev === 'voting' ? null : 'voting');
@@ -1553,7 +1581,7 @@ useEffect(() => {
             onContextMenu={handleContextMenu}
             onClick={handleCanvasClick}
           >
-            {!isPresentMode && otherUsers?.map(user => (
+            {!isPresentMode && otherUsers?.map((user: PresenceUser) => (
                 <motion.div
                   key={user.userId}
                   className="absolute pointer-events-none z-50"
@@ -1565,7 +1593,7 @@ useEffect(() => {
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow" />
                     <span className="text-xs bg-gray-900 text-white px-2 py-1 rounded shadow">
-                      {user.user.name}
+                      {user.user?.name || "User"}
                     </span>
                   </div>
                 </motion.div>
@@ -1792,22 +1820,34 @@ useEffect(() => {
           )}
 
           {/* ZOOM CONTROLS */}
-          <div className="absolute bottom-4 right-4 bg-white rounded-lg shadow-lg border border-gray-200 p-2 flex gap-1 z-30">
-            <button 
-              onClick={() => setScale(s => Math.min(2, s + 0.1))}
-              className="w-8 h-8 rounded hover:bg-gray-100 flex items-center justify-center text-gray-700 font-semibold"
-            >
-              +
+          <div className="absolute bottom-4 right-4 bg-gradient-to-br from-green-100 via-blue-100 to-purple-200 rounded-xl shadow-2xl border border-blue-200 p-3 flex gap-2 z-40 animate-fade-in">
+            <button onClick={() => zoomIn()}
+              className="w-9 h-9 rounded-full bg-white/80 hover:bg-blue-100 transition flex items-center justify-center text-blue-700 font-bold shadow-md border border-blue-200"
+              title="Zoom avant (+)">
+              <span className="sr-only">Zoom avant</span>
+              <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5"/></svg>
             </button>
-            <button 
-              onClick={() => setScale(s => Math.max(0.3, s - 0.1))}
-              className="w-8 h-8 rounded hover:bg-gray-100 flex items-center justify-center text-gray-700 font-semibold"
-            >
-              −
+            <button onClick={() => zoomOut()} 
+              className="w-9 h-9 rounded-full bg-white/80 hover:bg-blue-100 transition flex items-center justify-center text-blue-700 font-bold shadow-md border border-blue-200"
+              title="Zoom arrière (-)">
+              <span className="sr-only">Zoom arrière</span>
+              <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 12h14"/></svg>
             </button>
-            <div className="w-12 h-8 flex items-center justify-center text-xs text-gray-600 border-l border-gray-200">
-              {Math.round(scale * 100)}%
-            </div>
+            <button onClick={() => resetTransform()}
+              className="w-9 h-9 rounded-full bg-white/80 hover:bg-green-100 transition flex items-center justify-center text-green-700 font-bold shadow-md border border-green-200"
+              title="Réinitialiser (0)">
+              <span className="sr-only">Réinitialiser</span>
+              <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 4v5h.582M20 20v-5h-.581M5 19A9 9 0 1 1 19 5"/></svg>
+            </button>
+            <button onClick={() => centerView()}
+              className="w-9 h-9 rounded-full bg-white/80 hover:bg-purple-100 transition flex items-center justify-center text-purple-700 font-bold shadow-md border border-purple-200"
+              title="Centrer (C)">
+              <span className="sr-only">Centrer</span>
+              <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2m10-10h-2M4 12H2"/></svg>
+            </button>
+            <span className="ml-3 px-3 py-1 rounded-full bg-white/80 text-blue-700 font-semibold text-xs shadow border border-blue-100 animate-zoom-indicator">
+              {Math.round(scale * 100)}%<span className="ml-1 text-gray-400">{position.x !== 0 || position.y !== 0 ? ' • Pan' : ''}</span>
+            </span>
           </div>
         </div>
      
