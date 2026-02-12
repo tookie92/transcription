@@ -23,10 +23,7 @@ import { ThemeDiscoveryPanel } from "./ThemeDiscoveryPanel";
 import { ThemeVisualization } from "./ThemeVisualization";
 import { ThemeAnalysis, DetectedTheme, ThemeRecommendation } from "@/types";
 import { useThemeDetection } from "@/hooks/useThemeDetection";
-import { ThemeVisualizationDebug } from "./ThemeVisualizationDebug";
 import { ThemeVisualizationFixed } from "./ThemeVisualizationFixed";
-import { SimpleThemeTest } from "./SimpleThemeTest";
-import { UltraSimpleTest } from "./UltraSimpleTest";
 import { Badge } from "../ui/badge";
 import { ExportPanel } from "./ExportPanel";
 import { ImportModal } from "./ImportModal";
@@ -773,6 +770,11 @@ const placeDot = useMutation(api.dotVoting.placeDot);
 
 
   // ==================== HANDLERS SOURIS/CLAVIER ====================
+  // Debounced wheel handler and requestAnimationFrame for pan/zoom
+  const wheelTimeout = useRef<NodeJS.Timeout | null>(null);
+  const rafId = useRef<number | null>(null);
+  const pendingWheel = useRef<{deltaX: number, deltaY: number, ctrlKey: boolean, clientX: number, clientY: number} | null>(null);
+
   const handleWheel = useCallback((e: WheelEvent) => {
     const target = e.target as HTMLElement;
     const isScrollableElement = 
@@ -784,32 +786,47 @@ const placeDot = useMutation(api.dotVoting.placeDot);
     if (isScrollableElement) return;
 
     e.preventDefault();
-    
-    if (e.ctrlKey) {
-      const zoomIntensity = 0.1;
-      const delta = -e.deltaY * zoomIntensity * 0.01;
-      const newScale = Math.min(2, Math.max(0.3, scale * (1 + delta)));
-      
-      if (canvasRef.current) {
-        const rect = canvasRef.current.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-        
-        const worldX = (mouseX - position.x) / scale;
-        const worldY = (mouseY - position.y) / scale;
-        
-        setScale(newScale);
-        setPosition({
-          x: mouseX - worldX * newScale,
-          y: mouseY - worldY * newScale
-        });
-      }
-    } else {
-      setPosition(prev => ({
-        x: prev.x - e.deltaX,
-        y: prev.y - e.deltaY
-      }));
-    }
+
+    // Store wheel event for debouncing
+    pendingWheel.current = {
+      deltaX: e.deltaX,
+      deltaY: e.deltaY,
+      ctrlKey: e.ctrlKey,
+      clientX: e.clientX,
+      clientY: e.clientY
+    };
+
+    if (wheelTimeout.current) clearTimeout(wheelTimeout.current);
+    wheelTimeout.current = setTimeout(() => {
+      if (rafId.current) cancelAnimationFrame(rafId.current);
+      rafId.current = requestAnimationFrame(() => {
+        const wheel = pendingWheel.current;
+        if (!wheel) return;
+        if (wheel.ctrlKey) {
+          const zoomIntensity = 0.1;
+          const delta = -wheel.deltaY * zoomIntensity * 0.01;
+          const newScale = Math.min(2, Math.max(0.3, scale * (1 + delta)));
+          if (canvasRef.current) {
+            const rect = canvasRef.current.getBoundingClientRect();
+            const mouseX = wheel.clientX - rect.left;
+            const mouseY = wheel.clientY - rect.top;
+            const worldX = (mouseX - position.x) / scale;
+            const worldY = (mouseY - position.y) / scale;
+            setScale(newScale);
+            setPosition({
+              x: mouseX - worldX * newScale,
+              y: mouseY - worldY * newScale
+            });
+          }
+        } else {
+          setPosition(prev => ({
+            x: prev.x - wheel.deltaX,
+            y: prev.y - wheel.deltaY
+          }));
+        }
+        pendingWheel.current = null;
+      });
+    }, 16); // ~60fps debounce
   }, [scale, position]);
 
   const handleCanvasMouseDown = (e: React.MouseEvent) => {

@@ -178,7 +178,7 @@ export function FloatingToolbar({
                 </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Dot Voting Panel</p>
+                  <p>Persona Generator</p>
                 </TooltipContent>
               </Tooltip>
 
