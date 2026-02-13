@@ -12,6 +12,7 @@ import {
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { toast } from "sonner";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSilentSorting } from "@/hooks/useSilentSorting";
 
@@ -56,6 +57,7 @@ interface AffinityGroupProps {
   isPlacingDot?: boolean;
   activeSessionId?: string;
   activeSession?: DotVotingSession;
+  myDotsCount?: number;
 }
 
 export default function AffinityGroup({
@@ -66,6 +68,7 @@ export default function AffinityGroup({
   onOpenComments, mapId, commentCounts, comments,
   isPresentationMode = false, isFocusedInPresentation = false,
   presentationScale = 1, isPlacingDot = false, activeSessionId, activeSession,
+  myDotsCount = 0,
 }: AffinityGroupProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempTitle, setTempTitle] = useState(group.title);
@@ -237,6 +240,10 @@ export default function AffinityGroup({
 
   const handleAddDot = useCallback(async (e: React.MouseEvent) => {
     if (!isPlacingDot || !activeSessionId || !currentUserId) return;
+    if (myDotsCount >= 10) {
+      toast.error("You have reached the maximum of 10 dots");
+      return;
+    }
     e.stopPropagation(); e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
     const position = { x: e.clientX - rect.left - 12, y: e.clientY - rect.top - 12 };
@@ -250,7 +257,7 @@ export default function AffinityGroup({
       });
       if (result.success) setLocalDots(prev => prev.filter(dot => dot.id !== tempDotId));
     } catch (error) { console.error('Failed to save dot:', error); }
-  }, [isPlacingDot, activeSessionId, currentUserId, placeDot, group.id, getUserColor]);
+  }, [isPlacingDot, activeSessionId, currentUserId, placeDot, group.id, getUserColor, myDotsCount]);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     if (isPlacingDot) { handleAddDot(e); return; }

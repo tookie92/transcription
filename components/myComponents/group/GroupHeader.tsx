@@ -26,6 +26,7 @@ interface GroupHeaderProps {
   isPlacingDot: boolean;
   unreadCount?: number;
   amIMentioned?: boolean;
+  isSelectedByOther?: boolean;
   styles: {
     header: React.CSSProperties;
     counterBadge: React.CSSProperties;
@@ -54,6 +55,7 @@ export function GroupHeader({
   isPlacingDot,
   unreadCount,
   amIMentioned,
+  isSelectedByOther,
   styles,
 }: GroupHeaderProps) {
   return (
@@ -82,6 +84,13 @@ export function GroupHeader({
           <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center">
             <span className="text-green-600 text-xs font-bold">+</span>
           </div>
+        </div>
+      )}
+
+      {/* INDICATEUR SÉLECTIONNÉ PAR AUTRUI */}
+      {isSelectedByOther && (
+        <div className="absolute -top-3 -right-3 px-2 py-1 bg-orange-100 border border-orange-300 rounded-full text-orange-700 text-xs font-medium z-10 shadow">
+          🔒 Taken
         </div>
       )}
 

@@ -47,8 +47,14 @@ export function useThemeManagement({
   const [pendingParentGroup, setPendingParentGroup] = useState<PendingGroupData | null>(null);
   const [applyingAction, setApplyingAction] = useState<string | null>(null);
   const [highlightedGroups, setHighlightedGroups] = useState<Set<string>>(new Set());
+  const [appliedRecommendationIds, setAppliedRecommendationIds] = useState<Set<string>>(new Set());
 
   const detectedThemes = themeAnalysis?.themes || [];
+  
+  // 🆕 RECOMMENDATIONS FILTRÉES (sans celles déjà appliquées)
+  const filteredRecommendations = themeAnalysis?.recommendations?.filter((rec, idx) => 
+    !appliedRecommendationIds.has(`${rec.type}-${rec.groups.join('-')}`)
+  ) || [];
 
   // ==================== EXTRACT SUGGESTED NAME ====================
   const extractSuggestedName = useCallback((reason: string): string => {
@@ -238,7 +244,7 @@ export function useThemeManagement({
       setApplyingAction(recommendation.type);
       setHighlightedGroups(new Set(recommendation.groups));
 
-      const suggestedName = extractSuggestedName(recommendation.reason);
+      const suggestedName = extractSuggestedName(recommendation.reason) || `Merged Theme`;
       toast.info(`Applying ${recommendation.type} recommendation...`);
 
       switch (recommendation.type) {
@@ -263,16 +269,6 @@ export function useThemeManagement({
             toast.info("Please select a single group to split manually");
           }
           break;
-        case "create_parent":
-          if (recommendation.groups.length >= 1) {
-            handleCreateParentGroup(
-              recommendation.groups,
-              suggestedName
-            );
-          } else {
-            toast.error("Need groups to create parent for");
-          }
-          break;
         case "reorganize":
           if (recommendation.groups.length >= 1) {
             handleReorganizeGroups(recommendation.groups);
@@ -285,6 +281,10 @@ export function useThemeManagement({
             `Action "${recommendation.type}" ready to implement`
           );
       }
+
+      // 🆕 MARQUER COMME APPLIQUÉE
+      const recId = `${recommendation.type}-${recommendation.groups.join('-')}`;
+      setAppliedRecommendationIds(prev => new Set([...prev, recId]));
 
       setTimeout(() => {
         setApplyingAction(null);
@@ -386,6 +386,7 @@ export function useThemeManagement({
     isThemesAnalyzing,
     themeAnalysis,
     detectedThemes,
+    filteredRecommendations,
     selectedTheme,
     setSelectedTheme,
     clearThemes,

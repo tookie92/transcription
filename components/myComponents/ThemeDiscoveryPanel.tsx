@@ -18,7 +18,6 @@ import { AffinityGroup, Insight, ThemeAnalysis, DetectedTheme, ThemeRecommendati
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useThemeDetection } from "@/hooks/useThemeDetection";
 import { toast } from "sonner";
 
 interface ThemeDiscoveryPanelProps {
@@ -29,6 +28,11 @@ interface ThemeDiscoveryPanelProps {
   onApplyRecommendation?: (recommendation: ThemeRecommendation) => void;
   onGroupsMerge?: (groupIds: string[], newTitle: string) => void;
   onGroupSplit?: (groupId: string, newGroups: { title: string; insightIds: string[] }[]) => void;
+  filteredRecommendations?: ThemeRecommendation[];
+  themeAnalysis: ThemeAnalysis | null;
+  isAnalyzing: boolean;
+  onAnalyze: () => void;
+  onClear: () => void;
 }
 
 export function ThemeDiscoveryPanel({
@@ -38,17 +42,16 @@ export function ThemeDiscoveryPanel({
   onThemeSelect,
   onApplyRecommendation,
   onGroupsMerge,
-  onGroupSplit
+  onGroupSplit,
+  filteredRecommendations,
+  themeAnalysis,
+  isAnalyzing,
+  onAnalyze,
+  onClear,
 }: ThemeDiscoveryPanelProps) {
-  const { isAnalyzing, themeAnalysis, detectThemes, clearThemes } = useThemeDetection();
   const [selectedTheme, setSelectedTheme] = useState<DetectedTheme | null>(null);
 
-  const handleAnalyze = async () => {
-    const analysis = await detectThemes(groups, insights, projectContext);
-    if (analysis && analysis.themes.length > 0) {
-      setSelectedTheme(analysis.themes[0]);
-    }
-  };
+  const recommendations = filteredRecommendations ?? themeAnalysis?.recommendations ?? [];
 
   const handleThemeSelect = (theme: DetectedTheme) => {
     setSelectedTheme(theme);
@@ -59,27 +62,6 @@ export function ThemeDiscoveryPanel({
 
   const handleApplyRecommendation = (recommendation: ThemeRecommendation) => {
     onApplyRecommendation?.(recommendation);
-    
-    // Actions automatiques basées sur le type de recommendation
-    switch (recommendation.type) {
-      case 'merge':
-        if (onGroupsMerge) {
-          const newTitle = recommendation.reason.includes('suggested name') 
-            ? recommendation.reason.split('suggested name: ')[1]?.split('.')[0] 
-            : `Merged Theme`;
-          onGroupsMerge(recommendation.groups, newTitle);
-        }
-        break;
-      case 'split':
-        toast.info('Please manually split the group based on the recommendation');
-        break;
-      case 'create_parent':
-        toast.info('Consider creating a parent group for these related themes');
-        break;
-      case 'reorganize':
-        toast.info('Consider reorganizing these groups for better thematic clarity');
-        break;
-    }
   };
 
   const getThemeTypeIcon = (type: string) => {
@@ -135,31 +117,34 @@ export function ThemeDiscoveryPanel({
             <Button
               variant="outline"
               size="sm"
-              onClick={clearThemes}
+              onClick={onClear}
               className="h-7 w-7 p-0"
+              title="Clear themes"
             >
               <X size={14} />
             </Button>
           )}
         </div>
 
-        {/* 🆕 BOUTON UNIQUE DANS LE HEADER */}
-        {!themeAnalysis && (
-          <Button
-            onClick={handleAnalyze}
-            disabled={isAnalyzing || groups.length === 0}
-            className="w-full"
-          >
-            <Sparkles size={16} className="mr-2" />
-            {isAnalyzing ? 'Analyzing Patterns...' : 'Discover Themes'}
-          </Button>
-        )}
+        {/* Bouton pour générer ou régénérer les thèmes */}
+        <Button
+          onClick={onAnalyze}
+          disabled={isAnalyzing || groups.length === 0}
+          className="w-full"
+        >
+          <Sparkles size={16} className="mr-2" />
+          {isAnalyzing 
+            ? 'Analyzing Patterns...' 
+            : themeAnalysis 
+              ? 'Regenerate Themes' 
+              : 'Discover Themes'}
+        </Button>
       </div>
 
-      {/* Content - 🆕 STRUCTURE CORRIGÉE */}
+      {/* Content */}
       <div className="flex-1 overflow-y-auto">
         {!themeAnalysis ? (
-          // 🆕 ÉTAT INITIAL - INTRODUCTION
+          // État initial - Introduction
           <div className="p-6 space-y-4">
             <div className="text-center">
               <div className="text-4xl mb-4">🎯</div>
@@ -180,20 +165,9 @@ export function ThemeDiscoveryPanel({
                 <p>• {`"Feature Requests"`} spans across 5 different groups</p>
               </div>
             </div>
-
-            {/* Bouton d'action principal */}
-            <Button
-              onClick={handleAnalyze}
-              disabled={isAnalyzing || groups.length === 0}
-              className="w-full bg-linear-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-              size="lg"
-            >
-              <Sparkles size={18} className="mr-2" />
-              {isAnalyzing ? '🔍 Analyzing...' : '🚀 Discover Themes'}
-            </Button>
           </div>
         ) : (
-          // 🆕 ÉTAT APRÈS ANALYSE - RÉSULTATS
+          // État après analyse - Résultats
           <div className="p-4 space-y-6">
             {/* Summary */}
             <Card>
@@ -261,17 +235,16 @@ export function ThemeDiscoveryPanel({
             </div>
 
             {/* Recommendations */}
-            {getValidRecommendations(themeAnalysis.recommendations).length > 0 && (
+            {getValidRecommendations(recommendations).length > 0 && (
               <div className="space-y-3">
                 <h4 className="font-medium text-sm text-gray-900">Recommendations</h4>
                 <div className="space-y-2">
-                  {getValidRecommendations(themeAnalysis.recommendations).map((rec, index) => (
+                  {getValidRecommendations(recommendations).map((rec, index) => (
                     <Card key={index} className="border-orange-200">
                       <CardContent className="p-3">
                         <div className="flex items-start gap-2 mb-2">
                           {rec.type === 'merge' && <Merge size={14} className="text-orange-600 mt-0.5" />}
                           {rec.type === 'split' && <Split size={14} className="text-orange-600 mt-0.5" />}
-                          {rec.type === 'create_parent' && <TrendingUp size={14} className="text-orange-600 mt-0.5" />}
                           {rec.type === 'reorganize' && <Users size={14} className="text-orange-600 mt-0.5" />}
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">

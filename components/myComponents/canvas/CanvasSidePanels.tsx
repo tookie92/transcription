@@ -27,6 +27,11 @@ interface CanvasSidePanelsProps {
   setSelectedTheme: (theme: DetectedTheme) => void;
   onApplyRecommendation: (recommendation: ThemeRecommendation) => void;
   onGroupsMerge: (groupIds: string[], newTitle: string) => void;
+  filteredRecommendations?: ThemeRecommendation[];
+  themeAnalysis: ThemeAnalysis | null;
+  isThemesAnalyzing: boolean;
+  onAnalyzeThemes: () => void;
+  onClearThemes: () => void;
 }
 
 export function CanvasSidePanels({
@@ -42,6 +47,11 @@ export function CanvasSidePanels({
   setSelectedTheme,
   onApplyRecommendation,
   onGroupsMerge,
+  filteredRecommendations,
+  themeAnalysis,
+  isThemesAnalyzing,
+  onAnalyzeThemes,
+  onClearThemes,
 }: CanvasSidePanelsProps) {
   if (isPresentMode) return null;
 
@@ -63,6 +73,11 @@ export function CanvasSidePanels({
             onThemeSelect={setSelectedTheme}
             onApplyRecommendation={onApplyRecommendation}
             onGroupsMerge={onGroupsMerge}
+            filteredRecommendations={filteredRecommendations}
+            themeAnalysis={themeAnalysis}
+            isAnalyzing={isThemesAnalyzing}
+            onAnalyze={onAnalyzeThemes}
+            onClear={onClearThemes}
           />
         </motion.div>
       )}

@@ -63,6 +63,9 @@ interface FloatingToolbarProps {
   // 🎯 PERSONA GENERATOR
   showPersonaGenerator?: boolean;
   onShowPersonaGenerator?: (show: boolean) => void;
+  // 🎯 DOT VOTING
+  hasActiveVotingSession?: boolean;
+  isVotingPhase?: boolean;
 }
 
 export function FloatingToolbar({
@@ -82,6 +85,8 @@ export function FloatingToolbar({
   activities,
   onShowVotingHistory,
   showVotingHistory = false,
+  hasActiveVotingSession = false,
+  isVotingPhase = false,
 
 }: FloatingToolbarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -134,12 +139,16 @@ export function FloatingToolbar({
               
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <ToggleGroupItem value="voting" className="rounded-full w-10 h-10">
+                  <ToggleGroupItem 
+                    value="voting" 
+                    className="rounded-full w-10 h-10"
+                    disabled={!hasActiveVotingSession || !isVotingPhase}
+                  >
                     <Vote size={18} />
                   </ToggleGroupItem>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Dot Voting Mode</p>
+                  <p>{!hasActiveVotingSession ? "No active voting session" : !isVotingPhase ? "Voting session ended" : "Dot Voting Mode"}</p>
                 </TooltipContent>
               </Tooltip>
             </ToggleGroup>

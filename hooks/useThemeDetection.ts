@@ -1,5 +1,5 @@
-// hooks/useThemeDetection.ts - VERSION SANS ANY
-import { useState, useCallback } from 'react';
+// hooks/useThemeDetection.ts - VERSION AVEC CACHE
+import { useState, useCallback, useRef } from 'react';
 import { AffinityGroup, Insight, ThemeAnalysis } from '@/types';
 import { toast } from 'sonner';
 
@@ -17,11 +17,32 @@ interface ThemeDetectionRequestBody {
   totalInsights: number;
 }
 
+// 🆕 CACHE GLOBAL POUR TOUTE L'APPLICATION
+const globalThemeCache = new Map<string, {
+  analysis: ThemeAnalysis;
+  timestamp: number;
+  groupsHash: string;
+}>();
+
+// 🆕 GÉNÉRER UN HASH POUR LES GROUPS
+const generateGroupsHash = (groups: AffinityGroup[]): string => {
+  return groups
+    .map(g => `${g.id}-${g.insightIds.length}`)
+    .sort()
+    .join('|');
+};
+
+// 🆕 VÉRIFIER SI L'ANALYSE EST TOUJOURS FRAÎCHE (5 minutes)
+const isAnalysisFresh = (timestamp: number): boolean => {
+  const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+  return timestamp > fiveMinutesAgo;
+};
 
 // hooks/useThemeDetection.ts - S'ASSURER QUE themeAnalysis SE MET À JOUR
 export const useThemeDetection = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [themeAnalysis, setThemeAnalysis] = useState<ThemeAnalysis | null>(null);
+  const cacheRef = useRef<{ key: string; analysis: ThemeAnalysis; timestamp: number } | null>(null);
 
   const detectThemes = useCallback(async (
     groups: AffinityGroup[], 
@@ -32,6 +53,19 @@ export const useThemeDetection = () => {
       console.log('❌ No groups to analyze');
       toast.error('No groups to analyze');
       return null;
+    }
+
+    // 🆕 VÉRIFIER LE CACHE LOCAL
+    const groupsHash = generateGroupsHash(groups);
+    const cacheKey = `${projectContext || 'default'}_${groupsHash}`;
+    
+    if (cacheRef.current && 
+        cacheRef.current.key === cacheKey && 
+        cacheRef.current.analysis && 
+        isAnalysisFresh(cacheRef.current.timestamp)) {
+      console.log('💨 Using cached theme analysis');
+      setThemeAnalysis(cacheRef.current.analysis);
+      return cacheRef.current.analysis;
     }
 
     console.log('🚀 Calling detectThemes with:', {
@@ -75,6 +109,13 @@ export const useThemeDetection = () => {
         recommendations: analysis.recommendations?.length
       });
       
+      // 🆕 METTRE EN CACHE
+      cacheRef.current = {
+        key: cacheKey,
+        analysis,
+        timestamp: Date.now()
+      };
+      
       // 🆕 BIEN METTRE À JOUR themeAnalysis
       setThemeAnalysis(analysis);
       console.log('✅ themeAnalysis updated in hook');
@@ -92,6 +133,7 @@ export const useThemeDetection = () => {
 
   const clearThemes = useCallback(() => {
     setThemeAnalysis(null);
+    cacheRef.current = null;
   }, []);
 
   return {

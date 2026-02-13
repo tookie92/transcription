@@ -279,12 +279,12 @@ export interface ThemeAnalysis {
 
 // types/index.ts - METTRE À JOUR ThemeRecommendation
 export interface ThemeRecommendation {
-  type: 'merge' | 'split' | 'reorganize' | 'create_parent';
+  type: 'merge' | 'split' | 'reorganize';
   groups: string[];
   reason: string;
   confidence: number;
   expectedImpact: 'high' | 'medium' | 'low';
-  suggestedName?: string; // 🆕 OPTIONNEL - pour les noms suggérés
+  suggestedName?: string;
 }
 
 export interface Comment {

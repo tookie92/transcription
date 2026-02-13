@@ -570,6 +570,8 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
           onShowVotingHistory={setShowVotingHistory}
           showPersonaGenerator={showPersonaGenerator}
           onShowPersonaGenerator={setShowPersonaGenerator}
+          hasActiveVotingSession={!!dotVoting.activeSessions?.[0]}
+          isVotingPhase={dotVoting.activeSessions?.[0]?.votingPhase === "voting"}
         />
       )}
 
@@ -703,6 +705,7 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
                                 key={group.id}
                                 group={group}
                                 activeSessionId={dotVoting.activeSessions?.[0]?._id}
+                                myDotsCount={dotVoting.myDots?.length ?? 0}
                                 insights={insights}
                                 scale={scale}
                                 isPlacingDot={dotVoting.isPlacingDot && !!dotVoting.activeSessions?.[0]}
@@ -829,6 +832,11 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
           setSelectedTheme={themeManagement.setSelectedTheme}
           onApplyRecommendation={themeManagement.handleApplyRecommendation}
           onGroupsMerge={themeManagement.handleGroupsMerge}
+          filteredRecommendations={themeManagement.filteredRecommendations}
+          themeAnalysis={themeManagement.themeAnalysis}
+          isThemesAnalyzing={themeManagement.isThemesAnalyzing}
+          onAnalyzeThemes={themeManagement.handleAnalyzeThemes}
+          onClearThemes={themeManagement.clearThemes}
         />
       </div>
 
