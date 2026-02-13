@@ -16,8 +16,11 @@ interface CanvasShortcutsConfig {
   onToggleAnalyticsPanel?: () => void; // 🆕 AJOUT
   onTogglePersonaPanel?: () => void; // 🆕 AJOUT
   onToggleThemeDiscoveryPanel?: () => void; // 🆕 AJOUT
-  onToggleActivityPanel?: () => void; // 🆕 AJOUT
   onToggleExportPanel?: () => void; // 🆕 AJOUT
+  onZoomIn?: () => void; // 🆕 AJOUT - ZOOM
+  onZoomOut?: () => void; // 🆕 AJOUT - ZOOM
+  onResetZoom?: () => void; // 🆕 AJOUT - ZOOM
+  onCenterZoom?: () => void; // 🆕 AJOUT - ZOOM
   selectedGroups: Set<string>;
 }
 
@@ -35,6 +38,10 @@ export function useCanvasShortcuts(config: CanvasShortcutsConfig) {
     onTogglePersonaPanel, // 🆕 AJOUT
     onToggleThemeDiscoveryPanel, // 🆕 AJOUT
     onToggleExportPanel,
+    onZoomIn, // 🆕 AJOUT
+    onZoomOut, // 🆕 AJOUT
+    onResetZoom, // 🆕 AJOUT
+    onCenterZoom, // 🆕 AJOUT
     selectedGroups 
   } = config;
 
@@ -164,8 +171,43 @@ export function useCanvasShortcuts(config: CanvasShortcutsConfig) {
       return;
     }
 
+    // 🆕 RACCOURCIS POUR ZOOM (Ctrl/Cmd + +/- / 0 / C)
+    // ZOOM IN (Ctrl/Cmd + Plus)
+    if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+      e.preventDefault();
+      e.stopPropagation();
+      onZoomIn?.();
+      return;
+    }
 
-  }, [onNewGroup, onSelectAll, onDeleteSelected, onEscape, onArrowMove, onUndo, onRedo,onToggleAnalyticsPanel, onToggleVotingPanel, selectedGroups]);
+    // ZOOM OUT (Ctrl/Cmd + Minus)
+    if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+      e.preventDefault();
+      e.stopPropagation();
+      onZoomOut?.();
+      return;
+    }
+
+    // RESET ZOOM (Ctrl/Cmd + 0)
+    if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+      e.preventDefault();
+      e.stopPropagation();
+      onResetZoom?.();
+      return;
+    }
+
+    // CENTER VIEW (Ctrl/Cmd + C ou C seul sans modifier)
+    if (e.key === 'c' && !e.altKey && !e.shiftKey) {
+      if ((e.ctrlKey || e.metaKey) || (!e.ctrlKey && !e.metaKey && selectedGroups.size === 0)) {
+        e.preventDefault();
+        e.stopPropagation();
+        onCenterZoom?.();
+        return;
+      }
+    }
+
+
+  }, [onNewGroup, onSelectAll, onDeleteSelected, onEscape, onArrowMove, onUndo, onRedo, onToggleAnalyticsPanel, onToggleVotingPanel, onTogglePersonaPanel, onToggleThemeDiscoveryPanel, onToggleExportPanel, onZoomIn, onZoomOut, onResetZoom, onCenterZoom, selectedGroups]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);

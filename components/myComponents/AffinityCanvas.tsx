@@ -144,6 +144,12 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const clickCountRef = useRef(0);
+  const zoomControlsRef = useRef<{
+    zoomIn: () => void;
+    zoomOut: () => void;
+    resetTransform: () => void;
+    centerView: () => void;
+  } | null>(null);
 
   // ==================== useState ====================
   const [isSpacePressed, setIsSpacePressed] = useState(false);
@@ -1242,8 +1248,11 @@ useEffect(() => {
     onToggleAnalyticsPanel: toggleAnalyticsPanel,
     onTogglePersonaPanel: togglePersonaPanel,
     onToggleThemeDiscoveryPanel: toggleThemeDiscoveryPanel,
-    onToggleActivityPanel: toggleActivityPanel,
     onToggleExportPanel: toggleExportPanel,
+    onZoomIn: () => zoomControlsRef.current?.zoomIn(),
+    onZoomOut: () => zoomControlsRef.current?.zoomOut(),
+    onResetZoom: () => zoomControlsRef.current?.resetTransform(),
+    onCenterZoom: () => zoomControlsRef.current?.centerView(),
     selectedGroups,
   });
 
@@ -1566,66 +1575,90 @@ useEffect(() => {
             />
           )}
 
-          {/* 🎯 COUCHE 2: CANVAS INTERACTIF (GROUPE + DRAG) */}
-          <div
-            ref={canvasRef}
-            className="absolute inset-0 cursor-default z-20" // 🆕 z-20 pour interactivité
-            style={{ 
-              cursor: isSpacePressed ? 'grab' : (isPanning ? 'grabbing' : 'default')
-            }}
-            onMouseDown={handleCanvasMouseDown}
-            onMouseMove={handleCanvasMouseMove}
-            onMouseUp={handleCanvasMouseUp}
-            onMouseLeave={handleCanvasMouseUp}
-            onDoubleClick={handleDoubleClick}
-            onContextMenu={handleContextMenu}
-            onClick={handleCanvasClick}
+          {/* 🎯 COUCHE 2: CANVAS INTERACTIF AVEC ZOOM/PAN (TransformWrapper) */}
+          <TransformWrapper
+            initialScale={1}
+            initialPositionX={0}
+            initialPositionY={0}
+            minScale={0.1}
+            maxScale={5}
+            wheel={{ step: 0.05 }}
+            panning={{ velocityDisabled: true }}
+            pinch={{ step: 5 }}
+            doubleClick={{ disabled: false, step: 0.2, animationTime: 200 }}
           >
-            {!isPresentMode && otherUsers?.map((user: PresenceUser) => (
-                <motion.div
-                  key={user.userId}
-                  className="absolute pointer-events-none z-50"
-                  style={{
-                    left: user.cursor.x * scale + position.x,
-                    top: user.cursor.y * scale + position.y,
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow" />
-                    <span className="text-xs bg-gray-900 text-white px-2 py-1 rounded shadow">
-                      {user.user?.name || "User"}
-                    </span>
-                  </div>
-                </motion.div>
-              ))}
+            {({ zoomIn: transformZoomIn, zoomOut: transformZoomOut, resetTransform: transformReset, centerView: transformCenter, instance }) => {
+              // Capturer les fonctions de zoom dans la ref
+              zoomControlsRef.current = {
+                zoomIn: transformZoomIn,
+                zoomOut: transformZoomOut,
+                resetTransform: transformReset,
+                centerView: transformCenter,
+              };
 
-              
-                          
-            {/* CANVAS CONTENT */}
-            <div
-              key={renderKey}
-              className="absolute"
-              style={{
-                transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-                transformOrigin: '0 0',
-                width: '5000px',
-                height: '5000px',
-              }}
-            >
-              {/* GRID BACKGROUND */}
-              <div 
-                className="absolute inset-0 canvas-background"
-                style={{
-                  backgroundImage: `
-                    linear-gradient(rgba(217, 243, 230, 1) 1px, transparent 1px),
-                    linear-gradient(90deg, rgba(217, 243, 230, 1) 1px, transparent 1px)
-                  `,
-                  backgroundSize: '40px 40px',
-                }}
-              />
-             
-              {/* GROUPS */}
-              <div className="p-8">
+              return (
+                <>
+                  <TransformComponent
+                    wrapperClass="absolute inset-0 z-20"
+                    contentClass="transform-content"
+                  >
+                    <div
+                      ref={canvasRef}
+                      style={{
+                        cursor: isSpacePressed ? 'grab' : (isPanning ? 'grabbing' : 'default'),
+                        width: '5000px',
+                        height: '5000px',
+                        position: 'relative'
+                      }}
+                      onMouseDown={handleCanvasMouseDown}
+                      onMouseMove={handleCanvasMouseMove}
+                      onMouseUp={handleCanvasMouseUp}
+                      onMouseLeave={handleCanvasMouseUp}
+                      onDoubleClick={handleDoubleClick}
+                      onContextMenu={handleContextMenu}
+                      onClick={handleCanvasClick}
+                    >
+                    {!isPresentMode && otherUsers?.map((user: PresenceUser) => (
+                    <motion.div
+                      key={user.userId}
+                      className="absolute pointer-events-none z-50"
+                      style={{
+                        left: user.cursor.x,
+                        top: user.cursor.y,
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow" />
+                        <span className="text-xs bg-gray-900 text-white px-2 py-1 rounded shadow">
+                          {user.user?.name || "User"}
+                        </span>
+                      </div>
+                    </motion.div>
+                  ))}
+
+                  {/* CANVAS CONTENT */}
+                  <div
+                    key={renderKey}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      position: 'relative'
+                    }}
+                  >
+                  {/* GRID BACKGROUND */}
+                    <div 
+                      className="absolute inset-0 canvas-background"
+                      style={{
+                        backgroundImage: `
+                          linear-gradient(rgba(217, 243, 230, 1) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(217, 243, 230, 1) 1px, transparent 1px)
+                        `,
+                        backgroundSize: '40px 40px',
+                      }}
+                    />
+                   
+                    {/* GROUPS */}
+                    <div className="p-8">
 
                 {groups.map((group, index) => {
                   const isCurrentInPresentation = presentationState.isActive && 
@@ -1751,13 +1784,45 @@ useEffect(() => {
                     </div>
                   </div>
                 )}
-              </div>
-            </div>
+                    </div>
+                  </div>
+                  </div>
+                </TransformComponent>
 
-             {/* {process.env.NODE_ENV === "development" && (
-                <DebugSecondUser mapId={mapId} />
-              )} */}
-          </div>
+                  {/* ZOOM CONTROLS WRAPPED WITH TransformWrapper API */}
+                  <div className="absolute bottom-4 right-4 bg-linear-to-br from-green-100 via-blue-100 to-purple-200 rounded-xl shadow-2xl border border-blue-200 p-3 flex gap-2 z-40 animate-fade-in">
+                    <button onClick={() => transformZoomIn()}
+                      className="w-9 h-9 rounded-full bg-white/80 hover:bg-blue-100 transition flex items-center justify-center text-blue-700 font-bold shadow-md border border-blue-200"
+                      title="Zoom avant (+)">
+                      <span className="sr-only">Zoom avant</span>
+                      <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5"/></svg>
+                    </button>
+                    <button onClick={() => transformZoomOut()} 
+                      className="w-9 h-9 rounded-full bg-white/80 hover:bg-blue-100 transition flex items-center justify-center text-blue-700 font-bold shadow-md border border-blue-200"
+                      title="Zoom arrière (-)">
+                      <span className="sr-only">Zoom arrière</span>
+                      <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 12h14"/></svg>
+                    </button>
+                    <button onClick={() => transformReset()}
+                      className="w-9 h-9 rounded-full bg-white/80 hover:bg-green-100 transition flex items-center justify-center text-green-700 font-bold shadow-md border border-green-200"
+                      title="Réinitialiser (0)">
+                      <span className="sr-only">Réinitialiser</span>
+                      <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 4v5h.582M20 20v-5h-.581M5 19A9 9 0 1 1 19 5"/></svg>
+                    </button>
+                    <button onClick={() => transformCenter()}
+                      className="w-9 h-9 rounded-full bg-white/80 hover:bg-purple-100 transition flex items-center justify-center text-purple-700 font-bold shadow-md border border-purple-200"
+                      title="Centrer (C)">
+                      <span className="sr-only">Centrer</span>
+                      <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2m10-10h-2M4 12H2"/></svg>
+                    </button>
+                    <span className="ml-3 px-3 py-1 rounded-full bg-white/80 text-blue-700 font-semibold text-xs shadow border border-blue-100 animate-zoom-indicator">
+                      {Math.round(scale * 100)}%
+                    </span>
+                  </div>
+                </>
+              );
+            }}
+          </TransformWrapper>
 
           {isSilentSortingActive && (
         <div className={`absolute top-4 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2 rounded-full text-sm font-medium shadow-lg ${
@@ -1819,36 +1884,6 @@ useEffect(() => {
             </motion.div>
           )}
 
-          {/* ZOOM CONTROLS */}
-          <div className="absolute bottom-4 right-4 bg-gradient-to-br from-green-100 via-blue-100 to-purple-200 rounded-xl shadow-2xl border border-blue-200 p-3 flex gap-2 z-40 animate-fade-in">
-            <button onClick={() => zoomIn()}
-              className="w-9 h-9 rounded-full bg-white/80 hover:bg-blue-100 transition flex items-center justify-center text-blue-700 font-bold shadow-md border border-blue-200"
-              title="Zoom avant (+)">
-              <span className="sr-only">Zoom avant</span>
-              <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5"/></svg>
-            </button>
-            <button onClick={() => zoomOut()} 
-              className="w-9 h-9 rounded-full bg-white/80 hover:bg-blue-100 transition flex items-center justify-center text-blue-700 font-bold shadow-md border border-blue-200"
-              title="Zoom arrière (-)">
-              <span className="sr-only">Zoom arrière</span>
-              <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 12h14"/></svg>
-            </button>
-            <button onClick={() => resetTransform()}
-              className="w-9 h-9 rounded-full bg-white/80 hover:bg-green-100 transition flex items-center justify-center text-green-700 font-bold shadow-md border border-green-200"
-              title="Réinitialiser (0)">
-              <span className="sr-only">Réinitialiser</span>
-              <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 4v5h.582M20 20v-5h-.581M5 19A9 9 0 1 1 19 5"/></svg>
-            </button>
-            <button onClick={() => centerView()}
-              className="w-9 h-9 rounded-full bg-white/80 hover:bg-purple-100 transition flex items-center justify-center text-purple-700 font-bold shadow-md border border-purple-200"
-              title="Centrer (C)">
-              <span className="sr-only">Centrer</span>
-              <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2m10-10h-2M4 12H2"/></svg>
-            </button>
-            <span className="ml-3 px-3 py-1 rounded-full bg-white/80 text-blue-700 font-semibold text-xs shadow border border-blue-100 animate-zoom-indicator">
-              {Math.round(scale * 100)}%<span className="ml-1 text-gray-400">{position.x !== 0 || position.y !== 0 ? ' • Pan' : ''}</span>
-            </span>
-          </div>
         </div>
      
 
