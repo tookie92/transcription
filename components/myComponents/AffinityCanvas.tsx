@@ -112,6 +112,7 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
 
   // ==================== useRef ====================
   const canvasRef = useRef<HTMLDivElement>(null);
+  const canvasWrapperRef = useRef<HTMLDivElement>(null);
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const clickCountRef = useRef(0);
   const zoomControlsRef = useRef<{
@@ -298,37 +299,49 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
     const target = e.target as HTMLElement;
     const isScrollableElement = target.classList.contains('overflow-y-auto') || target.classList.contains('overflow-auto') || target.closest('.overflow-y-auto') || target.closest('.overflow-auto');
     if (isScrollableElement) return;
+    
     e.preventDefault();
-    pendingWheel.current = { deltaX: e.deltaX, deltaY: e.deltaY, ctrlKey: e.ctrlKey, clientX: e.clientX, clientY: e.clientY };
-    if (wheelTimeout.current) clearTimeout(wheelTimeout.current);
-    wheelTimeout.current = setTimeout(() => {
-      if (rafId.current) cancelAnimationFrame(rafId.current);
-      rafId.current = requestAnimationFrame(() => {
-        const wheel = pendingWheel.current;
-        if (!wheel) return;
-        if (wheel.ctrlKey) {
-          const delta = -wheel.deltaY * 0.001;
-          const newScale = Math.min(2, Math.max(0.3, scale * (1 + delta)));
-          if (canvasRef.current) {
-            const rect = canvasRef.current.getBoundingClientRect();
-            const mouseX = wheel.clientX - rect.left;
-            const mouseY = wheel.clientY - rect.top;
-            const worldX = (mouseX - position.x) / scale;
-            const worldY = (mouseY - position.y) / scale;
-            setScale(newScale);
-            setPosition({ x: mouseX - worldX * newScale, y: mouseY - worldY * newScale });
-          }
-        } else {
-          setPosition(prev => ({ x: prev.x - wheel.deltaX, y: prev.y - wheel.deltaY }));
-        }
-        pendingWheel.current = null;
-      });
-    }, 16);
+    e.stopPropagation();
+    
+    const { ctrlKey, deltaX, deltaY, clientX, clientY } = e;
+    
+    if (ctrlKey) {
+      const delta = -deltaY * 0.002;
+      const newScale = Math.min(3, Math.max(0.3, scale * (1 + delta)));
+      
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = clientX - rect.left;
+        const mouseY = clientY - rect.top;
+        const worldX = (mouseX - position.x) / scale;
+        const worldY = (mouseY - position.y) / scale;
+        
+        setScale(newScale);
+        setPosition({ 
+          x: mouseX - worldX * newScale, 
+          y: mouseY - worldY * newScale 
+        });
+      }
+    } else {
+      setPosition(prev => ({ 
+        x: prev.x - deltaX, 
+        y: prev.y - deltaY 
+      }));
+    }
   }, [scale, position]);
 
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     if (e.button === 2) return;
-    if (e.button === 1 || (e.button === 0 && isSpacePressed)) { setIsPanning(true); return; }
+    if (e.button === 1) {
+      e.preventDefault();
+      setIsPanning(true);
+      return;
+    }
+    if (e.button === 0 && isSpacePressed) { 
+      setIsPanning(true); 
+      return; 
+    }
   };
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
@@ -342,7 +355,7 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
       const worldY = (y - position.y) / scale;
       updatePresence(worldX, worldY, Array.from(selectedGroups));
     }
-    if (isPanning && e.buttons === 1) {
+    if (isPanning && (e.buttons & 1 || e.buttons & 4)) {
       setPosition(prev => ({ x: prev.x + e.movementX, y: prev.y + e.movementY }));
     }
   }, [isPanning, position, scale, selectedGroups, updatePresence]);
@@ -396,11 +409,20 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
   }, [selectedGroups]);
 
   useEffect(() => {
+    const wrapper = canvasWrapperRef.current;
     const canvas = canvasRef.current;
+    
+    if (wrapper) {
+      wrapper.addEventListener('wheel', handleWheel, { passive: false });
+    }
     if (canvas) {
       canvas.addEventListener('wheel', handleWheel, { passive: false });
-      return () => canvas.removeEventListener('wheel', handleWheel);
     }
+    
+    return () => {
+      if (wrapper) wrapper.removeEventListener('wheel', handleWheel);
+      if (canvas) canvas.removeEventListener('wheel', handleWheel);
+    };
   }, [handleWheel]);
 
   useEffect(() => {
@@ -621,6 +643,7 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
 
           {/* CANVAS WITH ZOOM/PAN */}
           <div
+            ref={canvasWrapperRef}
             className="absolute inset-0 z-20 overflow-hidden"
           >
             <div
