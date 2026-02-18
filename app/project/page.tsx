@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const PROJECT_TEMPLATES = [
   {
@@ -108,26 +109,29 @@ const ProjectPage = () => {
   };
 
   return (
-    <div className="min-h-dvh w-full p-8 bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-dvh w-full p-8 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
       <div className="max-w-4xl mx-auto mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Your Projects</h1>
-            <p className="text-gray-500 mt-1">Manage your interviews and affinity maps</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Your Projects</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">Manage your interviews and affinity maps</p>
           </div>
-          <Button 
-            onClick={() => setShowTemplateDialog(true)}
-            disabled={isCreating}
-            className="bg-[#3D7C6F] hover:bg-[#2d5f54]"
-          >
-            {isCreating ? (
-              <RefreshCcwIcon className="w-4 h-4 animate-spin mr-2" />
-            ) : (
-              <Plus className="w-4 h-4 mr-2" />
-            )}
-            New Project
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button 
+              onClick={() => setShowTemplateDialog(true)}
+              disabled={isCreating}
+              className="bg-[#3D7C6F] hover:bg-[#2d5f54]"
+            >
+              {isCreating ? (
+                <RefreshCcwIcon className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Plus className="w-4 h-4 mr-2" />
+              )}
+              New Project
+            </Button>
+          </div>
         </div>
       </div>
 
