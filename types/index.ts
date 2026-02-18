@@ -77,9 +77,10 @@ export interface Insight {
   priority?: 'low' | 'medium' | 'high';
 }
 
-// Affinity Map types - SIMPLIFIÉS
+// Affinity Map types - UNIFIÉS
 export interface AffinityMap {
   id: string;
+  _id?: Id<"affinityMaps">;
   projectId: string;
   name: string;
   description?: string;
@@ -90,6 +91,8 @@ export interface AffinityMap {
   updatedAt: number;
   createdBy: string;
 }
+
+export type AffinityMapId = AffinityMap['_id'];
 
 export interface AffinityGroup {
   id: string;
@@ -184,19 +187,6 @@ export interface ConvexInsight {
   createdAt: number;
   tags?: string[];
   priority?: 'low' | 'medium' | 'high';
-}
-
-export interface ConvexAffinityMap {
-  _id: string;
-  projectId: string;
-  name: string;
-  description?: string;
-  version: number;
-  isCurrent: boolean;
-  groups: AffinityGroup[];
-  createdAt: number;
-  updatedAt: number;
-  createdBy: string;
 }
 
 // Export types

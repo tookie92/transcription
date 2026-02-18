@@ -56,6 +56,27 @@ export function useCanvasNavigation({
     setPosition({ x: 0, y: 0 });
   }, []);
 
+  const resetTransform = useCallback(() => {
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
+  }, []);
+
+  const centerView = useCallback(() => {
+    if (canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      setPosition({ x: rect.width / 2, y: rect.height / 2 });
+    }
+  }, []);
+
+  // Zoom in/out helpers
+  const zoomIn = useCallback(() => {
+    setScale(prev => Math.min(prev * 1.2, 3));
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    setScale(prev => Math.max(prev / 1.2, 0.3));
+  }, []);
+
   // Wheel zoom
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
@@ -86,12 +107,19 @@ export function useCanvasNavigation({
     scale,
     position,
     isPanning,
+    setScale,
+    setPosition,
+    setIsPanning,
     canvasRef,
     zoom,
+    zoomIn,
+    zoomOut,
     startPan,
     stopPan,
     pan,
     reset,
+    resetTransform,
+    centerView,
     handleWheel,
     handleKeyDown,
     handleKeyUp

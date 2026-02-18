@@ -6,7 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import { Id } from "@/convex/_generated/dataModel";
-import { AffinityGroup, Insight } from "@/types";
+import { AffinityGroup, Insight, ActivePanel } from "@/types";
 import { toast } from "sonner";
 import AffinityCanvas from "./AffinityCanvas";
 import { useAuth, useUser } from "@clerk/nextjs";
@@ -43,6 +43,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   // ==================== ACTIVITY ====================
   const activity = useActivity();
   const [showActivityPanel, setShowActivityPanel] = useState(false);
+  const [activePanel, setActivePanel] = useState<ActivePanel>(null);
 
   // ==================== AUTO-CREATE MAP ====================
   const createAffinityMap = useMutation(api.affinityMaps.create);
@@ -104,12 +105,16 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         mapId={affinityMap?._id}
         showActivityPanel={showActivityPanel}
         setShowActivityPanel={setShowActivityPanel}
+        activePanel={activePanel}
+        setActivePanel={setActivePanel}
         activities={activities}
       />
 
       {/* Main Workspace */}
       <div className="flex-1 relative bg-white overflow-hidden">
         <AffinityCanvas
+          activePanel={activePanel}
+          setActivePanel={setActivePanel}
           groups={groups}
           insights={insights}
           projectId={projectId}

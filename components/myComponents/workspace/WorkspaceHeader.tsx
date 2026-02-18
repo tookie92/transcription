@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
+import { ActivePanel } from "@/types";
 import { NotificationBell } from "../NotificationBell";
 import { SilentSortingCommand } from "../SilentSortingCommand";
 
@@ -13,7 +14,9 @@ interface WorkspaceHeaderProps {
   userId: string | null | undefined;
   showActivityPanel: boolean;
   setShowActivityPanel: (show: boolean) => void;
-  activities: any[] | undefined;
+  activePanel: ActivePanel;
+  setActivePanel: (panel: ActivePanel) => void;
+  activities: unknown[] | undefined;
 }
 
 export function WorkspaceHeader({
@@ -24,6 +27,8 @@ export function WorkspaceHeader({
   userId,
   showActivityPanel,
   setShowActivityPanel,
+  activePanel,
+  setActivePanel,
   activities,
 }: WorkspaceHeaderProps) {
   const router = useRouter();
@@ -61,9 +66,9 @@ export function WorkspaceHeader({
 
         {/* Activity Button */}
         <button
-          onClick={() => setShowActivityPanel(!showActivityPanel)}
+          onClick={() => setActivePanel(activePanel === 'activity' ? null : 'activity')}
           className={`px-3 py-2 rounded-lg border flex items-center gap-2 ${
-            showActivityPanel
+            activePanel === 'activity'
               ? "bg-blue-100 border-blue-400 text-blue-800"
               : "bg-gray-100 border-gray-300"
           }`}
@@ -78,7 +83,14 @@ export function WorkspaceHeader({
         </button>
 
         {/* Export */}
-        <button className="px-3 py-2 border rounded-lg hover:bg-gray-50">
+        <button 
+          onClick={() => setActivePanel(activePanel === 'export' ? null : 'export')}
+          className={`px-3 py-2 rounded-lg border flex items-center gap-2 ${
+            activePanel === 'export'
+              ? "bg-blue-100 border-blue-400 text-blue-800"
+              : "bg-gray-100 border-gray-300 hover:bg-gray-50"
+          }`}
+        >
           Export
         </button>
       </div>

@@ -30,6 +30,7 @@ import { useSilentSorting } from "@/hooks/useSilentSorting";
 import { usePresentationMode } from "@/hooks/usePresentationMode";
 import { useDotVotingCanvas } from "@/hooks/useDotVotingCanvas";
 import { useThemeManagement } from "@/hooks/useThemeManagement";
+import { useCanvasNavigation } from "@/hooks/useCanvasNavigation";
 
 // Extracted components
 import { PresentationOverlay } from "./canvas/PresentationOverlay";
@@ -59,6 +60,8 @@ interface AffinityCanvasProps {
     description?: string;
   };
   mapId: string;
+  activePanel?: ActivePanel;
+  setActivePanel?: (panel: ActivePanel) => void;
   onGroupMove: (groupId: string, position: { x: number; y: number }) => void;
   onGroupCreate: (position: { x: number; y: number }) => void;
   onInsightDrop: (insightId: string, groupId: string) => void;
@@ -72,10 +75,16 @@ interface AffinityCanvasProps {
 export default function AffinityCanvas(props: AffinityCanvasProps) {
   const {
     groups, insights, projectId, projectInfo, mapId,
+    activePanel: controlledActivePanel, setActivePanel: controlledSetActivePanel,
     onGroupMove, onGroupCreate, onInsightDrop,
     onInsightRemoveFromGroup, onGroupDelete, onManualInsightCreate,
     onGroupTitleUpdate, onGroupsReplace
   } = props;
+
+  // Use controlled state if provided, otherwise use internal state
+  const [internalActivePanel, setInternalActivePanel] = useState<ActivePanel>(null);
+  const activePanel = controlledActivePanel !== undefined ? controlledActivePanel : internalActivePanel;
+  const setActivePanel = controlledSetActivePanel || setInternalActivePanel;
 
   // ==================== HOOKS CLERK ====================
   const { userId } = useAuth();
@@ -104,6 +113,7 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
 
   const presentation = usePresentationMode(groups);
   const dotVoting = useDotVotingCanvas(mapId);
+  const canvasNav = useCanvasNavigation();
   const themeManagement = useThemeManagement({
     groups, insights, projectContext,
     onGroupCreate, onGroupMove, onInsightDrop,
@@ -128,7 +138,6 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
   const [isMovingWithArrows, setIsMovingWithArrows] = useState(false);
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
   const [showThemeDiscovery, setShowThemeDiscovery] = useState(false);
-  const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const [optimisticPositions, setOptimisticPositions] = useState<Map<string, {x: number, y: number}>>(new Map());
   const [renderKey, setRenderKey] = useState(0);
   const [isInputFocused, setIsInputFocused] = useState(false);
@@ -145,9 +154,6 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
     groupId: string; screenRect: DOMRect; groupTitle: string;
   } | null>(null);
   const [showActivityPanel, setShowActivityPanel] = useState(false);
-  const [isPanning, setIsPanning] = useState(false);
-  const [scale, setScale] = useState(1);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
 
   // ==================== QUERIES ====================
   const commentCounts = useQuery(api.comments.getCommentCountsByMap, {
@@ -158,9 +164,10 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
   const stats = useMemo(() => {
     const totalInsights = insights.length;
     const groupedInsights = groups.reduce((sum, group) => sum + group.insightIds.length, 0);
-    const ungroupedInsights = totalInsights - groupedInsights;
     return {
-      totalInsights, groupedInsights, ungroupedInsights,
+      totalInsights, 
+      groupedInsights, 
+      ungroupedInsights: totalInsights - groupedInsights,
       groupCount: groups.length,
       completion: totalInsights > 0 ? Math.round((groupedInsights / totalInsights) * 100) : 0
     };
@@ -171,7 +178,7 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
     [otherUsers]
   );
 
-  const followRect = useFollowGroupRect(showComments?.groupId ?? null, { scale, position });
+  const followRect = useFollowGroupRect(showComments?.groupId ?? null, { scale: canvasNav.scale, position: canvasNav.position });
 
   // ==================== useCallback ====================
 
@@ -273,22 +280,25 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
   }, [history, onGroupsReplace]);
 
   // ==================== ZOOM/PAN FUNCTIONS ====================
-  const zoomIn = useCallback(() => setScale(prev => Math.min(prev * 1.2, 3)), []);
-  const zoomOut = useCallback(() => setScale(prev => Math.max(prev / 1.2, 0.5)), []);
-  const resetTransform = useCallback(() => { setScale(1); setPosition({ x: 0, y: 0 }); }, []);
-  const centerView = useCallback(() => {
-    if (canvasRef.current) {
-      const rect = canvasRef.current.getBoundingClientRect();
-      setPosition({ x: rect.width / 2, y: rect.height / 2 });
-    }
-  }, []);
+  const { zoomIn, zoomOut, resetTransform, centerView, setPosition, setScale, position, scale, isPanning, setIsPanning } = canvasNav;
 
-  const toggleAnalyticsPanel = useCallback(() => setActivePanel(prev => prev === 'analytics' ? null : 'analytics'), []);
-  const togglePersonaPanel = useCallback(() => setActivePanel(prev => prev === 'persona' ? null : 'persona'), []);
-  const toggleExportPanel = useCallback(() => setActivePanel(prev => prev === 'export' ? null : 'export'), []);
-  const toggleVotingHistoryPanel = useCallback(() => setActivePanel(prev => prev === 'votingHistory' ? null : 'votingHistory'), []);
-  const toggleThemeDiscoveryPanel = useCallback(() => setActivePanel(prev => prev === 'themeDiscovery' ? null : 'themeDiscovery'), []);
-  const toggleActivityPanel = useCallback(() => setActivePanel(prev => prev === 'activity' ? null : 'activity'), []);
+  const isControlled = controlledSetActivePanel !== undefined;
+  
+  const togglePanel = useCallback((panel: ActivePanel) => {
+    if (isControlled) {
+      const currentPanel = controlledActivePanel;
+      setActivePanel(currentPanel === panel ? null : panel);
+    } else {
+      setInternalActivePanel(prev => prev === panel ? null : panel);
+    }
+  }, [isControlled, controlledActivePanel, setActivePanel]);
+
+  const toggleAnalyticsPanel = useCallback(() => togglePanel('analytics'), [togglePanel]);
+  const togglePersonaPanel = useCallback(() => togglePanel('persona'), [togglePanel]);
+  const toggleExportPanel = useCallback(() => togglePanel('export'), [togglePanel]);
+  const toggleVotingHistoryPanel = useCallback(() => togglePanel('votingHistory'), [togglePanel]);
+  const toggleThemeDiscoveryPanel = useCallback(() => togglePanel('themeDiscovery'), [togglePanel]);
+  const toggleActivityPanel = useCallback(() => togglePanel('activity'), [togglePanel]);
 
   // ==================== HANDLERS SOURIS/CLAVIER ====================
   const wheelTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -329,7 +339,7 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
         y: prev.y - deltaY 
       }));
     }
-  }, [scale, position]);
+  }, [scale, position, setScale, setPosition, canvasRef]);
 
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     if (e.button === 2) return;
@@ -483,7 +493,7 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
 
   useEffect(() => {
     const handleQuitPanel = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' || activePanel) { setActivePanel(null); return; }
+      if (e.key === 'Escape' && activePanel) { setActivePanel(null); return; }
       return;
     };
     document.addEventListener('keydown', handleQuitPanel);
