@@ -96,9 +96,11 @@ export function VotingSessionManager({
       toast.success("Voting session ended (no votes to save)");
     }
     
-    // 🎯 NETTOYER L'ÉTAT
+    // 🎯 NETTOYER L'ÉTAT - ALWAYS DÉSACTIVER LE MODE PLACEMENT
     onSessionEnd?.();
-    onToggleDotPlacement();
+    if (isPlacingDot) {
+      onToggleDotPlacement();
+    }
     
   } catch (error) {
     console.error("Failed to end session:", error);

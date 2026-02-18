@@ -92,6 +92,7 @@ export default function AffinityGroup({
     } : "skip"
   );
   const placeDot = useMutation(api.dotVoting.placeDot);
+  const removeDot = useMutation(api.dotVoting.removeDot);
 
   const groupInsights = useMemo(() => 
     insights.filter(insight => group.insightIds.includes(insight.id)),
@@ -259,6 +260,21 @@ export default function AffinityGroup({
     } catch (error) { console.error('Failed to save dot:', error); }
   }, [isPlacingDot, activeSessionId, currentUserId, placeDot, group.id, getUserColor, myDotsCount]);
 
+  const handleRemoveDot = useCallback(async (dotId: string) => {
+    if (!activeSessionId || !currentUserId) return;
+    try {
+      await removeDot({ dotId: dotId as Id<"dotVotes"> });
+      toast.success("Vote removed");
+    } catch (error) {
+      console.error('Failed to remove dot:', error);
+      toast.error("Failed to remove vote");
+    }
+  }, [activeSessionId, currentUserId, removeDot]);
+
+  const handleRemoveLocalDot = useCallback((dotId: string) => {
+    setLocalDots(prev => prev.filter(dot => dot.id !== dotId));
+  }, []);
+
   const handleClick = useCallback((e: React.MouseEvent) => {
     if (isPlacingDot) { handleAddDot(e); return; }
     if (isPresentationMode) { e.stopPropagation(); return; }
@@ -284,6 +300,7 @@ export default function AffinityGroup({
           drag={!isSelectedByOther && !isPresentationMode}
           dragMomentum={false}
           dragElastic={0}
+          dragListener={isPlacingDot ? false : true}
           onDragStart={(e) => {
             if (isPresentationMode) return;
             const data = e as unknown as React.DragEvent;
@@ -295,7 +312,7 @@ export default function AffinityGroup({
           onDragOver={handleDragOverLocal}
           onDragLeave={handleDragLeaveLocal}
           onDrop={handleDropLocal}
-          style={{ 
+          style={{
             ...styles.container, x, y,
             rotateX: isDragging ? rotateX : 0,
             rotateY: isDragging ? rotateY : 0,
@@ -347,6 +364,7 @@ export default function AffinityGroup({
             styles={styles}
             onOpenComments={onOpenComments}
             amIMentioned={amIMentioned}
+            isSelectedByOther={isSelectedByOther}
           />
 
           {/* INSIGHTS LIST */}
@@ -378,6 +396,8 @@ export default function AffinityGroup({
             currentUserId={currentUserId}
             activeSession={activeSession}
             getUserColor={getUserColor}
+            onRemoveDot={handleRemoveDot}
+            onRemoveLocalDot={handleRemoveLocalDot}
           />
         </motion.div>
       </ContextMenuTrigger>
