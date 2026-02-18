@@ -844,6 +844,7 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
             personalTimeLeft={personalTimeLeft}
             cursorPosition={cursorPosition}
             scale={scale}
+            isVotingActive={!!dotVoting.activeSessions?.[0] && dotVoting.activeSessions[0].votingPhase === 'voting'}
           />
         </div>
 
@@ -857,6 +858,8 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
           projectId={projectId}
           projectInfo={projectInfo}
           mapId={mapId}
+          userId={currentUserId}
+          userName={user?.fullName || user?.username || "Anonymous"}
           selectedTheme={themeManagement.selectedTheme}
           setSelectedTheme={themeManagement.setSelectedTheme}
           onApplyRecommendation={themeManagement.handleApplyRecommendation}

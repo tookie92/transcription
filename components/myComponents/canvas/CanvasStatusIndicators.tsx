@@ -15,6 +15,7 @@ interface CanvasStatusIndicatorsProps {
   personalTimeLeft: number;
   cursorPosition?: { x: number; y: number };
   scale?: number;
+  isVotingActive?: boolean;
 }
 
 export function CanvasStatusIndicators({
@@ -29,6 +30,7 @@ export function CanvasStatusIndicators({
   personalTimeLeft,
   cursorPosition,
   scale = 1,
+  isVotingActive = false,
 }: CanvasStatusIndicatorsProps) {
   return (
     <>
@@ -52,8 +54,8 @@ export function CanvasStatusIndicators({
         </div>
       )}
 
-      {/* Dot Placement Indicator */}
-      {isPlacingDot && (
+      {/* Dot Placement Indicator - Only show when voting is active */}
+      {isPlacingDot && isVotingActive && (
         <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-50 flex items-center gap-2">
           <div className="w-3 h-3 bg-white rounded-full animate-ping" />
           <span>Click on groups or insights to place dots</span>

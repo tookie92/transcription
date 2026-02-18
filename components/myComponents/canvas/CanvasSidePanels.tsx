@@ -8,7 +8,9 @@ import { PersonaGenerator } from "../PersonaGenerator";
 import { ActivityPanel } from "../ActivityPanel";
 import { VotingHistoryPanel } from "../VotingHistoryPanel";
 import { ExportPanel } from "../ExportPanel";
+import { FigJamDotVoting } from "../FigJamDotVoting";
 import { Id } from "@/convex/_generated/dataModel";
+import { useAuth, useUser } from "@clerk/nextjs";
 
 interface CanvasSidePanelsProps {
   isPresentMode: boolean;
@@ -21,6 +23,8 @@ interface CanvasSidePanelsProps {
   projectId: string;
   projectInfo?: { name: string; description?: string };
   mapId: string;
+  userId?: string;
+  userName?: string;
 
   // Theme props
   selectedTheme: DetectedTheme | null;
@@ -43,6 +47,8 @@ export function CanvasSidePanels({
   projectId,
   projectInfo,
   mapId,
+  userId,
+  userName,
   selectedTheme,
   setSelectedTheme,
   onApplyRecommendation,
@@ -57,6 +63,24 @@ export function CanvasSidePanels({
 
   return (
     <AnimatePresence>
+      {/* Dot Voting Panel - New FigJam Style */}
+      {activePanel === "voting" && (
+        <motion.div
+          initial={{ x: 600, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: 600, opacity: 0 }}
+          className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full overflow-y-auto"
+        >
+          <FigJamDotVoting
+            mapId={mapId}
+            projectId={projectId}
+            groups={groups.map(g => ({ id: g.id, title: g.title, color: g.color, insightIds: g.insightIds }))}
+            userId={userId}
+            userName={userName}
+          />
+        </motion.div>
+      )}
+
       {activePanel === "themeDiscovery" && (
         <motion.div
           initial={{ x: 600, opacity: 0 }}
