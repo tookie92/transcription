@@ -58,6 +58,8 @@ interface AffinityGroupProps {
   activeSessionId?: string;
   activeSession?: DotVotingSession;
   myDotsCount?: number;
+  isChatOpen?: boolean;
+  onResize?: (groupId: string, size: { width: number; height: number }) => void;
 }
 
 export default function AffinityGroup({
@@ -68,7 +70,7 @@ export default function AffinityGroup({
   onOpenComments, mapId, commentCounts, comments,
   isPresentationMode = false, isFocusedInPresentation = false,
   presentationScale = 1, isPlacingDot = false, activeSessionId, activeSession,
-  myDotsCount = 0,
+  myDotsCount = 0, isChatOpen = false, onResize,
 }: AffinityGroupProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempTitle, setTempTitle] = useState(group.title);
@@ -361,10 +363,11 @@ export default function AffinityGroup({
             isPlacingDot={isPlacingDot}
             hasInsights={hasInsights}
             projectContext={projectContext}
-            styles={styles}
             onOpenComments={onOpenComments}
             amIMentioned={amIMentioned}
             isSelectedByOther={isSelectedByOther}
+            isChatOpen={isChatOpen}
+            onResize={onResize}
           />
 
           {/* INSIGHTS LIST */}

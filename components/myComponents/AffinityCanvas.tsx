@@ -155,6 +155,12 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
     groupId: string; screenRect: DOMRect; groupTitle: string;
   } | null>(null);
   const [showActivityPanel, setShowActivityPanel] = useState(false);
+  const [groupSizes, setGroupSizes] = useState<Record<string, { width: number; height: number }>>({});
+
+  // Handler for resizing groups
+  const handleGroupResize = useCallback((groupId: string, size: { width: number; height: number }) => {
+    setGroupSizes(prev => ({ ...prev, [groupId]: size }));
+  }, []);
 
   // ==================== QUERIES ====================
   const commentCounts = useQuery(api.comments.getCommentCountsByMap, {
@@ -391,11 +397,17 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
   };
 
   const handleCanvasClick = (e: React.MouseEvent) => {
+    // Clear selection when clicking on empty canvas (outside groups)
+    if (selectedGroups.size > 0 && e.target === canvasRef.current) {
+      setSelectedGroups(new Set());
+      toast.info("Selection cleared");
+    }
+    
     if (dotVoting.isPlacingDot) return;
     if (e.target === canvasRef.current) {
       clickCountRef.current++;
       if (clickCountRef.current === 1) {
-        clickTimeoutRef.current = setTimeout(() => { setSelectedGroups(new Set()); clickCountRef.current = 0; }, 300);
+        clickTimeoutRef.current = setTimeout(() => { clickCountRef.current = 0; }, 300);
       } else if (clickCountRef.current === 2) {
         if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
         const rect = canvasRef.current!.getBoundingClientRect();
@@ -786,6 +798,8 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
                                 mapId={mapId}
                                 commentCounts={commentCounts}
                                 activeSession={dotVoting.activeSessions?.[0]}
+                                isChatOpen={!!showComments}
+                                onResize={handleGroupResize}
                               />
                             );
                           })}

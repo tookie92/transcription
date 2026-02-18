@@ -56,7 +56,7 @@ export function InsightsList({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      {groupInsights.map((insight) => (
+      {groupInsights.map((insight, index) => (
         <InsightCard
           key={insight.id}
           insight={insight}
@@ -72,6 +72,7 @@ export function InsightsList({
           onInsightDrop={onInsightDrop}
           onInsightDragEnd={onInsightDragEnd}
           insightCardStyle={insightCardStyle}
+          index={index}
         />
       ))}
 
