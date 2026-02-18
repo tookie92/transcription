@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Plus, Users, Calendar, ArrowLeft, CircuitBoard } from "lucide-react";
+import { FileText, Plus, Users, Calendar, ArrowLeft, CircuitBoard, Lightbulb, ArrowRight, BarChart3, CheckCircle2, Circle } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 
@@ -38,10 +38,21 @@ const project = useQuery(api.projects.getProjectForInvite, { projectId });
 
 
   const interviews = useQuery(api.interviews.getProjectInterviews, { projectId });
+  const insights = useQuery(api.insights.getByProject, { projectId });
+  const affinityMaps = useQuery(api.affinityMaps.getByProject, { projectId });
   const [openManage, setOpenManage] = useState(false);
   const [openInvite, setOpenInvite] = useState(false);
-  // const allProjects = useQuery(api.projects.getUserProjects);
-  // const claimInvite = useMutation(api.projects.claimInvite);
+
+  // Calculate project progress
+  const totalInsights = insights?.length || 0;
+  const analyzedInterviews = interviews?.filter(i => i.status === "completed").length || 0;
+  const totalInterviews = interviews?.length || 0;
+  const progressPercent = totalInterviews > 0 ? Math.round((analyzedInterviews / totalInterviews) * 100) : 0;
+  
+  // Get current affinity map
+  const currentMap = affinityMaps?.find(m => m.isCurrent);
+  const totalGroups = currentMap?.groups.length || 0;
+  const groupedInsights = currentMap?.groups.reduce((sum, g) => sum + g.insightIds.length, 0) || 0;
 
 // Dans ProjectContent.tsx - MODIFIER le useEffect
 useEffect(() => {
@@ -115,55 +126,112 @@ useEffect(() => {
       </div>
 
       {/* Project Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Interviews</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-blue-700">Interviews</CardTitle>
+            <FileText className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{interviews?.length || 0}</div>
+            <div className="text-2xl font-bold text-blue-700">{totalInterviews}</div>
+            <p className="text-xs text-blue-600">{analyzedInterviews} analyzed</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-medium">Team Members</CardTitle>
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-200">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-purple-700">Insights</CardTitle>
+            <Lightbulb className="h-4 w-4 text-purple-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-700">{totalInsights}</div>
+            <p className="text-xs text-purple-600">extracted</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-green-50 to-green-100/50 border-green-200">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-green-700">Groups</CardTitle>
+            <CircuitBoard className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-700">{totalGroups}</div>
+            <p className="text-xs text-green-600">{groupedInsights} insights grouped</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100/50 border-orange-200">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-orange-700">Team</CardTitle>
+            <Users className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-700">{project.members.length}</div>
+            <p className="text-xs text-orange-600">
+              {project.ownerId === userId ? "owner" : "member{project.members.length !== 1 ? 's' : ''}"}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-amber-700">Progress</CardTitle>
+            <BarChart3 className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-700">{progressPercent}%</div>
+            <div className="w-full bg-amber-200 rounded-full h-1.5 mt-1">
+              <div 
+                className="bg-amber-500 h-1.5 rounded-full transition-all" 
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => router.push(`/project/${projectId}/affinity/`)}>
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+              <CircuitBoard className="w-6 h-6 text-green-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold">Open Affinity Map</h3>
+              <p className="text-sm text-gray-500">Group and organize insights</p>
+            </div>
+            <ArrowRight className="w-5 h-5 text-gray-400 ml-auto" />
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => router.push(`/project/${projectId}/interview/`)}>
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+              <Plus className="w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold">Add Interview</h3>
+              <p className="text-sm text-gray-500">Upload and transcribe new interview</p>
+            </div>
+            <ArrowRight className="w-5 h-5 text-gray-400 ml-auto" />
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+              <Users className="w-6 h-6 text-purple-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold">Invite Team</h3>
+              <p className="text-sm text-gray-500">Collaborate with your team</p>
+            </div>
             <TeamMembersModal 
               projectId={projectId} 
               projectName={project.name}
               isOwner={project.ownerId === userId}
             />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{project.members.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Created</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm font-medium">
-              {new Date(project.createdAt).toLocaleDateString()}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Status</CardTitle>
-            <Badge variant={project.isPublic ? "default" : "secondary"}>
-              {project.isPublic ? "Public" : "Private"}
-              
-            </Badge>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm text-muted-foreground">
-              {project.ownerId === userId ? "Owner" : "Member"}
-            </div>
           </CardContent>
         </Card>
       </div>
