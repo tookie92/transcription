@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { CopyInviteLink } from "./CopyInviteLink";
 import { MemberManagerDialog } from "./MemberManagerDialog";
+import { TeamMembersModal } from "./TeamMembersModal";
 import { Dialog, DialogContent } from "../ui/dialog";
 import { DialogTitle, DialogTrigger } from "@radix-ui/react-dialog";
 import { DropdownMenu } from "@radix-ui/react-dropdown-menu";
@@ -125,36 +126,14 @@ useEffect(() => {
           </CardContent>
         </Card>
 
-         <Card>
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-medium">Team Members</CardTitle>
-            {project.ownerId === userId && (
-              <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className=" hover:text-myGreen-500">
-                      Manage
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem className=" hover:text-myGreen-500" onClick={() => setOpenManage(true)}>
-                      See members
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className=" hover:text-myGreen-500" onClick={() => setOpenInvite(true)}>
-                      Invite
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                {/* Dialog séparé, SANS asChild */}
-                <Dialog open={openInvite} onOpenChange={setOpenInvite}>
-                  <DialogContent className="w-80">
-                  <DialogTitle>Invite a user</DialogTitle>
-                    <InviteUserButton projectId={projectId} />
-                  </DialogContent>
-                </Dialog>
-              </>
-            )}
+            <TeamMembersModal 
+              projectId={projectId} 
+              projectName={project.name}
+              isOwner={project.ownerId === userId}
+            />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{project.members.length}</div>

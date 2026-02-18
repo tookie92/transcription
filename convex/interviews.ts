@@ -101,7 +101,7 @@ export const getById = query({
     return hasAccess ? interview : null;
   },
 });
-// Dans convex/interviews.ts - AJOUTER CES MUTATIONS
+
 // Dans convex/interviews.ts - AJOUTER CES MUTATIONS
 export const generateSummary = mutation({
   args: {

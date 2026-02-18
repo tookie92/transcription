@@ -1,14 +1,24 @@
-// components/InterviewContent.tsx - VERSION CORRIGÉE
+// components/InterviewContent.tsx
 "use client";
 
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Lightbulb, FileSpreadsheet, Sparkles, ArrowLeft, Play, Download } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { 
+  FileText, 
+  Lightbulb, 
+  FileSpreadsheet, 
+  Sparkles, 
+  ArrowLeft, 
+  Download,
+  Search,
+  Filter
+} from "lucide-react";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { ExportDialog } from "./ExportDialog";
 import { useState } from "react";
@@ -28,12 +38,23 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [insightFilter, setInsightFilter] = useState<string | null>(null);
 
   // Récupérer les données
   const project = useQuery(api.projects.getById, { projectId });
   const interview = useQuery(api.interviews.getById, { interviewId });
   const insights = useQuery(api.insights.getByInterview, { interviewId });
   const projectInterviews = useQuery(api.interviews.getProjectInterviews, { projectId });
+
+  // Format time
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
 
   // Gérer le cas où l'interview n'est pas trouvée
   if (!interview || !project) {
@@ -69,6 +90,19 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
     isAnalyzing: false,
     createdAt: new Date(interview._creationTime).toISOString(),
   };
+
+  // Filter insights by type
+  const filteredInsights = insights?.filter(insight => {
+    const matchesFilter = !insightFilter || insight.type === insightFilter;
+    const matchesSearch = !searchQuery || 
+      insight.text.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesFilter && matchesSearch;
+  }) || [];
+
+  // Filter segments by search
+  const filteredSegments = interview.segments.filter(segment => 
+    !searchQuery || segment.text.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
@@ -213,7 +247,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
               )}
               <div className="flex items-center gap-4 text-sm text-gray-500">
                 <span>
-                  <Play className="w-4 h-4 inline mr-1" />
+                  <FileText className="w-4 h-4 inline mr-1" />
                   {Math.floor(interview.duration / 60)}:
                   {String(Math.floor(interview.duration % 60)).padStart(2, '0')} min
                 </span>
@@ -266,26 +300,56 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
         <TabsContent value="transcription">
           <Card>
             <CardHeader>
-              <CardTitle>Full Transcription</CardTitle>
-              <CardDescription>
-                Complete interview transcription with timestamps
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Full Transcription</CardTitle>
+                  <CardDescription>
+                    Complete interview transcription with timestamps
+                    {searchQuery && <span className="ml-2 text-blue-600">• {filteredSegments.length} results</span>}
+                  </CardDescription>
+                </div>
+                {/* Search in transcription */}
+                <div className="relative w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    placeholder="Search transcription..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4 max-h-[600px] overflow-y-auto">
-                {interview.segments.map((segment) => (
-                  <div key={segment.id} className="group hover:bg-gray-50 p-4 rounded-lg transition-colors">
-                    <div className="flex gap-4">
-                      <span className="text-sm text-gray-400 font-mono mt-1 min-w-[80px] flex-shrink-0">
+              <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
+                {(searchQuery ? filteredSegments : interview.segments).map((segment) => (
+                  <div 
+                    key={segment.id}
+                    className="hover:bg-gray-50 p-3 rounded-lg transition-colors"
+                  >
+                    <div className="flex gap-3 items-start">
+                      <span className="text-sm font-mono mt-0.5 min-w-[60px] flex-shrink-0 text-gray-500">
                         {Math.floor(segment.start / 60)}:
                         {String(Math.floor(segment.start % 60)).padStart(2, '0')}
                       </span>
                       <p className="text-gray-700 leading-relaxed flex-1">
-                        {segment.text}
+                        {searchQuery ? (
+                          segment.text.split(new RegExp(`(${searchQuery})`, 'gi')).map((part, i) => 
+                            part.toLowerCase() === searchQuery.toLowerCase() ? (
+                              <mark key={i} className="bg-yellow-200 px-0.5 rounded">{part}</mark>
+                            ) : part
+                          )
+                        ) : segment.text}
                       </p>
                     </div>
                   </div>
                 ))}
+                {searchQuery && filteredSegments.length === 0 && (
+                  <div className="text-center py-8 text-gray-400">
+                    <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p>No results found for "{searchQuery}"</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -295,10 +359,49 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
         <TabsContent value="insights">
           <Card>
             <CardHeader>
-              <CardTitle>Interview Insights</CardTitle>
-              <CardDescription>
-                Key findings extracted from the interview
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Interview Insights</CardTitle>
+                  <CardDescription>
+                    Key findings extracted from the interview
+                    {insightFilter && <span className="ml-2 text-blue-600">• Filtered</span>}
+                  </CardDescription>
+                </div>
+                {/* Filter by type */}
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      placeholder="Search insights..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9 w-48"
+                    />
+                  </div>
+                  <Filter className="w-4 h-4 text-gray-400" />
+                  <div className="flex gap-1">
+                    <Button
+                      variant={!insightFilter ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setInsightFilter(null)}
+                      className="text-xs"
+                    >
+                      All
+                    </Button>
+                    {["pain-point", "quote", "insight", "follow-up"].map((type) => (
+                      <Button
+                        key={type}
+                        variant={insightFilter === type ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setInsightFilter(type)}
+                        className="text-xs capitalize"
+                      >
+                        {type}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               {!insights || insights.length === 0 ? (
@@ -313,7 +416,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                 </div>
               ) : (
                 <div className="grid gap-4">
-                  {insights.map((insight) => (
+                  {filteredInsights.map((insight) => (
                     <Card key={insight._id} className="hover:shadow-md transition-shadow">
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between mb-3">
@@ -337,6 +440,12 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                       </CardContent>
                     </Card>
                   ))}
+                  {filteredInsights.length === 0 && insights && insights.length > 0 && (
+                    <div className="text-center py-8 text-gray-400">
+                      <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p>No insights match your filter</p>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>

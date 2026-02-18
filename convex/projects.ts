@@ -31,10 +31,15 @@ export const claimInvite = mutation({
 
     console.log("✅ Invitation found, replacing with userId:", identity.subject);
 
-    // Remplacer l'email par le vrai userId Clerk
+    // Remplacer l'email par le vrai userId Clerk mais garder le nom
     await ctx.db.patch(args.projectId, {
       members: project.members.map(m =>
-        m.userId === args.email ? { ...m, userId: identity.subject } : m
+        m.userId === args.email ? { 
+          ...m, 
+          userId: identity.subject,
+          email: identity.email || m.email,
+          name: identity.name || m.name || args.email.split('@')[0],
+        } : m
       ),
       updatedAt: Date.now(),
     });
@@ -64,6 +69,8 @@ export const createProject = mutation({
         userId: identity.subject,
         role: "owner" as const,
         joinedAt: Date.now(),
+        name: identity.name || identity.email?.split('@')[0] || "Owner",
+        email: identity.email,
       }],
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -185,13 +192,11 @@ export const getById = query({
     if (args.withNames) {
       const membersWithNames = await Promise.all(
         project.members.map(async (m) => {
-          // on va chercher les métadatas Clerk
-          const user = await ctx.auth.getUserIdentity(); // ⚠️ pas dispo direct
-          // On passe donc par un petit helper côté client (voir étape 2)
-          // On renvoie juste l’email pour l’instant
+          // Retourner les infos stockées (nom et email)
           return {
             ...m,
-            email: m.userId, // email utilisé lors de l’invitation
+            name: m.name || m.userId,
+            email: m.email || m.userId,
           };
         })
       );
@@ -331,5 +336,96 @@ export const removeMember = mutation({
       members: proj.members.filter(m => m.userId !== args.userId),
       updatedAt: Date.now(),
     });
+  },
+});
+
+// Decline an invitation
+export const declineInvite = mutation({
+  args: { projectId: v.id("projects"), email: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const proj = await ctx.db.get(args.projectId);
+    if (!proj) throw new Error("Project not found");
+
+    // Remove the pending invitation
+    await ctx.db.patch(args.projectId, {
+      members: proj.members.filter(m => m.userId !== args.email),
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+// Migration: Fix existing members without name/email
+export const migrateMembersInfo = mutation({
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    
+    const allProjects = await ctx.db.query("projects").collect();
+    let updatedCount = 0;
+    
+    for (const project of allProjects) {
+      let needsUpdate = false;
+      const updatedMembers = project.members.map(m => {
+        // Skip if already has name that doesn't look like a userId
+        if (m.name && !m.name.includes('@') && m.name !== m.userId) return m;
+        
+        needsUpdate = true;
+        // Try to extract name from userId if it looks like an email
+        const extractedName = m.userId.includes('@') 
+          ? m.userId.split('@')[0] 
+          : m.userId;
+        
+        return {
+          ...m,
+          name: m.name || extractedName,
+          email: m.email || (m.userId.includes('@') ? m.userId : undefined),
+        };
+      });
+      
+      if (needsUpdate) {
+        await ctx.db.patch(project._id, {
+          members: updatedMembers,
+          updatedAt: Date.now(),
+        });
+        updatedCount++;
+      }
+    }
+    
+    return { success: true, updatedProjects: updatedCount };
+  },
+});
+
+// Fix current user's member info in a project using Clerk identity
+export const fixCurrentUserMember = mutation({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new Error("Project not found");
+    
+    const memberIndex = project.members.findIndex(m => m.userId === identity.subject);
+    if (memberIndex === -1) throw new Error("Not a member of this project");
+    
+    const updatedMembers = [...project.members];
+    updatedMembers[memberIndex] = {
+      ...updatedMembers[memberIndex],
+      userId: identity.subject,
+      name: identity.name || identity.email?.split('@')[0] || "Unknown",
+      email: identity.email,
+    };
+    
+    await ctx.db.patch(args.projectId, {
+      members: updatedMembers,
+      updatedAt: Date.now(),
+    });
+    
+    return { success: true };
   },
 });

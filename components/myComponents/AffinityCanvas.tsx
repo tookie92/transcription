@@ -121,6 +121,26 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
     onGroupDelete, onGroupTitleUpdate, saveCurrentState,
   });
 
+  // Auto-zoom to current group in presentation mode
+  useEffect(() => {
+    if (!presentation.presentationState.isActive) return;
+    if (presentation.presentationState.isOverview) return;
+    
+    const groupPos = presentation.currentGroupPosition;
+    if (!groupPos || !canvasWrapperRef.current) return;
+
+    const wrapper = canvasWrapperRef.current;
+    const viewportWidth = wrapper.clientWidth;
+    const viewportHeight = wrapper.clientHeight;
+
+    const targetScale = 1.2;
+    const targetX = viewportWidth / 2 - (groupPos.x + groupPos.width / 2) * targetScale;
+    const targetY = viewportHeight / 2 - (groupPos.y + groupPos.height / 2) * targetScale;
+
+    canvasNav.setScale(targetScale);
+    canvasNav.setPosition({ x: targetX, y: targetY });
+  }, [presentation.presentationState.currentGroupIndex, presentation.presentationState.isActive, presentation.presentationState.isOverview]);
+
   // ==================== useRef ====================
   const canvasRef = useRef<HTMLDivElement>(null);
   const canvasWrapperRef = useRef<HTMLDivElement>(null);
@@ -660,6 +680,7 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
             nextGroup={presentation.nextGroup}
             prevGroup={presentation.prevGroup}
             toggleOverview={presentation.toggleOverview}
+            isFullscreen={presentation.isFullscreen}
           />
 
           {/* THEME VISUALIZATION */}

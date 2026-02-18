@@ -4,10 +4,10 @@ import { Id } from "@/convex/_generated/dataModel";
 import { InterviewContent } from "@/components/myComponents/InterviewContent";
 
 interface InterviewPageProps {
-  params: {
-    projectId: Id<"projects">;
-    interviewId: Id<"interviews">;
-  };
+  params: Promise<{
+    projectId: string;
+    interviewId: string;
+  }>;
 }
 
 export async function generateMetadata({ params }: InterviewPageProps): Promise<Metadata> {
@@ -17,6 +17,7 @@ export async function generateMetadata({ params }: InterviewPageProps): Promise<
   };
 }
 
-export default function InterviewPage({ params }: InterviewPageProps) {
-  return <InterviewContent projectId={params.projectId} interviewId={params.interviewId} />;
+export default async function InterviewPage({ params }: InterviewPageProps) {
+  const { projectId, interviewId } = await params;
+  return <InterviewContent projectId={projectId as Id<"projects">} interviewId={interviewId as Id<"interviews">} />;
 }
