@@ -13,6 +13,8 @@ interface CanvasStatusIndicatorsProps {
   currentPhase: string | null;
   groupTimeLeft: number;
   personalTimeLeft: number;
+  cursorPosition?: { x: number; y: number };
+  scale?: number;
 }
 
 export function CanvasStatusIndicators({
@@ -25,6 +27,8 @@ export function CanvasStatusIndicators({
   currentPhase,
   groupTimeLeft,
   personalTimeLeft,
+  cursorPosition,
+  scale = 1,
 }: CanvasStatusIndicatorsProps) {
   return (
     <>
@@ -92,6 +96,25 @@ export function CanvasStatusIndicators({
           <span>Applying {applyingAction}...</span>
         </motion.div>
       )}
+
+      {/* Position & Selection Indicator */}
+      <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 shadow-lg z-40 flex items-center gap-3">
+        {selectedGroupsCount > 0 && (
+          <span className="font-medium text-blue-600">
+            {selectedGroupsCount} selected
+          </span>
+        )}
+        {cursorPosition && (
+          <>
+            <span className="text-gray-400">|</span>
+            <span>
+              X: {Math.round(cursorPosition.x)} Y: {Math.round(cursorPosition.y)}
+            </span>
+            <span className="text-gray-400">|</span>
+            <span>{Math.round(scale * 100)}%</span>
+          </>
+        )}
+      </div>
     </>
   );
 }

@@ -96,6 +96,11 @@ export function FloatingToolbar({
     onShowVotingHistory?.(!showVotingHistory);
   };
 
+  // Helper to close other panels when opening one
+  const handleOpenPanel = (panel: ActivePanel) => {
+    setActivePanel(activePanel === panel ? null : panel);
+  };
+
   return (
     <TooltipProvider>
       <motion.div
@@ -133,7 +138,7 @@ export function FloatingToolbar({
                   </ToggleGroupItem>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Grouping Mode</p>
+                  <p>Grouping Mode <span className="text-gray-400 ml-1">(default)</span></p>
                 </TooltipContent>
               </Tooltip>
               
@@ -186,8 +191,8 @@ export function FloatingToolbar({
                   <User size={18} />
                 </Button>
                 </TooltipTrigger>
-                <TooltipContent>
-                  <p>Persona Generator</p>
+              <TooltipContent>
+                  <p>Persona <span className="text-gray-400">(P)</span></p>
                 </TooltipContent>
               </Tooltip>
 
@@ -204,7 +209,7 @@ export function FloatingToolbar({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Voting History</p>
+                  <p>Vote History <span className="text-gray-400">(H)</span></p>
                 </TooltipContent>
               </Tooltip>
 

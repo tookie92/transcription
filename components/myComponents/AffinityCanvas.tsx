@@ -37,6 +37,7 @@ import { PresentationOverlay } from "./canvas/PresentationOverlay";
 import { CanvasSidePanels } from "./canvas/CanvasSidePanels";
 import { CanvasStatusIndicators } from "./canvas/CanvasStatusIndicators";
 import { ZoomControls } from "./canvas/ZoomControls";
+import { MiniMap } from "./canvas/MiniMap";
 
 // ==================== INTERFACES ====================
 
@@ -299,6 +300,13 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
   const toggleVotingHistoryPanel = useCallback(() => togglePanel('votingHistory'), [togglePanel]);
   const toggleThemeDiscoveryPanel = useCallback(() => togglePanel('themeDiscovery'), [togglePanel]);
   const toggleActivityPanel = useCallback(() => togglePanel('activity'), [togglePanel]);
+
+  const handleMinimapNavigate = useCallback((x: number, y: number) => {
+    const viewportWidth = 800;
+    const viewportHeight = 600;
+    setPosition({ x: -x * scale + viewportWidth / 2, y: -y * scale + viewportHeight / 2 });
+    toast.info(`Navigated to ${Math.round(x)}, ${Math.round(y)}`);
+  }, [scale, setPosition]);
 
   // ==================== HANDLERS SOURIS/CLAVIER ====================
   const wheelTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -814,6 +822,15 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
                     </div>
           </div>
 
+          {/* MINI MAP - Outside canvas for visibility */}
+          <MiniMap
+            groups={groups}
+            position={position}
+            scale={scale}
+            onNavigate={handleMinimapNavigate}
+            viewportSize={{ width: 800, height: 600 }}
+          />
+
           {/* STATUS INDICATORS */}
           <CanvasStatusIndicators
             isPlacingDot={dotVoting.isPlacingDot}
@@ -825,6 +842,8 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
             currentPhase={currentPhase}
             groupTimeLeft={groupTimeLeft}
             personalTimeLeft={personalTimeLeft}
+            cursorPosition={cursorPosition}
+            scale={scale}
           />
         </div>
 
