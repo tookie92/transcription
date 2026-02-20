@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Plus, Users, Calendar, ArrowLeft, CircuitBoard, Lightbulb, ArrowRight, BarChart3, CheckCircle2, Circle, TrendingUp, Clock, Target, Zap, PieChart } from "lucide-react";
+import { FileText, Plus, Users, Calendar, ArrowLeft, CircuitBoard, Lightbulb, ArrowRight, BarChart3, CheckCircle2, Circle, TrendingUp, Clock, Target, Zap, PieChart, DeleteIcon, Trash, Trash2, ViewIcon } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 
@@ -38,10 +38,12 @@ const project = useQuery(api.projects.getProjectForInvite, { projectId });
 
 
   const interviews = useQuery(api.interviews.getProjectInterviews, { projectId });
+  const deleteInterview = useMutation(api.interviews.deleteInterview);
   const insights = useQuery(api.insights.getByProject, { projectId });
   const affinityMaps = useQuery(api.affinityMaps.getByProject, { projectId });
   const [openManage, setOpenManage] = useState(false);
   const [openInvite, setOpenInvite] = useState(false);
+ 
 
   // Calculate project progress
   const totalInsights = insights?.length || 0;
@@ -268,12 +270,8 @@ useEffect(() => {
           {interviews && interviews.length > 0 ? (
             <div className="space-y-4">
               {interviews.map((interview) => (
-                <Link 
-                  key={interview._id} 
-                  href={`/project/${projectId}/interview/${interview._id}`}
-                  className="block"
-                >
-                  <Card className="hover:bg-gray-50 transition-colors cursor-pointer">
+                
+                  <Card key={interview._id}  className="hover:bg-gray-50 transition-colors cursor-pointer">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
@@ -290,17 +288,44 @@ useEffect(() => {
                           </div>
                         </div>
                         <div className="text-right">
-                          <Badge variant="outline" className="mb-1">
-                            {interview.status}
-                          </Badge>
-                          <p className="text-xs text-gray-500">
-                            {new Date(interview.createdAt).toLocaleDateString()}
-                          </p>
+                          <div className="flex gap-2 items-center">
+                            <div>
+                              <Badge variant="outline" className="mb-1">
+                                {interview.status}
+                              </Badge>
+                              <p className="text-xs text-gray-500">
+                                {new Date(interview.createdAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="ml-auto">
+                              <Button onClick={()=> router.push(`/project/${projectId}/interview/${interview._id}`)} className="bg-white text-black">
+                                <ViewIcon className="w-4 h-4 " />
+                              </Button>
+                            </div>
+                            <div className="ml-auto">
+                              <Button 
+                                className="bg-white text-black"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (confirm("Êtes-vous sûr de vouloir supprimer cette interview ?")) {
+                                    try {
+                                      await deleteInterview({ interviewId: interview._id });
+                                      toast.success("Interview supprimée");
+                                    } catch (error) {
+                                      toast.error("Erreur lors de la suppression");
+                                    }
+                                  }
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4 " />
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </CardContent>
                   </Card>
-                </Link>
+               
               ))}
             </div>
           ) : (

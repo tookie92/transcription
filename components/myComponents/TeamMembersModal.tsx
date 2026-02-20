@@ -73,13 +73,18 @@ export function TeamMembersModal({ projectId, projectName, isOwner }: TeamMember
   const migrateMembersInfo = useMutation(api.projects.migrateMembersInfo);
 
   // Build members list from project data
-  const members: TeamMember[] = project?.members?.map(m => ({
+  const members: TeamMember[] = (project?.members?.map(m => ({
     userId: m.userId,
     name: m.name || m.userId,
     email: m.email,
     role: m.role as MemberRole,
     status: "active" as MemberStatus,
-  })) || [];
+  })) || []);
+
+  // Deduplicate members by userId
+  const uniqueMembers = members.filter((member, index, self) => 
+    index === self.findIndex(m => m.userId === member.userId)
+  );
 
   // Migration mutation
   const [isMigrating, setIsMigrating] = useState(false);
@@ -108,7 +113,7 @@ export function TeamMembersModal({ projectId, projectName, isOwner }: TeamMember
   // Add pending invitations (mock for now - would come from a separate query)
   const pendingInvitations: TeamMember[] = [];
 
-  const allMembers = [...members, ...pendingInvitations];
+  const allMembers = [...uniqueMembers, ...pendingInvitations];
   const filteredMembers = allMembers.filter(m => 
     m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     m.email?.toLowerCase().includes(searchQuery.toLowerCase())

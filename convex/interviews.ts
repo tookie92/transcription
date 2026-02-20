@@ -183,3 +183,29 @@ export const updateSummary = mutation({
     return { success: true };
   },
 });
+
+export const deleteInterview = mutation({
+  args: {
+    interviewId: v.id("interviews"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const interview = await ctx.db.get(args.interviewId);
+    if (!interview) throw new Error("Interview not found");
+
+    const project = await ctx.db.get(interview.projectId);
+    if (!project) throw new Error("Project not found");
+
+    const hasAccess = project.members.some(member => 
+      member.userId === identity.subject
+    ) || project.ownerId === identity.subject;
+
+    if (!hasAccess) throw new Error("No access to delete this interview");
+
+    await ctx.db.delete(args.interviewId);
+
+    return { success: true };
+  },
+});
