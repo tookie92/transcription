@@ -14,6 +14,8 @@ export function useTranscription() {
     transcriptionError,
     setTranscriptionError,
     addInterview,
+    currentTranscript,
+    setCurrentTranscript,
   } = useTranscriptionStore();
 
   const transcribe = async (file: File, title?: string, topic?: string): Promise<Interview> => {
@@ -50,6 +52,9 @@ export function useTranscription() {
         audioUrl: URL.createObjectURL(file),
       };
 
+      // Set current transcript for display
+      setCurrentTranscript(data.text);
+
       // Add to store
       addInterview(interview);
 
@@ -66,5 +71,7 @@ export function useTranscription() {
     transcribe,
     isTranscribing,
     error: transcriptionError,
+    transcript: currentTranscript,
+    setTranscript: setCurrentTranscript,
   };
 }

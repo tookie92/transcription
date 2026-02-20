@@ -16,13 +16,13 @@ interface UseAffinityMapHandlersProps {
 
   // Mutations
   addGroup: (args: { mapId: Id<"affinityMaps">; title: string; color: string; position: { x: number; y: number } }) => Promise<string>;
-  moveGroup: (args: { mapId: Id<"affinityMaps">; groupId: string; position: { x: number; y: number } }) => Promise<any>;
-  addInsightToGroup: (args: { mapId: Id<"affinityMaps">; groupId: string; insightId: Id<"insights"> }) => Promise<any>;
-  updateGroupTitle: (args: { mapId: Id<"affinityMaps">; groupId: string; title: string }) => Promise<any>;
-  removeGroup: (args: { mapId: Id<"affinityMaps">; groupId: string }) => Promise<any>;
-  removeInsightFromGroup: (args: { mapId: Id<"affinityMaps">; groupId: string; insightId: Id<"insights"> }) => Promise<any>;
-  replaceAllGroups: (args: { mapId: Id<"affinityMaps">; groups: AffinityGroup[] }) => Promise<any>;
-  createManualInsight: (args: { projectId: Id<"projects">; text: string; type: any }) => Promise<any>;
+  moveGroup: (args: { mapId: Id<"affinityMaps">; groupId: string; position: { x: number; y: number } }) => Promise<unknown>;
+  addInsightToGroup: (args: { mapId: Id<"affinityMaps">; groupId: string; insightId: Id<"insights"> }) => Promise<unknown>;
+  updateGroupTitle: (args: { mapId: Id<"affinityMaps">; groupId: string; title: string }) => Promise<unknown>;
+  removeGroup: (args: { mapId: Id<"affinityMaps">; groupId: string }) => Promise<unknown>;
+  removeInsightFromGroup: (args: { mapId: Id<"affinityMaps">; groupId: string; insightId: Id<"insights"> }) => Promise<unknown>;
+  replaceAllGroups: (args: { mapId: Id<"affinityMaps">; groups: AffinityGroup[] }) => Promise<unknown>;
+  createManualInsight: (args: { projectId: Id<"projects">; text: string; type: string }) => Promise<unknown>;
 
   // Notifications
   broadcastGroupCreated: (args: {
@@ -31,7 +31,7 @@ interface UseAffinityMapHandlersProps {
     groupTitle: string;
     createdByUserId: string;
     createdByUserName: string;
-  }) => Promise<any>;
+  }) => Promise<unknown>;
   broadcastInsightMoved: (args: {
     mapId: Id<"affinityMaps">;
     fromGroupId: string;
@@ -40,7 +40,7 @@ interface UseAffinityMapHandlersProps {
     toGroupTitle: string;
     movedByUserId: string;
     movedByUserName: string;
-  }) => Promise<any>;
+  }) => Promise<unknown>;
 
   // Activity
   activity: {

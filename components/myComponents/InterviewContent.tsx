@@ -347,7 +347,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                 {searchQuery && filteredSegments.length === 0 && (
                   <div className="text-center py-8 text-gray-400">
                     <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p>No results found for "{searchQuery}"</p>
+                    <p>No results found for &quot;{searchQuery}&quot;</p>
                   </div>
                 )}
               </div>

@@ -87,7 +87,7 @@ export const getVotingAnalytics = query({
     
     // Top groupes votés
     const groupVotes = votes.reduce((acc, vote) => {
-      acc[vote.groupId] = (acc[vote.groupId] || 0) + vote.votes;
+      acc[vote.targetId] = (acc[vote.targetId] || 0) + vote.votes;
       return acc;
     }, {} as Record<string, number>);
 

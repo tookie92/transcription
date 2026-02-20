@@ -35,6 +35,7 @@ interface TranscriptionStore {
   isTranscribing: boolean;
   currentFile: File | null;
   transcriptionError: string | null;
+  currentTranscript: string;
   
   // Interviews
   interviews: Interview[];
@@ -44,6 +45,7 @@ interface TranscriptionStore {
   setIsTranscribing: (isTranscribing: boolean) => void;
   setCurrentFile: (file: File | null) => void;
   setTranscriptionError: (error: string | null) => void;
+  setCurrentTranscript: (transcript: string) => void;
   
   addInterview: (interview: Interview) => void;
   updateInterview: (id: string, updates: Partial<Interview>) => void;
@@ -66,6 +68,7 @@ export const useTranscriptionStore = create<TranscriptionStore>()(
         isTranscribing: false,
         currentFile: null,
         transcriptionError: null,
+        currentTranscript: "",
         interviews: [],
         currentInterview: null,
 
@@ -73,6 +76,7 @@ export const useTranscriptionStore = create<TranscriptionStore>()(
         setIsTranscribing: (isTranscribing) => set({ isTranscribing }),
         setCurrentFile: (file) => set({ currentFile: file }),
         setTranscriptionError: (error) => set({ transcriptionError: error }),
+        setCurrentTranscript: (transcript) => set({ currentTranscript: transcript }),
 
         addInterview: (interview) =>
           set((state) => ({
@@ -151,6 +155,7 @@ export const useTranscriptionStore = create<TranscriptionStore>()(
             isTranscribing: false,
             currentFile: null,
             transcriptionError: null,
+            currentTranscript: "",
           }),
       }),
       {

@@ -165,7 +165,7 @@ function validateRecommendations(
         recommendations.push({
           type: (['merge', 'split', 'reorganize', 'create_parent'].includes(rec.type) 
             ? rec.type as 'merge' | 'split' | 'reorganize' | 'create_parent'
-            : 'reorganize'),
+            : 'reorganize') as 'merge' | 'split' | 'reorganize',
           groups: validGroups,
           reason: rec.reason || `Recommendation ${index + 1}`,
           confidence: typeof rec.confidence === 'number' 

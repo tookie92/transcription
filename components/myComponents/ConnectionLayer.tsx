@@ -2,8 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Id } from "@/convex/_generated/dataModel";
-import { GroupConnection, AffinityGroup } from "@/types";
-import { CONNECTION_TYPES } from "./AffinityCanvas";
+import { GroupConnection, AffinityGroup, CONNECTION_TYPES } from "@/types";
 
 interface ConnectionsLayerProps {
   groups: AffinityGroup[];

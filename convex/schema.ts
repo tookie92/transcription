@@ -240,7 +240,7 @@ commentViews: defineTable({
   votes: defineTable({
   sessionId: v.id("dotVotingSessions"),
   userId: v.string(),
-  targetId: v.string(), // 🆕 Peut être groupId OU insightId
+  targetId: v.string(),
   targetType: v.union(v.literal("group"), v.literal("insight")),
   votes: v.number(),
   isVisible: v.boolean(),
@@ -254,8 +254,9 @@ commentViews: defineTable({
   zIndex: v.optional(v.number()),
   createdAt: v.number(),
 })
-.index("by_user_target_session", ["userId", "targetId", "sessionId"]) // 🆕
-.index("by_session_target", ["sessionId", "targetId"]) ,// 
+.index("by_user_target_session", ["userId", "targetId", "sessionId"])
+.index("by_session_target", ["sessionId", "targetId"])
+.index("by_session", ["sessionId"]),
 
 dotVotes: defineTable({
   sessionId: v.id("dotVotingSessions"),
@@ -334,7 +335,26 @@ silentSortingSessions: defineTable({
   participants: v.array(v.string()),
 })
 .index("by_map", ["mapId"])
-.index("by_active", ["isActive"])
+.index("by_active", ["isActive"]),
+
+// Table for group connections
+groupConnections: defineTable({
+  mapId: v.id("affinityMaps"),
+  sourceGroupId: v.string(),
+  targetGroupId: v.string(),
+  type: v.union(
+    v.literal("related"),
+    v.literal("hierarchy"),
+    v.literal("dependency"),
+    v.literal("contradiction")
+  ),
+  label: v.optional(v.string()),
+  strength: v.optional(v.number()),
+  createdBy: v.string(),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+})
+.index("by_map", ["mapId"])
 
 });
 

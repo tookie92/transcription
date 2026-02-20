@@ -212,6 +212,22 @@ export interface ExportInsight {
   source?: string;
 }
 
+export interface GroupConnection {
+  id: Id<"groupConnections">;
+  sourceGroupId: string;
+  targetGroupId: string;
+  type: string;
+  strength?: number;
+  label?: string;
+}
+
+export const CONNECTION_TYPES = [
+  { value: 'related', label: 'Related', color: '#6B7280' },
+  { value: 'hierarchy', label: 'Hierarchy', color: '#3B82F6' },
+  { value: 'dependency', label: 'Dependency', color: '#F59E0B' },
+  { value: 'contradiction', label: 'Contradiction', color: '#EF4444' },
+] as const;
+
 export interface HistoryState {
   groups: AffinityGroup[];
   insights: Insight[];
@@ -270,7 +286,7 @@ export interface ThemeAnalysis {
 
 // types/index.ts - METTRE À JOUR ThemeRecommendation
 export interface ThemeRecommendation {
-  type: 'merge' | 'split' | 'reorganize';
+  type: 'merge' | 'split' | 'reorganize' | 'create_parent';
   groups: string[];
   reason: string;
   confidence: number;

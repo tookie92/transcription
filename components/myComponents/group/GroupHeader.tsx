@@ -63,8 +63,8 @@ export function GroupHeader({
 }: GroupHeaderProps) {
   const insightCount = groupInsights.length;
   const [isResizing, setIsResizing] = React.useState(false);
-  const groupWidth = (group as any).width || 320;
-  const groupHeight = (group as any).height || 300;
+  const groupWidth = (group as unknown as { width?: number }).width || 320;
+  const groupHeight = (group as unknown as { height?: number }).height || 300;
 
   const handleResize = (e: React.MouseEvent, direction: 'width' | 'height' | 'both') => {
     e.stopPropagation();

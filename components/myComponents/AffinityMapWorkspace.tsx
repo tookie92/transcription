@@ -70,7 +70,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     removeGroup,
     removeInsightFromGroup,
     replaceAllGroups,
-    createManualInsight,
+    createManualInsight: createManualInsight as (args: { projectId: Id<"projects">; text: string; type: string }) => Promise<unknown>,
     broadcastGroupCreated,
     broadcastInsightMoved,
     activity,

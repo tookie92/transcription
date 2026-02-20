@@ -312,7 +312,7 @@ export default function TranscriptionManager() {
                 </div>
                 <h4 className="font-semibold text-gray-900 mb-2">Ready to transcribe?</h4>
                 <p className="text-sm text-gray-500 mb-6 max-w-xs mx-auto">
-                  Upload your audio file and we'll extract insights automatically
+                  Upload your audio file and we&apos;ll extract insights automatically
                 </p>
                 <Button
                   onClick={handleUploadAndExtract}
