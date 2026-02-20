@@ -209,6 +209,7 @@ export interface ExportInsight {
   timestamp: number;
   segmentId?: number;
   createdAt: string;
+  source?: string;
 }
 
 export interface HistoryState {

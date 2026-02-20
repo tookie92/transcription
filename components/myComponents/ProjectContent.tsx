@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Plus, Users, Calendar, ArrowLeft, CircuitBoard, Lightbulb, ArrowRight, BarChart3, CheckCircle2, Circle } from "lucide-react";
+import { FileText, Plus, Users, Calendar, ArrowLeft, CircuitBoard, Lightbulb, ArrowRight, BarChart3, CheckCircle2, Circle, TrendingUp, Clock, Target, Zap, PieChart } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 
@@ -53,6 +53,26 @@ const project = useQuery(api.projects.getProjectForInvite, { projectId });
   const currentMap = affinityMaps?.find(m => m.isCurrent);
   const totalGroups = currentMap?.groups.length || 0;
   const groupedInsights = currentMap?.groups.reduce((sum, g) => sum + g.insightIds.length, 0) || 0;
+  
+  // Analytics calculations
+  const interviewStatusBreakdown = {
+    completed: interviews?.filter(i => i.status === "completed").length || 0,
+    analyzing: interviews?.filter(i => i.status === "analyzing").length || 0,
+    transcribing: interviews?.filter(i => i.status === "transcribing").length || 0,
+    uploading: interviews?.filter(i => i.status === "uploading").length || 0,
+    ready: interviews?.filter(i => i.status === "ready").length || 0,
+  };
+  
+  const insightsByType = {
+    painPoint: insights?.filter(i => i.type === "pain-point").length || 0,
+    quote: insights?.filter(i => i.type === "quote").length || 0,
+    insight: insights?.filter(i => i.type === "insight").length || 0,
+    followUp: insights?.filter(i => i.type === "follow-up").length || 0,
+  };
+  
+  const totalDuration = interviews?.reduce((sum, i) => sum + (i.duration || 0), 0) || 0;
+  const avgInterviewDuration = totalInterviews > 0 ? Math.round(totalDuration / totalInterviews) : 0;
+  const groupingProgress = totalInsights > 0 ? Math.round((groupedInsights / totalInsights) * 100) : 0;
 
 // Dans ProjectContent.tsx - MODIFIER le useEffect
 useEffect(() => {

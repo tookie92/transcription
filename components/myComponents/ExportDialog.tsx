@@ -15,7 +15,7 @@ import { ExportInterview } from '@/types';
 import { toast } from 'sonner';
 
 interface ExportDialogProps {
-  interview: ExportInterview; // ← Changer ici
+  interview: ExportInterview;
   trigger?: React.ReactNode;
 }
 
@@ -28,10 +28,10 @@ export function ExportDialog({ interview, trigger }: ExportDialogProps) {
     toast.success("PDF downloaded successfully!");
   };
 
-  const handleExportMarkdown = () => {
-    toast.info("Generating Markdown...");
+   const handleExportJSON = () => {
+    toast.info("Generating JSON...");
     exportAsMarkdown(interview);
-    toast.success("Markdown downloaded successfully!");
+    toast.success("JSON downloaded successfully!");
   };
 
 
@@ -45,7 +45,7 @@ export function ExportDialog({ interview, trigger }: ExportDialogProps) {
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Export Interview</DialogTitle>
           <DialogDescription>
@@ -55,11 +55,11 @@ export function ExportDialog({ interview, trigger }: ExportDialogProps) {
         <div className="space-y-3 py-4">
           {/* PDF Export */}
           <Button
-            onClick={handleExportPDF} // ← CHANGÉ
+            onClick={handleExportPDF}
             className="w-full justify-start gap-3 h-auto py-4"
             variant="outline"
           >
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-red-50">
+            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-red-50 dark:bg-red-950">
               <FileDown className="w-5 h-5 text-red-600" />
             </div>
             <div className="flex flex-col items-start">
@@ -70,19 +70,19 @@ export function ExportDialog({ interview, trigger }: ExportDialogProps) {
             </div>
           </Button>
 
-          {/* Markdown Export */}
+          {/* JSON Export */}
           <Button
-            onClick={handleExportMarkdown} // ← CHANGÉ
+            onClick={handleExportJSON}
             className="w-full justify-start gap-3 h-auto py-4"
             variant="outline"
           >
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-50">
+            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950">
               <FileText className="w-5 h-5 text-blue-600" />
             </div>
             <div className="flex flex-col items-start">
-              <span className="font-medium">Export as Markdown</span>
+              <span className="font-medium">Export as JSON</span>
               <span className="text-xs text-gray-500">
-                Plain text format for easy editing
+                Structured data for backup
               </span>
             </div>
           </Button>

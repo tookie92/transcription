@@ -222,8 +222,82 @@ export function useExport() {
     return markdown;
   };
 
+  // Export as CSV (for Excel)
+  const exportAsCSV = (interview: ExportInterview) => {
+    let csv = 'Type,Timestamp,Text,Source\n';
+    
+    interview.insights.forEach((insight) => {
+      const timestamp = `${Math.floor(insight.timestamp / 60)}:${String(Math.floor(insight.timestamp % 60)).padStart(2, '0')}`;
+      const text = insight.text.replace(/"/g, '""');
+      csv += `"${insight.type}","${timestamp}","${text}","${insight.source}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${interview.title.replace(/[^a-z0-9]/gi, '_')}_insights.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Export as Notion-friendly Markdown
+  const exportAsNotion = (interview: ExportInterview) => {
+    let markdown = `# ${interview.title}\n\n`;
+    
+    markdown += `**Date:** ${new Date(interview.createdAt).toLocaleDateString()}\n`;
+    markdown += `**Duration:** ${Math.floor(interview.duration / 60)}:${String(Math.floor(interview.duration % 60)).padStart(2, '0')} min\n`;
+    if (interview.topic) {
+      markdown += `**Topic:** ${interview.topic}\n`;
+    }
+    markdown += '\n---\n\n';
+
+    markdown += '## Key Insights\n\n';
+    
+    if (interview.insights.length > 0) {
+      const groupedInsights = interview.insights.reduce((acc, insight) => {
+        if (!acc[insight.type]) {
+          acc[insight.type] = [];
+        }
+        acc[insight.type].push(insight);
+        return acc;
+      }, {} as Record<string, typeof interview.insights>);
+
+      Object.entries(groupedInsights).forEach(([type, insights]) => {
+        const icon = type === 'pain-point' ? '🔴' : type === 'quote' ? '💬' : type === 'insight' ? '💡' : '➡️';
+        markdown += `### ${icon} ${type.charAt(0).toUpperCase() + type.slice(1).replace('-', ' ')}\n\n`;
+        insights.forEach((insight) => {
+          const timestamp = `${Math.floor(insight.timestamp / 60)}:${String(Math.floor(insight.timestamp % 60)).padStart(2, '0')}`;
+          markdown += `- **${timestamp}** ${insight.text}\n`;
+        });
+        markdown += '\n';
+      });
+    } else {
+      markdown += '_No insights yet._\n\n';
+    }
+
+    markdown += '---\n\n';
+    markdown += '## Transcription\n\n';
+    markdown += '_Full transcription available in separate document._\n';
+    markdown += `- ${interview.segments.length} segments, ${interview.transcription.split(' ').length} words\n`;
+
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${interview.title.replace(/[^a-z0-9]/gi, '_')}_notion.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return {
     exportAsMarkdown,
     exportAsPDF,
+    exportAsCSV,
+    exportAsNotion,
   };
 }

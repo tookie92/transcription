@@ -145,13 +145,13 @@ export function ExportPanel({ mapId, projectId, onClose }: ExportPanelProps) {
       description: 'Professional document with all insights',
       available: true
     },
-    {
-      value: 'png' as ExportFormat,
-      label: 'PNG Image',
-      icon: <Image size={18} />,
-      description: 'Visual snapshot of the current view',
-      available: false
-    }
+    // {
+    //   value: 'png' as ExportFormat,
+    //   label: 'PNG Image',
+    //   icon: <Image size={18} />,
+    //   description: 'Visual snapshot of the current view',
+    //   available: false
+    // }
   ];
 
   if (!mapData) {
@@ -166,7 +166,7 @@ export function ExportPanel({ mapId, projectId, onClose }: ExportPanelProps) {
   }
 
   return (
-    <Card className="w-80">
+    <Card className="w-80 mb-20">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Download size={20} />
