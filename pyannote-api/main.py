@@ -1,5 +1,5 @@
 """
-PyAnnote Speaker Diarization API
+PyAnnote Speaker Diarization API - Optimized version
 Deploy on Render.com for free
 """
 
@@ -19,7 +19,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global pipeline - loaded lazily
 pipeline = None
 HF_TOKEN = os.getenv("HF_TOKEN")
 pipeline_loading = False
@@ -37,7 +36,6 @@ def get_pipeline():
     pipeline_loading = True
     
     try:
-        # Import here to avoid blocking on startup
         import torch
         from pyannote.audio import Pipeline
         pipeline = Pipeline.from_pretrained(
@@ -51,6 +49,18 @@ def get_pipeline():
         import traceback
         traceback.print_exc()
         return None
+
+def optimize_audio(input_path, output_path):
+    """Convert audio to mono 16kHz for faster processing"""
+    try:
+        from pydub import AudioSegment
+        audio = AudioSegment.from_file(input_path)
+        audio = audio.set_channels(1).set_frame_rate(16000)
+        audio.export(output_path, format="wav")
+        return True
+    except Exception as e:
+        print(f"Audio optimization failed: {e}")
+        return False
 
 def merge_diarization_with_transcription(diarization, segments, duration):
     """Merge speaker diarization with Whisper segments"""
@@ -98,17 +108,29 @@ async def diarize_audio(
     try:
         audio_content = await audio.read()
         
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-            tmp.write(audio_content)
-            tmp_path = tmp.name
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_in:
+            tmp_in.write(audio_content)
+            tmp_in_path = tmp_in.name
         
-        diarization = p(tmp_path)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_out:
+            tmp_out_path = tmp_out.name
+        
+        optimized = optimize_audio(tmp_in_path, tmp_out_path)
+        
+        if optimized:
+            audio_path = tmp_out_path
+        else:
+            audio_path = tmp_in_path
+        
+        diarization = p(audio_path)
         duration = diarization.duration
         
         segments_data = json.loads(segments) if segments else []
         result = merge_diarization_with_transcription(diarization, segments_data, duration)
         
-        os.unlink(tmp_path)
+        os.unlink(tmp_in_path)
+        if optimized:
+            os.unlink(tmp_out_path)
         
         return JSONResponse(content={
             "segments": result,
