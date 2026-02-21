@@ -332,6 +332,11 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                         {Math.floor(segment.start / 60)}:
                         {String(Math.floor(segment.start % 60)).padStart(2, '0')}
                       </span>
+                      {segment.speaker && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded flex-shrink-0">
+                          {segment.speaker}
+                        </span>
+                      )}
                       <p className="text-gray-700 leading-relaxed flex-1">
                         {searchQuery ? (
                           segment.text.split(new RegExp(`(${searchQuery})`, 'gi')).map((part, i) => 
