@@ -4,11 +4,14 @@ Deploy on Render.com for free
 """
 
 import os
-import json
-import tempfile
+import io
+import base64
+import asyncio
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+import torch
+from pyannote.audio import Pipeline
 
 app = FastAPI(title="PyAnnote Diarization API")
 
@@ -19,27 +22,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pipeline loaded lazily
+# Initialize pipeline globally (reuse for efficiency)
 pipeline = None
 HF_TOKEN = os.getenv("HF_TOKEN")
 
-def get_pipeline():
-    """Lazy load pipeline on first request"""
+@app.on_event("startup")
+async def load_pipeline():
     global pipeline
-    if pipeline is None:
-        if not HF_TOKEN:
-            raise HTTPException(status_code=503, detail="HF_TOKEN not set")
-        
-        from pyannote.audio import Pipeline
-        pipeline = Pipeline.from_pretrained(
-            "pyannote/speaker-diarization-community-1",
-            use_auth_token=HF_TOKEN
-        )
-        print("PyAnnote pipeline loaded successfully!")
-    return pipeline
+    if HF_TOKEN:
+        try:
+            pipeline = Pipeline.from_pretrained(
+                "pyannote/speaker-diarization-community-1",
+                use_auth_token=HF_TOKEN
+            )
+            print("PyAnnote pipeline loaded successfully!")
+        except Exception as e:
+            print(f"Error loading pipeline: {e}")
+            pipeline = None
+    else:
+        print("HF_TOKEN not set - Diarization will not work")
 
 def merge_diarization_with_transcription(diarization, segments, duration):
-    """Merge speaker diarization with Whisper segments"""
+    """
+    Merge speaker diarization with Whisper segments
+    Returns segments with speaker labels
+    """
     result = []
     
     for segment in segments:
@@ -47,6 +54,7 @@ def merge_diarization_with_transcription(diarization, segments, duration):
         end = segment.get("end", duration)
         text = segment.get("text", "")
         
+        # Find speakers in this time range
         speakers = set()
         for turn, _, speaker in diarization.itertracks(yield_label=True):
             if turn.start < end and turn.end > start:
@@ -66,23 +74,35 @@ def merge_diarization_with_transcription(diarization, segments, duration):
 @app.post("/diarize")
 async def diarize_audio(
     audio: UploadFile = File(...),
-    segments: str = None
+    segments: str = None  # JSON string of Whisper segments
 ):
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="Pipeline not loaded. Set HF_TOKEN.")
+    
     try:
-        pipeline = get_pipeline()
-        
+        # Read audio file
         audio_content = await audio.read()
         
+        # Save to temporary file (PyAnnote needs file path or Audio object)
+        import tempfile
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
             tmp.write(audio_content)
             tmp_path = tmp.name
         
+        # Run diarization
         diarization = pipeline(tmp_path)
+        
+        # Get duration
         duration = diarization.duration
         
+        # Parse segments if provided
+        import json
         segments_data = json.loads(segments) if segments else []
+        
+        # Merge with transcription
         result = merge_diarization_with_transcription(diarization, segments_data, duration)
         
+        # Clean up
         os.unlink(tmp_path)
         
         return JSONResponse(content={
@@ -96,7 +116,7 @@ async def diarize_audio(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "pipeline_ready": pipeline is not None}
+    return {"status": "ok", "pipeline_loaded": pipeline is not None}
 
 if __name__ == "__main__":
     import uvicorn
