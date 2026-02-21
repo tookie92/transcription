@@ -30,6 +30,7 @@ export default defineSchema({
       start: v.number(),
       end: v.number(),
       text: v.string(),
+      speaker: v.optional(v.string()),
     })),
     duration: v.number(),
     status: v.union(

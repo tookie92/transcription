@@ -13,6 +13,7 @@ export const createInterview = mutation({
       start: v.number(),
       end: v.number(),
       text: v.string(),
+      speaker: v.optional(v.string()),
     })),
     duration: v.number(),
   },
@@ -205,6 +206,27 @@ export const deleteInterview = mutation({
     if (!hasAccess) throw new Error("No access to delete this interview");
 
     await ctx.db.delete(args.interviewId);
+
+    return { success: true };
+  },
+});
+
+// Mettre à jour les segments avec les speakers (pour la diarisation)
+export const updateSegmentsWithSpeakers = mutation({
+  args: {
+    interviewId: v.id("interviews"),
+    segments: v.array(v.object({
+      id: v.number(),
+      start: v.number(),
+      end: v.number(),
+      text: v.string(),
+      speaker: v.optional(v.string()),
+    })),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.interviewId, {
+      segments: args.segments,
+    });
 
     return { success: true };
   },

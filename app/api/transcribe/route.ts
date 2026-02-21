@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
               method: 'POST',
               body: diarizeFormData,
             },
-            180000 // 3 minutes timeout
+            300000 // 5 minutes timeout
           );
 
           if (diarizeResponse.status === 202) {

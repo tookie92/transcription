@@ -42,6 +42,7 @@
     "groq-sdk": "^0.34.0",
     "gsap": "^3.13.0",
     "html2canvas": "^1.4.1",
+    "inngest": "^3.52.3",
     "jspdf": "^3.0.3",
     "lucide-react": "^0.546.0",
     "next": "15.5.6",

@@ -47,7 +47,7 @@ export default function InterviewHome() {
     title: string;
     topic?: string;
     transcription: string;
-    segments: { id: number; start: number; end: number; text: string }[];
+    segments: { id: number; start: number; end: number; text: string; speaker?: string }[];
     duration: number;
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -167,6 +167,7 @@ export default function InterviewHome() {
         start: segment.start,
         end: segment.end,
         text: segment.text,
+        speaker: segment.speaker,
       }));
 
       // Store the transcribed data but don't save yet
@@ -194,11 +195,26 @@ export default function InterviewHome() {
   };
 
   const handleSave = async () => {
-    if (!pendingInterview || !currentProjectId) return;
+    if (!pendingInterview || !currentProjectId || !selectedFile) return;
 
     const toastId = toast.loading("Saving interview to project...");
 
     try {
+      // First upload audio to get a public URL
+      const uploadFormData = new FormData();
+      uploadFormData.append("audio", selectedFile);
+      
+      const uploadResponse = await fetch("/api/upload-audio", {
+        method: "POST",
+        body: uploadFormData,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("Failed to upload audio");
+      }
+
+      const { audioUrl: uploadedAudioUrl } = await uploadResponse.json();
+
       const interviewId = await createInterview({
         projectId: currentProjectId,
         title: pendingInterview.title,
@@ -207,6 +223,23 @@ export default function InterviewHome() {
         segments: pendingInterview.segments,
         duration: pendingInterview.duration,
       });
+
+      // Trigger background diarization with Inngest
+      try {
+        await fetch("/api/trigger-diarize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            interviewId,
+            projectId: currentProjectId,
+            audioUrl: uploadedAudioUrl,
+            segments: pendingInterview.segments,
+          }),
+        });
+        toast.info("Speaker detection started in background");
+      } catch (diarizeError) {
+        console.error("Failed to trigger diarization:", diarizeError);
+      }
 
       toast.success("Interview saved successfully!", { 
         id: toastId,
@@ -517,6 +550,11 @@ export default function InterviewHome() {
                       <span className="text-xs text-gray-400">
                         {Math.floor(segment.start / 60)}:{String(Math.floor(segment.start % 60)).padStart(2, '0')}
                       </span>
+                      {segment.speaker && (
+                        <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                          {segment.speaker}
+                        </span>
+                      )}
                       <p className="text-gray-700">{segment.text}</p>
                     </div>
                   ))}

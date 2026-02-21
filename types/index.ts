@@ -18,6 +18,7 @@ export interface TranscriptionSegment {
   avg_logprob: number;
   compression_ratio: number;
   no_speech_prob: number;
+  speaker?: string;
 }
 
 
@@ -27,6 +28,7 @@ export interface SimpleSegment {
   start: number;
   end: number;
   text: string;
+  speaker?: string;
 }
 
 // Project types
