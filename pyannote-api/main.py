@@ -5,7 +5,6 @@ Deploy on Render.com for free
 
 import os
 import json
-import asyncio
 import tempfile
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,6 +37,8 @@ def get_pipeline():
     pipeline_loading = True
     
     try:
+        # Import here to avoid blocking on startup
+        import torch
         from pyannote.audio import Pipeline
         pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-community-1",
@@ -47,7 +48,8 @@ def get_pipeline():
         return pipeline
     except Exception as e:
         print(f"Error loading pipeline: {e}")
-        pipeline_loading = False
+        import traceback
+        traceback.print_exc()
         return None
 
 def merge_diarization_with_transcription(diarization, segments, duration):
@@ -83,13 +85,15 @@ async def diarize_audio(
     p = get_pipeline()
     
     if p is None:
-        # Trigger loading if not already loading
         if pipeline_loading:
             return JSONResponse(
                 status_code=202,
                 content={"status": "loading", "message": "Pipeline is loading, please retry"}
             )
-        raise HTTPException(status_code=503, detail="Pipeline not loaded. Check HF_TOKEN.")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "message": "Pipeline failed to load. Check HF_TOKEN."}
+        )
     
     try:
         audio_content = await audio.read()
@@ -113,11 +117,18 @@ async def diarize_audio(
         })
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "pipeline_loaded": pipeline is not None}
+
+@app.get("/test")
+async def test():
+    return {"message": "API is running"}
 
 if __name__ == "__main__":
     import uvicorn
