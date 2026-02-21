@@ -8,6 +8,23 @@ const groq = new Groq({
 
 const PYANNOTE_API_URL = process.env.PYANNOTE_API_URL;
 
+async function fetchWithTimeout(url: string, options: RequestInit, timeout = 180000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -33,29 +50,57 @@ export async function POST(request: NextRequest) {
     let diarizedSegments = transcription.segments;
     
     if (PYANNOTE_API_URL) {
-      try {
-        // Create FormData for PyAnnote API
-        const diarizeFormData = new FormData();
-        diarizeFormData.append('audio', file);
-        diarizeFormData.append('segments', JSON.stringify(
-          transcription.segments.map((s: { start: number; end: number; text: string }) => ({
-            start: s.start,
-            end: s.end,
-            text: s.text,
-          }))
-        ));
+      let retries = 3;
+      let lastError = null;
+      
+      while (retries > 0) {
+        try {
+          // Create FormData for PyAnnote API
+          const diarizeFormData = new FormData();
+          diarizeFormData.append('audio', file);
+          diarizeFormData.append('segments', JSON.stringify(
+            transcription.segments.map((s: { start: number; end: number; text: string }) => ({
+              start: s.start,
+              end: s.end,
+              text: s.text,
+            }))
+          ));
 
-        const diarizeResponse = await fetch(`${PYANNOTE_API_URL}/diarize`, {
-          method: 'POST',
-          body: diarizeFormData,
-        });
+          const diarizeResponse = await fetchWithTimeout(
+            `${PYANNOTE_API_URL}/diarize`,
+            {
+              method: 'POST',
+              body: diarizeFormData,
+            },
+            180000 // 3 minutes timeout
+          );
 
-        if (diarizeResponse.ok) {
-          const diarizeData = await diarizeResponse.json();
-          diarizedSegments = diarizeData.segments;
+          if (diarizeResponse.status === 202) {
+            // Pipeline is still loading, wait and retry
+            console.log('PyAnnote loading, waiting...');
+            await new Promise(resolve => setTimeout(resolve, 30000));
+            retries--;
+            continue;
+          }
+
+          if (diarizeResponse.ok) {
+            const diarizeData = await diarizeResponse.json();
+            diarizedSegments = diarizeData.segments;
+            console.log('Diarization successful!');
+          }
+          break;
+        } catch (diarizeError) {
+          lastError = diarizeError;
+          console.error(`Diarization attempt failed (${retries} retries left):`, diarizeError);
+          retries--;
+          if (retries > 0) {
+            await new Promise(resolve => setTimeout(resolve, 10000));
+          }
         }
-      } catch (diarizeError) {
-        console.error('Diarization failed, using raw transcription:', diarizeError);
+      }
+      
+      if (retries === 0) {
+        console.error('Diarization failed after all retries:', lastError);
       }
     }
 
