@@ -77,7 +77,7 @@ export const runDiarization = inngest.createFunction(
         method: "POST",
         body: diarizeFormData,
       },
-      600000
+      900000 // 15 minutes for first load
     );
 
     if (!diarizeResponse.ok) {
