@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { GripVertical, Trash2, MessageCircle, Sparkles, ChevronDown, ChevronUp, Maximize2, Minimize2 } from "lucide-react";
+import { GripVertical, Trash2, MessageCircle, Sparkles, ChevronDown, ChevronUp, Maximize2, Minimize2, Circle } from "lucide-react";
 import { AffinityGroup as AffinityGroupType, Insight } from "@/types";
 import { GroupNameAssistant } from "../GroupNameAssistant";
 import { motion } from "framer-motion";
@@ -32,6 +32,8 @@ interface GroupHeaderProps {
   amIMentioned?: boolean;
   isSelectedByOther?: boolean;
   isChatOpen?: boolean;
+  myDotsCount?: number;
+  groupDotsCount?: number;
 }
 
 export function GroupHeader({
@@ -60,6 +62,8 @@ export function GroupHeader({
   amIMentioned,
   isSelectedByOther,
   isChatOpen = false,
+  myDotsCount = 0,
+  groupDotsCount = 0,
 }: GroupHeaderProps) {
   const insightCount = groupInsights.length;
   const [isResizing, setIsResizing] = React.useState(false);
@@ -235,6 +239,25 @@ export function GroupHeader({
           <Sparkles size={10} />
           {insightCount}
         </motion.div>
+
+        {/* Vote Counter - Show during dot voting */}
+        {(groupDotsCount > 0 || isPlacingDot) && (
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className={`
+              flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg
+              ${groupDotsCount > 0 ? "bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-sm" : "bg-gray-100 text-gray-400"}
+            `}
+            title={myDotsCount > 0 ? `You voted ${myDotsCount} time(s)` : `${groupDotsCount} vote${groupDotsCount !== 1 ? "s" : ""}`}
+          >
+            <Circle size={10} fill="currentColor" className={myDotsCount > 0 ? "animate-pulse" : ""} />
+            {groupDotsCount}
+            {myDotsCount > 0 && (
+              <span className="text-[9px] opacity-75">({myDotsCount})</span>
+            )}
+          </motion.div>
+        )}
 
         {/* AI Assistant */}
         {hasInsights && !isPresentationMode && !isPlacingDot && (

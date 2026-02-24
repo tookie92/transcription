@@ -93,6 +93,9 @@ export default function AffinityGroup({
       targetType: 'group', targetId: group.id
     } : "skip"
   );
+  
+  const groupDotsCount = groupDots?.length ?? 0;
+  
   const placeDot = useMutation(api.dotVoting.placeDot);
   const removeDot = useMutation(api.dotVoting.removeDot);
 
@@ -380,6 +383,8 @@ export default function AffinityGroup({
             isSelectedByOther={isSelectedByOther}
             isChatOpen={isChatOpen}
             onResize={onResize}
+            myDotsCount={myDotsCount}
+            groupDotsCount={groupDotsCount}
           />
 
           {/* INSIGHTS LIST */}
