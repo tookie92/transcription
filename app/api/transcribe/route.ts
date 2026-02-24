@@ -18,7 +18,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 1: Transcribe with Groq Whisper
     const transcription = await groq.audio.transcriptions.create({
       file: file,
       model: 'whisper-large-v3',
@@ -27,10 +26,22 @@ export async function POST(request: NextRequest) {
       temperature: 0.0,
     }) as unknown as VerboseTranscription;
 
-    // Return transcription (diarization is handled via Inngest)
+    const segments = transcription.segments?.map((segment, index) => ({
+      id: index,
+      seek: segment.seek || 0,
+      start: segment.start || 0,
+      end: segment.end || 0,
+      text: segment.text || '',
+      tokens: segment.tokens || [],
+      temperature: segment.temperature || 0,
+      avg_logprob: segment.avg_logprob || 0,
+      compression_ratio: segment.compression_ratio || 0,
+      no_speech_prob: segment.no_speech_prob || 0,
+    })) || [];
+
     return NextResponse.json({
       text: transcription.text,
-      segments: transcription.segments,
+      segments: segments,
       duration: transcription.duration,
       language: transcription.language,
     });
