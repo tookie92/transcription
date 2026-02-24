@@ -47,11 +47,11 @@ export function InsightsList({
 }: InsightsListProps) {
   return (
     <div
-      className={`p-4 space-y-3 max-h-60 overflow-y-auto ${
+      className={`p-4 space-y-3 max-h-[400px] overflow-y-auto ${
         isPresentationMode && isFocusedInPresentation
-          ? "bg-linear-to-br from-blue-50 to-indigo-50"
-          : "bg-white/50"
-      } rounded-b-2xl`}
+          ? "bg-blue-50/50"
+          : "bg-gray-50"
+      }`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}

@@ -107,14 +107,14 @@ export function GroupHeader({
   return (
     <div
       className={`
-        group relative flex items-center gap-2 px-3 py-2.5 cursor-grab active:cursor-grabbing 
-        rounded-t-xl transition-all duration-200
-        ${isFocusedInPresentation ? "bg-gradient-to-r from-blue-500/10 to-purple-500/10" : ""}
+        group relative flex items-center gap-2 px-4 py-3 cursor-grab active:cursor-grabbing 
+        transition-all duration-200
+        ${isFocusedInPresentation ? "bg-blue-50" : ""}
         ${isResizing ? "cursor-resize" : ""}
       `}
-      style={{ 
-        background: `linear-gradient(135deg, ${group.color}08 0%, ${group.color}15 100%)`,
-        borderBottom: `3px solid ${group.color}40`
+      style={{
+        backgroundColor: `${group.color}15`,
+        borderBottom: `2px solid ${group.color}60`,
       }}
       onMouseDown={(e) => {
         if (isPresentationMode) {
@@ -125,12 +125,6 @@ export function GroupHeader({
       }}
       onClick={onAddDot}
     >
-      {/* Left accent bar */}
-      <div 
-        className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl"
-        style={{ backgroundColor: group.color }}
-      />
-
       {/* FOCUS indicator */}
       {isPresentationMode && isFocusedInPresentation && (
         <motion.div 
@@ -290,26 +284,6 @@ export function GroupHeader({
             {amIMentioned && !isChatOpen && (
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-white" />
             )}
-          </motion.button>
-        )}
-
-        {/* Resize Handle */}
-        {!isPresentationMode && onResize && (
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onResize(group.id, { 
-                width: groupWidth + 50, 
-                height: groupHeight 
-              });
-            }}
-            onMouseDown={(e) => handleResize(e, 'both')}
-            className="p-1.5 rounded-lg hover:bg-black/5 text-gray-400 hover:text-gray-600 cursor-se-resize"
-            title="Resize group"
-          >
-            <Maximize2 size={14} />
           </motion.button>
         )}
 

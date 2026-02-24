@@ -115,38 +115,51 @@ export default function AffinityGroup({
   });
   const amIMentioned = myMentions?.includes(group.id);
 
-  // ==================== GAMIFIED STYLES ====================
+  // ==================== STICKY NOTE STYLES ====================
   const styles = useMemo(() => {
     const baseColor = group.color;
+    const stickyColors: Record<string, { bg: string; border: string; text: string }> = {
+      "pain-point": { bg: '#fef2f2', border: '#fecaca', text: '#991b1b' },
+      "quote": { bg: '#eff6ff', border: '#bfdbfe', text: '#1e40af' },
+      "insight": { bg: '#faf5ff', border: '#e9d5ff', text: '#6b21a8' },
+      "question": { bg: '#fffbeb', border: '#fde68a', text: '#92400e' },
+    };
+    
     return {
       container: {
         background: '#fff',
-        border: `2px solid ${baseColor}30`,
-        borderRadius: '28px',
+        border: `1px solid ${baseColor}40`,
+        borderRadius: '8px',
+        overflow: 'visible',
         boxShadow: isSelected
-          ? `0 4px 24px ${baseColor}33, 0 0 0 3px ${baseColor}`
+          ? `0 12px 40px ${baseColor}35, 0 0 0 3px ${baseColor}`
           : isHighlighted
-          ? `0 2px 12px ${baseColor}22, 0 0 0 2px ${baseColor}77`
-          : `0 2px 12px rgba(0,0,0,0.08)`,
-        transform: isSelected ? 'scale(1.03)' : 'scale(1)',
-        transition: 'all 0.22s cubic-bezier(.4,0,.2,1)',
+          ? `0 8px 24px ${baseColor}25, 0 0 0 2px ${baseColor}77`
+          : `0 6px 20px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.08)`,
+        transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+        transition: 'all 0.25s cubic-bezier(.4,0,.2,1)',
       },
       header: {
-        background: baseColor + '18',
-        borderBottom: `1.5px solid ${baseColor}33`,
-        borderRadius: '24px 24px 0 0',
-        minHeight: '48px',
+        background: `${baseColor}15`,
+        borderBottom: `2px solid ${baseColor}50`,
+        minHeight: '56px',
       },
+      insightListBg: '#fafafa',
       insightCard: {
-        background: '#fef9c3', border: '1.5px solid #fde68a',
-        borderRadius: '10px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-        fontSize: '1rem', color: '#7c6512', fontFamily: 'Inter, sans-serif',
+        background: '#ffffff', 
+        border: '1px solid #e5e7eb',
+        borderRadius: '6px', 
+        boxShadow: '0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)',
+        fontSize: '0.95rem', 
+        color: '#1f2937', 
+        fontFamily: 'Inter, sans-serif',
       },
       counterBadge: {
-        background: baseColor, color: 'white', borderRadius: '10px',
-        fontWeight: 700, fontSize: '0.95rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+        background: baseColor, 
+        color: 'white', borderRadius: '6px',
+        fontWeight: 700, fontSize: '0.75rem', 
       },
-      buttonGlossy: { background: '#f3f4f6', border: 'none', borderRadius: '50%', boxShadow: 'none' },
+      stickyColors,
     };
   }, [group.color, isSelected, isHighlighted]);
 
@@ -320,16 +333,15 @@ export default function AffinityGroup({
             rotateY: isDragging ? rotateY : 0,
             pointerEvents: isPresentationMode ? 'none' : 'auto'
           }}
-          className={`absolute min-w-80 max-w-96 ${
+          className={`absolute min-w-[420px] max-w-[520px] ${
             isPresentationMode ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
           } ${isPlacingDot ? 'ring-4 ring-blue-400 ring-opacity-60 animate-pulse' : ''}
           ${!canInteract ? 'opacity-80 cursor-not-allowed' : 'cursor-grab'}`}
         >
-
           {/* SILENT SORTING OVERLAY */}
           {!canInteract && isSilentSortingActive && (
-            <div className="absolute inset-0 bg-white/70 rounded-2xl flex items-center justify-center z-10 backdrop-blur-sm">
-              <div className="text-center p-4" style={styles.buttonGlossy}>
+            <div className="absolute inset-0 bg-white/70 rounded-lg flex items-center justify-center z-10 backdrop-blur-sm">
+              <div className="text-center p-4 bg-gray-100 rounded-full">
                 <VolumeX className="w-8 h-8 mx-auto mb-2 text-gray-500" />
                 <p className="text-sm text-gray-600 font-medium">Silent Sorting</p>
                 <p className="text-xs text-gray-500">Discussion paused</p>

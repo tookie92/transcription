@@ -25,31 +25,35 @@ interface InsightCardProps {
 const TYPE_CONFIG = {
   "pain-point": {
     emoji: "😫",
-    gradient: "from-red-50 to-red-100",
+    bg: "bg-red-50",
     border: "border-red-200",
     badge: "bg-red-500",
     label: "Pain",
+    textColor: "text-red-900",
   },
   "quote": {
     emoji: "💬",
-    gradient: "from-blue-50 to-blue-100",
+    bg: "bg-blue-50",
     border: "border-blue-200",
     badge: "bg-blue-500",
     label: "Quote",
+    textColor: "text-blue-900",
   },
   "insight": {
     emoji: "💡",
-    gradient: "from-purple-50 to-purple-100",
+    bg: "bg-purple-50",
     border: "border-purple-200",
     badge: "bg-purple-500",
     label: "Idea",
+    textColor: "text-purple-900",
   },
   "question": {
     emoji: "🤔",
-    gradient: "from-amber-50 to-amber-100",
+    bg: "bg-amber-50",
     border: "border-amber-200",
     badge: "bg-amber-500",
     label: "Question",
+    textColor: "text-amber-900",
   },
 } as const;
 
@@ -92,10 +96,9 @@ export function InsightCard({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className={`
-        relative group p-3.5 rounded-2xl transition-all duration-200
-        bg-gradient-to-br ${config.gradient}
-        border-2 ${config.border}
-        hover:shadow-lg hover:shadow-black/5
+        relative group p-4 rounded-md transition-all duration-200
+        ${config.bg} ${config.border}
+        border-b-4 shadow-sm hover:shadow-md hover:-translate-y-0.5
         ${isDraggable ? "cursor-grab active:cursor-grabbing" : "cursor-default"}
       `}
       style={insightCardStyle}
@@ -123,22 +126,22 @@ export function InsightCard({
       }}
     >
       {/* Drag Handle & Type Badge */}
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-3">
         {isDraggable && (
           <div className="text-gray-400 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity">
             <GripVertical size={14} />
           </div>
         )}
         
-        <span className="text-xs">{config.emoji}</span>
+        <span className="text-sm">{config.emoji}</span>
         
-        <span className={`${config.badge} text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider`}>
+        <span className={`${config.badge} text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider`}>
           {config.label}
         </span>
       </div>
 
       {/* Content */}
-      <p className="text-sm leading-relaxed text-gray-700 font-medium">
+      <p className={`text-base leading-relaxed font-medium ${config.textColor}`}>
         {insight.text}
       </p>
 
