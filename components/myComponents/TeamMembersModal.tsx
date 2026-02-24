@@ -165,9 +165,9 @@ export function TeamMembersModal({ projectId, projectName, isOwner }: TeamMember
 
   const getRoleColor = (role: MemberRole) => {
     switch (role) {
-      case "owner": return "bg-amber-50 text-amber-700 border-amber-200";
-      case "editor": return "bg-blue-50 text-blue-700 border-blue-200";
-      case "viewer": return "bg-gray-50 text-gray-700 border-gray-200";
+      case "owner": return "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800";
+      case "editor": return "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800";
+      case "viewer": return "bg-muted text-foreground border-border";
     }
   };
 
@@ -177,7 +177,7 @@ export function TeamMembersModal({ projectId, projectName, isOwner }: TeamMember
         <Button variant="outline" className="gap-2">
           <Users className="w-4 h-4" />
           Team
-          <span className="ml-1 px-2 py-0.5 bg-gray-100 text-xs rounded-full">
+          <span className="ml-1 px-2 py-0.5 bg-muted text-xs rounded-full">
             {members.length}
           </span>
         </Button>
@@ -185,7 +185,7 @@ export function TeamMembersModal({ projectId, projectName, isOwner }: TeamMember
       
       <DialogContent className="max-w-md w-full p-0 overflow-hidden">
         {/* Header */}
-        <div className="bg-linear-to-r from-[#3D7C6F] to-[#2d5f54] p-6 text-white">
+        <div className="bg-gradient-to-r from-[#3D7C6F] to-[#2d5f54] p-6 text-white">
           <DialogHeader className="text-white">
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Users className="w-5 h-5" />
@@ -200,8 +200,8 @@ export function TeamMembersModal({ projectId, projectName, isOwner }: TeamMember
         <div className="p-4 space-y-4">
           {/* Invite Form */}
           {isOwner && (
-            <div className="p-4 bg-gray-50 rounded-xl space-y-3">
-              <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
+            <div className="p-4 bg-muted rounded-xl space-y-3">
+              <p className="text-sm font-medium text-foreground flex items-center gap-2">
                 <UserPlus className="w-4 h-4" />
                 Invite new member
               </p>
@@ -232,7 +232,7 @@ export function TeamMembersModal({ projectId, projectName, isOwner }: TeamMember
                       flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg border-2 text-sm font-medium transition-all
                       ${selectedRole === role 
                         ? getRoleColor(role) 
-                        : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                        : "bg-background border-border text-foreground hover:border-primary"
                       }
                     `}
                   >

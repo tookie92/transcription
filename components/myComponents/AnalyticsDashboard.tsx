@@ -55,16 +55,16 @@ export function AnalyticsDashboard({ groups, insights, projectName, onClose }: A
   }, [groups, insights]);
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="h-full flex flex-col bg-background">
       {/* Header avec bouton fermer */}
-      <div className="shrink-0 bg-white border-b border-gray-200 p-4">
+      <div className="shrink-0 bg-card border-b border-border p-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
               <BarChart3 className="w-5 h-5" />
               Analytics Dashboard
             </h1>
-            <p className="text-sm text-gray-600 mt-1">{projectName}</p>
+            <p className="text-sm text-muted-foreground mt-1">{projectName}</p>
           </div>
           {onClose && (
             <Button
@@ -82,22 +82,22 @@ export function AnalyticsDashboard({ groups, insights, projectName, onClose }: A
       {/* Contenu scrollable */}
       <div className="flex-1 overflow-y-auto p-6">
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 bg-gray-100 p-1 rounded-lg">
+          <TabsList className="grid w-full grid-cols-3 bg-muted p-1 rounded-lg">
             <TabsTrigger 
               value="overview" 
-              className="data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
             >
               Overview
             </TabsTrigger>
             <TabsTrigger 
               value="insights" 
-              className="data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
             >
               Insights
             </TabsTrigger>
             <TabsTrigger 
               value="groups" 
-              className="data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
             >
               Groups
             </TabsTrigger>

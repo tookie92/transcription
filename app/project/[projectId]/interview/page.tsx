@@ -292,11 +292,11 @@ export default function InterviewHome() {
   if (projects && projects.length === 0) {
     return (
       <div className="container max-w-5xl mx-auto p-6">
-        <Card className="bg-white rounded-2xl shadow-lg p-8">
+        <Card className="bg-card rounded-2xl shadow-lg p-8">
           <CardContent className="text-center py-12">
-            <FolderOpen className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-            <h3 className="text-lg font-semibold mb-2">No Projects Yet</h3>
-            <p className="text-gray-500 mb-4">
+            <FolderOpen className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-semibold mb-2 text-foreground">No Projects Yet</h3>
+            <p className="text-muted-foreground mb-4">
               Create a project first to start transcribing interviews
             </p>
           </CardContent>
@@ -309,10 +309,10 @@ export default function InterviewHome() {
     <div className="container max-w-5xl mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="text-center mb-8">
-        <h1 className="text-4xl font-extrabold tracking-tight text-gray-900">
+        <h1 className="text-4xl font-extrabold tracking-tight text-foreground">
           Transkripschon
         </h1>
-        <p className="mt-2 text-gray-600">Upload, record, or paste a URL to transcribe your interview</p>
+        <p className="mt-2 text-muted-foreground">Upload, record, or paste a URL to transcribe your interview</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -331,8 +331,8 @@ export default function InterviewHome() {
                 onClick={() => setActiveTab('upload')}
                 className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === 'upload' 
-                    ? 'border-black text-black' 
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'border-primary text-primary' 
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <Upload className="w-4 h-4 inline mr-1" />
@@ -342,8 +342,8 @@ export default function InterviewHome() {
                 onClick={() => setActiveTab('record')}
                 className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === 'record' 
-                    ? 'border-black text-black' 
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'border-primary text-primary' 
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <Mic className="w-4 h-4 inline mr-1" />
@@ -353,8 +353,8 @@ export default function InterviewHome() {
                 onClick={() => setActiveTab('url')}
                 className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === 'url' 
-                    ? 'border-black text-black' 
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'border-primary text-primary' 
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <Link className="w-4 h-4 inline mr-1" />
@@ -375,11 +375,11 @@ export default function InterviewHome() {
                 />
                 <label
                   htmlFor="file-upload"
-                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-accent transition-colors"
                 >
-                  <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                  <span className="text-sm text-gray-600">Click to upload audio/video</span>
-                  <span className="text-xs text-gray-400 mt-1">MP3, MP4, WAV, M4A (Max 25MB)</span>
+                  <Upload className="w-8 h-8 text-muted-foreground mb-2" />
+                  <span className="text-sm text-foreground">Click to upload audio/video</span>
+                  <span className="text-xs text-muted-foreground mt-1">MP3, MP4, WAV, M4A (Max 25MB)</span>
                 </label>
               </div>
             )}
@@ -468,7 +468,7 @@ export default function InterviewHome() {
                       onChange={(e) => setTopic(e.target.value)}
                       disabled={isTranscribing}
                     />
-                    <p className="text-xs text-gray-500">Helps AI extract better insights</p>
+                    <p className="text-xs text-muted-foreground">Helps AI extract better insights</p>
                   </div>
                 </div>
 
@@ -477,7 +477,7 @@ export default function InterviewHome() {
                   <Button 
                     onClick={handleTranscribe}
                     disabled={isTranscribing || !selectedFile}
-                    className="flex-1 bg-black hover:bg-gray-800 text-white"
+                    className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
                     variant={pendingInterview ? "outline" : "default"}
                   >
                     {isTranscribing ? (
@@ -555,20 +555,20 @@ export default function InterviewHome() {
                           {segment.speaker}
                         </span>
                       )}
-                      <p className="text-gray-700">{segment.text}</p>
+                      <p className="text-foreground">{segment.text}</p>
                     </div>
                   ))}
                 </div>
               </div>
             ) : showTranscription && transcript ? (
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm text-gray-500">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Clock className="w-4 h-4" />
                   Processing...
                 </div>
                 <div className="max-h-[400px] overflow-y-auto space-y-2">
                   {transcript.split('\n').map((line, i) => (
-                    <p key={i} className="text-sm text-gray-700">{line}</p>
+                    <p key={i} className="text-sm text-foreground">{line}</p>
                   ))}
                 </div>
               </div>
@@ -579,7 +579,7 @@ export default function InterviewHome() {
                     <div
                       key={interview._id}
                       onClick={() => router.push(`/project/${currentProjectId}/interview/${interview._id}`)}
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
+                      className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-accent cursor-pointer transition-colors"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">

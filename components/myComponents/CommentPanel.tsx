@@ -202,7 +202,7 @@ export function CommentPanel({ mapId, groupId, onClose, screenRect, presenceUser
   /* -------- render -------- */
   return (
     <div
-      className="fixed z-50 bg-white rounded-lg shadow-xl border p-3 w-80"
+      className="fixed z-50 bg-card rounded-lg shadow-xl border p-3 w-80"
       style={{
         left: Math.min(screenRect.right + 8, window.innerWidth - 340),
         top: screenRect.top,
@@ -210,12 +210,12 @@ export function CommentPanel({ mapId, groupId, onClose, screenRect, presenceUser
     >
       {/* Menu flottant des @mentions */}
       {suggestions.length > 0 && (
-        <div className="absolute top-12 left-3 right-3 bg-white border rounded-md shadow-md z-20">
+        <div className="absolute top-12 left-3 right-3 bg-card border rounded-md shadow-md z-20">
           {suggestions.map((u) => (
             <button
               key={u.id}
               onClick={() => insertMention(u)}
-              className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm"
+              className="w-full text-left px-3 py-2 hover:bg-accent text-sm"
             >
               {u.name}
             </button>
@@ -225,8 +225,8 @@ export function CommentPanel({ mapId, groupId, onClose, screenRect, presenceUser
 
       {/* header */}
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-semibold">Comments</span>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+        <span className="text-sm font-semibold text-foreground">Comments</span>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">✕</button>
       </div>
 
       {/* messages scrollables */}

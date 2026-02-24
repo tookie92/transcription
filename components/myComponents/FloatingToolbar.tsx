@@ -114,7 +114,7 @@ export function FloatingToolbar({
       className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40">
         {/* BARRE PRINCIPALE */}
         <div className={`
-          bg-white/95 backdrop-blur-sm border border-gray-200 rounded-full shadow-xl
+          bg-card/95 backdrop-blur-sm border border-border rounded-full shadow-xl
           transition-all duration-300 ease-in-out
           ${isExpanded ? 'px-6 py-3' : 'px-4 py-3'}
         `}>
@@ -126,19 +126,19 @@ export function FloatingToolbar({
               onValueChange={(value: string) => {
                 if (value === 'grouping' || value === 'voting') {
                   setWorkspaceMode(value);
-                  
+                   
                 }
               }}
               className="flex items-center"
             >
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <ToggleGroupItem value="grouping" className="rounded-full w-10 h-10">
+                  <ToggleGroupItem value="grouping" className="rounded-full w-10 h-10 text-foreground hover:bg-accent">
                     <Users size={18} />
                   </ToggleGroupItem>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Grouping Mode <span className="text-gray-400 ml-1">(default)</span></p>
+                  <p>Grouping Mode <span className="text-muted-foreground ml-1">(default)</span></p>
                 </TooltipContent>
               </Tooltip>
               
@@ -146,7 +146,7 @@ export function FloatingToolbar({
                 <TooltipTrigger asChild>
                   <ToggleGroupItem 
                     value="voting" 
-                    className="rounded-full w-10 h-10"
+                    className="rounded-full w-10 h-10 text-foreground hover:bg-accent"
                     disabled={!hasActiveVotingSession || !isVotingPhase}
                   >
                     <Vote size={18} />
@@ -158,7 +158,7 @@ export function FloatingToolbar({
               </Tooltip>
             </ToggleGroup>
 
-            <div className="w-px h-6 bg-gray-300 mx-1" />
+            <div className="w-px h-6 bg-border mx-1" />
 
             {/* OUTILS PRINCIPAUX */}
             <div className="flex items-center gap-1">
@@ -192,7 +192,7 @@ export function FloatingToolbar({
                 </Button>
                 </TooltipTrigger>
               <TooltipContent>
-                  <p>Persona <span className="text-gray-400">(P)</span></p>
+                  <p>Persona <span className="text-muted-foreground">(P)</span></p>
                 </TooltipContent>
               </Tooltip>
 
@@ -202,14 +202,14 @@ export function FloatingToolbar({
                   <Button
                     variant={activePanel === 'votingHistory' ? "default" : "ghost"}
                     size="icon"
-                    className="rounded-full w-10 h-10"
+                    className="rounded-full w-10 h-10 text-foreground hover:bg-accent"
                     onClick={() => setActivePanel(activePanel === 'votingHistory' ? null : 'votingHistory')}
                   >
                     <History size={18} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Vote History <span className="text-gray-400">(H)</span></p>
+                  <p>Vote History <span className="text-muted-foreground">(H)</span></p>
                 </TooltipContent>
               </Tooltip>
 
@@ -251,7 +251,7 @@ export function FloatingToolbar({
                     {themeAnalysis && !isThemesAnalyzing && (
                       <Badge 
                         variant="secondary" 
-                        className="absolute -top-1 -right-1 w-4 h-4 p-0 text-xs bg-green-100 text-green-800"
+                        className="absolute -top-1 -right-1 w-4 h-4 p-0 text-xs bg-primary/20 text-primary"
                       >
                         {themeAnalysis.themes.length}
                       </Badge>
@@ -269,14 +269,14 @@ export function FloatingToolbar({
                   <Button
                     variant={activePanel === 'activity' ? "default" : "ghost"}
                     size="icon"
-                    className="rounded-full w-10 h-10 relative"
+                    className="rounded-full w-10 h-10 relative text-foreground hover:bg-accent"
                     onClick={() => setActivePanel(activePanel === 'activity' ? null : 'activity')}
                   >
                     <ActivityIcon size={18} />
                     {activities && activities.length > 0 && (
                       <Badge 
                         variant="secondary" 
-                        className="absolute -top-1 -right-1 w-4 h-4 p-0 text-xs bg-blue-100 text-blue-800"
+                        className="absolute -top-1 -right-1 w-4 h-4 p-0 text-xs bg-blue-500/20 text-blue-500"
                       >
                         {activities.length > 99 ? '99+' : activities.length}
                       </Badge>
@@ -302,7 +302,7 @@ export function FloatingToolbar({
             {/* OPTIONS ÉTENDUES */}
             {isExpanded && (
               <>
-                <div className="w-px h-6 bg-gray-300 mx-1" />
+                <div className="w-px h-6 bg-border mx-1" />
                 
                 <div className="flex items-center gap-1">
                   {/* EXPORT */}

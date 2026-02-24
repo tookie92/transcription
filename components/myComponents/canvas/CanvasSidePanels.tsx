@@ -69,7 +69,7 @@ export function CanvasSidePanels({
           initial={{ x: 600, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: 600, opacity: 0 }}
-          className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full overflow-y-auto"
+          className="w-80 bg-card border-l border-border flex flex-col shrink-0 z-30 h-full overflow-y-auto"
         >
           <FigJamDotVoting
             mapId={mapId}
@@ -86,7 +86,7 @@ export function CanvasSidePanels({
           initial={{ x: 600, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: 600, opacity: 0 }}
-          className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
+          className="w-80 bg-card border-l border-border flex flex-col shrink-0 z-30 h-full"
         >
           <ThemeDiscoveryPanel
             groups={groups}
@@ -111,7 +111,7 @@ export function CanvasSidePanels({
           initial={{ x: 600, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: 600, opacity: 0 }}
-          className="w-[600px] bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
+          className="w-[600px] bg-card border-l border-border flex flex-col shrink-0 z-30 h-full"
         >
           <AnalyticsDashboard
             groups={groups}
@@ -127,7 +127,7 @@ export function CanvasSidePanels({
           initial={{ x: 600, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: 600, opacity: 0 }}
-          className="w-[800px] bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
+          className="w-[800px] bg-card border-l border-border flex flex-col shrink-0 z-30 h-full"
         >
           <PersonaGenerator
             projectId={projectId}
@@ -146,7 +146,7 @@ export function CanvasSidePanels({
           initial={{ x: 600, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: 600, opacity: 0 }}
-          className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
+          className="w-80 bg-card border-l border-border flex flex-col shrink-0 z-30 h-full"
         >
           <ActivityPanel
             mapId={mapId as Id<"affinityMaps">}
@@ -161,7 +161,7 @@ export function CanvasSidePanels({
           initial={{ x: 600, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: 600, opacity: 0 }}
-          className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
+          className="w-80 bg-card border-l border-border flex flex-col shrink-0 z-30 h-full"
         >
           <VotingHistoryPanel
             projectId={projectId}
@@ -176,13 +176,15 @@ export function CanvasSidePanels({
           initial={{ x: 600, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: 600, opacity: 0 }}
-          className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-30 h-full"
+          className="w-80 bg-card border-l border-border flex flex-col shrink-0 z-30 h-full overflow-hidden"
         >
-          <ExportPanel
-            mapId={mapId}
-            projectId={projectId}
-            onClose={() => setActivePanel(null)}
-          />
+          <div className="flex-1 overflow-y-auto">
+            <ExportPanel
+              mapId={mapId}
+              projectId={projectId}
+              onClose={() => setActivePanel(null)}
+            />
+          </div>
         </motion.div>
       )}
     </AnimatePresence>

@@ -149,7 +149,7 @@ useEffect(() => {
 
       {/* Project Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200">
+        <Card className="bg-linear-to-br from-blue-50 to-blue-100/50 border-blue-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-blue-700">Interviews</CardTitle>
             <FileText className="h-4 w-4 text-blue-500" />
@@ -160,7 +160,7 @@ useEffect(() => {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-200">
+        <Card className="bg-linear-to-br from-purple-50 to-purple-100/50 border-purple-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-purple-700">Insights</CardTitle>
             <Lightbulb className="h-4 w-4 text-purple-500" />
@@ -171,7 +171,7 @@ useEffect(() => {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-green-50 to-green-100/50 border-green-200">
+        <Card className="bg-linear-to-br from-green-50 to-green-100/50 border-green-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-green-700">Groups</CardTitle>
             <CircuitBoard className="h-4 w-4 text-green-500" />
@@ -182,7 +182,7 @@ useEffect(() => {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100/50 border-orange-200">
+        <Card className="bg-linear-to-br from-orange-50 to-orange-100/50 border-orange-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-orange-700">Team</CardTitle>
             <Users className="h-4 w-4 text-orange-500" />
@@ -190,12 +190,12 @@ useEffect(() => {
           <CardContent>
             <div className="text-2xl font-bold text-orange-700">{project.members.length}</div>
             <p className="text-xs text-orange-600">
-              {project.ownerId === userId ? "owner" : "member{project.members.length !== 1 ? 's' : ''}"}
+              {project.ownerId === userId ? "owner" : `${project.members.length !== 1 ? 'members' : 'member'}`}
             </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200">
+        <Card className="bg-linear-to-br from-amber-50 to-amber-100/50 border-amber-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-amber-700">Progress</CardTitle>
             <BarChart3 className="h-4 w-4 text-amber-500" />

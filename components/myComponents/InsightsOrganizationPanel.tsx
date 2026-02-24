@@ -551,20 +551,20 @@ const handleDeleteInsight = async (insightId: string) => {
   }
 };
   return (
-    <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full">
+    <div className="w-80 bg-card border-r border-border flex flex-col h-full">
       {/* HEADER UNIFIÉ */}
-      <div className="p-4 border-b border-gray-200 shrink-0">
+      <div className="p-4 border-b border-border shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="font-semibold text-gray-900 text-lg">Insights to Organize</h3>
-            <p className="text-sm text-gray-600">Drag insights to create groups</p>
+            <h3 className="font-semibold text-foreground text-lg">Insights to Organize</h3>
+            <p className="text-sm text-muted-foreground">Drag insights to create groups</p>
           </div>
           <div className="flex gap-1">
-            <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+            <Badge variant="secondary" className="bg-primary/10 text-primary">
               {stats.total}
             </Badge>
             {stats.problematic > 0 && (
-              <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-200">
+              <Badge variant="outline" className="bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800">
                 {stats.problematic}
               </Badge>
             )}

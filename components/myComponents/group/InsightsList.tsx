@@ -49,8 +49,8 @@ export function InsightsList({
     <div
       className={`p-4 space-y-3 max-h-[400px] overflow-y-auto ${
         isPresentationMode && isFocusedInPresentation
-          ? "bg-blue-50/50"
-          : "bg-gray-50"
+          ? "bg-accent"
+          : "bg-card"
       }`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -80,8 +80,8 @@ export function InsightsList({
         <div
           className={`text-center py-6 text-sm rounded-xl ${
             isDragOver
-              ? "bg-linear-to-r from-blue-50 to-indigo-50 text-blue-600 font-bold border-2 border-dashed border-blue-300"
-              : "text-gray-400 bg-gray-50/50"
+              ? "bg-primary/10 text-primary font-bold border-2 border-dashed border-primary/30"
+              : "text-muted-foreground bg-muted/50"
           } transition-all`}
         >
           {workspaceMode === "grouping" && !isPlacingDot
@@ -90,7 +90,7 @@ export function InsightsList({
               : "✨ Drag insights here to group them"
             : "No insights yet"}
           {isPlacingDot && (
-            <div className="mt-2 text-xs text-gray-500">
+            <div className="mt-2 text-xs text-muted-foreground">
               Click to place your vote dot!
             </div>
           )}

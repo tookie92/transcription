@@ -12,7 +12,7 @@ export function WorkspaceFooter({
   hasMap,
 }: WorkspaceFooterProps) {
   return (
-    <footer className="px-4 py-2 bg-white border-t text-sm text-gray-600 flex justify-between">
+    <footer className="px-4 py-2 bg-card border-t text-sm text-muted-foreground flex justify-between">
       <div>
         {hasMap ? (
           <span>

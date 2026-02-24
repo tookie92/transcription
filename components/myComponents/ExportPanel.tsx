@@ -166,7 +166,7 @@ export function ExportPanel({ mapId, projectId, onClose }: ExportPanelProps) {
   }
 
   return (
-    <Card className="w-80 mb-20">
+    <Card className="w-80 border-0 shadow-none rounded-none">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Download size={20} />
@@ -180,7 +180,7 @@ export function ExportPanel({ mapId, projectId, onClose }: ExportPanelProps) {
       <CardContent className="space-y-4">
         {/* Format Selection - VERSION CORRIGÉE */}
         <div className="space-y-3">
-          <h4 className="font-medium text-sm text-gray-900">Export Format</h4>
+          <h4 className="font-medium text-sm text-foreground">Export Format</h4>
           <div className="grid gap-2">
             {formatOptions.map((format) => (
               <button
@@ -189,30 +189,30 @@ export function ExportPanel({ mapId, projectId, onClose }: ExportPanelProps) {
                 disabled={!format.available}
                 className={`p-3 border rounded-lg text-left transition-all ${
                   selectedFormat === format.value
-                    ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500 ring-opacity-20'
+                    ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
                     : format.available
-                    ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                    : 'border-gray-100 bg-gray-50 cursor-not-allowed opacity-50'
+                    ? 'border-border hover:border-primary hover:bg-accent'
+                    : 'border-border bg-muted cursor-not-allowed opacity-50'
                 }`}
               >
                 <div className="flex items-center gap-3 mb-1">
                   <div className={`p-2 rounded ${
                     selectedFormat === format.value 
-                      ? 'bg-blue-100 text-blue-600' 
+                      ? 'bg-primary/20 text-primary' 
                       : format.available
-                      ? 'bg-gray-100 text-gray-600'
-                      : 'bg-gray-100 text-gray-400'
+                      ? 'bg-muted text-foreground'
+                      : 'bg-muted text-muted-foreground'
                   }`}>
                     {format.icon}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-900">{format.label}</span>
+                      <span className="font-medium text-foreground">{format.label}</span>
                       {!format.available && (
                         <Badge variant="outline" className="text-xs">Soon</Badge>
                       )}
                     </div>
-                    <div className="text-xs text-gray-600">{format.description}</div>
+                    <div className="text-xs text-muted-foreground">{format.description}</div>
                   </div>
                 </div>
               </button>
@@ -221,19 +221,19 @@ export function ExportPanel({ mapId, projectId, onClose }: ExportPanelProps) {
         </div>
 
         {/* Map Info */}
-        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-          <h5 className="font-medium text-sm text-gray-900 mb-2">Map Details</h5>
+        <div className="p-3 bg-muted rounded-lg border border-border">
+          <h5 className="font-medium text-sm text-foreground mb-2">Map Details</h5>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-600">Name:</span>
-              <span className="font-medium">{mapData.map.name}</span>
+              <span className="text-muted-foreground">Name:</span>
+              <span className="font-medium text-foreground">{mapData.map.name}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Groups:</span>
+              <span className="text-muted-foreground">Groups:</span>
               <Badge variant="secondary">{mapData.map.groups.length}</Badge>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Total Insights:</span>
+              <span className="text-muted-foreground">Total Insights:</span>
               <Badge variant="secondary">
                 {mapData.map.groups.reduce((sum, group) => sum + group.insightIds.length, 0)}
               </Badge>
@@ -243,12 +243,12 @@ export function ExportPanel({ mapId, projectId, onClose }: ExportPanelProps) {
 
         {/* PDF Preview */}
         {selectedFormat === 'pdf' && pdfStats && (
-          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
             <div className="flex items-center gap-2 mb-2">
-              <FileText size={16} className="text-blue-600" />
-              <span className="font-medium text-blue-900 text-sm">PDF Report Includes:</span>
+              <FileText size={16} className="text-primary" />
+              <span className="font-medium text-primary text-sm">PDF Report Includes:</span>
             </div>
-            <div className="text-xs text-blue-800 space-y-1">
+            <div className="text-xs text-foreground space-y-1">
               <div>• Professional cover page</div>
               <div>• Project statistics</div>
               <div>• {pdfStats.groupCount} theme groups</div>
@@ -262,7 +262,7 @@ export function ExportPanel({ mapId, projectId, onClose }: ExportPanelProps) {
         {selectedFormat === 'json' && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <h5 className="font-medium text-sm text-gray-900">JSON Preview</h5>
+              <h5 className="font-medium text-sm text-foreground">JSON Preview</h5>
               <Button
                 variant="outline"
                 size="sm"
@@ -273,8 +273,8 @@ export function ExportPanel({ mapId, projectId, onClose }: ExportPanelProps) {
                 {copiedJson ? 'Copied!' : 'Copy'}
               </Button>
             </div>
-            <div className="p-2 bg-gray-100 rounded border border-gray-200 max-h-32 overflow-y-auto">
-              <pre className="text-xs text-gray-600">
+            <div className="p-2 bg-muted rounded border border-border max-h-32 overflow-y-auto">
+              <pre className="text-xs text-foreground">
                 {JSON.stringify({
                   name: mapData.map.name,
                   groups: mapData.map.groups.length,
@@ -317,7 +317,7 @@ export function ExportPanel({ mapId, projectId, onClose }: ExportPanelProps) {
         </div>
 
         {/* Help Text */}
-        <div className="text-xs text-gray-500 text-center">
+        <div className="text-xs text-muted-foreground text-center">
           {selectedFormat === 'pdf' 
             ? 'PDF format creates a professional report perfect for presentations'
             : 'JSON format recommended for backup and data sharing'

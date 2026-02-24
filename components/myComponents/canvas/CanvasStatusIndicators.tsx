@@ -100,19 +100,19 @@ export function CanvasStatusIndicators({
       )}
 
       {/* Position & Selection Indicator */}
-      <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 shadow-lg z-40 flex items-center gap-3">
+      <div className="absolute bottom-4 right-4 bg-card/90 backdrop-blur-sm border border-border rounded-lg px-3 py-2 text-xs text-foreground shadow-lg z-40 flex items-center gap-3">
         {selectedGroupsCount > 0 && (
-          <span className="font-medium text-blue-600">
+          <span className="font-medium text-primary">
             {selectedGroupsCount} selected
           </span>
         )}
         {cursorPosition && (
           <>
-            <span className="text-gray-400">|</span>
+            <span className="text-muted-foreground">|</span>
             <span>
               X: {Math.round(cursorPosition.x)} Y: {Math.round(cursorPosition.y)}
             </span>
-            <span className="text-gray-400">|</span>
+            <span className="text-muted-foreground">|</span>
             <span>{Math.round(scale * 100)}%</span>
           </>
         )}

@@ -66,7 +66,7 @@ export function MiniMap({
   return (
     <div className="fixed bottom-20 left-4 z-50" style={{ pointerEvents: 'auto' }}>
       <div
-        className="relative bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-lg cursor-crosshair overflow-hidden"
+        className="relative bg-card/95 backdrop-blur-sm border border-border rounded-lg shadow-lg cursor-crosshair overflow-hidden"
         style={{ width: MINIMAP_WIDTH, height: MINIMAP_HEIGHT }}
         onClick={handleMinimapClick}
       >
@@ -74,7 +74,7 @@ export function MiniMap({
         <div
           className="absolute inset-0 opacity-20"
           style={{
-            backgroundImage: `linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px)`,
+            backgroundImage: `linear-gradient(var(--foreground) 1px, transparent 1px), linear-gradient(90deg, var(--foreground) 1px, transparent 1px)`,
             backgroundSize: `${20 * minimapScale}px ${20 * minimapScale}px`,
           }}
         />

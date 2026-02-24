@@ -104,32 +104,32 @@ export function UngroupedInsightsPanel({
   const hasProblematicInsights = problematicInsights.length > 0;
 
   return (
-    <div className="border-t border-gray-200 bg-white">
+    <div className="border-t border-border bg-card">
       {/* HEADER CLICKABLE */}
       <div 
-        className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+        className="p-4 cursor-pointer hover:bg-accent transition-colors"
         onClick={() => setShowDetails(!showDetails)}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className={`p-2 rounded-lg ${
-              hasProblematicInsights ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'
+              hasProblematicInsights ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400' : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
             }`}>
               {hasProblematicInsights ? <AlertTriangle size={16} /> : <Clock size={16} />}
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
                 Ungrouped Insights
                 <Badge variant={hasProblematicInsights ? "destructive" : "secondary"}>
                   {availableInsights.length}
                 </Badge>
                 {hasProblematicInsights && (
-                  <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
+                  <Badge variant="outline" className="bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800">
                     {problematicInsights.length} need attention
                   </Badge>
                 )}
               </h3>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 {stats.completionRate.toFixed(0)}% organized • {stats.ungrouped} remaining
               </p>
             </div>
@@ -143,9 +143,9 @@ export function UngroupedInsightsPanel({
 
         {/* PROGRESS BAR */}
         <div className="mt-3">
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-muted rounded-full h-2">
             <div 
-              className="bg-green-500 h-2 rounded-full transition-all duration-500"
+              className="bg-primary h-2 rounded-full transition-all duration-500"
               style={{ width: `${stats.completionRate}%` }}
             />
           </div>

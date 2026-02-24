@@ -118,8 +118,8 @@ export function AutoClusteringPanel({
                 onClick={() => setAlgorithm(value as ClusteringAlgorithm)}
                 className={`p-2 border rounded-lg text-xs transition-colors ${
                   algorithm === value
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background text-foreground border-border hover:bg-accent'
                 }`}
               >
                 <Icon className="w-4 h-4 mx-auto mb-1" />
@@ -132,8 +132,8 @@ export function AutoClusteringPanel({
         {/* Sensitivity Slider */}
         <div className="space-y-2">
           <div className="flex justify-between">
-            <label className="text-sm font-medium">Sensitivity</label>
-            <span className="text-sm text-gray-500">
+            <label className="text-sm font-medium text-foreground">Sensitivity</label>
+            <span className="text-sm text-muted-foreground">
               {sensitivity[0] > 0.8 ? 'High' : sensitivity[0] > 0.5 ? 'Medium' : 'Low'}
             </span>
           </div>

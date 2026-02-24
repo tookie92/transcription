@@ -192,7 +192,7 @@ export function GroupHeader({
           onChange={(e) => setTempTitle(e.target.value)}
           onBlur={onTitleSave}
           onKeyDown={onKeyDown}
-          className="flex-1 font-bold text-sm bg-white border-2 outline-none px-2 py-1 rounded-lg transition-all shadow-sm"
+          className="flex-1 font-bold text-sm bg-background border-2 outline-none px-2 py-1 rounded-lg transition-all shadow-sm"
           style={{
             color: group.color,
             borderColor: `${group.color}50`,
@@ -229,7 +229,7 @@ export function GroupHeader({
           whileTap={{ scale: 0.95 }}
           className={`
             flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg
-            ${insightCount > 0 ? "text-white shadow-sm" : "bg-gray-100 text-gray-400"}
+            ${insightCount > 0 ? "text-primary-foreground shadow-sm" : "bg-muted text-muted-foreground"}
           `}
           style={{
             backgroundColor: insightCount > 0 ? group.color : undefined,
@@ -247,7 +247,7 @@ export function GroupHeader({
             whileTap={{ scale: 0.95 }}
             className={`
               flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg
-              ${groupDotsCount > 0 ? "bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-sm" : "bg-gray-100 text-gray-400"}
+              ${groupDotsCount > 0 ? "bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-sm" : "bg-muted text-muted-foreground"}
             `}
             title={myDotsCount > 0 ? `You voted ${myDotsCount} time(s)` : `${groupDotsCount} vote${groupDotsCount !== 1 ? "s" : ""}`}
           >

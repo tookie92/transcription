@@ -109,20 +109,20 @@ const ProjectPage = () => {
   };
 
   return (
-    <div className="min-h-dvh w-full p-8 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-dvh w-full p-8 bg-linear-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
       <div className="max-w-4xl mx-auto mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Your Projects</h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">Manage your interviews and affinity maps</p>
+            <h1 className="text-3xl font-bold text-foreground">Your Projects</h1>
+            <p className="text-muted-foreground mt-1">Manage your interviews and affinity maps</p>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <Button 
               onClick={() => setShowTemplateDialog(true)}
               disabled={isCreating}
-              className="bg-[#3D7C6F] hover:bg-[#2d5f54]"
+              className="bg-primary hover:bg-primary/90"
             >
               {isCreating ? (
                 <RefreshCcwIcon className="w-4 h-4 animate-spin mr-2" />
@@ -156,15 +156,15 @@ const ProjectPage = () => {
                     onClick={() => setSelectedTemplate(template.id)}
                     className={`p-4 rounded-xl border-2 text-left transition-all ${
                       selectedTemplate === template.id
-                        ? "border-[#3D7C6F] bg-[#3D7C6F]/5"
-                        : "border-gray-200 hover:border-gray-300"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary"
                     }`}
                   >
-                    <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${template.color} flex items-center justify-center mb-3`}>
+                    <div className={`w-10 h-10 rounded-lg bg-linear-to-br ${template.color} flex items-center justify-center mb-3`}>
                       <Icon className="w-5 h-5 text-white" />
                     </div>
-                    <h3 className="font-semibold text-gray-900">{template.name}</h3>
-                    <p className="text-xs text-gray-500 mt-1">{template.description}</p>
+                    <h3 className="font-semibold text-foreground">{template.name}</h3>
+                    <p className="text-xs text-muted-foreground mt-1">{template.description}</p>
                   </button>
                 );
               })}
@@ -172,7 +172,7 @@ const ProjectPage = () => {
 
             {/* Project Name Input */}
             <div className="space-y-2 pt-4 border-t">
-              <label className="text-sm font-medium text-gray-700">Project Name</label>
+              <label className="text-sm font-medium text-foreground">Project Name</label>
               <Input
                 placeholder="Enter project name..."
                 value={projectName}
@@ -221,21 +221,21 @@ const ProjectPage = () => {
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className="flex items-center justify-between bg-white rounded-lg p-3 border border-orange-100"
+                  className="flex items-center justify-between bg-card rounded-lg p-3 border border-orange-200 dark:border-orange-800"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                      <Users className="w-5 h-5 text-orange-600" />
+                    <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                      <Users className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                     </div>
                     <div>
-                      <p className="font-medium">{invite.projectName}</p>
-                      <p className="text-sm text-gray-500">Invited by {invite.name}</p>
+                      <p className="font-medium text-foreground">{invite.projectName}</p>
+                      <p className="text-sm text-muted-foreground">Invited by {invite.name}</p>
                     </div>
                   </div>
                   <div className="flex gap-2">
                     <Button
                       size="sm"
-                      className="bg-green-600 hover:bg-green-700"
+                      className="bg-primary hover:bg-primary/90"
                       onClick={() => handleAcceptInvite(invite)}
                     >
                       Accept
@@ -269,23 +269,23 @@ const ProjectPage = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
                 onClick={() => router.push(`/project/${project._id}`)}
-                className="group bg-white rounded-xl border border-gray-200 p-5 hover:border-[#3D7C6F] hover:shadow-lg transition-all cursor-pointer"
+                className="group bg-card rounded-xl border border-border p-5 hover:border-primary hover:shadow-lg transition-all cursor-pointer"
               >
                 <div className="flex items-start justify-between mb-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-[#3D7C6F]/10 to-purple-50 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Folder className="w-6 h-6 text-[#3D7C6F]" />
+                  <div className="w-12 h-12 bg-linear-to-br from-primary/10 to-purple-100 dark:to-purple-900/30 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Folder className="w-6 h-6 text-primary" />
                   </div>
-                  <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-[#3D7C6F] group-hover:translate-x-1 transition-all" />
+                  <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
                 </div>
                 
-                <h3 className="font-semibold text-lg text-gray-900 mb-1 truncate">
+                <h3 className="font-semibold text-lg text-foreground mb-1 truncate">
                   {project.name}
                 </h3>
-                <p className="text-sm text-gray-500 line-clamp-2 mb-4">
+                <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
                   {project.description || "No description"}
                 </p>
                 
-                <div className="flex items-center justify-between text-xs text-gray-400">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <Users className="w-3 h-3" />
                     {project.members.length} member{project.members.length !== 1 ? 's' : ''}
@@ -300,16 +300,16 @@ const ProjectPage = () => {
           </div>
         ) : (
           <div className="text-center py-20">
-            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Folder className="w-12 h-12 text-gray-400" />
+            <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
+              <Folder className="w-12 h-12 text-muted-foreground" />
             </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">No projects yet</h2>
-            <p className="text-gray-500 mb-6 max-w-sm mx-auto">
+            <h2 className="text-xl font-semibold text-foreground mb-2">No projects yet</h2>
+            <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
               Create your first project to start organizing interviews and insights
             </p>
             <Button 
               onClick={handleCreateProject}
-              className="bg-[#3D7C6F] hover:bg-[#2d5f54]"
+              className="bg-primary hover:bg-primary/90"
             >
               <Plus className="w-4 h-4 mr-2" />
               Create Project

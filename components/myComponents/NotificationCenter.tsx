@@ -112,17 +112,17 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
 
 return (
     <div 
-      className="w-80 bg-white rounded-lg shadow-xl border border-gray-200 max-h-96 overflow-hidden flex flex-col"
-      onClick={(e) => e.stopPropagation()} // 🆕 EMPÊCHER LA PROPAGATION
+      className="w-80 bg-card rounded-lg shadow-xl border border-border max-h-96 overflow-hidden flex flex-col"
+      onClick={(e) => e.stopPropagation()}
     >
       {/* HEADER */}
-      <div className="p-4 border-b border-gray-200 bg-gray-50">
+      <div className="p-4 border-b border-border bg-muted">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Bell size={20} className="text-gray-700" />
-            <h3 className="font-semibold text-gray-900">Notifications</h3>
+            <Bell size={20} className="text-foreground" />
+            <h3 className="font-semibold text-foreground">Notifications</h3>
             {unreadCount > 0 && (
-              <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
+              <span className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full">
                 {unreadCount} non lu{unreadCount > 1 ? 's' : ''}
               </span>
             )}
@@ -130,9 +130,9 @@ return (
           
           {unreadCount > 0 && (
             <button
-              onClick={handleMarkAllAsReadClick} // 🆕 UTILISER LE NOUVEAU HANDLER
+              onClick={handleMarkAllAsReadClick}
               disabled={isLoading}
-              className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+              className="text-sm text-primary hover:text-primary/80 disabled:opacity-50"
             >
               Tout marquer comme lu
             </button>
@@ -150,7 +150,7 @@ return (
                 className={`
                   p-4 cursor-pointer transition-colors relative
                   ${notification.read 
-                    ? 'bg-white hover:bg-gray-50' 
+                    ? 'bg-white hover:bg-accent' 
                     : 'bg-blue-50 hover:bg-blue-100 border-l-4 border-l-blue-500'
                   }
                 `}
@@ -206,7 +206,7 @@ return (
 
       {/* FOOTER */}
       {notifications.length > 0 && (
-        <div className="p-3 border-t border-gray-200 bg-gray-50">
+        <div className="p-3 border-t border-gray-200 bg-accent">
           <button
             onClick={(e) => {
               e.stopPropagation();

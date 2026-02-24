@@ -307,7 +307,7 @@ export default function TranscriptionManager() {
           <TabsContent value="transcription" className="mt-0">
             {!hasTranscription ? (
               <div className="text-center py-16">
-                <div className="w-20 h-20 bg-gradient-to-br from-[#3D7C6F]/10 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="w-20 h-20 bg-linear-to-br from-[#3D7C6F]/10 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Upload className="w-10 h-10 text-[#3D7C6F]" />
                 </div>
                 <h4 className="font-semibold text-gray-900 mb-2">Ready to transcribe?</h4>
@@ -350,7 +350,7 @@ export default function TranscriptionManager() {
           <TabsContent value="insights" className="mt-0">
             {!hasInsights ? (
               <div className="text-center py-16">
-                <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="w-20 h-20 bg-linear-to-br from-purple-100 to-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Lightbulb className="w-10 h-10 text-purple-500" />
                 </div>
                 <h4 className="font-semibold text-gray-900 mb-2">No insights yet</h4>
@@ -379,7 +379,7 @@ export default function TranscriptionManager() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="p-4 rounded-xl border-2 hover:border-purple-200 transition-all bg-gradient-to-br from-white to-purple-50/50"
+                    className="p-4 rounded-xl border-2 hover:border-purple-200 transition-all bg-linear-to-br from-white to-purple-50/50"
                   >
                     <div className="flex items-start justify-between mb-2">
                       <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
@@ -411,7 +411,7 @@ export default function TranscriptionManager() {
           {/* Summary Tab */}
           <TabsContent value="summary" className="mt-0">
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-gradient-to-br from-[#3D7C6F]/5 to-transparent rounded-xl">
+              <div className="p-4 bg-linear-to-br from-[#3D7C6F]/5 to-transparent rounded-xl">
                 <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Duration</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {currentInterview && (
@@ -424,7 +424,7 @@ export default function TranscriptionManager() {
                 <p className="text-xs text-gray-400">minutes</p>
               </div>
               
-              <div className="p-4 bg-gradient-to-br from-purple-50 to-transparent rounded-xl">
+              <div className="p-4 bg-linear-to-br from-purple-50 to-transparent rounded-xl">
                 <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Words</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {currentInterview?.transcription.split(' ').length || 0}
@@ -432,7 +432,7 @@ export default function TranscriptionManager() {
                 <p className="text-xs text-gray-400">transcribed</p>
               </div>
               
-              <div className="p-4 bg-gradient-to-br from-blue-50 to-transparent rounded-xl">
+              <div className="p-4 bg-linear-to-br from-blue-50 to-transparent rounded-xl">
                 <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Segments</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {currentInterview?.segments.length || 0}
@@ -440,7 +440,7 @@ export default function TranscriptionManager() {
                 <p className="text-xs text-gray-400">chunks</p>
               </div>
               
-              <div className="p-4 bg-gradient-to-br from-amber-50 to-transparent rounded-xl">
+              <div className="p-4 bg-linear-to-br from-amber-50 to-transparent rounded-xl">
                 <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Insights</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {insights?.length || 0}

@@ -146,11 +146,11 @@ export function InsightCard({
       </p>
 
       {/* Actions */}
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-black/5">
-        <div className="flex items-center gap-1 text-xs text-gray-400">
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
           {insight.createdBy && (
             <>
-              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-[8px] font-bold">
+              <div className="w-5 h-5 rounded-full bg-linear-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-[8px] font-bold">
                 {insight.createdBy.charAt(0).toUpperCase()}
               </div>
               <span className="truncate max-w-[60px]">{insight.createdBy}</span>
@@ -167,8 +167,8 @@ export function InsightCard({
               onRemoveInsight(insight.id, groupId);
             }}
             className="
-              flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 
-              px-2 py-1 rounded-lg hover:bg-red-50 
+              flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive 
+              px-2 py-1 rounded-lg hover:bg-destructive/10 
               opacity-0 group-hover:opacity-100 transition-all
             "
             title="Remove from group"

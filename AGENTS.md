@@ -74,6 +74,26 @@ npm run lint             # Run ESLint
 - Use `class-variance-authority` (cva) for component variants
 - Use `clsx` and `tailwind-merge` (cn utility) for conditional classes
 
+### Dark Mode / Theme Support
+
+This project uses CSS variables with shadcn/ui theming system. Always use theme-aware classes:
+
+- **Backgrounds**: Use `bg-background` or `bg-card` instead of `bg-white` or `bg-gray-50`
+- **Text**: Use `text-foreground` for primary text, `text-muted-foreground` for secondary text
+- **Borders**: Use `border-border` instead of `border-gray-200`
+- **Hover states**: Use `hover:bg-accent` instead of `hover:bg-gray-50`
+- **Primary color**: Use `bg-primary`, `text-primary`, `border-primary` (green theme)
+- **Avoid hardcoded colors**: Never use `bg-white`, `bg-gray-*`, `text-gray-*`, `border-gray-*` directly
+
+Example of theme-aware styling:
+```tsx
+// ❌ Wrong - hardcoded colors don't work in dark mode
+<div className="bg-white text-gray-600 border-gray-200">
+
+// ✅ Correct - uses CSS variables
+<div className="bg-card text-foreground border-border">
+```
+
 ### Error Handling
 
 - Use `try/catch` for async operations

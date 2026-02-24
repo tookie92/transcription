@@ -343,11 +343,11 @@ export default function AffinityGroup({
         >
           {/* SILENT SORTING OVERLAY */}
           {!canInteract && isSilentSortingActive && (
-            <div className="absolute inset-0 bg-white/70 rounded-lg flex items-center justify-center z-10 backdrop-blur-sm">
-              <div className="text-center p-4 bg-gray-100 rounded-full">
-                <VolumeX className="w-8 h-8 mx-auto mb-2 text-gray-500" />
-                <p className="text-sm text-gray-600 font-medium">Silent Sorting</p>
-                <p className="text-xs text-gray-500">Discussion paused</p>
+            <div className="absolute inset-0 bg-background/70 rounded-lg flex items-center justify-center z-10 backdrop-blur-sm">
+              <div className="text-center p-4 bg-muted rounded-full">
+                <VolumeX className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm text-foreground font-medium">Silent Sorting</p>
+                <p className="text-xs text-muted-foreground">Discussion paused</p>
               </div>
             </div>
           )}

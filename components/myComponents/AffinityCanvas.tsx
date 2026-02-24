@@ -577,7 +577,7 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
   // ==================== RENDER ====================
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="h-full flex flex-col bg-background">
       {isPresentMode && (
         <div className="fixed top-4 right-4 bg-black/70 text-white px-3 py-1 rounded text-xs">
           Present mode – press ESC to exit
@@ -640,7 +640,7 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
 
         {/* CANVAS PRINCIPAL */}
         <div
-          className="flex-1 relative overflow-hidden bg-linear-to-br from-gray-50 to-gray-100"
+          className="flex-1 relative overflow-hidden bg-background"
           onDragOver={(e: React.DragEvent) => {
             if (workspaceMode === 'grouping') { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
           }}
@@ -739,8 +739,9 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
                         <div
                           className="absolute inset-0 canvas-background"
                           style={{
-                            backgroundImage: `linear-gradient(rgba(217, 243, 230, 1) 1px, transparent 1px), linear-gradient(90deg, rgba(217, 243, 230, 1) 1px, transparent 1px)`,
+                            backgroundImage: `linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)`,
                             backgroundSize: '40px 40px',
+                            opacity: 0.5,
                           }}
                         />
 

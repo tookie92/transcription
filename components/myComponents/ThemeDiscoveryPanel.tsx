@@ -101,16 +101,16 @@ export function ThemeDiscoveryPanel({
 
 
   return (
-    <div className="w-80 bg-white border-l border-gray-200 flex flex-col h-full">
+    <div className="w-80 bg-card border-l border-border flex flex-col h-full">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200 shrink-0">
+      <div className="p-4 border-b border-border shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+            <h3 className="font-semibold text-foreground flex items-center gap-2">
               <Sparkles size={18} />
               Theme Discovery
             </h3>
-            <p className="text-sm text-gray-600">AI-powered pattern detection</p>
+            <p className="text-sm text-muted-foreground">AI-powered pattern detection</p>
           </div>
           
           {themeAnalysis && (

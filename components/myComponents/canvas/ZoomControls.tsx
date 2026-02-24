@@ -16,10 +16,10 @@ export function ZoomControls({
   scale,
 }: ZoomControlsProps) {
   return (
-    <div className="absolute bottom-4 right-4 bg-linear-to-br from-green-100 via-blue-100 to-purple-200 rounded-xl shadow-2xl border border-blue-200 p-3 flex gap-2 z-40 animate-fade-in">
+    <div className="absolute bottom-4 right-4 bg-card border border-border rounded-xl shadow-2xl p-3 flex gap-2 z-40 animate-fade-in">
       <button
         onClick={zoomIn}
-        className="w-9 h-9 rounded-full bg-white/80 hover:bg-blue-100 transition flex items-center justify-center text-blue-700 font-bold shadow-md border border-blue-200"
+        className="w-9 h-9 rounded-full bg-background/80 hover:bg-primary/20 transition flex items-center justify-center text-primary font-bold shadow-md border border-border"
         title="Zoom avant (+)"
       >
         <span className="sr-only">Zoom avant</span>
@@ -36,7 +36,7 @@ export function ZoomControls({
       </button>
       <button
         onClick={zoomOut}
-        className="w-9 h-9 rounded-full bg-white/80 hover:bg-blue-100 transition flex items-center justify-center text-blue-700 font-bold shadow-md border border-blue-200"
+        className="w-9 h-9 rounded-full bg-background/80 hover:bg-primary/20 transition flex items-center justify-center text-primary font-bold shadow-md border border-border"
         title="Zoom arrière (-)"
       >
         <span className="sr-only">Zoom arrière</span>
@@ -53,7 +53,7 @@ export function ZoomControls({
       </button>
       <button
         onClick={resetTransform}
-        className="w-9 h-9 rounded-full bg-white/80 hover:bg-green-100 transition flex items-center justify-center text-green-700 font-bold shadow-md border border-green-200"
+        className="w-9 h-9 rounded-full bg-background/80 hover:bg-primary/20 transition flex items-center justify-center text-primary font-bold shadow-md border border-border"
         title="Réinitialiser (0)"
       >
         <span className="sr-only">Réinitialiser</span>
@@ -70,7 +70,7 @@ export function ZoomControls({
       </button>
       <button
         onClick={centerView}
-        className="w-9 h-9 rounded-full bg-white/80 hover:bg-purple-100 transition flex items-center justify-center text-purple-700 font-bold shadow-md border border-purple-200"
+        className="w-9 h-9 rounded-full bg-background/80 hover:bg-primary/20 transition flex items-center justify-center text-primary font-bold shadow-md border border-border"
         title="Centrer (C)"
       >
         <span className="sr-only">Centrer</span>
@@ -86,7 +86,7 @@ export function ZoomControls({
           <path d="M12 2v2m0 16v2m10-10h-2M4 12H2" />
         </svg>
       </button>
-      <span className="ml-3 px-3 py-1 rounded-full bg-white/80 text-blue-700 font-semibold text-xs shadow border border-blue-100 animate-zoom-indicator">
+      <span className="ml-3 px-3 py-1 rounded-full bg-background/80 text-primary font-semibold text-xs shadow border border-border animate-zoom-indicator">
         {Math.round(scale * 100)}%
       </span>
     </div>
