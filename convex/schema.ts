@@ -66,6 +66,7 @@ export default defineSchema({
     timestamp: v.number(),
     source: v.union(v.literal("ai"), v.literal("manual")),
     createdBy: v.string(),
+    createdByName: v.string(),
     tags: v.optional(v.array(v.string())),
     priority: v.optional(v.union(
       v.literal("low"),

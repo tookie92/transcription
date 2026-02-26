@@ -641,6 +641,14 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
         {/* CANVAS PRINCIPAL */}
         <div
           className="flex-1 relative overflow-hidden bg-background"
+          onClick={(e: React.MouseEvent) => {
+            const target = e.target as HTMLElement;
+            const isGroupClick = target.closest('[data-group-id]');
+            const isPanelClick = target.closest('[data-panel]');
+            if (!isGroupClick && !isPanelClick && selectedGroups.size > 0) {
+              setSelectedGroups(new Set());
+            }
+          }}
           onDragOver={(e: React.DragEvent) => {
             if (workspaceMode === 'grouping') { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
           }}

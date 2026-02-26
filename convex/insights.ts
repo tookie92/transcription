@@ -31,6 +31,7 @@ export const createInsights = mutation({
         timestamp: insight.timestamp,
         source: "ai" as const,
         createdBy: identity.subject,
+        createdByName: identity.name || identity.email?.split('@')[0] || "Unknown",
         createdAt: Date.now(),
       })
     );
@@ -147,6 +148,7 @@ export const createManualInsight = mutation({
       timestamp: args.timestamp,
       source: "manual" as const,
       createdBy: identity.subject,
+      createdByName: identity.name || identity.email?.split('@')[0] || "Unknown",
       tags: args.tags,
       priority: args.priority,
       createdAt: Date.now(),

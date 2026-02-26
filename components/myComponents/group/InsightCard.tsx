@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useCallback, memo } from "react";
 import { Trash2, GripVertical } from "lucide-react";
 import { Insight } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -57,7 +57,7 @@ const TYPE_CONFIG = {
   },
 } as const;
 
-export function InsightCard({
+const InsightCardComponent = ({
   insight,
   groupId,
   workspaceMode,
@@ -72,7 +72,7 @@ export function InsightCard({
   onInsightDragEnd,
   insightCardStyle,
   index = 0,
-}: InsightCardProps) {
+}: InsightCardProps) => {
   const type = insight.type as keyof typeof TYPE_CONFIG;
   const config = TYPE_CONFIG[type] || TYPE_CONFIG.insight;
   const [isHovered, setIsHovered] = useState(false);
@@ -82,6 +82,34 @@ export function InsightCard({
     !isSelectedByOther &&
     !isPresentationMode &&
     !isPlacingDot;
+
+  const handleDragStart = useCallback((e: React.DragEvent) => {
+    if (isDraggable && onInsightDragStart) {
+      e.dataTransfer.effectAllowed = 'move';
+      onInsightDragStart(e, insight.id);
+    }
+  }, [isDraggable, onInsightDragStart, insight.id]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (isDraggable && onInsightDragOver) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      onInsightDragOver(e);
+    }
+  }, [isDraggable, onInsightDragOver]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    if (isDraggable && onInsightDrop) {
+      e.preventDefault();
+      onInsightDrop(e, groupId);
+    }
+  }, [isDraggable, onInsightDrop, groupId]);
+
+  const handleDragEnd = useCallback((e: React.DragEvent) => {
+    if (isDraggable && onInsightDragEnd) {
+      onInsightDragEnd(e);
+    }
+  }, [isDraggable, onInsightDragEnd]);
 
   return (
     <motion.div
@@ -103,27 +131,10 @@ export function InsightCard({
       `}
       style={insightCardStyle}
       draggable={isDraggable}
-      onDragStart={(e) => {
-        if (isDraggable && onInsightDragStart) {
-          onInsightDragStart(e as unknown as React.DragEvent, insight.id);
-        }
-      }}
-      onDragOver={(e) => {
-        if (isDraggable && onInsightDragOver) {
-          e.preventDefault();
-          onInsightDragOver(e as unknown as React.DragEvent);
-        }
-      }}
-      onDrop={(e) => {
-        if (isDraggable && onInsightDrop) {
-          onInsightDrop(e as unknown as React.DragEvent, groupId);
-        }
-      }}
-      onDragEnd={(e) => {
-        if (isDraggable && onInsightDragEnd) {
-          onInsightDragEnd(e as unknown as React.DragEvent);
-        }
-      }}
+      onDragStart={handleDragStart as never}
+      onDragOver={handleDragOver as never}
+      onDrop={handleDrop as never}
+      onDragEnd={handleDragEnd as never}
     >
       {/* Drag Handle & Type Badge */}
       <div className="flex items-center gap-2 mb-3">
@@ -148,12 +159,12 @@ export function InsightCard({
       {/* Actions */}
       <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          {insight.createdBy && (
+          {insight.createdByName && (
             <>
               <div className="w-5 h-5 rounded-full bg-linear-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-[8px] font-bold">
-                {insight.createdBy.charAt(0).toUpperCase()}
+                {insight.createdByName.charAt(0).toUpperCase()}
               </div>
-              <span className="truncate max-w-[60px]">{insight.createdBy}</span>
+              <span className="truncate max-w-[60px]">{insight.createdByName}</span>
             </>
           )}
         </div>
@@ -196,3 +207,15 @@ export function InsightCard({
     </motion.div>
   );
 }
+
+export const InsightCard = memo(InsightCardComponent, (prevProps, nextProps) => {
+  return (
+    prevProps.insight.id === nextProps.insight.id &&
+    prevProps.groupId === nextProps.groupId &&
+    prevProps.workspaceMode === nextProps.workspaceMode &&
+    prevProps.isSelectedByOther === nextProps.isSelectedByOther &&
+    prevProps.isPresentationMode === nextProps.isPresentationMode &&
+    prevProps.isPlacingDot === nextProps.isPlacingDot &&
+    prevProps.index === nextProps.index
+  );
+});

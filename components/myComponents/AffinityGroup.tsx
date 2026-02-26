@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, PanInfo } from "framer-motion";
+import { motion } from "framer-motion";
 import { VolumeX } from "lucide-react";
 import React, { useState, useCallback, useMemo } from "react";
 import { AffinityGroup as AffinityGroupType, Comment, DotVotingSession, Insight } from "@/types";
@@ -80,8 +80,6 @@ export default function AffinityGroup({
 
   const x = useMotionValue(group.position.x);
   const y = useMotionValue(group.position.y);
-  const rotateX = useTransform(y, [-100, 0, 100], [1, 0, -1]);
-  const rotateY = useTransform(x, [-100, 0, 100], [-1, 0, 1]);
 
   const unreadCount = useQuery(api.comments.getUnreadCount, {
     groupId: group.id, userId: currentUserId!, mapId: mapId as Id<"affinityMaps">,
@@ -194,10 +192,10 @@ export default function AffinityGroup({
     }
   }, [isPresentationMode, onInsightDrop]);
 
-  const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+  const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number; y: number } }) => {
     setIsDragging(false);
     onMove(group.id, { x: group.position.x + info.offset.x / scale, y: group.position.y + info.offset.y / scale });
-  }, [group.position.x, group.position.y, group.id, scale, onMove]); 
+  }, [group.position.x, group.position.y, group.id, scale, onMove]);
 
   const handleTitleSave = () => {
     if (tempTitle.trim() && tempTitle !== group.title) onTitleUpdate?.(group.id, tempTitle.trim());
@@ -332,13 +330,11 @@ export default function AffinityGroup({
           onDrop={handleDropLocal}
           style={{
             ...styles.container, x, y,
-            rotateX: isDragging ? rotateX : 0,
-            rotateY: isDragging ? rotateY : 0,
             pointerEvents: isPresentationMode ? 'none' : 'auto'
           }}
           className={`absolute min-w-[420px] max-w-[520px] ${
             isPresentationMode ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
-          } ${isPlacingDot ? 'ring-4 ring-blue-400 ring-opacity-60 animate-pulse' : ''}
+          } ${isDragging ? 'cursor-grabbing' : ''} ${isPlacingDot ? 'ring-4 ring-blue-400 ring-opacity-60 animate-pulse' : ''}
           ${!canInteract ? 'opacity-80 cursor-not-allowed' : 'cursor-grab'}`}
         >
           {/* SILENT SORTING OVERLAY */}

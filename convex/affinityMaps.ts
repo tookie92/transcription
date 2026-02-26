@@ -233,6 +233,7 @@ export const createIndependentInsight = mutation({
       timestamp: 0,
       source: "manual" as const,
       createdBy: identity.subject,
+      createdByName: identity.name || identity.email?.split('@')[0] || "Unknown",
       createdAt: Date.now(),
       // interviewId est optionnel maintenant
     });
@@ -365,6 +366,7 @@ export const createManualInsight = mutation({
       timestamp: 0,
       source: "manual" as const,
       createdBy: identity.subject,
+      createdByName: identity.name || identity.email?.split('@')[0] || "Unknown",
       createdAt: Date.now(),
     });
 

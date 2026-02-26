@@ -74,6 +74,7 @@ export interface Insight {
   timestamp: number;
   source: 'ai' | 'manual';
   createdBy: string;
+  createdByName: string;
   createdAt: string;
   tags?: string[];
   priority?: 'low' | 'medium' | 'high';

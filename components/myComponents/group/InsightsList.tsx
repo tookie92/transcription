@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { memo } from "react";
 import { AffinityGroup as AffinityGroupType, Insight } from "@/types";
 import { InsightCard } from "./InsightCard";
 
@@ -25,7 +25,7 @@ interface InsightsListProps {
   insightCardStyle: React.CSSProperties;
 }
 
-export function InsightsList({
+const InsightsListComponent = ({
   groupInsights,
   group,
   workspaceMode,
@@ -44,7 +44,7 @@ export function InsightsList({
   onDragLeave,
   onDrop,
   insightCardStyle,
-}: InsightsListProps) {
+}: InsightsListProps) => {
   return (
     <div
       className={`p-4 space-y-3 max-h-[400px] overflow-y-auto ${
@@ -99,3 +99,14 @@ export function InsightsList({
     </div>
   );
 }
+
+export const InsightsList = memo(InsightsListComponent, (prevProps, nextProps) => {
+  return (
+    prevProps.groupInsights.length === nextProps.groupInsights.length &&
+    prevProps.groupInsights.every((insight, i) => insight.id === nextProps.groupInsights[i]?.id) &&
+    prevProps.isDragOver === nextProps.isDragOver &&
+    prevProps.isSelectedByOther === nextProps.isSelectedByOther &&
+    prevProps.isPresentationMode === nextProps.isPresentationMode &&
+    prevProps.isPlacingDot === nextProps.isPlacingDot
+  );
+});
