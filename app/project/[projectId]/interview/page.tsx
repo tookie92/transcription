@@ -193,26 +193,11 @@ export default function InterviewHome() {
   };
 
   const handleSave = async () => {
-    if (!pendingInterview || !currentProjectId || !selectedFile) return;
+    if (!pendingInterview || !currentProjectId) return;
 
     const toastId = toast.loading("Saving interview to project...");
 
     try {
-      // First upload audio to get a public URL
-      const uploadFormData = new FormData();
-      uploadFormData.append("audio", selectedFile);
-      
-      const uploadResponse = await fetch("/api/upload-audio", {
-        method: "POST",
-        body: uploadFormData,
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error("Failed to upload audio");
-      }
-
-      const { audioUrl: uploadedAudioUrl } = await uploadResponse.json();
-
       const interviewId = await createInterview({
         projectId: currentProjectId,
         title: pendingInterview.title,
@@ -221,23 +206,6 @@ export default function InterviewHome() {
         segments: pendingInterview.segments,
         duration: pendingInterview.duration,
       });
-
-      // Trigger background diarization with Inngest
-      try {
-        await fetch("/api/trigger-diarize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            interviewId,
-            projectId: currentProjectId,
-            audioUrl: uploadedAudioUrl,
-            segments: pendingInterview.segments,
-          }),
-        });
-        toast.info("Speaker detection started in background");
-      } catch (diarizeError) {
-        console.error("Failed to trigger diarization:", diarizeError);
-      }
 
       toast.success("Interview saved successfully!", { 
         id: toastId,
@@ -306,16 +274,23 @@ export default function InterviewHome() {
   return (
     <div className="container max-w-5xl mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-extrabold tracking-tight text-foreground">
-          Skripta
-        </h1>
-        <p className="mt-2 text-muted-foreground">Upload, record, or paste a URL to transcribe your interview</p>
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <img 
+            src="/logomark.svg" 
+            alt="Skripta" 
+            className="w-10 h-10 object-contain"
+          />
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            New Interview
+          </h1>
+        </div>
+        <p className="mt-1 text-muted-foreground">Upload, record, or paste a URL to transcribe your interview</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Upload Card */}
-        <Card className="bg-white rounded-2xl shadow-lg">
+        <Card className="bg-card rounded-2xl shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Upload className="w-5 h-5" />
@@ -387,8 +362,8 @@ export default function InterviewHome() {
               <div className="py-4 text-center space-y-4">
                 {isRecording ? (
                   <div className="space-y-2">
-                    <div className="flex items-center justify-center gap-2 text-red-500">
-                      <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+                    <div className="flex items-center justify-center gap-2 text-destructive">
+                      <span className="w-3 h-3 bg-destructive rounded-full animate-pulse"></span>
                       Recording...
                     </div>
                     <div className="text-2xl font-mono">{formatRecordingTime(recordingTime)}</div>
@@ -398,7 +373,7 @@ export default function InterviewHome() {
                     </Button>
                   </div>
                 ) : (
-                  <Button onClick={startRecording} className="gap-2 bg-red-500 hover:bg-red-600">
+                  <Button onClick={startRecording} className="gap-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground">
                     <Mic className="w-4 h-4" />
                     Start Recording
                   </Button>
@@ -506,7 +481,7 @@ export default function InterviewHome() {
                     <Button 
                       onClick={handleSave}
                       disabled={isSaving}
-                      className="flex-1 bg-[#3D7C6F] hover:bg-[#2d5f54]"
+                      className="flex-1"
                     >
                       {isSaving ? (
                         <>
@@ -526,15 +501,15 @@ export default function InterviewHome() {
             )}
 
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-600 text-sm">{error}</p>
+              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <p className="text-destructive text-sm">{error}</p>
               </div>
             )}
           </CardContent>
         </Card>
 
         {/* Right: Transcription Preview or Recent Interviews */}
-        <Card className="bg-white rounded-2xl shadow-lg">
+        <Card className="bg-card rounded-2xl shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
@@ -544,18 +519,18 @@ export default function InterviewHome() {
           <CardContent>
             {pendingInterview ? (
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 p-2 rounded-lg">
+                <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 dark:bg-green-950 p-2 rounded-lg">
                   <Clock className="w-4 h-4" />
                   Ready to save - {pendingInterview.segments.length} segments
                 </div>
                 <div className="max-h-[400px] overflow-y-auto space-y-2">
                   {pendingInterview.segments.map((segment, i) => (
                     <div key={i} className="text-sm">
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-muted-foreground">
                         {Math.floor(segment.start / 60)}:{String(Math.floor(segment.start % 60)).padStart(2, '0')}
                       </span>
                       {segment.speaker && (
-                        <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                        <span className="ml-2 text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
                           {segment.speaker}
                         </span>
                       )}
@@ -586,12 +561,12 @@ export default function InterviewHome() {
                       className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-accent cursor-pointer transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                          <FileText className="w-5 h-5 text-blue-600" />
+                        <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                          <FileText className="w-5 h-5 text-primary" />
                         </div>
                         <div>
                           <p className="font-medium text-sm">{interview.title}</p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-muted-foreground">
                             {Math.floor(interview.duration / 60)}:{String(Math.floor(interview.duration % 60)).padStart(2, '0')} min
                           </p>
                         </div>
@@ -602,7 +577,7 @@ export default function InterviewHome() {
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-muted-foreground">
                     <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>No interviews yet</p>
                     <p className="text-sm">Upload an audio file to get started</p>

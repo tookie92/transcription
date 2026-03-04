@@ -22,7 +22,8 @@ import {
   Lightbulb, 
   FileSpreadsheet, 
   Sparkles, 
-  ArrowLeft, 
+  ArrowLeft,
+  ArrowRight,
   Download,
   Search,
   Filter
@@ -33,7 +34,7 @@ import { useState } from "react";
 import { ExportInterview, Insight } from "@/types";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
-import { Plus, Trash } from "lucide-react";
+import { Plus, Trash, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface InterviewContentProps {
   projectId: Id<"projects">;
@@ -103,7 +104,6 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
       segmentId: undefined,
       createdAt: new Date(insight.createdAt).toISOString(),
     })) || [],
-    isAnalyzing: false,
     createdAt: new Date(interview._creationTime).toISOString(),
   };
 
@@ -163,6 +163,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
           timestamp: insight.timestamp,
           source: insight.source,
           createdBy: insight.createdBy,
+          createdByName: insight.createdByName,
           createdAt: new Date(insight._creationTime).toISOString(),
           projectId: insight.projectId,
           interviewId: insight.interviewId,
@@ -223,54 +224,36 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
         <div className="flex items-center gap-4">
           <Button variant="outline" onClick={() => router.push(`/project/${projectId}`)}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Project
+            Back
           </Button>
           
           {/* Navigation entre interviews */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
               disabled={!hasPrevious}
               onClick={() => router.push(`/project/${projectId}/interview/${previousInterview?._id}`)}
             >
-              ← Previous
+              <ChevronLeft className="w-4 h-4" />
             </Button>
             
-            <span className="text-sm text-gray-500 px-2">
-              {currentIndex + 1} of {projectInterviews?.length}
+            <span className="text-sm text-muted-foreground px-2">
+              {currentIndex + 1} / {projectInterviews?.length}
             </span>
             
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
               disabled={!hasNext}
               onClick={() => router.push(`/project/${projectId}/interview/${nextInterview?._id}`)}
             >
-              Next →
+              <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
         </div>
 
         <div className="flex gap-2">
-          <Button
-            onClick={handleAnalyze}
-            disabled={isAnalyzing}
-            className="flex items-center gap-2 bg-[#3D7C6F] hover:bg-[#2d5f54]"
-          >
-            {isAnalyzing ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Analyzing...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                Analyze
-              </>
-            )}
-          </Button>
-          
           <ExportDialog 
             interview={interviewForExport}
             trigger={
@@ -288,11 +271,18 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
         <CardContent className="p-6">
           <div className="flex items-start justify-between">
             <div className="space-y-2">
-              <h1 className="text-3xl font-bold">{interview.title}</h1>
+              <div className="flex items-center gap-3">
+                <img 
+                  src="/logomark.svg" 
+                  alt="Skripta" 
+                  className="w-8 h-8 object-contain"
+                />
+                <h1 className="text-3xl font-bold">{interview.title}</h1>
+              </div>
               {interview.topic && (
-                <p className="text-lg text-gray-600">{interview.topic}</p>
+                <p className="text-lg text-muted-foreground">{interview.topic}</p>
               )}
-              <div className="flex items-center gap-4 text-sm text-gray-500">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <span>
                   <FileText className="w-4 h-4 inline mr-1" />
                   {Math.floor(interview.duration / 60)}:
@@ -315,12 +305,6 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
         </CardContent>
       </Card>
 
-      {analysisError && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-600 text-sm">{analysisError}</p>
-        </div>
-      )}
-
       {/* Content Tabs */}
       <Tabs defaultValue="transcription" className="space-y-6">
         <TabsList className="grid w-full grid-cols-3">
@@ -332,7 +316,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
             <Lightbulb className="w-4 h-4" />
             Insights
             {insights && insights.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 text-xs bg-blue-500 text-white rounded-full">
+              <span className="ml-1 px-1.5 py-0.5 text-xs bg-primary text-primary-foreground rounded-full">
                 {insights.length}
               </span>
             )}
@@ -352,12 +336,12 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                   <CardTitle>Full Transcription</CardTitle>
                   <CardDescription>
                     Complete interview transcription with timestamps
-                    {searchQuery && <span className="ml-2 text-blue-600">• {filteredSegments.length} results</span>}
+                    {searchQuery && <span className="ml-2 text-primary">• {filteredSegments.length} results</span>}
                   </CardDescription>
                 </div>
                 {/* Search in transcription */}
                 <div className="relative w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     placeholder="Search transcription..."
                     value={searchQuery}
@@ -372,23 +356,23 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                 {(searchQuery ? filteredSegments : interview.segments).map((segment) => (
                   <div 
                     key={segment.id}
-                    className="hover:bg-gray-50 p-3 rounded-lg transition-colors"
+                    className="hover:bg-accent p-3 rounded-lg transition-colors"
                   >
                     <div className="flex gap-3 items-start">
-                      <span className="text-sm font-mono mt-0.5 min-w-[60px] flex-shrink-0 text-gray-500">
+                      <span className="text-sm font-mono mt-0.5 min-w-[60px] flex-shrink-0 text-muted-foreground">
                         {Math.floor(segment.start / 60)}:
                         {String(Math.floor(segment.start % 60)).padStart(2, '0')}
                       </span>
                       {segment.speaker && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded flex-shrink-0">
+                        <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded flex-shrink-0">
                           {segment.speaker}
                         </span>
                       )}
-                      <p className="text-gray-700 leading-relaxed flex-1">
+                      <p className="text-foreground leading-relaxed flex-1">
                         {searchQuery ? (
                           segment.text.split(new RegExp(`(${searchQuery})`, 'gi')).map((part, i) => 
                             part.toLowerCase() === searchQuery.toLowerCase() ? (
-                              <mark key={i} className="bg-yellow-200 px-0.5 rounded">{part}</mark>
+                              <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">{part}</mark>
                             ) : part
                           )
                         ) : segment.text}
@@ -397,7 +381,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                   </div>
                 ))}
                 {searchQuery && filteredSegments.length === 0 && (
-                  <div className="text-center py-8 text-gray-400">
+                  <div className="text-center py-8 text-muted-foreground">
                     <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
                     <p>No results found for &quot;{searchQuery}&quot;</p>
                   </div>
@@ -416,21 +400,21 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                   <CardTitle>Interview Insights</CardTitle>
                   <CardDescription>
                     Key findings extracted from the interview
-                    {insightFilter && <span className="ml-2 text-blue-600">• Filtered</span>}
+                    {insightFilter && <span className="ml-2 text-primary">• Filtered</span>}
                   </CardDescription>
                 </div>
                 {/* Filter by type */}
                 <div className="flex items-center gap-2">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       placeholder="Search insights..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9 w-48"
+                    className="pl-9 w-48"
                     />
                   </div>
-                  <Filter className="w-4 h-4 text-gray-400" />
+                  <Filter className="w-4 h-4 text-muted-foreground" />
                   <div className="flex gap-1">
                     <Button
                       variant={!insightFilter ? "default" : "outline"}
@@ -469,10 +453,10 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                       <div className="space-y-4 py-4">
                         <div className="flex gap-1 flex-wrap">
                           {[
-                            { value: 'pain-point', label: 'Pain', color: 'bg-red-100 text-red-700' },
-                            { value: 'quote', label: 'Quote', color: 'bg-blue-100 text-blue-700' },
-                            { value: 'insight', label: 'Insight', color: 'bg-purple-100 text-purple-700' },
-                            { value: 'follow-up', label: 'Follow-up', color: 'bg-green-100 text-green-700' },
+                            { value: 'pain-point', label: 'Pain', color: 'bg-destructive/20 text-destructive border-destructive' },
+                            { value: 'quote', label: 'Quote', color: 'bg-primary/20 text-primary border-primary' },
+                            { value: 'insight', label: 'Insight', color: 'bg-secondary text-secondary-foreground border-secondary' },
+                            { value: 'follow-up', label: 'Follow-up', color: 'bg-green-500/20 text-green-600 dark:text-green-400 border-green-500' },
                           ].map(({ value, label, color }) => (
                             <button
                               key={value}
@@ -480,7 +464,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                               onClick={() => setNewInsightType(value as Insight['type'])}
                               className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
                                 newInsightType === value
-                                  ? `${color} border-2 border-current`
+                                  ? `${color} border-2`
                                   : 'bg-muted border border-border text-muted-foreground hover:bg-accent'
                               }`}
                             >
@@ -524,14 +508,10 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
 
             <CardContent>
               {!insights || insights.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
+                <div className="text-center py-12 text-muted-foreground">
                   <Lightbulb className="w-16 h-16 mx-auto mb-3 opacity-50" />
                   <p className="text-lg mb-2">No insights yet</p>
-                  <p className="text-sm mb-4">Analyze this interview to extract insights automatically</p>
-                  <Button onClick={handleAnalyze} disabled={isAnalyzing}>
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Analyze Interview
-                  </Button>
+                  <p className="text-sm">Go to the Summary tab to analyze this interview</p>
                 </div>
               ) : (
                 <div className="grid gap-4">
@@ -557,14 +537,14 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                                 <Trash className="h-3 w-3" />
                               </Button>
                             )}
-                            <span className="text-sm text-gray-400 font-mono">
+                            <span className="text-sm text-muted-foreground font-mono">
                               {Math.floor(insight.timestamp / 60)}:
                               {String(Math.floor(insight.timestamp % 60)).padStart(2, '0')}
                             </span>
                           </div>
                         </div>
-                        <p className="text-gray-700">{insight.text}</p>
-                        <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
+                        <p className="text-foreground">{insight.text}</p>
+                        <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
                           <span>Source: {insight.source}</span>
                           <span>{new Date(insight._creationTime).toLocaleDateString()}</span>
                         </div>
@@ -572,7 +552,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                     </Card>
                   ))}
                   {filteredInsights.length === 0 && insights && insights.length > 0 && (
-                    <div className="text-center py-8 text-gray-400">
+                    <div className="text-center py-8 text-muted-foreground">
                       <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
                       <p>No insights match your filter</p>
                     </div>
@@ -587,8 +567,8 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
         <TabsContent value="summary">
           <div className="grid gap-6">
             {summaryError && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-600 text-sm">{summaryError}</p>
+              <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <p className="text-destructive text-sm">{summaryError}</p>
               </div>
             )}
 
@@ -602,25 +582,6 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                       AI-generated executive summary and key findings
                     </CardDescription>
                   </div>
-                  {!interview.summary && (
-                    <Button
-                      onClick={handleGenerateSummary}
-                      disabled={isGeneratingSummary}
-                      className="flex items-center gap-2 bg-[#3D7C6F] hover:bg-[#2d5f54]"
-                    >
-                      {isGeneratingSummary ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4" />
-                          Generate Summary
-                        </>
-                      )}
-                    </Button>
-                  )}
                 </div>
               </CardHeader>
             </Card>
@@ -635,7 +596,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                   </CardHeader>
                   <CardContent>
                     <div className="prose max-w-none">
-                      <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                      <p className="text-foreground leading-relaxed whitespace-pre-wrap">
                         {interview.summary.executiveSummary}
                       </p>
                     </div>
@@ -651,8 +612,8 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                     <ul className="space-y-2">
                       {interview.summary.keyPoints.map((point, index) => (
                         <li key={index} className="flex items-start gap-3">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
-                          <span className="text-gray-700">{point}</span>
+                          <div className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0" />
+                          <span className="text-foreground">{point}</span>
                         </li>
                       ))}
                     </ul>
@@ -667,9 +628,9 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                   <CardContent>
                     <ul className="space-y-3">
                       {interview.summary.recommendations.map((recommendation, index) => (
-                        <li key={index} className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+                        <li key={index} className="flex items-start gap-3 p-3 bg-green-50 dark:bg-green-950 rounded-lg">
                           <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0" />
-                          <span className="text-gray-700">{recommendation}</span>
+                          <span className="text-foreground">{recommendation}</span>
                         </li>
                       ))}
                     </ul>
@@ -696,14 +657,14 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                 {interview.summary.criticalIssues.length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-red-600">Critical Issues</CardTitle>
+                      <CardTitle className="text-destructive">Critical Issues</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <ul className="space-y-2">
                         {interview.summary.criticalIssues.map((issue, index) => (
-                          <li key={index} className="flex items-start gap-3 p-3 bg-red-50 rounded-lg">
-                            <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0" />
-                            <span className="text-red-700">{issue}</span>
+                          <li key={index} className="flex items-start gap-3 p-3 bg-destructive/5 rounded-lg">
+                            <div className="w-2 h-2 bg-destructive rounded-full mt-2 flex-shrink-0" />
+                            <span className="text-destructive">{issue}</span>
                           </li>
                         ))}
                       </ul>
@@ -715,30 +676,63 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
               // État vide - pas de résumé
               <Card>
                 <CardContent className="text-center py-12">
-                  <FileSpreadsheet className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                  <h3 className="text-lg font-semibold text-gray-600 mb-2">
+                  <FileSpreadsheet className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold text-foreground mb-2">
                     No Summary Yet
                   </h3>
-                  <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                    Generate an AI-powered summary to get executive insights, key findings, and actionable recommendations from this interview.
-                  </p>
-                  <Button 
-                    onClick={handleGenerateSummary} 
-                    disabled={isGeneratingSummary}
-                    className="bg-[#3D7C6F] hover:bg-[#2d5f54]"
-                  >
-                    {isGeneratingSummary ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Generating Summary...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4 mr-2" />
-                        Generate AI Summary
-                      </>
-                    )}
-                  </Button>
+                  {!insights || insights.length === 0 ? (
+                    <>
+                      <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                        Analyze the interview first to extract insights, then generate a summary.
+                      </p>
+                      <div className="flex items-center justify-center gap-3">
+                        {isAnalyzing && (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                        )}
+                        <Button 
+                          onClick={handleAnalyze}
+                          disabled={isAnalyzing}
+                        >
+                          {isAnalyzing ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4 mr-2" />
+                              Analyze Interview
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      {analysisError && (
+                        <p className="text-destructive text-sm mt-4">{analysisError}</p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                        Generate an AI-powered summary based on the {insights.length} insights extracted from this interview.
+                      </p>
+                      <Button 
+                        onClick={handleGenerateSummary} 
+                        disabled={isGeneratingSummary}
+                      >
+                        {isGeneratingSummary ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Generating Summary...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Generate AI Summary
+                          </>
+                        )}
+                      </Button>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             )}

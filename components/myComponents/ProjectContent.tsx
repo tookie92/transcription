@@ -332,7 +332,7 @@ useEffect(() => {
               <p className="text-gray-500 mb-4">
                 Start by uploading your first interview
               </p>
-              <Button onClick={() => router.push("/")}>
+              <Button onClick={() => router.push(`/project/${projectId}/interview`)}>
                 <Plus className="w-4 h-4 mr-2" />
                 Create First Interview
               </Button>
