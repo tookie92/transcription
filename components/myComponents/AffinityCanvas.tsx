@@ -39,6 +39,38 @@ import { CanvasStatusIndicators } from "./canvas/CanvasStatusIndicators";
 import { ZoomControls } from "./canvas/ZoomControls";
 import { MiniMap } from "./canvas/MiniMap";
 
+// ==================== UTILITIES ====================
+
+const CURSOR_COLORS = [
+  "#ef4444", // red
+  "#f97316", // orange
+  "#eab308", // yellow
+  "#22c55e", // green
+  "#14b8a6", // teal
+  "#3b82f6", // blue
+  "#8b5cf6", // violet
+  "#ec4899", // pink
+];
+
+const OFFLINE_THRESHOLD_MS = 30000; // 30 seconds
+const INACTIVE_THRESHOLD_MS = 5000; // 5 seconds
+
+function isUserOnline(lastSeen: number): boolean {
+  return Date.now() - lastSeen < OFFLINE_THRESHOLD_MS;
+}
+
+function isUserInactive(lastSeen: number): boolean {
+  return Date.now() - lastSeen > INACTIVE_THRESHOLD_MS;
+}
+
+function getUserColor(userId: string): string {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return CURSOR_COLORS[Math.abs(hash) % CURSOR_COLORS.length];
+}
+
 // ==================== INTERFACES ====================
 
 interface PresenceUser {
@@ -50,6 +82,7 @@ interface PresenceUser {
     name: string;
     avatar?: string;
   };
+  lastSeen: number;
 }
 
 interface AffinityCanvasProps {
@@ -726,20 +759,47 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
               onClick={handleCanvasClick}
             >
                       {/* OTHER USERS CURSORS */}
-                      {!isPresentMode && otherUsers?.map((user: PresenceUser) => (
-                        <motion.div
-                          key={user.userId}
-                          className="absolute pointer-events-none z-50"
-                          style={{ left: user.cursor.x, top: user.cursor.y }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow" />
-                            <span className="text-xs bg-gray-900 text-white px-2 py-1 rounded shadow">
-                              {user.user?.name || "User"}
-                            </span>
-                          </div>
-                        </motion.div>
-                      ))}
+                      {!isPresentMode && otherUsers?.filter((user: PresenceUser) => isUserOnline(user.lastSeen)).map((user: PresenceUser, index: number) => {
+                        const userColor = getUserColor(user.userId);
+                        const isInactive = isUserInactive(user.lastSeen);
+                        const labelOnRight = index % 2 === 0;
+                        
+                        return (
+                          <motion.div
+                            key={user.userId}
+                            className="absolute pointer-events-none z-50"
+                            style={{ 
+                              left: user.cursor.x, 
+                              top: user.cursor.y,
+                              opacity: isInactive ? 0.5 : 1,
+                              transition: "opacity 0.3s ease",
+                            }}
+                          >
+                            <div className={`flex items-center ${labelOnRight ? 'gap-2' : 'gap-2 flex-row-reverse'}`}>
+                              <img
+                                src="/cursor.svg"
+                                alt="cursor"
+                                className="w-6 h-6"
+                                style={{ filter: `drop-shadow(0 0 2px ${userColor})` }}
+                              />
+                              {user.user?.avatar ? (
+                                <img
+                                  src={user.user.avatar}
+                                  alt={user.user.name}
+                                  className="w-6 h-6 rounded-full border-2 border-white shadow"
+                                />
+                              ) : (
+                                <span
+                                  className="text-xs text-white px-2 py-1 rounded shadow whitespace-nowrap"
+                                  style={{ backgroundColor: userColor }}
+                                >
+                                  {user.user?.name || "User"}
+                                </span>
+                              )}
+                            </div>
+                          </motion.div>
+                        );
+                      })}
 
                       {/* CANVAS CONTENT */}
                       <div key={renderKey} style={{ width: '100%', height: '100%', position: 'relative' }}>

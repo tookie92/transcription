@@ -52,7 +52,7 @@
 :root {
   --radius: 0.5rem;
   
-  /* Light Theme - Transkripschon Green Palette */
+  /* Light Theme - Skripta Green Palette */
   --background: oklch(0.97 0.04 150);
   --foreground: oklch(0.2 0.02 195);
   
@@ -100,7 +100,7 @@
   --myBackground: #EAF9E7;
 }
 
-/* Dark Theme - Transkripschon - Deep Teal with Green Accent */
+/* Dark Theme - Skripta - Deep Teal with Green Accent */
 .dark {
   /* Deep dark background - #013237 */
   --background: oklch(0.12 0.03 195);
@@ -168,7 +168,7 @@
   }
 }
 
-/* 🎨 Sticky Note Colors for Affinity Groups - Transkripschon Palette */
+/* 🎨 Sticky Note Colors for Affinity Groups - Skripta Palette */
 :root {
   /* Group accent colors - using new palette */
   --group-red: oklch(65% 0.15 25);

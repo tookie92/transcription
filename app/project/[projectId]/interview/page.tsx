@@ -153,14 +153,12 @@ export default function InterviewHome() {
   };
 
   const handleTranscribe = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile || !title.trim() || !topic.trim()) return;
 
     const toastId = toast.loading("Transcribing audio...");
 
     try {
-      const interviewTitle = title || `Interview ${new Date().toLocaleDateString()}`;
-      
-      const interview = await transcribe(selectedFile, interviewTitle, topic || undefined);
+      const interview = await transcribe(selectedFile, title, topic);
       
       const convexSegments = interview.segments.map(segment => ({
         id: segment.id,
@@ -310,7 +308,7 @@ export default function InterviewHome() {
       {/* Header */}
       <div className="text-center mb-8">
         <h1 className="text-4xl font-extrabold tracking-tight text-foreground">
-          Transkripschon
+          Skripta
         </h1>
         <p className="mt-2 text-muted-foreground">Upload, record, or paste a URL to transcribe your interview</p>
       </div>
@@ -447,7 +445,9 @@ export default function InterviewHome() {
 
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <Label htmlFor="title">Interview Title (optional)</Label>
+                    <Label htmlFor="title">
+                      Interview Title <span className="text-red-500">*</span>
+                    </Label>
                     <Input
                       id="title"
                       type="text"
@@ -455,11 +455,14 @@ export default function InterviewHome() {
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
                       disabled={isTranscribing}
+                      required
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="topic">Interview Topic</Label>
+                    <Label htmlFor="topic">
+                      Interview Topic <span className="text-red-500">*</span>
+                    </Label>
                     <Input
                       id="topic"
                       type="text"
@@ -467,6 +470,7 @@ export default function InterviewHome() {
                       value={topic}
                       onChange={(e) => setTopic(e.target.value)}
                       disabled={isTranscribing}
+                      required
                     />
                     <p className="text-xs text-muted-foreground">Helps AI extract better insights</p>
                   </div>
@@ -476,7 +480,7 @@ export default function InterviewHome() {
                 <div className="flex gap-3">
                   <Button 
                     onClick={handleTranscribe}
-                    disabled={isTranscribing || !selectedFile}
+                    disabled={isTranscribing || !selectedFile || !title.trim() || !topic.trim()}
                     className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
                     variant={pendingInterview ? "outline" : "default"}
                   >

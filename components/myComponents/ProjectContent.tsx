@@ -43,6 +43,8 @@ const project = useQuery(api.projects.getProjectForInvite, { projectId });
   const affinityMaps = useQuery(api.affinityMaps.getByProject, { projectId });
   const [openManage, setOpenManage] = useState(false);
   const [openInvite, setOpenInvite] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [interviewToDelete, setInterviewToDelete] = useState<{ id: Id<"interviews">; title: string } | null>(null);
  
 
   // Calculate project progress
@@ -121,7 +123,7 @@ useEffect(() => {
       {/* Header */}
       <div className="flex flex-col gap-8 items-center justify-between">
         <div className="flex items-center  w-full justify-between">
-          <Button variant="outline" onClick={() => router.push("/")}>
+          <Button variant="outline" onClick={() => router.push("/project")}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Projects
           </Button>
@@ -271,7 +273,11 @@ useEffect(() => {
             <div className="space-y-4">
               {interviews.map((interview) => (
                 
-                  <Card key={interview._id}  className="hover:bg-gray-50 transition-colors cursor-pointer">
+                  <Card 
+                    key={interview._id} 
+                    className="group hover:bg-gray-50 transition-colors cursor-pointer"
+                    onClick={() => router.push(`/project/${projectId}/interview/${interview._id}`)}
+                  >
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
@@ -297,27 +303,18 @@ useEffect(() => {
                                 {new Date(interview.createdAt).toLocaleDateString()}
                               </p>
                             </div>
-                            <div className="ml-auto">
-                              <Button onClick={()=> router.push(`/project/${projectId}/interview/${interview._id}`)} className="bg-white text-black">
-                                <ViewIcon className="w-4 h-4 " />
-                              </Button>
-                            </div>
-                            <div className="ml-auto">
+                            <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
                               <Button 
-                                className="bg-white text-black"
-                                onClick={async (e) => {
+                                variant="ghost"
+                                size="icon"
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                onClick={(e) => {
                                   e.stopPropagation();
-                                  if (confirm("Êtes-vous sûr de vouloir supprimer cette interview ?")) {
-                                    try {
-                                      await deleteInterview({ interviewId: interview._id });
-                                      toast.success("Interview supprimée");
-                                    } catch (error) {
-                                      toast.error("Erreur lors de la suppression");
-                                    }
-                                  }
+                                  setInterviewToDelete({ id: interview._id, title: interview.title });
+                                  setDeleteDialogOpen(true);
                                 }}
                               >
-                                <Trash2 className="w-4 h-4 " />
+                                <Trash2 className="w-4 h-4" />
                               </Button>
                             </div>
                           </div>
@@ -325,7 +322,7 @@ useEffect(() => {
                       </div>
                     </CardContent>
                   </Card>
-               
+                
               ))}
             </div>
           ) : (
@@ -351,6 +348,36 @@ useEffect(() => {
           onOpenChange={setOpenManage}
         />
       )}
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogTitle className="text-lg font-semibold">Supprimer l'interview</DialogTitle>
+          <p className="text-muted-foreground">
+            Etes-vous sur de vouloir supprimer &quot;{interviewToDelete?.title}&quot; ? Cette action est irreversible
+          </p>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Annuler
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={async () => {
+                if (interviewToDelete) {
+                  try {
+                    await deleteInterview({ interviewId: interviewToDelete.id });
+                    toast.success("Interview supprimée");
+                    setDeleteDialogOpen(false);
+                  } catch (error) {
+                    toast.error("Erreur lors de la suppression");
+                  }
+                }
+              }}
+            >
+              Supprimer
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

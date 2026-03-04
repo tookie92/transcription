@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 
 import type { Metadata } from "next";
-import { Playfair_Display, Inter } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import ConvexClientProvider from "@/components/ConvexClientProvider";
@@ -11,21 +11,22 @@ import { ThemeProvider } from "next-themes";
 import { shadcn } from '@clerk/themes'
 
 
-const playfair = Playfair_Display({
-  variable: "--font-playfair",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const inter = Inter({
-  variable: "--font-inter",
+const jakarta = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
   subsets: ["latin"],
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "transkripschon",
-  description: "Transkripieren + schon - Your AI-powered transcription and affinity mapping tool",
+  title: "Skripta",
+  description: "Your AI-powered transcription and affinity mapping tool",
+  icons: {
+    icon: [
+      { url: "/logomark.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/logomark.svg",
+    apple: "/logomark.svg",
+  },
 };
 
 export default function RootLayout({
@@ -35,7 +36,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${playfair.variable} ${inter.variable} font-sans bg-myBackground antialiased`}>
+      <body className={`${jakarta.variable} font-sans bg-myBackground antialiased`}>
         <ThemeProvider
           attribute="class"
             defaultTheme="system"
@@ -48,7 +49,7 @@ export default function RootLayout({
               }}
           >
             <ConvexClientProvider>
-                <main className="flex w-full min-h-dvh ">
+                <main className="w-full min-h-dvh flex-1">
                   {children}
                 </main>
               <Toaster/>

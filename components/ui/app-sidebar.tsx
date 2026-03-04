@@ -80,8 +80,13 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="border-b">
-        <div className="p-4">
-          <h2 className="text-lg font-semibold">Projects</h2>
+        <div className="p-4 flex items-center gap-3">
+          <img 
+            src="/logomark.svg" 
+            alt="Skripta" 
+            className="w-8 h-8"
+          />
+          <h2 className="text-lg font-bold">Projects</h2>
         </div>
       </SidebarHeader>
 

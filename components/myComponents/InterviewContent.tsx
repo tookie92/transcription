@@ -9,6 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { 
   FileText, 
   Lightbulb, 
@@ -22,9 +30,10 @@ import {
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { ExportDialog } from "./ExportDialog";
 import { useState } from "react";
-import { ExportInterview } from "@/types";
+import { ExportInterview, Insight } from "@/types";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
+import { Plus, Trash } from "lucide-react";
 
 interface InterviewContentProps {
   projectId: Id<"projects">;
@@ -34,10 +43,17 @@ interface InterviewContentProps {
 export function InterviewContent({ projectId, interviewId }: InterviewContentProps) {
   const router = useRouter();
   const { analyzeInterview, generateInterviewSummary } = useAnalysis();
+  const createManualInsight = useMutation(api.insights.createManualInsight);
+  const deleteInsight = useMutation(api.insights.deleteInsight);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  
+  // Manual insight creation
+  const [showAddInsight, setShowAddInsight] = useState(false);
+  const [newInsightText, setNewInsightText] = useState("");
+  const [newInsightType, setNewInsightType] = useState<Insight['type']>('insight');
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -159,6 +175,37 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
       toast.error("Failed to generate summary");
     } finally {
       setIsGeneratingSummary(false);
+    }
+  };
+
+  const handleCreateManualInsight = async () => {
+    if (!newInsightText.trim()) return;
+
+    try {
+      await createManualInsight({
+        interviewId,
+        projectId,
+        type: newInsightType,
+        text: newInsightText.trim(),
+        timestamp: 0,
+      });
+      toast.success("Insight added");
+      setNewInsightText("");
+      setNewInsightType('insight');
+      setShowAddInsight(false);
+    } catch (error) {
+      console.error("Failed to create insight:", error);
+      toast.error("Failed to add insight");
+    }
+  };
+
+  const handleDeleteInsight = async (insightId: string) => {
+    try {
+      await deleteInsight({ insightId: insightId as Id<"insights"> });
+      toast.success("Insight deleted");
+    } catch (error) {
+      console.error("Failed to delete insight:", error);
+      toast.error("Failed to delete insight");
     }
   };
 
@@ -405,9 +452,76 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                       </Button>
                     ))}
                   </div>
+                  <Dialog open={showAddInsight} onOpenChange={setShowAddInsight}>
+                    <DialogTrigger asChild>
+                      <Button size="sm">
+                        <Plus className="w-4 h-4 mr-1" />
+                        Add
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Add Manual Insight</DialogTitle>
+                        <DialogDescription>
+                          Add your own insight to this interview.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="flex gap-1 flex-wrap">
+                          {[
+                            { value: 'pain-point', label: 'Pain', color: 'bg-red-100 text-red-700' },
+                            { value: 'quote', label: 'Quote', color: 'bg-blue-100 text-blue-700' },
+                            { value: 'insight', label: 'Insight', color: 'bg-purple-100 text-purple-700' },
+                            { value: 'follow-up', label: 'Follow-up', color: 'bg-green-100 text-green-700' },
+                          ].map(({ value, label, color }) => (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => setNewInsightType(value as Insight['type'])}
+                              className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                                newInsightType === value
+                                  ? `${color} border-2 border-current`
+                                  : 'bg-muted border border-border text-muted-foreground hover:bg-accent'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                        
+                        <textarea
+                          value={newInsightText}
+                          onChange={(e) => setNewInsightText(e.target.value)}
+                          placeholder="Type your insight..."
+                          className="w-full px-3 py-2 text-sm border border-input rounded-lg resize-none focus:ring-2 focus:ring-ring focus:border-transparent bg-background"
+                          rows={3}
+                        />
+                        
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setShowAddInsight(false);
+                              setNewInsightText("");
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={handleCreateManualInsight}
+                            disabled={!newInsightText.trim()}
+                            className="bg-primary hover:bg-primary/90"
+                          >
+                            Add Insight
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
             </CardHeader>
+
             <CardContent>
               {!insights || insights.length === 0 ? (
                 <div className="text-center py-12 text-gray-400">
@@ -432,10 +546,22 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                           }>
                             {insight.type}
                           </Badge>
-                          <span className="text-sm text-gray-400 font-mono">
-                            {Math.floor(insight.timestamp / 60)}:
-                            {String(Math.floor(insight.timestamp % 60)).padStart(2, '0')}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {insight.source === 'manual' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleDeleteInsight(insight._id)}
+                              >
+                                <Trash className="h-3 w-3" />
+                              </Button>
+                            )}
+                            <span className="text-sm text-gray-400 font-mono">
+                              {Math.floor(insight.timestamp / 60)}:
+                              {String(Math.floor(insight.timestamp % 60)).padStart(2, '0')}
+                            </span>
+                          </div>
                         </div>
                         <p className="text-gray-700">{insight.text}</p>
                         <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
