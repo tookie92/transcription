@@ -1,44 +1,46 @@
-import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
-
-const AUDIO_DIR = path.join(process.cwd(), "public", "audio-uploads");
-
-function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).substring(2);
-}
+import { NextRequest, NextResponse } from 'next/server';
+import { utapi } from '@/lib/uploadthing';
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    const file = formData.get("audio") as File;
+    const file = formData.get('file') as File;
 
     if (!file) {
       return NextResponse.json(
-        { error: "No audio file provided" },
+        { error: 'No audio file provided' },
         { status: 400 }
       );
     }
 
-    await mkdir(AUDIO_DIR, { recursive: true });
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    
-    const ext = file.name.split(".").pop() || "wav";
-    const filename = `${generateId()}.${ext}`;
-    const filepath = path.join(AUDIO_DIR, filename);
-    
-    await writeFile(filepath, buffer);
+    const fileToUpload = new File([buffer], file.name, { type: file.type });
 
-    const audioUrl = `/audio-uploads/${filename}`;
+    const response = await utapi.uploadFiles(fileToUpload);
 
-    return NextResponse.json({ audioUrl });
+    if (response.error) {
+      console.error('UploadThing error:', response.error);
+      throw new Error(response.error.message);
+    }
+
+    return NextResponse.json({
+      url: response.data?.ufsUrl,
+      fileName: file.name,
+    });
   } catch (error) {
-    console.error("Upload error:", error);
+    console.error('Upload error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Upload failed';
     return NextResponse.json(
-      { error: "Upload failed" },
+      { error: errorMessage },
       { status: 500 }
     );
   }
 }
+
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};

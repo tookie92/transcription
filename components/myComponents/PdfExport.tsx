@@ -41,6 +41,7 @@ export function PdfExport({
           timestamp: insight.timestamp,
           source: insight.source,
           createdBy: insight.createdBy,
+          createdByName: 'User',
           createdAt: new Date(insight.createdAt).toISOString(),
           tags: insight.tags,
           priority: insight.priority

@@ -26,7 +26,8 @@ import {
   ArrowRight,
   Download,
   Search,
-  Filter
+  Filter,
+  CircuitBoard
 } from "lucide-react";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { ExportDialog } from "./ExportDialog";
@@ -78,9 +79,9 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
     return (
       <div className="container mx-auto p-6">
         <div className="flex items-center gap-4 mb-6">
-          <Button variant="outline" onClick={() => router.push(`/project/${projectId}`)}>
+          <Button variant="outline" onClick={() => router.push(`/project/${projectId}/interview`)}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Project
+            Back to Interviews
           </Button>
           <h1 className="text-2xl font-bold">Interview not found</h1>
         </div>
@@ -222,7 +223,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
       {/* Header avec navigation */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={() => router.push(`/project/${projectId}`)}>
+          <Button variant="outline" onClick={() => router.push(`/project/${projectId}/interview`)}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
@@ -254,6 +255,14 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
         </div>
 
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => router.push(`/project/${projectId}/affinity/`)}
+            className="gap-2"
+          >
+            <CircuitBoard className="w-4 h-4" />
+            Affinity Map
+          </Button>
           <ExportDialog 
             interview={interviewForExport}
             trigger={
@@ -281,6 +290,17 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
               </div>
               {interview.topic && (
                 <p className="text-lg text-muted-foreground">{interview.topic}</p>
+              )}
+              {interview.audioUrl && (
+                <div className="flex items-center gap-2 mt-2">
+                  <audio 
+                    controls 
+                    className="h-8 w-64"
+                    src={interview.audioUrl}
+                  >
+                    Your browser does not support the audio element.
+                  </audio>
+                </div>
               )}
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <span>

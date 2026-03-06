@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { api } from "@/convex/_generated/api";
-import { fetchAction } from "@/convex/server";
+
+const CONVEX_URL = process.env.NEXT_PUBLIC_CONVEX_URL;
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,12 +13,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await fetchAction(api.interviews.updateSegmentsWithSpeakers, {
-      interviewId,
-      segments,
+    const response = await fetch(`${CONVEX_URL}/updateSegmentsWithSpeakers`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ interviewId, segments }),
     });
 
-    return NextResponse.json({ success: true });
+    if (!response.ok) {
+      throw new Error("Failed to update segments in Convex");
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
   } catch (error) {
     console.error("Error updating interview segments:", error);
     return NextResponse.json(

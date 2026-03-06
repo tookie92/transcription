@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import { useAuth, useUser } from "@clerk/nextjs";
 import { CopyInviteLink } from "./CopyInviteLink";
 import { MemberManagerDialog } from "./MemberManagerDialog";
 import { TeamMembersModal } from "./TeamMembersModal";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Dialog, DialogContent } from "../ui/dialog";
 import { DialogTitle, DialogTrigger } from "@radix-ui/react-dialog";
 import { DropdownMenu } from "@radix-ui/react-dropdown-menu";
@@ -38,7 +39,7 @@ const project = useQuery(api.projects.getProjectForInvite, { projectId });
 
 
   const interviews = useQuery(api.interviews.getProjectInterviews, { projectId });
-  const deleteInterview = useMutation(api.interviews.deleteInterview);
+  const deleteInterview = useAction(api.interviews.deleteInterview);
   const insights = useQuery(api.insights.getByProject, { projectId });
   const affinityMaps = useQuery(api.affinityMaps.getByProject, { projectId });
   const [openManage, setOpenManage] = useState(false);
@@ -134,6 +135,7 @@ useEffect(() => {
             )}
           </div>
           <div className="flex gap-x-3">
+              <ThemeToggle />
               <Button onClick={() => router.push(`/project/${projectId}/interview/`)}>
                 <Plus className="w-4 h-4" />
                 New Interview
@@ -150,7 +152,7 @@ useEffect(() => {
       </div>
 
       {/* Project Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="bg-linear-to-br from-blue-50 to-blue-100/50 border-blue-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-blue-700">Interviews</CardTitle>
@@ -189,72 +191,18 @@ useEffect(() => {
             <CardTitle className="text-sm font-medium text-orange-700">Team</CardTitle>
             <Users className="h-4 w-4 text-orange-500" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-700">{project.members.length}</div>
-            <p className="text-xs text-orange-600">
-              {project.ownerId === userId ? "owner" : `${project.members.length !== 1 ? 'members' : 'member'}`}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-linear-to-br from-amber-50 to-amber-100/50 border-amber-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-amber-700">Progress</CardTitle>
-            <BarChart3 className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-amber-700">{progressPercent}%</div>
-            <div className="w-full bg-amber-200 rounded-full h-1.5 mt-1">
-              <div 
-                className="bg-amber-500 h-1.5 rounded-full transition-all" 
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => router.push(`/project/${projectId}/affinity/`)}>
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-              <CircuitBoard className="w-6 h-6 text-green-600" />
-            </div>
+          <CardContent className="flex items-end justify-between">
             <div>
-              <h3 className="font-semibold">Open Affinity Map</h3>
-              <p className="text-sm text-gray-500">Group and organize insights</p>
-            </div>
-            <ArrowRight className="w-5 h-5 text-gray-400 ml-auto" />
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => router.push(`/project/${projectId}/interview/`)}>
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Plus className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold">Add Interview</h3>
-              <p className="text-sm text-gray-500">Upload and transcribe new interview</p>
-            </div>
-            <ArrowRight className="w-5 h-5 text-gray-400 ml-auto" />
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <Users className="w-6 h-6 text-purple-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold">Invite Team</h3>
-              <p className="text-sm text-gray-500">Collaborate with your team</p>
+              <div className="text-2xl font-bold text-orange-700">{project.members.length}</div>
+              <p className="text-xs text-orange-600">
+                {project.ownerId === userId ? "owner" : `${project.members.length !== 1 ? 'members' : 'member'}`}
+              </p>
             </div>
             <TeamMembersModal 
               projectId={projectId} 
               projectName={project.name}
               isOwner={project.ownerId === userId}
+              variant="minimal"
             />
           </CardContent>
         </Card>
@@ -351,9 +299,9 @@ useEffect(() => {
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
-          <DialogTitle className="text-lg font-semibold">Supprimer l'interview</DialogTitle>
+          <DialogTitle className="text-lg font-semibold">Supprimer l&apos;interview</DialogTitle>
           <p className="text-muted-foreground">
-            Etes-vous sur de vouloir supprimer &quot;{interviewToDelete?.title}&quot; ? Cette action est irreversible
+            Etes-vous sur de vouloir supprimer &quot;{interviewToDelete?.title}&quot; ? Cette action est irr&eacute;versible
           </p>
           <div className="flex justify-end gap-3 mt-4">
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
@@ -364,6 +312,14 @@ useEffect(() => {
               onClick={async () => {
                 if (interviewToDelete) {
                   try {
+                    const interview = interviews?.find(i => i._id === interviewToDelete.id);
+                    if (interview?.audioUrl) {
+                      await fetch('/api/delete-audio', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fileUrl: interview.audioUrl }),
+                      });
+                    }
                     await deleteInterview({ interviewId: interviewToDelete.id });
                     toast.success("Interview supprimée");
                     setDeleteDialogOpen(false);

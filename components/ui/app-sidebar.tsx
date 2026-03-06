@@ -165,7 +165,7 @@ export function AppSidebar() {
         )}
 
         {/* Projects Section */}
-        <SidebarGroup>
+        <SidebarGroup className="mt-4">
           <SidebarGroupLabel>Your Projects</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -176,7 +176,7 @@ export function AppSidebar() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.03 }}
                 >
-                  <SidebarMenuItem>
+                  <SidebarMenuItem className="mb-3">
                     <SidebarMenuButton asChild>
                       <Link 
                         href={`/project/${project._id}`} 

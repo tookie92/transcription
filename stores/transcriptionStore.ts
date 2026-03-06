@@ -164,6 +164,21 @@ export const useTranscriptionStore = create<TranscriptionStore>()(
         partialize: (state) => ({
           interviews: state.interviews,
         }),
+        storage: {
+          getItem: (name) => {
+            const value = localStorage.getItem(name);
+            return value ? JSON.parse(value) : null;
+          },
+          setItem: (name, value) => {
+            try {
+              localStorage.setItem(name, JSON.stringify(value));
+            } catch (e) {
+              console.error('Storage quota exceeded, clearing...');
+              localStorage.removeItem(name);
+            }
+          },
+          removeItem: (name) => localStorage.removeItem(name),
+        },
       }
     )
   )

@@ -33,6 +33,7 @@ export default defineSchema({
       speaker: v.optional(v.string()),
     })),
     duration: v.number(),
+    audioUrl: v.optional(v.string()), // URL R2 de l'audio
     status: v.union(
       v.literal("uploading"),
       v.literal("transcribing"), 

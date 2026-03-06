@@ -20,6 +20,7 @@ import {
   Mic,
   Link,
   ArrowRight,
+  ArrowLeft,
   X,
   Pause
 } from 'lucide-react';
@@ -49,6 +50,7 @@ export default function InterviewHome() {
     transcription: string;
     segments: { id: number; start: number; end: number; text: string; speaker?: string }[];
     duration: number;
+    audioFile?: File;
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -175,6 +177,7 @@ export default function InterviewHome() {
         transcription: interview.transcription,
         segments: convexSegments,
         duration: interview.duration,
+        audioFile: selectedFile || undefined,
       });
       
       setShowTranscription(true);
@@ -193,19 +196,76 @@ export default function InterviewHome() {
   };
 
   const handleSave = async () => {
-    if (!pendingInterview || !currentProjectId) return;
+    if (!pendingInterview || !currentProjectId) {
+      console.log('Missing pendingInterview or currentProjectId', { pendingInterview, currentProjectId });
+      return;
+    }
 
     const toastId = toast.loading("Saving interview to project...");
+    setIsSaving(true);
 
     try {
-      const interviewId = await createInterview({
-        projectId: currentProjectId,
-        title: pendingInterview.title,
-        topic: pendingInterview.topic,
-        transcription: pendingInterview.transcription,
-        segments: pendingInterview.segments,
-        duration: pendingInterview.duration,
+      console.log('Starting save process...', { 
+        hasAudioFile: !!pendingInterview.audioFile,
+        audioFileName: pendingInterview.audioFile?.name,
+        audioFileSize: pendingInterview.audioFile?.size 
       });
+
+      let audioUrl: string | undefined;
+
+      // Upload audio to R2 if we have the file
+      if (pendingInterview.audioFile && typeof window !== 'undefined') {
+        const uploadToastId = toast.loading("Uploading audio...");
+        try {
+          const formData = new FormData();
+          formData.append('file', pendingInterview.audioFile);
+          formData.append('interviewId', `temp-${Date.now()}`);
+
+          console.log('Starting audio upload...');
+
+          const uploadResponse = await fetch('/api/upload-audio', {
+            method: 'POST',
+            body: formData,
+          });
+
+          console.log('Upload response status:', uploadResponse.status);
+
+          if (!uploadResponse.ok) {
+            const errorText = await uploadResponse.text();
+            console.error('Upload failed:', errorText);
+            throw new Error('Failed to upload audio');
+          }
+
+          const uploadData = await uploadResponse.json();
+          audioUrl = uploadData.url;
+          console.log('Audio uploaded successfully:', audioUrl);
+          toast.success("Audio uploaded successfully", { id: uploadToastId });
+        } catch (uploadError) {
+          console.error('Audio upload failed:', uploadError);
+          toast.warning("Audio upload failed - continuing without audio", { id: uploadToastId });
+        }
+      }
+
+      console.log('Creating interview with audioUrl:', audioUrl);
+      console.log('Creating interview in Convex...');
+      
+      let interviewId;
+      try {
+        interviewId = await createInterview({
+          projectId: currentProjectId,
+          title: pendingInterview.title,
+          topic: pendingInterview.topic,
+          transcription: pendingInterview.transcription,
+          segments: pendingInterview.segments,
+          duration: pendingInterview.duration,
+          audioUrl,
+        });
+      } catch (createError) {
+        console.error('Error creating interview:', createError);
+        throw createError;
+      }
+
+      console.log('Interview created with ID:', interviewId);
 
       toast.success("Interview saved successfully!", { 
         id: toastId,
@@ -275,6 +335,16 @@ export default function InterviewHome() {
     <div className="container max-w-5xl mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="mb-8">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={() => router.push(`/project/${projectId}`)}
+          className="mb-4 -ml-2 text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="w-4 h-4 mr-1" />
+          Back to Project
+        </Button>
+        
         <div className="flex items-center gap-3 mb-2">
           <img 
             src="/logomark.svg" 

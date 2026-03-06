@@ -22,10 +22,10 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   const { projectId } = await params;
   return (
       
-     <SidebarProvider defaultOpen={false} >
+     <SidebarProvider >
                 <AppSidebar />
                 <main className="flex w-full min-h-dvh">
-                   <SidebarTrigger /> 
+                   {/* <SidebarTrigger />  */}
                       <ProjectContent projectId={projectId as Id<"projects">} />
                 </main>
     </SidebarProvider>

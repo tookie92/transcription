@@ -1,5 +1,6 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, action } from "./_generated/server";
 import { v } from "convex/values";
+import { api } from "./_generated/api";
 
 // Créer une interview
 export const createInterview = mutation({
@@ -16,6 +17,7 @@ export const createInterview = mutation({
       speaker: v.optional(v.string()),
     })),
     duration: v.number(),
+    audioUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -185,7 +187,7 @@ export const updateSummary = mutation({
   },
 });
 
-export const deleteInterview = mutation({
+export const deleteInterview = action({
   args: {
     interviewId: v.id("interviews"),
   },
@@ -193,20 +195,44 @@ export const deleteInterview = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
-    const interview = await ctx.db.get(args.interviewId);
+    const interview = await ctx.runQuery(api.interviews.getById, { interviewId: args.interviewId });
     if (!interview) throw new Error("Interview not found");
 
-    const project = await ctx.db.get(interview.projectId);
+    const project = await ctx.runQuery(api.projects.getProjectForInvite, { projectId: interview.projectId });
     if (!project) throw new Error("Project not found");
 
-    const hasAccess = project.members.some(member => 
+    const hasAccess = project.members.some((member: { userId: string }) => 
       member.userId === identity.subject
     ) || project.ownerId === identity.subject;
 
     if (!hasAccess) throw new Error("No access to delete this interview");
 
-    await ctx.db.delete(args.interviewId);
+    const audioUrl = interview.audioUrl;
 
+    await ctx.runMutation(api.interviews.deleteInterviewInternal, { interviewId: args.interviewId });
+
+    return { success: true };
+  },
+});
+
+// Internal mutation to delete interview (used by action)
+export const deleteInterviewInternal = mutation({
+  args: {
+    interviewId: v.id("interviews"),
+  },
+  handler: async (ctx, args) => {
+    // Supprimer les insights liés à l'interview
+    const relatedInsights = await ctx.db
+      .query("insights")
+      .filter(q => q.eq(q.field("interviewId"), args.interviewId))
+      .collect();
+
+    for (const insight of relatedInsights) {
+      await ctx.db.delete(insight._id);
+    }
+
+    // Supprimer l'interview
+    await ctx.db.delete(args.interviewId);
     return { success: true };
   },
 });

@@ -33,11 +33,13 @@ import {
   DialogTitle,
   DialogTrigger 
 } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 interface TeamMembersModalProps {
   projectId: Id<"projects">;
   projectName: string;
   isOwner: boolean;
+  variant?: "default" | "minimal";
 }
 
 type MemberRole = "owner" | "editor" | "viewer";
@@ -53,7 +55,7 @@ interface TeamMember {
   joinedAt?: number;
 }
 
-export function TeamMembersModal({ projectId, projectName, isOwner }: TeamMembersModalProps) {
+export function TeamMembersModal({ projectId, projectName, isOwner, variant = "default" }: TeamMembersModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -174,13 +176,26 @@ export function TeamMembersModal({ projectId, projectName, isOwner }: TeamMember
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
-          <Users className="w-4 h-4" />
-          Team
-          <span className="ml-1 px-2 py-0.5 bg-muted text-xs rounded-full">
-            {members.length}
-          </span>
-        </Button>
+        {variant === "minimal" ? (
+          <Tooltip>
+            <TooltipTrigger>
+              <Button variant="ghost" size="icon" className="h-6 w-6">
+                <span className="text-lg">+</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Invite Member</p>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button variant="outline" className="gap-2">
+            <Users className="w-4 h-4" />
+            Team
+            <span className="ml-1 px-2 py-0.5 bg-muted text-xs rounded-full">
+              {members.length}
+            </span>
+          </Button>
+        )}
       </DialogTrigger>
       
       <DialogContent className="max-w-md w-full p-0 overflow-hidden">

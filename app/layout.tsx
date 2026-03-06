@@ -9,6 +9,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/ui/app-sidebar";
 import { ThemeProvider } from "next-themes";
 import { shadcn } from '@clerk/themes'
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 
 const jakarta = Plus_Jakarta_Sans({
@@ -48,12 +49,14 @@ export default function RootLayout({
                 baseTheme: shadcn,
               }}
           >
-            <ConvexClientProvider>
-                <main className="w-full min-h-dvh flex-1">
-                  {children}
-                </main>
-              <Toaster/>
-            </ConvexClientProvider>
+            <TooltipProvider>
+              <ConvexClientProvider>
+                  <main className="w-full min-h-dvh flex-1">
+                    {children}
+                  </main>
+                <Toaster/>
+              </ConvexClientProvider>
+            </TooltipProvider>
           </ClerkProvider>
         </ThemeProvider>
       </body>
