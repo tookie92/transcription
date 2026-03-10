@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import { ProjectContent } from "@/components/myComponents/ProjectContent";
 import { Id } from "@/convex/_generated/dataModel";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/ui/app-sidebar";
 
 interface ProjectPageProps {
@@ -21,13 +21,11 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
 export default async function ProjectPage({ params }: ProjectPageProps) {
   const { projectId } = await params;
   return (
-      
-     <SidebarProvider >
-                <AppSidebar />
-                <main className="flex w-full min-h-dvh">
-                   {/* <SidebarTrigger />  */}
-                      <ProjectContent projectId={projectId as Id<"projects">} />
-                </main>
+    <SidebarProvider>
+      <AppSidebar />
+      <main className="flex-1 min-h-dvh">
+        <ProjectContent projectId={projectId as Id<"projects">} />
+      </main>
     </SidebarProvider>
-);
+  );
 }

@@ -131,7 +131,7 @@ useEffect(() => {
           <div className="flex flex-col items-center justify-center">
             <h1 className="text-3xl font-bold">{project.name}</h1>
             {project.description && (
-              <p className="text-gray-600 mt-1">{project.description}</p>
+              <p className="text-muted-foreground mt-1">{project.description}</p>
             )}
           </div>
           <div className="flex gap-x-3">
@@ -153,48 +153,48 @@ useEffect(() => {
 
       {/* Project Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="bg-linear-to-br from-blue-50 to-blue-100/50 border-blue-200">
+        <Card className="border-l-4 border-l-blue-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700">Interviews</CardTitle>
+            <CardTitle className="text-sm font-medium">Interviews</CardTitle>
             <FileText className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-700">{totalInterviews}</div>
-            <p className="text-xs text-blue-600">{analyzedInterviews} analyzed</p>
+            <div className="text-2xl font-bold">{totalInterviews}</div>
+            <p className="text-xs text-muted-foreground">{analyzedInterviews} analyzed</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-linear-to-br from-purple-50 to-purple-100/50 border-purple-200">
+        <Card className="border-l-4 border-l-purple-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-purple-700">Insights</CardTitle>
+            <CardTitle className="text-sm font-medium">Insights</CardTitle>
             <Lightbulb className="h-4 w-4 text-purple-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-purple-700">{totalInsights}</div>
-            <p className="text-xs text-purple-600">extracted</p>
+            <div className="text-2xl font-bold">{totalInsights}</div>
+            <p className="text-xs text-muted-foreground">extracted</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-linear-to-br from-green-50 to-green-100/50 border-green-200">
+        <Card className="border-l-4 border-l-green-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-green-700">Groups</CardTitle>
+            <CardTitle className="text-sm font-medium">Groups</CardTitle>
             <CircuitBoard className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-700">{totalGroups}</div>
-            <p className="text-xs text-green-600">{groupedInsights} insights grouped</p>
+            <div className="text-2xl font-bold">{totalGroups}</div>
+            <p className="text-xs text-muted-foreground">{groupedInsights} insights grouped</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-linear-to-br from-orange-50 to-orange-100/50 border-orange-200">
+        <Card className="border-l-4 border-l-orange-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-orange-700">Team</CardTitle>
+            <CardTitle className="text-sm font-medium">Team</CardTitle>
             <Users className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent className="flex items-end justify-between">
             <div>
-              <div className="text-2xl font-bold text-orange-700">{project.members.length}</div>
-              <p className="text-xs text-orange-600">
+              <div className="text-2xl font-bold">{project.members.length}</div>
+              <p className="text-xs text-muted-foreground">
                 {project.ownerId === userId ? "owner" : `${project.members.length !== 1 ? 'members' : 'member'}`}
               </p>
             </div>
@@ -223,18 +223,18 @@ useEffect(() => {
                 
                   <Card 
                     key={interview._id} 
-                    className="group hover:bg-gray-50 transition-colors cursor-pointer"
+                    className="group hover:bg-accent transition-colors cursor-pointer"
                     onClick={() => router.push(`/project/${projectId}/interview/${interview._id}`)}
                   >
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                          <div className="w-10 h-10 bg-accent rounded-lg flex items-center justify-center">
                             <FileText className="w-5 h-5 text-blue-600" />
                           </div>
                           <div>
                             <h3 className="font-semibold">{interview.title}</h3>
-                            <p className="text-sm text-gray-500">
+                            <p className="text-sm text-muted-foreground">
                               {Math.floor(interview.duration / 60)}:
                               {String(Math.floor(interview.duration % 60)).padStart(2, '0')} min
                               {interview.topic && ` • ${interview.topic}`}
@@ -247,7 +247,7 @@ useEffect(() => {
                               <Badge variant="outline" className="mb-1">
                                 {interview.status}
                               </Badge>
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs text-muted-foreground">
                                 {new Date(interview.createdAt).toLocaleDateString()}
                               </p>
                             </div>
@@ -275,9 +275,9 @@ useEffect(() => {
             </div>
           ) : (
             <div className="text-center py-12">
-              <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+              <FileText className="w-16 h-16 mx-auto mb-4 text-muted" />
               <h3 className="text-lg font-semibold mb-2">No interviews yet</h3>
-              <p className="text-gray-500 mb-4">
+              <p className="text-muted-foreground mb-4">
                 Start by uploading your first interview
               </p>
               <Button onClick={() => router.push(`/project/${projectId}/interview`)}>

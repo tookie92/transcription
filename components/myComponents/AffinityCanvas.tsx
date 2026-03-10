@@ -898,15 +898,15 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
                           {groups.length === 0 && (
                             <div className="text-center py-20">
                               <div className="text-6xl mb-4">📊</div>
-                              <h3 className="text-xl font-semibold text-gray-700 mb-2">Start Creating Groups</h3>
-                              <p className="text-gray-500 mb-4">Double-click on the canvas to create your first group</p>
-                              <div className="flex justify-center gap-4 text-sm text-gray-600 mb-6">
+                              <h3 className="text-xl font-semibold mb-2">Start Creating Groups</h3>
+                              <p className="text-muted-foreground mb-4">Double-click on the canvas to create your first group</p>
+                              <div className="flex justify-center gap-4 text-sm mb-6">
                                 <div className="flex items-center gap-2">
-                                  <kbd className="px-2 py-1 bg-gray-100 rounded border text-xs">Double-click</kbd>
+                                  <kbd className="px-2 py-1 bg-muted rounded border text-xs">Double-click</kbd>
                                   <span>Create group</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <kbd className="px-2 py-1 bg-gray-100 rounded border text-xs">N</kbd>
+                                  <kbd className="px-2 py-1 bg-muted rounded border text-xs">N</kbd>
                                   <span>New group</span>
                                 </div>
                               </div>

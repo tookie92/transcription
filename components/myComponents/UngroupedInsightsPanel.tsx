@@ -209,7 +209,7 @@ export function UngroupedInsightsPanel({
                           )}
                         </div>
                         
-                        <p className="text-gray-700 mb-3 leading-snug">
+                        <p className="mb-3 leading-snug">
                           {insight.text}
                         </p>
                         
@@ -265,8 +265,8 @@ export function UngroupedInsightsPanel({
               {/* TOUS LES INSIGHTS NON-GROUPÉS (liste compacte) */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <Clock size={14} className="text-gray-500" />
-                  <span className="text-sm font-medium text-gray-700">All Ungrouped Insights</span>
+                  <Clock size={14} className="text-muted-foreground" />
+                  <span className="text-sm font-medium">All Ungrouped Insights</span>
                 </div>
                 
                 {availableInsights.slice(0, 5).map(insight => (
@@ -277,18 +277,18 @@ export function UngroupedInsightsPanel({
                       e.dataTransfer.effectAllowed = 'move';
                       e.dataTransfer.setData('text/plain', insight.id);
                     }}
-                    className="p-2 bg-gray-50 border border-gray-200 rounded text-sm cursor-move hover:border-blue-300 transition-colors"
+                    className="p-2 bg-muted border border-border rounded text-sm cursor-move hover:border-primary transition-colors"
                   >
                     <div className="flex items-start justify-between">
                       <span className={`text-xs px-1.5 py-0.5 rounded mr-2 ${
-                        insight.type === 'pain-point' ? 'bg-red-100 text-red-700' :
-                        insight.type === 'quote' ? 'bg-blue-100 text-blue-700' :
-                        insight.type === 'insight' ? 'bg-purple-100 text-purple-700' :
-                        'bg-green-100 text-green-700'
+                        insight.type === 'pain-point' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+                        insight.type === 'quote' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
+                        insight.type === 'insight' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' :
+                        'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
                       }`}>
                         {insight.type.charAt(0)}
                       </span>
-                      <p className="text-gray-700 flex-1 text-sm leading-snug line-clamp-2">
+                      <p className="flex-1 text-sm leading-snug line-clamp-2">
                         {insight.text}
                       </p>
                     </div>
@@ -297,7 +297,7 @@ export function UngroupedInsightsPanel({
                 
                 {availableInsights.length > 5 && (
                   <div className="text-center py-2">
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-muted-foreground">
                       +{availableInsights.length - 5} more insights to organize
                     </span>
                   </div>
@@ -305,7 +305,7 @@ export function UngroupedInsightsPanel({
               </div>
 
               {/* RECOMMANDATIONS */}
-              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
                 <div className="flex items-center gap-2 mb-2">
                   <Lightbulb size={14} className="text-blue-600" />
                   <span className="text-sm font-medium text-blue-800">Tips</span>

@@ -425,18 +425,18 @@ const InsightCard = ({ insight, isProblematic = false, onDelete }: { insight: In
       }}
       className={`p-3 rounded-lg border cursor-move transition-all group relative ${
         isProblematic 
-          ? 'bg-orange-50 border-orange-200 hover:border-orange-300' 
-          : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm'
-      } ${suggestedGroup ? 'ring-1 ring-blue-200' : ''}`} // 🆕 EFFET VISUEL POUR LES MATCHS
+          ? 'bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800 hover:border-orange-300 dark:hover:border-orange-700' 
+          : 'bg-card border-border hover:border-primary hover:shadow-sm'
+      } ${suggestedGroup ? 'ring-1 ring-primary/50' : ''}`}
     >
       {/* EN-TÊTE AMÉLIORÉE */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-            insight.type === 'pain-point' ? 'bg-red-100 text-red-700' :
-            insight.type === 'quote' ? 'bg-blue-100 text-blue-700' :
-            insight.type === 'insight' ? 'bg-purple-100 text-purple-700' :
-            'bg-green-100 text-green-700'
+            insight.type === 'pain-point' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+            insight.type === 'quote' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
+            insight.type === 'insight' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' :
+            'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
           }`}>
             {insight.type}
           </span>
@@ -446,7 +446,7 @@ const InsightCard = ({ insight, isProblematic = false, onDelete }: { insight: In
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                  <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800">
                     <Sparkles size={10} className="mr-1" />
                     {Math.round(similarityScore * 100)}% Match
                   </Badge>
@@ -478,7 +478,7 @@ const InsightCard = ({ insight, isProblematic = false, onDelete }: { insight: In
       </div>
 
       {/* TEXTE */}
-      <p className="text-sm text-gray-700 leading-snug mb-3">
+      <p className="text-sm leading-snug mb-3">
         {insight.text}
       </p>
 
@@ -613,13 +613,13 @@ const handleDeleteInsight = async (insightId: string) => {
 
         {/* BARRE DE RECHERCHE */}
         <div className="relative mb-3">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <input
             type="text"
             placeholder="Search insights..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 border border-input rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
           />
         </div>
 
@@ -667,13 +667,13 @@ const handleDeleteInsight = async (insightId: string) => {
 
         {/* PROGRESS BAR */}
         <div className="mb-2">
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-muted rounded-full h-2">
             <div 
               className="bg-green-500 h-2 rounded-full transition-all duration-500"
               style={{ width: `${stats.completionRate}%` }}
             />
           </div>
-          <div className="flex justify-between text-xs text-gray-600 mt-1">
+          <div className="flex justify-between text-xs text-muted-foreground mt-1">
             <span>{stats.completionRate.toFixed(0)}% organized</span>
             <span>{stats.total} remaining</span>
           </div>
@@ -681,14 +681,14 @@ const handleDeleteInsight = async (insightId: string) => {
 
         {/* FORMULAIRE AJOUT D'INSIGHT */}
         {showAddInsight && (
-          <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
+          <div className="mt-3 p-3 bg-muted rounded-lg border border-border space-y-3">
             <div className="grid grid-cols-3 gap-1">
               {[
-                { value: 'pain-point', label: 'Pain', color: 'bg-red-100 text-red-700' },
-                { value: 'quote', label: 'Quote', color: 'bg-blue-100 text-blue-700' },
-                { value: 'insight', label: 'Insight', color: 'bg-purple-100 text-purple-700' },
-                { value: 'follow-up', label: 'Follow-up', color: 'bg-green-100 text-green-700' },
-                { value: 'custom', label: 'Custom', color: 'bg-gray-100 text-gray-700' },
+                { value: 'pain-point', label: 'Pain', color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' },
+                { value: 'quote', label: 'Quote', color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' },
+                { value: 'insight', label: 'Insight', color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' },
+                { value: 'follow-up', label: 'Follow-up', color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' },
+                { value: 'custom', label: 'Custom', color: 'bg-muted text-foreground' },
               ].map(({ value, label, color }) => (
                 <button
                   key={value}

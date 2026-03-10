@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Bell, RefreshCcwIcon, Plus, Users, Folder, ArrowRight, Clock, Layout, Target, MessageSquare, Search, Zap } from "lucide-react";
+import { Bell, RefreshCcwIcon, Plus, Users, Folder, ArrowRight, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Id } from "@/convex/_generated/dataModel";
@@ -13,47 +13,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 
-const PROJECT_TEMPLATES = [
-  {
-    id: "user-research",
-    name: "User Research",
-    description: "Conduct interviews and analyze user behavior",
-    icon: Search,
-    color: "from-blue-500 to-blue-600",
-    insightTypes: ["pain-point", "quote", "insight", "follow-up"] as const,
-  },
-  {
-    id: "usability-test",
-    name: "Usability Testing",
-    description: "Test product usability and identify issues",
-    icon: Target,
-    color: "from-red-500 to-red-600",
-    insightTypes: ["pain-point", "insight", "follow-up"] as const,
-  },
-  {
-    id: "customer-interview",
-    name: "Customer Interviews",
-    description: "Interview customers about their experience",
-    icon: MessageSquare,
-    color: "from-green-500 to-green-600",
-    insightTypes: ["quote", "insight", "follow-up"] as const,
-  },
-  {
-    id: "discovery",
-    name: "Discovery",
-    description: "General discovery research",
-    icon: Zap,
-    color: "from-purple-500 to-purple-600",
-    insightTypes: ["insight", "follow-up"] as const,
-  },
-];
-
 const ProjectPage = () => {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [projectName, setProjectName] = useState("");
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
 
   const projects = useQuery(api.projects.getUserProjects);
   const createProject = useMutation(api.projects.createProject);
@@ -80,12 +44,10 @@ const ProjectPage = () => {
     try {
       const result = await createProject({
         name: projectName,
-        description: `Template: ${selectedTemplate || 'custom'}`,
       });
       toast.success("Project created!");
       setShowTemplateDialog(false);
       setProjectName("");
-      setSelectedTemplate(null);
       router.push(`/project/${result}`);
     } catch (error) {
       toast.error("Failed to create project");
@@ -135,49 +97,26 @@ const ProjectPage = () => {
         </div>
       </div>
 
-      {/* Template Selection Dialog */}
+      {/* Create Project Dialog - Simplified */}
       <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Create New Project</DialogTitle>
             <DialogDescription>
-              Choose a template to get started or start from scratch
+              Enter a name to get started
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
-            {/* Template Grid */}
-            <div className="grid grid-cols-2 gap-3">
-              {PROJECT_TEMPLATES.map((template) => {
-                const Icon = template.icon;
-                return (
-                  <button
-                    key={template.id}
-                    onClick={() => setSelectedTemplate(template.id)}
-                    className={`p-4 rounded-xl border-2 text-left transition-all ${
-                      selectedTemplate === template.id
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary"
-                    }`}
-                  >
-                    <div className={`w-10 h-10 rounded-lg bg-linear-to-br ${template.color} flex items-center justify-center mb-3`}>
-                      <Icon className="w-5 h-5 text-white" />
-                    </div>
-                    <h3 className="font-semibold text-foreground">{template.name}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">{template.description}</p>
-                  </button>
-                );
-              })}
-            </div>
-
             {/* Project Name Input */}
-            <div className="space-y-2 pt-4 border-t">
+            <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Project Name</label>
               <Input
                 placeholder="Enter project name..."
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleCreateProject()}
+                autoFocus
               />
             </div>
 
@@ -189,7 +128,6 @@ const ProjectPage = () => {
               <Button
                 onClick={handleCreateProject}
                 disabled={!projectName.trim() || isCreating}
-                className="bg-[#3D7C6F] hover:bg-[#2d5f54]"
               >
                 {isCreating && <RefreshCcwIcon className="w-4 h-4 animate-spin mr-2" />}
                 Create Project

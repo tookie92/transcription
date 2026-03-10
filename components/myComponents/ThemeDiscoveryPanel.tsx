@@ -76,11 +76,11 @@ export function ThemeDiscoveryPanel({
 
   const getThemeTypeColor = (type: string) => {
     switch (type) {
-      case 'hierarchical': return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'related': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'contradictory': return 'bg-red-100 text-red-800 border-red-200';
-      case 'complementary': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'hierarchical': return 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-800';
+      case 'related': return 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800';
+      case 'contradictory': return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800';
+      case 'complementary': return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800';
+      default: return 'bg-muted text-muted-foreground border-border';
     }
   };
 
@@ -148,18 +148,18 @@ export function ThemeDiscoveryPanel({
           <div className="p-6 space-y-4">
             <div className="text-center">
               <div className="text-4xl mb-4">🎯</div>
-              <h4 className="font-bold text-gray-900 text-lg mb-2">
+              <h4 className="font-bold text-lg mb-2">
                 Discover Hidden Patterns
               </h4>
-              <p className="text-gray-600 mb-4">
+              <p className="text-muted-foreground mb-4">
                 AI will analyze your {groups.length} groups to find emergent themes and relationships
               </p>
             </div>
 
             {/* Exemple concret */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h5 className="font-semibold text-blue-900 mb-2">Example Discovery:</h5>
-              <div className="text-sm text-blue-800 space-y-1">
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <h5 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Example Discovery:</h5>
+              <div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
                 <p>• {`"User Frustration"`} connects 3 groups about errors</p>
                 <p>• {`"Onboarding Journey"`} links 4 sequential groups</p>
                 <p>• {`"Feature Requests"`} spans across 5 different groups</p>
@@ -176,19 +176,19 @@ export function ThemeDiscoveryPanel({
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Themes Found</span>
+                  <span className="text-sm text-muted-foreground">Themes Found</span>
                   <Badge variant="secondary">
                     {themeAnalysis.themes?.length || 0}
                   </Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Coverage</span>
+                  <span className="text-sm text-muted-foreground">Coverage</span>
                   <Badge variant="secondary">
                     {themeAnalysis.summary?.coverage || 0}%
                   </Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Confidence</span>
+                  <span className="text-sm text-muted-foreground">Confidence</span>
                   <Badge variant="secondary">
                     {Math.round((themeAnalysis.summary?.avgConfidence || 0) * 100)}%
                   </Badge>
@@ -198,20 +198,20 @@ export function ThemeDiscoveryPanel({
 
             {/* Detected Themes */}
             <div className="space-y-3">
-              <h4 className="font-medium text-sm text-gray-900">Detected Themes</h4>
+              <h4 className="font-medium text-sm">Detected Themes</h4>
               <div className="space-y-2">
                 {(themeAnalysis.themes || []).map(theme => (
                   <motion.div
                     key={theme.id}
                     className={`p-3 border rounded-lg cursor-pointer transition-all ${
                       selectedTheme?.id === theme.id 
-                        ? 'border-blue-300 bg-blue-50' 
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-950' 
+                        : 'border-border hover:border-input'
                     }`}
                     onClick={() => handleThemeSelect(theme)}
                   >
                     <div className="flex items-start justify-between mb-2">
-                      <h5 className="font-medium text-sm text-gray-900 flex-1">
+                      <h5 className="font-medium text-sm flex-1">
                         {theme.name || 'Unnamed Theme'}
                       </h5>
                       <Badge 
@@ -222,10 +222,10 @@ export function ThemeDiscoveryPanel({
                         {theme.type || 'unknown'}
                       </Badge>
                     </div>
-                    <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+                    <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
                       {theme.description || 'No description available'}
                     </p>
-                    <div className="flex justify-between items-center text-xs text-gray-500">
+                    <div className="flex justify-between items-center text-xs text-muted-foreground">
                       <span>{(theme.insightsCount || 0)} insights</span>
                       <span>{Math.round((theme.confidence || 0) * 100)}% confidence</span>
                     </div>
@@ -237,10 +237,10 @@ export function ThemeDiscoveryPanel({
             {/* Recommendations */}
             {getValidRecommendations(recommendations).length > 0 && (
               <div className="space-y-3">
-                <h4 className="font-medium text-sm text-gray-900">Recommendations</h4>
+                <h4 className="font-medium text-sm">Recommendations</h4>
                 <div className="space-y-2">
                   {getValidRecommendations(recommendations).map((rec, index) => (
-                    <Card key={index} className="border-orange-200">
+                    <Card key={index} className="border-orange-200 dark:border-orange-800">
                       <CardContent className="p-3">
                         <div className="flex items-start gap-2 mb-2">
                           {rec.type === 'merge' && <Merge size={14} className="text-orange-600 mt-0.5" />}
@@ -248,18 +248,18 @@ export function ThemeDiscoveryPanel({
                           {rec.type === 'reorganize' && <Users size={14} className="text-orange-600 mt-0.5" />}
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="font-medium text-sm text-gray-900 capitalize">
+                              <span className="font-medium text-sm capitalize">
                                 {formatRecommendationType(rec.type)}
                               </span>
                               <Badge variant="outline" className={
-                                rec.expectedImpact === 'high' ? 'bg-red-100 text-red-700' :
-                                rec.expectedImpact === 'medium' ? 'bg-orange-100 text-orange-700' :
-                                'bg-blue-100 text-blue-700'
+                                rec.expectedImpact === 'high' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+                                rec.expectedImpact === 'medium' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' :
+                                'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                               }>
                                 {rec.expectedImpact} impact
                               </Badge>
                             </div>
-                            <p className="text-xs text-gray-600">{rec.reason}</p>
+                            <p className="text-xs text-muted-foreground">{rec.reason}</p>
                           </div>
                         </div>
                         <Button

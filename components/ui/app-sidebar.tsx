@@ -11,11 +11,12 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import ButtonFooter from "../myComponents/ButtonFooter"
 import { useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
-import { Folder, Users, Bell, MailPlus, Check, X, Loader2 } from "lucide-react"
+import { Folder, Users, Bell, MailPlus, Check, X, Loader2, Search, Plus, PanelLeftIcon, PanelLeftCloseIcon } from "lucide-react"
 import Link from "next/link"
 import { ModeToggle } from "../ModeToggle"
 import { Button } from "../ui/button"
@@ -24,17 +25,25 @@ import { useMutation } from "convex/react"
 import { Id } from "@/convex/_generated/dataModel"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
+import { useAuth, useUser } from "@clerk/nextjs"
+import { Input } from "../ui/input"
 
 export function AppSidebar() {
+  const { state, toggleSidebar } = useSidebar()
+  const { isSignedIn, userId } = useAuth()
+  const { user } = useUser()
+  const [searchQuery, setSearchQuery] = useState("")
+  
   const projects = useQuery(api.projects.getUserProjects)
   const [inviteStates, setInviteStates] = useState<Record<string, "accepting" | "declining" | null>>({})
 
-  // Find pending invitations (members with email as userId - not claimed yet)
-  // A member is "pending" if their userId contains @ and they're not the current user
-  const currentUserId = "current-user-id" // This would come from useAuth in a real app
+  const filteredProjects = projects?.filter(project => 
+    project.name.toLowerCase().includes(searchQuery.toLowerCase())
+  ) || []
+
   const pendingInvitations = projects?.flatMap(project => 
     project.members
-      .filter(m => m.userId.includes('@')) // Email-based = pending invitation
+      .filter(m => m.userId.includes('@'))
       .map(m => ({
         projectId: project._id,
         projectName: project.name,
@@ -77,130 +86,196 @@ export function AppSidebar() {
     }
   }
 
+  const isCollapsed = state === "collapsed"
+
   return (
     <Sidebar>
       <SidebarHeader className="border-b">
-        <div className="p-4 flex items-center gap-3">
-          <img 
-            src="/logomark.svg" 
-            alt="Skripta" 
-            className="w-8 h-8"
-          />
-          <h2 className="text-lg font-bold">Projects</h2>
+        <div className="p-4 flex items-center justify-between">
+          {!isCollapsed && (
+            <div className="flex items-center gap-3">
+              <img 
+                src="/logomark.svg" 
+                alt="Skripta" 
+                className="w-8 h-8"
+              />
+              <h2 className="text-lg font-bold">Projects</h2>
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleSidebar}
+            className={isCollapsed ? "mx-auto" : "ml-auto"}
+          >
+            {isCollapsed ? (
+              <PanelLeftIcon className="h-4 w-4" />
+            ) : (
+              <PanelLeftCloseIcon className="h-4 w-4" />
+            )}
+          </Button>
         </div>
       </SidebarHeader>
 
       <SidebarContent>
-        {/* Pending Invitations Section */}
-        {pendingInvitations.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="flex items-center gap-2 text-orange-600">
-              <MailPlus className="w-4 h-4" />
-              Pending Invites
-              <span className="ml-auto px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full">
-                {pendingInvitations.length}
-              </span>
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <AnimatePresence>
-                  {pendingInvitations.map((invite, index) => (
-                    <motion.div
-                      key={`${invite.projectId}-${invite.email}`}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      transition={{ delay: index * 0.05 }}
-                    >
-                      <div className="p-3 mx-2 my-1 bg-orange-50 border border-orange-200 rounded-xl">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-8 h-8 bg-orange-200 rounded-full flex items-center justify-center">
-                            <Users className="w-4 h-4 text-orange-700" />
+        {!isCollapsed && (
+          <>
+            {/* Search */}
+            <div className="p-4 pb-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search projects..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 h-9"
+                />
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="px-4 pb-4">
+              <div className="flex gap-2">
+                <Button 
+                  asChild
+                  size="sm" 
+                  className="flex-1 h-8"
+                >
+                  <Link href="/project">
+                    <Plus className="w-4 h-4 mr-1" />
+                    New
+                  </Link>
+                </Button>
+              </div>
+            </div>
+
+            {/* Pending Invitations Section */}
+            {pendingInvitations.length > 0 && (
+              <SidebarGroup>
+                <SidebarGroupLabel className="flex items-center gap-2 text-orange-600">
+                  <MailPlus className="w-4 h-4" />
+                  Pending Invites
+                  <span className="ml-auto px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs rounded-full">
+                    {pendingInvitations.length}
+                  </span>
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    <AnimatePresence>
+                      {pendingInvitations.map((invite, index) => (
+                        <motion.div
+                          key={`${invite.projectId}-${invite.email}`}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 20 }}
+                          transition={{ delay: index * 0.05 }}
+                        >
+                          <div className="p-3 mx-2 my-1 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-xl">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-8 h-8 bg-orange-200 dark:bg-orange-900/50 rounded-full flex items-center justify-center">
+                                <Users className="w-4 h-4 text-orange-700 dark:text-orange-300" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{invite.projectName}</p>
+                                <p className="text-xs text-orange-600 dark:text-orange-400">Invited by {invite.name}</p>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                className="flex-1 h-8 bg-green-600 hover:bg-green-700"
+                                onClick={() => handleAccept(invite)}
+                                disabled={inviteStates[invite.projectId] === "accepting"}
+                              >
+                                {inviteStates[invite.projectId] === "accepting" ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Check className="w-3 h-3 mr-1" />
+                                    Accept
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 h-8"
+                                onClick={() => handleDecline(invite)}
+                                disabled={inviteStates[invite.projectId] === "declining"}
+                              >
+                                {inviteStates[invite.projectId] === "declining" ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <X className="w-3 h-3 mr-1" />
+                                    Decline
+                                  </>
+                                )}
+                              </Button>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{invite.projectName}</p>
-                            <p className="text-xs text-orange-600">Invited by {invite.name}</p>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            className="flex-1 h-8 bg-green-600 hover:bg-green-700"
-                            onClick={() => handleAccept(invite)}
-                            disabled={inviteStates[invite.projectId] === "accepting"}
-                          >
-                            {inviteStates[invite.projectId] === "accepting" ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <>
-                                <Check className="w-3 h-3 mr-1" />
-                                Accept
-                              </>
-                            )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="flex-1 h-8"
-                            onClick={() => handleDecline(invite)}
-                            disabled={inviteStates[invite.projectId] === "declining"}
-                          >
-                            {inviteStates[invite.projectId] === "declining" ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <>
-                                <X className="w-3 h-3 mr-1" />
-                                Decline
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
+          </>
         )}
 
         {/* Projects Section */}
-        <SidebarGroup className="mt-4">
-          <SidebarGroupLabel>Your Projects</SidebarGroupLabel>
+        <SidebarGroup className={isCollapsed ? "mt-4" : "mt-2"}>
+          {!isCollapsed && <SidebarGroupLabel>Your Projects</SidebarGroupLabel>}
           <SidebarGroupContent>
             <SidebarMenu>
-              {projects?.map((project, index) => (
+              {filteredProjects.map((project, index) => (
                 <motion.div
                   key={project._id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.03 }}
                 >
-                  <SidebarMenuItem className="mb-3">
+                  <SidebarMenuItem className={isCollapsed ? "flex justify-center" : "mb-1"}>
                     <SidebarMenuButton asChild>
-                      <Link 
-                        href={`/project/${project._id}`} 
-                        className="flex items-center gap-2 group"
-                      >
-                        <div className="w-8 h-8 bg-[#3D7C6F]/10 rounded-lg flex items-center justify-center group-hover:bg-[#3D7C6F]/20 transition-colors">
-                          <Folder className="w-4 h-4 text-[#3D7C6F]" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="truncate block font-medium">{project.name}</span>
-                          <span className="text-xs text-gray-500 truncate block">
-                            {project.members.length} member{project.members.length !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-                      </Link>
+                      {isCollapsed ? (
+                        <Link 
+                          href={`/project/${project._id}`}
+                          className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center hover:bg-primary/20 transition-colors"
+                          title={project.name}
+                        >
+                          <Folder className="w-5 h-5 text-primary" />
+                        </Link>
+                      ) : (
+                        <Link 
+                          href={`/project/${project._id}`} 
+                          className="flex items-center gap-2 group"
+                        >
+                          <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                            <Folder className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="truncate block font-medium">{project.name}</span>
+                            <span className="text-xs text-muted-foreground truncate block">
+                              {project.members.length} member{project.members.length !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        </Link>
+                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 </motion.div>
               ))}
-              {projects?.length === 0 && (
-                <div className="px-2 py-8 text-sm text-gray-500 text-center">
+              {filteredProjects.length === 0 && !isCollapsed && (
+                <div className="px-2 py-8 text-sm text-muted-foreground text-center">
                   <Folder className="w-8 h-8 mx-auto mb-2 opacity-50" />
                   <p>No projects yet</p>
                   <p className="text-xs mt-1">Create one to get started</p>
+                </div>
+              )}
+              {isCollapsed && filteredProjects.length === 0 && (
+                <div className="flex justify-center py-4">
+                  <Folder className="w-6 h-6 text-muted-foreground opacity-50" />
                 </div>
               )}
             </SidebarMenu>
@@ -208,7 +283,23 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter>
+      <SidebarFooter className="gap-2">
+        {!isCollapsed && user && (
+          <div className="flex items-center gap-3 p-2 rounded-lg bg-muted/50">
+            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground text-sm font-medium">
+              {user.firstName?.charAt(0) || user.emailAddresses[0]?.emailAddress.charAt(0) || "U"}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{user.fullName || user.username || "User"}</p>
+              <p className="text-xs text-muted-foreground truncate">{user.emailAddresses[0]?.emailAddress}</p>
+            </div>
+          </div>
+        )}
+        {isCollapsed && user && (
+          <div className="w-10 h-10 mx-auto bg-primary rounded-full flex items-center justify-center text-primary-foreground text-sm font-medium" title={user.fullName || "User"}>
+            {user.firstName?.charAt(0) || user.emailAddresses[0]?.emailAddress.charAt(0) || "U"}
+          </div>
+        )}
         <ButtonFooter />
         <ModeToggle />
       </SidebarFooter>

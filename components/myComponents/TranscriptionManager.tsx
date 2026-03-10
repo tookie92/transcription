@@ -110,7 +110,7 @@ export default function TranscriptionManager() {
   // Interview selection view
   if (currentProjectId && !currentInterview) {
     return (
-      <Card className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md">
+      <Card className="bg-card rounded-2xl shadow-lg p-6 w-full max-w-md">
         <CardContent>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold">Interviews</h3>
@@ -126,29 +126,29 @@ export default function TranscriptionManager() {
                 key={interview._id}
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
-                className="w-full flex items-center gap-3 p-3 rounded-xl border hover:border-[#3D7C6F] hover:bg-[#3D7C6F]/5 transition-all text-left"
+                className="w-full flex items-center gap-3 p-3 rounded-xl border border-border hover:border-primary hover:bg-accent transition-all text-left"
                 onClick={() => setCurrentInterview(interview._id)}
               >
-                <div className="w-10 h-10 bg-[#3D7C6F]/10 rounded-lg flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-[#3D7C6F]" />
+                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{interview.title}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted-foreground">
                     {interview.transcription ? `${interview.transcription.split(' ').length} words` : 'Not transcribed'}
                   </p>
                 </div>
-                <ChevronRight className="w-4 h-4 text-gray-400" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </motion.button>
             ))}
             
             {interviews?.length === 0 && (
               <div className="text-center py-12">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Upload className="w-8 h-8 text-gray-400" />
+                <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Upload className="w-8 h-8 text-muted-foreground" />
                 </div>
-                <p className="text-gray-500 font-medium">No interviews yet</p>
-                <p className="text-xs text-gray-400 mt-1">Upload audio to get started</p>
+                <p className="text-muted-foreground font-medium">No interviews yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Upload audio to get started</p>
               </div>
             )}
           </div>
@@ -181,29 +181,29 @@ export default function TranscriptionManager() {
   const hasInsights = insights && insights.length > 0;
 
   return (
-    <Card className="bg-white rounded-2xl shadow-lg w-full overflow-hidden">
+    <Card className="bg-card rounded-2xl shadow-lg w-full overflow-hidden">
       {/* Header */}
-      <div className="p-4 border-b bg-gradient-to-r from-[#3D7C6F]/5 to-transparent">
+      <div className="p-4 border-b bg-gradient-to-r from-primary/5 to-transparent">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setCurrentInterview(null)}
-              className="text-gray-500"
+              className="text-muted-foreground"
             >
               ←
             </Button>
-            <div className="w-10 h-10 bg-[#3D7C6F] rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
               <FileText className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900">{currentInterview?.title}</h3>
-              <p className="text-xs text-gray-500">
+              <h3 className="font-semibold">{currentInterview?.title}</h3>
+              <p className="text-xs text-muted-foreground">
                 {currentInterview && (
                   <>
                     {Math.floor(currentInterview.duration / 60)}:{String(Math.floor(currentInterview.duration % 60)).padStart(2, '0')} min
-                    {currentInterview.topic && <span className="ml-2 text-[#3D7C6F]">• {currentInterview.topic}</span>}
+                    {currentInterview.topic && <span className="ml-2 text-primary">• {currentInterview.topic}</span>}
                   </>
                 )}
               </p>
@@ -214,7 +214,7 @@ export default function TranscriptionManager() {
           {!hasInsights && currentStep !== 'transcribing' && currentStep !== 'analyzing' && (
             <Button
               onClick={handleUploadAndExtract}
-              className="bg-gradient-to-r from-[#3D7C6F] to-[#2d5f54] hover:from-[#2d5f54] hover:to-[#1f4a42] text-white shadow-lg"
+              className="bg-primary hover:bg-primary/90 text-white shadow-lg"
             >
               <Wand2 className="w-4 h-4 mr-2" />
               Upload & Extract
@@ -225,7 +225,7 @@ export default function TranscriptionManager() {
             <ExportDialog 
               interview={interviewForExport}
               trigger={
-                <Button variant="outline" size="sm" className="border-[#3D7C6F] text-[#3D7C6F]">
+                <Button variant="outline" size="sm" className="border-primary text-primary">
                   <FileText className="w-4 h-4 mr-2" />
                   Export
                 </Button>
@@ -245,18 +245,18 @@ export default function TranscriptionManager() {
             >
               <div className="flex items-center gap-3 mb-2">
                 {currentStep === 'transcribing' ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-[#3D7C6F]" />
+                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
                 ) : (
                   <Sparkles className="w-4 h-4 text-purple-500" />
                 )}
-                <span className="text-sm font-medium text-gray-700">
+                <span className="text-sm font-medium">
                   {currentStep === 'transcribing' ? 'Transcribing audio...' : 'Extracting insights...'}
                 </span>
-                <span className="text-xs text-gray-400 ml-auto">{progress}%</span>
+                <span className="text-xs text-muted-foreground ml-auto">{progress}%</span>
               </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-2 bg-muted rounded-full overflow-hidden">
                 <motion.div
-                  className="h-full bg-gradient-to-r from-[#3D7C6F] to-purple-500"
+                  className="h-full bg-gradient-to-r from-primary to-purple-500"
                   initial={{ width: 0 }}
                   animate={{ width: `${progress}%` }}
                   transition={{ duration: 0.3 }}
@@ -271,7 +271,7 @@ export default function TranscriptionManager() {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-4 flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg"
+            className="mt-4 flex items-center gap-2 text-sm text-green-600 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg"
           >
             <CheckCircle2 className="w-4 h-4" />
             <span>All done! {insights?.length || 0} insights extracted.</span>
@@ -307,16 +307,16 @@ export default function TranscriptionManager() {
           <TabsContent value="transcription" className="mt-0">
             {!hasTranscription ? (
               <div className="text-center py-16">
-                <div className="w-20 h-20 bg-linear-to-br from-[#3D7C6F]/10 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Upload className="w-10 h-10 text-[#3D7C6F]" />
+                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Upload className="w-10 h-10 text-primary" />
                 </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Ready to transcribe?</h4>
-                <p className="text-sm text-gray-500 mb-6 max-w-xs mx-auto">
+                <h4 className="font-semibold mb-2">Ready to transcribe?</h4>
+                <p className="text-sm text-muted-foreground mb-6 max-w-xs mx-auto">
                   Upload your audio file and we&apos;ll extract insights automatically
                 </p>
                 <Button
                   onClick={handleUploadAndExtract}
-                  className="bg-[#3D7C6F] hover:bg-[#2d5f54]"
+                  className="bg-primary hover:bg-primary/90"
                   size="lg"
                 >
                   <Zap className="w-5 h-5 mr-2" />
@@ -330,13 +330,13 @@ export default function TranscriptionManager() {
                     key={segment.id}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="group hover:bg-gray-50 p-2 rounded-lg transition-colors"
+                    className="group hover:bg-accent p-2 rounded-lg transition-colors"
                   >
                     <div className="flex gap-3">
-                      <span className="text-xs text-[#3D7C6F] font-mono mt-1 min-w-[50px]">
+                      <span className="text-xs text-primary font-mono mt-1 min-w-[50px]">
                         {Math.floor(segment.start / 60)}:{String(Math.floor(segment.start % 60)).padStart(2, '0')}
                       </span>
-                      <p className="text-gray-700 text-sm leading-relaxed flex-1">
+                      <p className="text-sm leading-relaxed flex-1">
                         {segment.text}
                       </p>
                     </div>
@@ -350,11 +350,11 @@ export default function TranscriptionManager() {
           <TabsContent value="insights" className="mt-0">
             {!hasInsights ? (
               <div className="text-center py-16">
-                <div className="w-20 h-20 bg-linear-to-br from-purple-100 to-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="w-20 h-20 bg-purple-100 dark:bg-purple-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Lightbulb className="w-10 h-10 text-purple-500" />
                 </div>
-                <h4 className="font-semibold text-gray-900 mb-2">No insights yet</h4>
-                <p className="text-sm text-gray-500 mb-6">
+                <h4 className="font-semibold mb-2">No insights yet</h4>
+                <p className="text-sm text-muted-foreground mb-6">
                   Extract insights from your transcription
                 </p>
                 <Button
@@ -379,17 +379,17 @@ export default function TranscriptionManager() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="p-4 rounded-xl border-2 hover:border-purple-200 transition-all bg-linear-to-br from-white to-purple-50/50"
+                    className="p-4 rounded-xl border-2 hover:border-purple-200 dark:hover:border-purple-800 transition-all bg-card"
                   >
                     <div className="flex items-start justify-between mb-2">
                       <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
                         insight.type === 'pain-point' 
-                          ? 'bg-red-100 text-red-700 border border-red-200'
+                          ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800'
                           : insight.type === 'quote'
-                          ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
                           : insight.type === 'insight'
-                          ? 'bg-purple-100 text-purple-700 border border-purple-200'
-                          : 'bg-amber-100 text-amber-700 border border-amber-200'
+                          ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border border-purple-200 dark:border-purple-800'
+                          : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
                       }`}>
                         {insight.type === 'pain-point' && '😫 '}
                         {insight.type === 'quote' && '💬 '}
@@ -397,11 +397,11 @@ export default function TranscriptionManager() {
                         {insight.type === 'follow-up' && '🤔 '}
                         {insight.type}
                       </span>
-                      <span className="text-xs text-gray-400 font-mono">
+                      <span className="text-xs text-muted-foreground font-mono">
                         {Math.floor(insight.timestamp / 60)}:{String(Math.floor(insight.timestamp % 60)).padStart(2, '0')}
                       </span>
                     </div>
-                    <p className="text-gray-700 text-sm leading-relaxed">{insight.text}</p>
+                    <p className="text-sm leading-relaxed">{insight.text}</p>
                   </motion.div>
                 ))}
               </div>
@@ -411,9 +411,9 @@ export default function TranscriptionManager() {
           {/* Summary Tab */}
           <TabsContent value="summary" className="mt-0">
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-linear-to-br from-[#3D7C6F]/5 to-transparent rounded-xl">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Duration</p>
-                <p className="text-2xl font-bold text-gray-900">
+              <div className="p-4 bg-muted/50 rounded-xl">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Duration</p>
+                <p className="text-2xl font-bold">
                   {currentInterview && (
                     <>
                       {Math.floor(currentInterview.duration / 60)}:
@@ -421,31 +421,31 @@ export default function TranscriptionManager() {
                     </>
                   )}
                 </p>
-                <p className="text-xs text-gray-400">minutes</p>
+                <p className="text-xs text-muted-foreground">minutes</p>
               </div>
               
-              <div className="p-4 bg-linear-to-br from-purple-50 to-transparent rounded-xl">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Words</p>
-                <p className="text-2xl font-bold text-gray-900">
+              <div className="p-4 bg-muted/50 rounded-xl">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Words</p>
+                <p className="text-2xl font-bold">
                   {currentInterview?.transcription.split(' ').length || 0}
                 </p>
-                <p className="text-xs text-gray-400">transcribed</p>
+                <p className="text-xs text-muted-foreground">transcribed</p>
               </div>
               
-              <div className="p-4 bg-linear-to-br from-blue-50 to-transparent rounded-xl">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Segments</p>
-                <p className="text-2xl font-bold text-gray-900">
+              <div className="p-4 bg-muted/50 rounded-xl">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Segments</p>
+                <p className="text-2xl font-bold">
                   {currentInterview?.segments.length || 0}
                 </p>
-                <p className="text-xs text-gray-400">chunks</p>
+                <p className="text-xs text-muted-foreground">chunks</p>
               </div>
               
-              <div className="p-4 bg-linear-to-br from-amber-50 to-transparent rounded-xl">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Insights</p>
-                <p className="text-2xl font-bold text-gray-900">
+              <div className="p-4 bg-muted/50 rounded-xl">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Insights</p>
+                <p className="text-2xl font-bold">
                   {insights?.length || 0}
                 </p>
-                <p className="text-xs text-gray-400">extracted</p>
+                <p className="text-xs text-muted-foreground">extracted</p>
               </div>
             </div>
           </TabsContent>

@@ -153,7 +153,7 @@ export function GroupHeader({
 
       {/* TAKEN indicator */}
       {isSelectedByOther && (
-        <div className="absolute -top-2 -right-2 px-2 py-0.5 bg-orange-100 border border-orange-300 rounded-full text-orange-700 text-[10px] font-medium z-10 shadow">
+        <div className="absolute -top-2 -right-2 px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700 rounded-full text-orange-700 dark:text-orange-300 text-[10px] font-medium z-10 shadow">
           🔒
         </div>
       )}
@@ -167,7 +167,7 @@ export function GroupHeader({
             e.stopPropagation();
             onToggleCollapse();
           }}
-          className="p-1.5 rounded-lg hover:bg-black/5 transition-colors text-gray-500"
+          className="p-1.5 rounded-lg hover:bg-accent transition-colors text-muted-foreground"
           title={isCollapsed ? "Expand" : "Collapse"}
         >
           {isCollapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
@@ -214,7 +214,7 @@ export function GroupHeader({
             {group.title}
           </h3>
           {isPlacingDot && (
-            <p className="text-[9px] text-gray-400 font-medium">
+            <p className="text-[9px] text-muted-foreground font-medium">
               Click to vote
             </p>
           )}
@@ -293,7 +293,7 @@ export function GroupHeader({
             }}
             className={`
               p-1.5 rounded-lg transition-all relative
-              ${amIMentioned ? "bg-blue-100 text-blue-600" : "hover:bg-black/5 text-gray-400 hover:text-blue-500"}
+              ${amIMentioned ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" : "hover:bg-accent text-muted-foreground hover:text-primary"}
             `}
             title="Comments"
           >
@@ -319,7 +319,7 @@ export function GroupHeader({
               e.stopPropagation();
               onDelete(group.id);
             }}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 transition-all"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 transition-all"
             title="Delete group"
           >
             <Trash2 size={14} />

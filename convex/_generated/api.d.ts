@@ -15,6 +15,7 @@ import type * as comments from "../comments.js";
 import type * as connections from "../connections.js";
 import type * as dotVoting from "../dotVoting.js";
 import type * as export_ from "../export.js";
+import type * as http from "../http.js";
 import type * as insights from "../insights.js";
 import type * as interviews from "../interviews.js";
 import type * as notificationService from "../notificationService.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   connections: typeof connections;
   dotVoting: typeof dotVoting;
   export: typeof export_;
+  http: typeof http;
   insights: typeof insights;
   interviews: typeof interviews;
   notificationService: typeof notificationService;

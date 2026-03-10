@@ -13,17 +13,13 @@ import {
   Users, 
   Mail, 
   UserPlus, 
-  X, 
-  Check, 
   Clock, 
   Crown, 
   Shield, 
   Eye,
   Loader2,
   Search,
-  MoreHorizontal,
   Trash2,
-  ArrowRight,
   RefreshCw
 } from "lucide-react";
 import { 
@@ -33,7 +29,6 @@ import {
   DialogTitle,
   DialogTrigger 
 } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 interface TeamMembersModalProps {
   projectId: Id<"projects">;
@@ -177,16 +172,9 @@ export function TeamMembersModal({ projectId, projectName, isOwner, variant = "d
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {variant === "minimal" ? (
-          <Tooltip>
-            <TooltipTrigger>
-              <Button variant="ghost" size="icon" className="h-6 w-6">
-                <span className="text-lg">+</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Invite Member</p>
-            </TooltipContent>
-          </Tooltip>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsOpen(true)}>
+            <span className="text-lg">+</span>
+          </Button>
         ) : (
           <Button variant="outline" className="gap-2">
             <Users className="w-4 h-4" />
@@ -200,14 +188,14 @@ export function TeamMembersModal({ projectId, projectName, isOwner, variant = "d
       
       <DialogContent className="max-w-md w-full p-0 overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#3D7C6F] to-[#2d5f54] p-6 text-white">
-          <DialogHeader className="text-white">
+        <div className="bg-gradient-to-r from-primary to-primary/80 p-6 text-primary-foreground">
+          <DialogHeader className="text-primary-foreground">
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Users className="w-5 h-5" />
               Team Members
             </DialogTitle>
           </DialogHeader>
-          <p className="text-white/80 text-sm mt-1">
+          <p className="text-primary-foreground/80 text-sm mt-1">
             {projectName} • {members.length} members
           </p>
         </div>
@@ -260,7 +248,7 @@ export function TeamMembersModal({ projectId, projectName, isOwner, variant = "d
               <Button
                 onClick={handleInvite}
                 disabled={isInviting || !email || !name}
-                className="w-full bg-[#3D7C6F] hover:bg-[#2d5f54]"
+                className="w-full bg-primary hover:bg-primary/90"
               >
                 {isInviting ? (
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -274,7 +262,7 @@ export function TeamMembersModal({ projectId, projectName, isOwner, variant = "d
 
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Search members..."
               value={searchQuery}
@@ -294,7 +282,7 @@ export function TeamMembersModal({ projectId, projectName, isOwner, variant = "d
                   transition={{ delay: index * 0.05 }}
                   className={`
                     flex items-center gap-3 p-3 rounded-xl border-2 transition-all
-                    ${member.role === "owner" ? "bg-amber-50 border-amber-200" : "bg-white border-gray-100 hover:border-gray-200"}
+                    ${member.role === "owner" ? "bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800" : "bg-card border-border hover:border-input"}
                   `}
                 >
                   {/* Avatar */}
@@ -309,7 +297,7 @@ export function TeamMembersModal({ projectId, projectName, isOwner, variant = "d
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 truncate">
+                    <p className="font-medium truncate">
                       {member.name}
                       {member.role === "owner" && (
                         <Crown className="inline w-4 h-4 text-amber-500 ml-1" />
@@ -318,7 +306,7 @@ export function TeamMembersModal({ projectId, projectName, isOwner, variant = "d
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="ml-2 h-6 px-1 text-xs text-blue-600 hover:text-blue-700"
+                          className="ml-2 h-6 px-1 text-xs text-primary hover:text-primary/80"
                           onClick={handleFixMyInfo}
                         >
                           <RefreshCw className="w-3 h-3 mr-1" />
@@ -327,7 +315,7 @@ export function TeamMembersModal({ projectId, projectName, isOwner, variant = "d
                       )}
                     </p>
                     {member.email && (
-                      <p className="text-xs text-gray-500 truncate">{member.email}</p>
+                      <p className="text-xs text-muted-foreground truncate">{member.email}</p>
                     )}
                   </div>
 
@@ -350,7 +338,7 @@ export function TeamMembersModal({ projectId, projectName, isOwner, variant = "d
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="text-gray-400 hover:text-red-500 hover:bg-red-50"
+                      className="text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
                       onClick={() => handleRemove(member.userId)}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -361,7 +349,7 @@ export function TeamMembersModal({ projectId, projectName, isOwner, variant = "d
             </AnimatePresence>
 
             {filteredMembers.length === 0 && (
-              <div className="text-center py-8 text-gray-400">
+              <div className="text-center py-8 text-muted-foreground">
                 <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
                 <p>No members found</p>
               </div>
@@ -370,16 +358,16 @@ export function TeamMembersModal({ projectId, projectName, isOwner, variant = "d
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t bg-gray-50 flex justify-between items-center">
+        <div className="p-4 border-t bg-muted flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               {isOwner ? "You can invite up to 5 team members" : "Contact the owner to invite more members"}
             </p>
             {isOwner && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-xs text-blue-600 hover:text-blue-700 h-6 px-2"
+                className="text-xs text-primary hover:text-primary/80 h-6 px-2"
                 onClick={handleMigrate}
                 disabled={isMigrating}
               >

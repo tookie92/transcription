@@ -1,8 +1,13 @@
+import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api } from "./_generated/api";
 
-export const http = {
-  updateSegmentsWithSpeakers: httpAction(async (ctx, request) => {
+const http = httpRouter();
+
+http.route({
+  path: "/updateSegmentsWithSpeakers",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
     const { interviewId, segments } = await request.json();
 
     if (!interviewId || !segments) {
@@ -20,4 +25,6 @@ export const http = {
       status: 200,
     });
   }),
-};
+});
+
+export default http;
