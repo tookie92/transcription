@@ -52,7 +52,7 @@ export function WorkspaceHeader({
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3" data-tour="toolbar">
         {/* Bell Notifications */}
         <NotificationBell />
 

@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Bell, RefreshCcwIcon, Plus, Users, Folder, ArrowRight, Clock } from "lucide-react";
+import { Bell, RefreshCcwIcon, Plus, Users, Folder, ArrowRight, Clock, Mic, Sparkles, FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Id } from "@/convex/_generated/dataModel";
@@ -246,12 +246,40 @@ const ProjectPage = () => {
               Create your first project to start organizing interviews and insights
             </p>
             <Button 
-              onClick={handleCreateProject}
+              onClick={() => setShowTemplateDialog(true)}
               className="bg-primary hover:bg-primary/90"
             >
               <Plus className="w-4 h-4 mr-2" />
               Create Project
             </Button>
+            
+            {/* Quick Start Guide */}
+            <div className="mt-12 max-w-2xl mx-auto">
+              <h3 className="text-sm font-medium text-muted-foreground mb-4">How it works</h3>
+              <div className="grid sm:grid-cols-3 gap-6 text-left">
+                <div className="p-4 bg-card rounded-xl border">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
+                    <Mic className="w-5 h-5 text-primary" />
+                  </div>
+                  <h4 className="font-medium text-sm mb-1">1. Upload Interviews</h4>
+                  <p className="text-xs text-muted-foreground">Upload audio or video files for AI transcription</p>
+                </div>
+                <div className="p-4 bg-card rounded-xl border">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
+                    <Sparkles className="w-5 h-5 text-primary" />
+                  </div>
+                  <h4 className="font-medium text-sm mb-1">2. AI Analysis</h4>
+                  <p className="text-xs text-muted-foreground">Extract insights and detect themes automatically</p>
+                </div>
+                <div className="p-4 bg-card rounded-xl border">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
+                    <FileText className="w-5 h-5 text-primary" />
+                  </div>
+                  <h4 className="font-medium text-sm mb-1">3. Affinity Mapping</h4>
+                  <p className="text-xs text-muted-foreground">Organize insights with drag-and-drop affinity diagrams</p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

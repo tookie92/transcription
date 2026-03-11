@@ -148,6 +148,7 @@ export function FloatingToolbar({
                     value="voting" 
                     className="rounded-full w-10 h-10 text-foreground hover:bg-accent"
                     disabled={!hasActiveVotingSession || !isVotingPhase}
+                    data-tour="dot-voting"
                   >
                     <Vote size={18} />
                   </ToggleGroupItem>

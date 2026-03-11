@@ -23,6 +23,10 @@ import { WorkspaceFooter } from "./workspace/WorkspaceFooter";
 import { useActivity } from "@/hooks/useActivity";
 import { ActivityPanel } from "./ActivityPanel";
 
+// Tour
+import { SpotlightTour, useSpotlightTour } from "@/components/ui/spotlight-tour";
+import { Button } from "@/components/ui/button";
+
 interface AffinityMapWorkspaceProps {
   projectId: Id<"projects">;
 }
@@ -31,6 +35,9 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const router = useRouter();
   const { userId } = useAuth();
   const { user } = useUser();
+
+  // Tour
+  const { isOpen: isTourOpen, closeTour, resetAndOpenTour } = useSpotlightTour();
 
   // ==================== DATA HOOK ====================
   const { 
@@ -146,6 +153,20 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         insightCount={insightsData?.length}
         hasMap={!!affinityMap}
       />
+
+      {/* Onboarding Tour */}
+      <SpotlightTour isOpen={isTourOpen} onClose={closeTour} />
+      
+      {/* Tour Trigger (hidden button for re-running tour) */}
+      <Button
+        variant="outline"
+        size="sm"
+        className="fixed bottom-4 right-4 z-30 opacity-50 hover:opacity-100"
+        onClick={resetAndOpenTour}
+        title="Restart tour"
+      >
+        ?
+      </Button>
     </div>
   );
 }

@@ -445,7 +445,7 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
       const x = (e.clientX - rect.left - position.x) / scale;
       const y = (e.clientY - rect.top - position.y) / scale;
       onGroupCreate({ x, y });
-      toast.success("Group created with double-click");
+      toast.success("Group created! Double-click on canvas");
     }
   };
 
@@ -661,19 +661,22 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
       {/* MAIN WORKSPACE */}
       <div className="flex-1 flex min-h-0">
         {/* SIDEBAR - INSIGHTS */}
-        <InsightsOrganizationPanel
-          groups={groups}
-          insights={insights}
-          projectInfo={projectInfo}
-          onGroupCreate={onGroupCreate}
-          onInsightDrop={onInsightDrop}
-          onManualInsightCreate={onManualInsightCreate}
-          onGroupTitleUpdate={onGroupTitleUpdate}
-        />
+        <div data-tour="insights-panel">
+          <InsightsOrganizationPanel
+            groups={groups}
+            insights={insights}
+            projectInfo={projectInfo}
+            onGroupCreate={onGroupCreate}
+            onInsightDrop={onInsightDrop}
+            onManualInsightCreate={onManualInsightCreate}
+            onGroupTitleUpdate={onGroupTitleUpdate}
+          />
+        </div>
 
         {/* CANVAS PRINCIPAL */}
         <div
           className="flex-1 relative overflow-hidden bg-background"
+          data-tour="groups"
           onClick={(e: React.MouseEvent) => {
             const target = e.target as HTMLElement;
             const isGroupClick = target.closest('[data-group-id]');
