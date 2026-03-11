@@ -142,7 +142,7 @@ export default function Home() {
               </ClerkLoaded>
             </div>
             <p className="mt-4 text-sm text-muted-foreground">
-              made for our interview research 🤪
+              The AI-powered platform for user research teams
             </p>
           </div>
         </div>
@@ -229,7 +229,7 @@ export default function Home() {
               <span className="text-sm text-muted-foreground">Skripta © 2024</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Made for interview research
+              Made with love by <a href="https://www.shadcn.com" target="_blank" rel="noreferrer">Rehovision</a>
             </p>
           </div>
         </div>

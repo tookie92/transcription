@@ -1,9 +1,4 @@
-import { Metadata } from "next";
-import { ProjectContent } from "@/components/myComponents/ProjectContent";
-import { Id } from "@/convex/_generated/dataModel";
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/ui/app-sidebar";
-import { Separator } from "@/components/ui/separator";
+import { AppSidebar } from "@/components/ui/app-sidebar"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -11,24 +6,15 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+} from "@/components/ui/breadcrumb"
+import { Separator } from "@/components/ui/separator"
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar"
 
-interface ProjectPageProps {
-  params: Promise<{
-    projectId: string;
-  }>;
-}
-
-export async function generateMetadata({ params }: ProjectPageProps): Promise<Metadata> {
-  const { projectId } = await params;
-  return {
-    title: "Project Details",
-    description: "View and manage your project interviews",
-  };
-}
-
-export default async function ProjectPage({ params }: ProjectPageProps) {
-  const { projectId } = await params;
+export default function Page() {
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -43,8 +29,8 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/project">
-                    Projects
+                  <BreadcrumbLink href="/">
+                    Home
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
@@ -56,9 +42,14 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <ProjectContent projectId={projectId as Id<"projects">} />
+          <div className="grid auto-rows-min gap-4 md:grid-cols-3">
+            <div className="aspect-video rounded-xl bg-muted/50" />
+            <div className="aspect-video rounded-xl bg-muted/50" />
+            <div className="aspect-video rounded-xl bg-muted/50" />
+          </div>
+          <div className="min-h-[100vh] flex-1 rounded-xl bg-muted/50 md:min-h-min" />
         </div>
       </SidebarInset>
     </SidebarProvider>
-  );
+  )
 }

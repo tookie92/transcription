@@ -124,18 +124,15 @@ useEffect(() => {
       {/* Header */}
       <div className="flex flex-col gap-8 items-center justify-between">
         <div className="flex items-center  w-full justify-between">
-          <Button variant="outline" onClick={() => router.push("/project")}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Projects
-          </Button>
-          <div className="flex flex-col items-center justify-center">
+          
+          <div className="flex flex-col  ">
             <h1 className="text-3xl font-bold">{project.name}</h1>
             {project.description && (
               <p className="text-muted-foreground mt-1">{project.description}</p>
             )}
           </div>
           <div className="flex gap-x-3">
-              <ThemeToggle />
+              
               <Button onClick={() => router.push(`/project/${projectId}/interview/`)}>
                 <Plus className="w-4 h-4" />
                 New Interview
