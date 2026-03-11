@@ -897,20 +897,22 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
                             );
                           })}
 
-                          {/* EMPTY STATE */}
+                          {/* EMPTY STATE - Centered in viewport */}
                           {groups.length === 0 && (
-                            <div className="text-center py-20">
-                              <div className="text-6xl mb-4">📊</div>
-                              <h3 className="text-xl font-semibold mb-2">Start Creating Groups</h3>
-                              <p className="text-muted-foreground mb-4">Double-click on the canvas to create your first group</p>
-                              <div className="flex justify-center gap-4 text-sm mb-6">
-                                <div className="flex items-center gap-2">
-                                  <kbd className="px-2 py-1 bg-muted rounded border text-xs">Double-click</kbd>
-                                  <span>Create group</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <kbd className="px-2 py-1 bg-muted rounded border text-xs">N</kbd>
-                                  <span>New group</span>
+                            <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-50" style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}>
+                              <div className="text-center bg-background/95 backdrop-blur-sm p-8 rounded-2xl border shadow-2xl pointer-events-auto">
+                                <div className="text-6xl mb-4">📊</div>
+                                <h3 className="text-xl font-semibold mb-2">Start Creating Groups</h3>
+                                <p className="text-muted-foreground mb-4">Double-click on the canvas to create your first group</p>
+                                <div className="flex justify-center gap-4 text-sm mb-6">
+                                  <div className="flex items-center gap-2">
+                                    <kbd className="px-2 py-1 bg-muted rounded border text-xs">Double-click</kbd>
+                                    <span>Create group</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <kbd className="px-2 py-1 bg-muted rounded border text-xs">N</kbd>
+                                    <span>New group</span>
+                                  </div>
                                 </div>
                               </div>
                             </div>
