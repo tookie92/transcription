@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { ExportDialog } from "./ExportDialog";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ExportInterview, Insight } from "@/types";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
@@ -52,6 +52,10 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   
+  // Audio playback state
+  const [currentTime, setCurrentTime] = useState(0);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
   // Manual insight creation
   const [showAddInsight, setShowAddInsight] = useState(false);
   const [newInsightText, setNewInsightText] = useState("");
@@ -60,6 +64,34 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [insightFilter, setInsightFilter] = useState<string | null>(null);
+
+  // Speaker colors
+  const getSpeakerColor = (speaker: string | undefined) => {
+    if (!speaker) return 'bg-primary/10 text-primary';
+    const speakerNum = parseInt(speaker.replace(/\D/g, '')) || 1;
+    const colors = [
+      'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+      'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+      'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+      'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+      'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300',
+      'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',
+    ];
+    return colors[(speakerNum - 1) % colors.length];
+  };
+
+  const getSpeakerLabel = (speaker: string | undefined) => {
+    if (!speaker) return 'Speaker';
+    const speakerNum = speaker.replace(/\D/g, '');
+    return `Speaker ${speakerNum}`;
+  };
+
+  // Handle audio time update
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
 
   // Récupérer les données
   const project = useQuery(api.projects.getById, { projectId });
@@ -294,9 +326,11 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
               {interview.audioUrl && (
                 <div className="flex items-center gap-2 mt-2">
                   <audio 
+                    ref={audioRef}
                     controls 
                     className="h-8 w-64"
                     src={interview.audioUrl}
+                    onTimeUpdate={handleTimeUpdate}
                   >
                     Your browser does not support the audio element.
                   </audio>
@@ -373,33 +407,47 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
             </CardHeader>
             <CardContent>
               <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
-                {(searchQuery ? filteredSegments : interview.segments).map((segment) => (
-                  <div 
-                    key={segment.id}
-                    className="hover:bg-accent p-3 rounded-lg transition-colors"
-                  >
-                    <div className="flex gap-3 items-start">
-                      <span className="text-sm font-mono mt-0.5 min-w-[60px] flex-shrink-0 text-muted-foreground">
-                        {Math.floor(segment.start / 60)}:
-                        {String(Math.floor(segment.start % 60)).padStart(2, '0')}
-                      </span>
-                      {segment.speaker && (
-                        <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded flex-shrink-0">
-                          {segment.speaker}
+                {(searchQuery ? filteredSegments : interview.segments).map((segment) => {
+                  const isActive = currentTime >= segment.start && currentTime < segment.end;
+                  return (
+                    <div 
+                      key={segment.id}
+                      className={`p-3 rounded-lg transition-all cursor-pointer ${
+                        isActive 
+                          ? 'bg-primary/20 border border-primary shadow-sm' 
+                          : 'hover:bg-accent'
+                      }`}
+                      onClick={() => {
+                        if (audioRef.current) {
+                          audioRef.current.currentTime = segment.start;
+                        }
+                      }}
+                    >
+                      <div className="flex gap-3 items-start">
+                        <span className={`text-sm font-mono mt-0.5 min-w-[60px] flex-shrink-0 ${
+                          isActive ? 'text-primary font-semibold' : 'text-muted-foreground'
+                        }`}>
+                          {Math.floor(segment.start / 60)}:
+                          {String(Math.floor(segment.start % 60)).padStart(2, '0')}
                         </span>
-                      )}
-                      <p className="text-foreground leading-relaxed flex-1">
-                        {searchQuery ? (
-                          segment.text.split(new RegExp(`(${searchQuery})`, 'gi')).map((part, i) => 
-                            part.toLowerCase() === searchQuery.toLowerCase() ? (
-                              <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">{part}</mark>
-                            ) : part
-                          )
-                        ) : segment.text}
-                      </p>
+                        {segment.speaker && (
+                          <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${getSpeakerColor(segment.speaker)}`}>
+                            {getSpeakerLabel(segment.speaker)}
+                          </span>
+                        )}
+                        <p className={`text-foreground leading-relaxed flex-1 ${isActive ? 'font-medium' : ''}`}>
+                          {searchQuery ? (
+                            segment.text.split(new RegExp(`(${searchQuery})`, 'gi')).map((part, i) => 
+                              part.toLowerCase() === searchQuery.toLowerCase() ? (
+                                <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">{part}</mark>
+                              ) : part
+                            )
+                          ) : segment.text}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {searchQuery && filteredSegments.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
