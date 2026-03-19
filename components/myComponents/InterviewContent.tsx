@@ -27,11 +27,14 @@ import {
   Download,
   Search,
   Filter,
-  CircuitBoard
+  CircuitBoard,
+  CheckCircle,
+  Circle,
+  Loader2
 } from "lucide-react";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { ExportDialog } from "./ExportDialog";
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { ExportInterview, Insight } from "@/types";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
@@ -42,11 +45,14 @@ interface InterviewContentProps {
   interviewId: Id<"interviews">;
 }
 
+type InterviewStage = "transcription" | "analysis" | "summary";
+
 export function InterviewContent({ projectId, interviewId }: InterviewContentProps) {
   const router = useRouter();
   const { analyzeInterview, generateInterviewSummary } = useAnalysis();
   const createManualInsight = useMutation(api.insights.createManualInsight);
   const deleteInsight = useMutation(api.insights.deleteInsight);
+  const [activeTab, setActiveTab] = useState<string>("transcription");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
@@ -98,6 +104,33 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
   const interview = useQuery(api.interviews.getById, { interviewId });
   const insights = useQuery(api.insights.getByInterview, { interviewId });
   const projectInterviews = useQuery(api.interviews.getProjectInterviews, { projectId });
+
+  // Determine current stage based on data
+  const currentStage = useMemo<InterviewStage>(() => {
+    if (interview?.summary) return "summary";
+    if (insights && insights.length > 0) return "analysis";
+    return "transcription";
+  }, [interview, insights]);
+
+  // Stage configuration
+  const stages: { id: InterviewStage; label: string; icon: React.ReactNode }[] = [
+    { id: "transcription", label: "Transcription", icon: <FileText className="w-4 h-4" /> },
+    { id: "analysis", label: "Analysis", icon: <Sparkles className="w-4 h-4" /> },
+    { id: "summary", label: "Summary", icon: <FileSpreadsheet className="w-4 h-4" /> },
+  ];
+
+  const getStageStatus = (stageId: InterviewStage) => {
+    const stageOrder: InterviewStage[] = ["transcription", "analysis", "summary"];
+    const currentIndex = stageOrder.indexOf(currentStage);
+    const stageIndex = stageOrder.indexOf(stageId);
+    
+    // If all stages are complete (summary exists), show all as complete
+    if (interview?.summary) return "complete";
+    
+    if (stageIndex < currentIndex) return "complete";
+    if (stageIndex === currentIndex) return "active";
+    return "pending";
+  };
 
   // Format time
   const formatTime = (seconds: number) => {
@@ -359,8 +392,54 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
         </CardContent>
       </Card>
 
+      {/* Stage Progress Indicator */}
+      <Card className="bg-muted/30 border-dashed">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Progress:</span>
+            </div>
+            <div className="flex items-center gap-1">
+              {stages.map((stage, index) => {
+                const status = getStageStatus(stage.id);
+                return (
+                  <div key={stage.id} className="flex items-center">
+                    <button
+                      onClick={() => setActiveTab(stage.id === "transcription" ? "transcription" : stage.id === "analysis" ? "insights" : "summary")}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors ${
+                        status === "active" 
+                          ? "bg-primary text-primary-foreground font-medium" 
+                          : status === "complete"
+                          ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                    >
+                      {status === "complete" ? (
+                        <CheckCircle className="w-4 h-4" />
+                      ) : status === "active" ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Circle className="w-4 h-4" />
+                      )}
+                      {stage.label}
+                    </button>
+                    {index < stages.length - 1 && (
+                      <div className={`w-8 h-0.5 mx-1 ${
+                        getStageStatus(stages[index + 1].id) !== "pending" 
+                          ? "bg-green-500" 
+                          : "bg-muted"
+                      }`} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Content Tabs */}
-      <Tabs defaultValue="transcription" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="transcription" className="flex items-center gap-2">
             <FileText className="w-4 h-4" />
@@ -378,6 +457,9 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
           <TabsTrigger value="summary" className="flex items-center gap-2">
             <FileSpreadsheet className="w-4 h-4" />
             Summary
+            {interview?.summary && (
+              <CheckCircle className="w-3 h-3 ml-1 text-green-500" />
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -576,10 +658,42 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
 
             <CardContent>
               {!insights || insights.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Lightbulb className="w-16 h-16 mx-auto mb-3 opacity-50" />
-                  <p className="text-lg mb-2">No insights yet</p>
-                  <p className="text-sm">Go to the Summary tab to analyze this interview</p>
+                <div className="text-center py-16">
+                  <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Lightbulb className="w-10 h-10 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">No insights yet</h3>
+                  <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+                    Extract key findings from this interview automatically using AI. 
+                    We'll identify pain points, quotes, insights, and follow-up questions.
+                  </p>
+                  <div className="flex flex-col items-center gap-4">
+                    <Button 
+                      size="lg" 
+                      onClick={handleAnalyze}
+                      disabled={isAnalyzing}
+                      className="gap-2"
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          Analyzing...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4" />
+                          Analyze Interview
+                        </>
+                      )}
+                    </Button>
+                    {analysisError && (
+                      <p className="text-destructive text-sm">{analysisError}</p>
+                    )}
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                      Est. time: ~30 seconds
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="grid gap-4">
@@ -743,62 +857,77 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
             ) : (
               // État vide - pas de résumé
               <Card>
-                <CardContent className="text-center py-12">
-                  <FileSpreadsheet className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-                  <h3 className="text-lg font-semibold text-foreground mb-2">
-                    No Summary Yet
-                  </h3>
+                <CardContent className="text-center py-16">
+                  <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-secondary/20 flex items-center justify-center">
+                    <FileSpreadsheet className="w-10 h-10 text-secondary-foreground" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">No Summary Yet</h3>
                   {!insights || insights.length === 0 ? (
                     <>
                       <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                        Analyze the interview first to extract insights, then generate a summary.
+                        Generate an AI-powered executive summary with key findings and recommendations.
                       </p>
-                      <div className="flex items-center justify-center gap-3">
-                        {isAnalyzing && (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                        )}
-                        <Button 
-                          onClick={handleAnalyze}
-                          disabled={isAnalyzing}
-                        >
-                          {isAnalyzing ? (
-                            <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                              Analyzing...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="w-4 h-4 mr-2" />
-                              Analyze Interview
-                            </>
+                      <div className="flex flex-col items-center gap-4">
+                        <p className="text-sm text-muted-foreground">
+                          First, you need to analyze the interview to extract insights.
+                        </p>
+                        <div className="flex items-center gap-3">
+                          {isAnalyzing && (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
                           )}
-                        </Button>
+                          <Button 
+                            onClick={handleAnalyze}
+                            disabled={isAnalyzing}
+                            className="gap-2"
+                          >
+                            {isAnalyzing ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                Analyzing...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-4 h-4" />
+                                Analyze Interview
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        {analysisError && (
+                          <p className="text-destructive text-sm">{analysisError}</p>
+                        )}
                       </div>
-                      {analysisError && (
-                        <p className="text-destructive text-sm mt-4">{analysisError}</p>
-                      )}
                     </>
                   ) : (
                     <>
                       <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                        Generate an AI-powered summary based on the {insights.length} insights extracted from this interview.
+                        Your {insights.length} insights are ready. Generate an AI-powered executive summary 
+                        with key points, recommendations, and main themes.
                       </p>
                       <Button 
                         onClick={handleGenerateSummary} 
                         disabled={isGeneratingSummary}
+                        size="lg"
+                        className="gap-2"
                       >
                         {isGeneratingSummary ? (
                           <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                             Generating Summary...
                           </>
                         ) : (
                           <>
-                            <Sparkles className="w-4 h-4 mr-2" />
+                            <Sparkles className="w-4 h-4" />
                             Generate AI Summary
                           </>
                         )}
                       </Button>
+                      {isGeneratingSummary && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+                          <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+                          Est. time: ~20 seconds
+                        </div>
+                      )}
                     </>
                   )}
                 </CardContent>
