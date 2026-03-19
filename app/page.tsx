@@ -14,6 +14,7 @@ import {
   BarChart3,
   Zap
 } from 'lucide-react';
+import Image from 'next/image';
 
 export default function Home() {
   const { currentProjectId } = useCurrentProject();
@@ -61,11 +62,13 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border">
+      <header className=" bg-white sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex  w-32 items-center gap-3">
-              <img 
+              <Image
+              height={50}
+              width={50}
                 src="/logo.svg" 
                 alt="Skripta" 
                 className="w-full h-full "
@@ -103,7 +106,7 @@ export default function Home() {
       </header>
 
       {/* Hero Section */}
-      <section className="py-24 sm:py-32">
+      <section className="py-24 h-svh bg-white sm:py-32">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto text-center">
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-foreground">
