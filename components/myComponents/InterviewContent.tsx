@@ -34,11 +34,13 @@ import {
 } from "lucide-react";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { ExportDialog } from "./ExportDialog";
-import { useState, useRef, useMemo } from "react";
+import { LiveNotesPanel } from "./LiveNotesPanel";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { ExportInterview, Insight } from "@/types";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
-import { Plus, Trash, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Trash, ChevronLeft, ChevronRight, StickyNote } from "lucide-react";
+import { Group, Panel, Separator } from "react-resizable-panels";
 
 interface InterviewContentProps {
   projectId: Id<"projects">;
@@ -71,6 +73,9 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
   const [searchQuery, setSearchQuery] = useState("");
   const [insightFilter, setInsightFilter] = useState<string | null>(null);
 
+  // Live Notes panel toggle
+  const [showLiveNotes, setShowLiveNotes] = useState(true);
+
   // Speaker colors
   const getSpeakerColor = (speaker: string | undefined) => {
     if (!speaker) return 'bg-primary/10 text-primary';
@@ -98,6 +103,33 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
       setCurrentTime(audioRef.current.currentTime);
     }
   };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement)?.isContentEditable
+      ) {
+        return;
+      }
+
+      // Space bar: pause/play audio
+      if (e.code === "Space" && audioRef.current) {
+        e.preventDefault();
+        if (audioRef.current.paused) {
+          audioRef.current.play();
+        } else {
+          audioRef.current.pause();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Récupérer les données
   const project = useQuery(api.projects.getById, { projectId });
@@ -463,82 +495,122 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
           </TabsTrigger>
         </TabsList>
 
-        {/* Transcription Tab */}
+        {/* Transcription Tab with Live Notes */}
         <TabsContent value="transcription">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Full Transcription</CardTitle>
-                  <CardDescription>
-                    Complete interview transcription with timestamps
-                    {searchQuery && <span className="ml-2 text-primary">• {filteredSegments.length} results</span>}
-                  </CardDescription>
-                </div>
-                {/* Search in transcription */}
-                <div className="relative w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search transcription..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
-                {(searchQuery ? filteredSegments : interview.segments).map((segment) => {
-                  const isActive = currentTime >= segment.start && currentTime < segment.end;
-                  return (
-                    <div 
-                      key={segment.id}
-                      className={`p-3 rounded-lg transition-all cursor-pointer ${
-                        isActive 
-                          ? 'bg-primary/20 border border-primary shadow-sm' 
-                          : 'hover:bg-accent'
-                      }`}
-                      onClick={() => {
-                        if (audioRef.current) {
-                          audioRef.current.currentTime = segment.start;
-                        }
-                      }}
-                    >
-                      <div className="flex gap-3 items-start">
-                        <span className={`text-sm font-mono mt-0.5 min-w-[60px] flex-shrink-0 ${
-                          isActive ? 'text-primary font-semibold' : 'text-muted-foreground'
-                        }`}>
-                          {Math.floor(segment.start / 60)}:
-                          {String(Math.floor(segment.start % 60)).padStart(2, '0')}
-                        </span>
-                        {segment.speaker && (
-                          <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${getSpeakerColor(segment.speaker)}`}>
-                            {getSpeakerLabel(segment.speaker)}
-                          </span>
-                        )}
-                        <p className={`text-foreground leading-relaxed flex-1 ${isActive ? 'font-medium' : ''}`}>
-                          {searchQuery ? (
-                            segment.text.split(new RegExp(`(${searchQuery})`, 'gi')).map((part, i) => 
-                              part.toLowerCase() === searchQuery.toLowerCase() ? (
-                                <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">{part}</mark>
-                              ) : part
-                            )
-                          ) : segment.text}
-                        </p>
-                      </div>
+          <div className="flex items-center gap-2 mb-4">
+            <Button
+              variant={showLiveNotes ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowLiveNotes(!showLiveNotes)}
+              className="gap-2"
+            >
+              <StickyNote className="w-4 h-4" />
+              {showLiveNotes ? "Hide" : "Show"} Live Notes
+            </Button>
+            {showLiveNotes && (
+              <span className="text-sm text-muted-foreground">
+                Take notes while listening — they'll be timestamped automatically
+              </span>
+            )}
+          </div>
+
+          <Group>
+            <Panel defaultSize={showLiveNotes ? 65 : 100} minSize={30}>
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Full Transcription</CardTitle>
+                      <CardDescription>
+                        Complete interview transcription with timestamps
+                        {searchQuery && <span className="ml-2 text-primary">• {filteredSegments.length} results</span>}
+                      </CardDescription>
                     </div>
-                  );
-                })}
-                {searchQuery && filteredSegments.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p>No results found for &quot;{searchQuery}&quot;</p>
+                    {/* Search in transcription */}
+                    <div className="relative w-64">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search transcription..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
+                    {(searchQuery ? filteredSegments : interview.segments).map((segment) => {
+                      const isActive = currentTime >= segment.start && currentTime < segment.end;
+                      return (
+                        <div 
+                          key={segment.id}
+                          className={`p-3 rounded-lg transition-all cursor-pointer ${
+                            isActive 
+                              ? 'bg-primary/20 border border-primary shadow-sm' 
+                              : 'hover:bg-accent'
+                          }`}
+                          onClick={() => {
+                            if (audioRef.current) {
+                              audioRef.current.currentTime = segment.start;
+                            }
+                          }}
+                        >
+                          <div className="flex gap-3 items-start">
+                            <span className={`text-sm font-mono mt-0.5 min-w-[60px] flex-shrink-0 ${
+                              isActive ? 'text-primary font-semibold' : 'text-muted-foreground'
+                            }`}>
+                              {Math.floor(segment.start / 60)}:
+                              {String(Math.floor(segment.start % 60)).padStart(2, '0')}
+                            </span>
+                            {segment.speaker && (
+                              <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${getSpeakerColor(segment.speaker)}`}>
+                                {getSpeakerLabel(segment.speaker)}
+                              </span>
+                            )}
+                            <p className={`text-foreground leading-relaxed flex-1 ${isActive ? 'font-medium' : ''}`}>
+                              {searchQuery ? (
+                                segment.text.split(new RegExp(`(${searchQuery})`, 'gi')).map((part, i) => 
+                                  part.toLowerCase() === searchQuery.toLowerCase() ? (
+                                    <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">{part}</mark>
+                                  ) : part
+                                )
+                              ) : segment.text}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {searchQuery && filteredSegments.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p>No results found for &quot;{searchQuery}&quot;</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </Panel>
+
+            {showLiveNotes && (
+              <>
+                <Separator />
+                <Panel defaultSize={35} minSize={20}>
+                  <Card className="h-full">
+                    <LiveNotesPanel
+                      interviewId={interviewId}
+                      projectId={projectId}
+                      audioRef={audioRef}
+                      currentTime={currentTime}
+                      onTimeChange={(time) => {
+                        setCurrentTime(time);
+                      }}
+                    />
+                  </Card>
+                </Panel>
+              </>
+            )}
+          </Group>
         </TabsContent>
 
         {/* Insights Tab */}

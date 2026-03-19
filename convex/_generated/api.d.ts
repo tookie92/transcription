@@ -18,6 +18,7 @@ import type * as export_ from "../export.js";
 import type * as http from "../http.js";
 import type * as insights from "../insights.js";
 import type * as interviews from "../interviews.js";
+import type * as liveNotes from "../liveNotes.js";
 import type * as notificationService from "../notificationService.js";
 import type * as notifications from "../notifications.js";
 import type * as personas from "../personas.js";
@@ -51,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   insights: typeof insights;
   interviews: typeof interviews;
+  liveNotes: typeof liveNotes;
   notificationService: typeof notificationService;
   notifications: typeof notifications;
   personas: typeof personas;

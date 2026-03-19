@@ -77,6 +77,26 @@ export default defineSchema({
     createdAt: v.number(),
   }),
 
+  // Table Live Notes
+  liveNotes: defineTable({
+    interviewId: v.id("interviews"),
+    userId: v.string(),
+    userName: v.string(),
+    content: v.string(),
+    timestamp: v.number(),
+    tag: v.optional(v.union(
+      v.literal("observation"),
+      v.literal("question"),
+      v.literal("idea"),
+      v.literal("important"),
+      v.literal("action")
+    )),
+    insightId: v.optional(v.id("insights")), // Lien vers l'insight cree (pour suppression cascade)
+    createdAt: v.number(),
+  })
+    .index("by_interview", ["interviewId"])
+    .index("by_user", ["userId"]),
+
   // Table Affinity Maps
   affinityMaps: defineTable({
     projectId: v.id("projects"),
