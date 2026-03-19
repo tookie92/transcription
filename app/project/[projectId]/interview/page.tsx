@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { useTranscription } from '@/hooks/useTranscription';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
@@ -22,16 +23,20 @@ import {
   ArrowRight,
   ArrowLeft,
   X,
-  Pause
+  Pause,
+  Film,
+  Music
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { videoConverter } from '@/lib/videoConverter';
 
 export default function InterviewHome() {
   const params = useParams();
   const projectId = params?.projectId as string;
   const currentProjectId = projectId as Id<"projects">;
-  const { transcribe, isTranscribing, transcript, setTranscript, error } = useTranscription();
+  const { transcribe, isTranscribing, transcript, setTranscript, error, conversionProgress } = useTranscription();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isVideoFile, setIsVideoFile] = useState(false);
   const [topic, setTopic] = useState('');
   const [title, setTitle] = useState('');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -79,6 +84,14 @@ export default function InterviewHome() {
     setSelectedFile(file);
     setAudioUrl(URL.createObjectURL(file));
     setShowTranscription(false);
+    
+    // Detect if it's a video file
+    const isVideo = videoConverter.isVideoFile(file) || videoConverter.isVideoExtension(file.name);
+    setIsVideoFile(isVideo);
+    
+    if (isVideo) {
+      toast.info(`Video detected (${(file.size / 1024 / 1024).toFixed(1)}MB). Will be converted to audio automatically.`);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -157,10 +170,18 @@ export default function InterviewHome() {
   const handleTranscribe = async () => {
     if (!selectedFile || !title.trim() || !topic.trim()) return;
 
-    const toastId = toast.loading("Transcribing audio...");
+    const toastId = toast.loading(isVideoFile ? "Converting video..." : "Transcribing audio...");
 
     try {
-      const interview = await transcribe(selectedFile, title, topic);
+      const interview = await transcribe(
+        selectedFile, 
+        title, 
+        topic,
+        (progress) => {
+          // Update toast with progress
+          toast.loading(progress.message, { id: toastId });
+        }
+      );
       
       const convexSegments = interview.segments.map(segment => ({
         id: segment.id,
@@ -421,8 +442,8 @@ export default function InterviewHome() {
                   className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-accent transition-colors"
                 >
                   <Upload className="w-8 h-8 text-muted-foreground mb-2" />
-                  <span className="text-sm text-foreground">Click to upload audio/video</span>
-                  <span className="text-xs text-muted-foreground mt-1">MP3, MP4, WAV, M4A (Max 25MB)</span>
+                  <span className="text-sm text-foreground">Click to upload audio or video</span>
+                  <span className="text-xs text-muted-foreground mt-1">MP3, MP4, WAV, M4A, WebM, MOV • Video files will be converted automatically</span>
                 </label>
               </div>
             )}
@@ -479,6 +500,14 @@ export default function InterviewHome() {
             {/* File Preview & Form */}
             {audioUrl && (
               <div className="space-y-4 pt-4 border-t">
+                {/* Video/Audio indicator */}
+                {isVideoFile && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground bg-primary/10 p-2 rounded-lg">
+                    <Film className="w-4 h-4 text-primary" />
+                    <span>Video file will be converted to audio automatically</span>
+                  </div>
+                )}
+                
                 <div className="flex items-center gap-3">
                   <audio controls className="flex-1" src={audioUrl}>
                     Your browser does not support the audio element.

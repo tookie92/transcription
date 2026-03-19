@@ -26,9 +26,9 @@ import { toast } from "sonner";
 interface LiveNotesPanelProps {
   interviewId: Id<"interviews">;
   projectId: Id<"projects">;
-  audioRef: React.RefObject<HTMLAudioElement | null>;
   currentTime: number;
   onTimeChange: (time: number) => void;
+  onSeek: (time: number) => void;
 }
 
 type NoteTag = "observation" | "question" | "idea" | "important" | "action";
@@ -46,9 +46,9 @@ const defaultUserName = "Anonymous";
 export function LiveNotesPanel({ 
   interviewId, 
   projectId,
-  audioRef, 
   currentTime,
-  onTimeChange 
+  onTimeChange,
+  onSeek
 }: LiveNotesPanelProps) {
   const { userId } = useAuth();
   const [content, setContent] = useState("");
@@ -83,7 +83,7 @@ export function LiveNotesPanel({
 
     setIsCreating(true);
     try {
-      const timestamp = audioRef.current?.currentTime ?? 0;
+      const timestamp = currentTime;
       
       await createNote({
         interviewId,
@@ -128,11 +128,8 @@ export function LiveNotesPanel({
   };
 
   const handleNoteClick = (timestamp: number) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = timestamp;
-      onTimeChange(timestamp);
-      audioRef.current.play();
-    }
+    onTimeChange(timestamp);
+    onSeek(timestamp);
   };
 
   const handleNoteSelect = (noteId: string, e: React.MouseEvent) => {

@@ -30,17 +30,20 @@ import {
   CircuitBoard,
   CheckCircle,
   Circle,
-  Loader2
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  Mic,
+  Plus,
+  Trash
 } from "lucide-react";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { ExportDialog } from "./ExportDialog";
-import { LiveNotesPanel } from "./LiveNotesPanel";
+import { AudioPlayer, AudioPlayerHandle } from "./AudioPlayer";
 import { useState, useRef, useMemo, useEffect } from "react";
 import { ExportInterview, Insight } from "@/types";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
-import { Plus, Trash, ChevronLeft, ChevronRight, StickyNote } from "lucide-react";
-import { Group, Panel, Separator } from "react-resizable-panels";
 
 interface InterviewContentProps {
   projectId: Id<"projects">;
@@ -62,7 +65,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
   
   // Audio playback state
   const [currentTime, setCurrentTime] = useState(0);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioPlayerRef = useRef<AudioPlayerHandle>(null);
 
   // Manual insight creation
   const [showAddInsight, setShowAddInsight] = useState(false);
@@ -72,9 +75,6 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [insightFilter, setInsightFilter] = useState<string | null>(null);
-
-  // Live Notes panel toggle
-  const [showLiveNotes, setShowLiveNotes] = useState(true);
 
   // Speaker colors
   const getSpeakerColor = (speaker: string | undefined) => {
@@ -97,11 +97,9 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
     return `Speaker ${speakerNum}`;
   };
 
-  // Handle audio time update
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-    }
+  // Handle audio time update (called by AudioPlayer)
+  const handleTimeUpdate = (time: number) => {
+    setCurrentTime(time);
   };
 
   // Keyboard shortcuts
@@ -117,12 +115,15 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
       }
 
       // Space bar: pause/play audio
-      if (e.code === "Space" && audioRef.current) {
+      if (e.code === "Space") {
         e.preventDefault();
-        if (audioRef.current.paused) {
-          audioRef.current.play();
-        } else {
-          audioRef.current.pause();
+        if (audioPlayerRef.current) {
+          const time = audioPlayerRef.current.getCurrentTime();
+          if (time === 0) {
+            audioPlayerRef.current.play();
+          } else {
+            audioPlayerRef.current.pause();
+          }
         }
       }
     };
@@ -353,6 +354,14 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
 
         <div className="flex gap-2">
           <Button 
+            variant="default" 
+            onClick={() => router.push(`/project/${projectId}/interview/${interviewId}/mode`)}
+            className="gap-2 bg-primary hover:bg-primary/90"
+          >
+            <Mic className="w-4 h-4" />
+            Interview Mode
+          </Button>
+          <Button 
             variant="outline" 
             onClick={() => router.push(`/project/${projectId}/affinity/`)}
             className="gap-2"
@@ -389,16 +398,12 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                 <p className="text-lg text-muted-foreground">{interview.topic}</p>
               )}
               {interview.audioUrl && (
-                <div className="flex items-center gap-2 mt-2">
-                  <audio 
-                    ref={audioRef}
-                    controls 
-                    className="h-8 w-64"
+                <div className="mt-3 max-w-xl">
+                  <AudioPlayer 
+                    ref={audioPlayerRef}
                     src={interview.audioUrl}
                     onTimeUpdate={handleTimeUpdate}
-                  >
-                    Your browser does not support the audio element.
-                  </audio>
+                  />
                 </div>
               )}
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -495,122 +500,80 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
           </TabsTrigger>
         </TabsList>
 
-        {/* Transcription Tab with Live Notes */}
+        {/* Transcription Tab */}
         <TabsContent value="transcription">
-          <div className="flex items-center gap-2 mb-4">
-            <Button
-              variant={showLiveNotes ? "default" : "outline"}
-              size="sm"
-              onClick={() => setShowLiveNotes(!showLiveNotes)}
-              className="gap-2"
-            >
-              <StickyNote className="w-4 h-4" />
-              {showLiveNotes ? "Hide" : "Show"} Live Notes
-            </Button>
-            {showLiveNotes && (
-              <span className="text-sm text-muted-foreground">
-                Take notes while listening — they'll be timestamped automatically
-              </span>
-            )}
-          </div>
-
-          <Group>
-            <Panel defaultSize={showLiveNotes ? 65 : 100} minSize={30}>
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle>Full Transcription</CardTitle>
-                      <CardDescription>
-                        Complete interview transcription with timestamps
-                        {searchQuery && <span className="ml-2 text-primary">• {filteredSegments.length} results</span>}
-                      </CardDescription>
-                    </div>
-                    {/* Search in transcription */}
-                    <div className="relative w-64">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search transcription..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-9"
-                      />
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
-                    {(searchQuery ? filteredSegments : interview.segments).map((segment) => {
-                      const isActive = currentTime >= segment.start && currentTime < segment.end;
-                      return (
-                        <div 
-                          key={segment.id}
-                          className={`p-3 rounded-lg transition-all cursor-pointer ${
-                            isActive 
-                              ? 'bg-primary/20 border border-primary shadow-sm' 
-                              : 'hover:bg-accent'
-                          }`}
-                          onClick={() => {
-                            if (audioRef.current) {
-                              audioRef.current.currentTime = segment.start;
-                            }
-                          }}
-                        >
-                          <div className="flex gap-3 items-start">
-                            <span className={`text-sm font-mono mt-0.5 min-w-[60px] flex-shrink-0 ${
-                              isActive ? 'text-primary font-semibold' : 'text-muted-foreground'
-                            }`}>
-                              {Math.floor(segment.start / 60)}:
-                              {String(Math.floor(segment.start % 60)).padStart(2, '0')}
-                            </span>
-                            {segment.speaker && (
-                              <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${getSpeakerColor(segment.speaker)}`}>
-                                {getSpeakerLabel(segment.speaker)}
-                              </span>
-                            )}
-                            <p className={`text-foreground leading-relaxed flex-1 ${isActive ? 'font-medium' : ''}`}>
-                              {searchQuery ? (
-                                segment.text.split(new RegExp(`(${searchQuery})`, 'gi')).map((part, i) => 
-                                  part.toLowerCase() === searchQuery.toLowerCase() ? (
-                                    <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">{part}</mark>
-                                  ) : part
-                                )
-                              ) : segment.text}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {searchQuery && filteredSegments.length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                        <p>No results found for &quot;{searchQuery}&quot;</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </Panel>
-
-            {showLiveNotes && (
-              <>
-                <Separator />
-                <Panel defaultSize={35} minSize={20}>
-                  <Card className="h-full">
-                    <LiveNotesPanel
-                      interviewId={interviewId}
-                      projectId={projectId}
-                      audioRef={audioRef}
-                      currentTime={currentTime}
-                      onTimeChange={(time) => {
-                        setCurrentTime(time);
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Full Transcription</CardTitle>
+                  <CardDescription>
+                    Complete interview transcription with timestamps
+                    {searchQuery && <span className="ml-2 text-primary">• {filteredSegments.length} results</span>}
+                  </CardDescription>
+                </div>
+                <div className="relative w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search transcription..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
+                {(searchQuery ? filteredSegments : interview.segments).map((segment) => {
+                  const isActive = currentTime >= segment.start && currentTime < segment.end;
+                  return (
+                    <div 
+                      key={segment.id}
+                      className={`p-3 rounded-lg transition-all cursor-pointer ${
+                        isActive 
+                          ? 'bg-primary/20 border border-primary shadow-sm' 
+                          : 'hover:bg-muted'
+                      }`}
+                      onClick={() => {
+                        audioPlayerRef.current?.setCurrentTime(segment.start);
+                        audioPlayerRef.current?.play();
                       }}
-                    />
-                  </Card>
-                </Panel>
-              </>
-            )}
-          </Group>
+                    >
+                      <div className="flex gap-3 items-start">
+                        <span className={`text-sm font-mono mt-0.5 min-w-[60px] flex-shrink-0 ${
+                          isActive ? 'text-primary font-semibold' : 'text-muted-foreground'
+                        }`}>
+                          {Math.floor(segment.start / 60)}:
+                          {String(Math.floor(segment.start % 60)).padStart(2, '0')}
+                        </span>
+                        {segment.speaker && (
+                          <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${getSpeakerColor(segment.speaker)}`}>
+                            {getSpeakerLabel(segment.speaker)}
+                          </span>
+                        )}
+                        <p className={`text-foreground leading-relaxed flex-1 ${isActive ? 'font-medium' : ''}`}>
+                          {searchQuery ? (
+                            segment.text.split(new RegExp(`(${searchQuery})`, 'gi')).map((part, i) => 
+                              part.toLowerCase() === searchQuery.toLowerCase() ? (
+                                <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">{part}</mark>
+                              ) : part
+                            )
+                          ) : segment.text}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+                {searchQuery && filteredSegments.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p>No results found for &quot;{searchQuery}&quot;</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Insights Tab */}
@@ -737,7 +700,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                   <h3 className="text-xl font-semibold mb-2">No insights yet</h3>
                   <p className="text-muted-foreground mb-8 max-w-md mx-auto">
                     Extract key findings from this interview automatically using AI. 
-                    We'll identify pain points, quotes, insights, and follow-up questions.
+                    We will identify pain points, quotes, insights, and follow-up questions.
                   </p>
                   <div className="flex flex-col items-center gap-4">
                     <Button 
