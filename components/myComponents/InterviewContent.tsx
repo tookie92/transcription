@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { ExportDialog } from "./ExportDialog";
+import { ShareModal } from "./ShareModal";
 import { AudioPlayer, AudioPlayerHandle } from "./AudioPlayer";
 import { useState, useRef, useMemo, useEffect } from "react";
 import { ExportInterview, Insight } from "@/types";
@@ -378,6 +379,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
               </Button>
             }
           />
+          <ShareModal interviewId={interviewId} />
         </div>
       </div>
 

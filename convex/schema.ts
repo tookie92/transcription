@@ -49,6 +49,11 @@ export default defineSchema({
     criticalIssues: v.array(v.string()),
     generatedAt: v.number(),
     })),
+    // Shareable fields
+    shareToken: v.optional(v.string()),
+    isPublic: v.optional(v.boolean()),
+    sharePassword: v.optional(v.string()),
+    expiresAt: v.optional(v.number()),
     createdAt: v.number(),
   }),
 
@@ -75,7 +80,9 @@ export default defineSchema({
       v.literal("high")
     )),
     createdAt: v.number(),
-  }),
+  })
+    .index("by_interview", ["interviewId"])
+    .index("by_project", ["projectId"]),
 
   // Table Live Notes
   liveNotes: defineTable({

@@ -24,6 +24,7 @@ import type * as notifications from "../notifications.js";
 import type * as personas from "../personas.js";
 import type * as presence from "../presence.js";
 import type * as projects from "../projects.js";
+import type * as sharing from "../sharing.js";
 import type * as silentSorting from "../silentSorting.js";
 import type * as typingIndicators from "../typingIndicators.js";
 
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   personas: typeof personas;
   presence: typeof presence;
   projects: typeof projects;
+  sharing: typeof sharing;
   silentSorting: typeof silentSorting;
   typingIndicators: typeof typingIndicators;
 }>;
