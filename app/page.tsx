@@ -110,12 +110,11 @@ export default function Home() {
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto text-center">
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-foreground">
-              Transform Your{' '}
-              <span className="text-primary">Interview Research</span>
+              Turn Talks{' '}<br/>
+              <span className="text-primary">into Insights</span>
             </h1>
             <p className="mt-6 text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto">
-              Transcribe, analyze, and organize user interviews with AI-powered insights. 
-              Build affinity maps and discover themes in minutes, not hours.
+              Turn conversations into clear insights—no more hours lost.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
               <ClerkLoaded>
