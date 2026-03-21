@@ -29,12 +29,15 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { videoConverter } from '@/lib/videoConverter';
+import { useAuth, useUser } from '@clerk/nextjs';
 
 export default function InterviewHome() {
   const params = useParams();
   const projectId = params?.projectId as string;
   const currentProjectId = projectId as Id<"projects">;
+  const { user } = useUser();
   const { transcribe, isTranscribing, transcript, setTranscript, error, conversionProgress } = useTranscription();
+  const userEmail = user?.emailAddresses?.[0]?.emailAddress;
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isVideoFile, setIsVideoFile] = useState(false);
   const [topic, setTopic] = useState('');
@@ -66,7 +69,7 @@ export default function InterviewHome() {
 
   // Convex
   const createInterview = useMutation(api.interviews.createInterview);
-  const projects = useQuery(api.projects.getUserProjects);
+  const projects = useQuery(api.projects.getUserProjects, { userEmail });
   const interviews = useQuery(api.interviews.getProjectInterviews, { projectId: currentProjectId });
 
   useEffect(() => {

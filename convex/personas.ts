@@ -80,3 +80,54 @@ export const getPersonasByMap = query({
     return personas;
   },
 });
+
+export const updatePersona = mutation({
+  args: {
+    personaId: v.id("personas"),
+    name: v.optional(v.string()),
+    age: v.optional(v.number()),
+    occupation: v.optional(v.string()),
+    background: v.optional(v.string()),
+    goals: v.optional(v.array(v.string())),
+    frustrations: v.optional(v.array(v.string())),
+    behaviors: v.optional(v.array(v.string())),
+    quote: v.optional(v.string()),
+    profileImage: v.optional(v.string()),
+    demographics: v.optional(v.object({
+      education: v.string(),
+      income: v.string(),
+      location: v.string(),
+      techProficiency: v.union(v.literal("beginner"), v.literal("intermediate"), v.literal("expert")),
+    })),
+    psychographics: v.optional(v.object({
+      motivations: v.array(v.string()),
+      values: v.array(v.string()),
+      personality: v.array(v.string()),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const { personaId, ...updates } = args;
+    const filteredUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([_, v]) => v !== undefined)
+    );
+
+    await ctx.db.patch(personaId, filteredUpdates);
+    return { success: true };
+  },
+});
+
+export const deletePersona = mutation({
+  args: {
+    personaId: v.id("personas"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    await ctx.db.delete(args.personaId);
+    return { success: true };
+  },
+});

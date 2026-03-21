@@ -115,7 +115,8 @@ export const createProject = mutation({
 //   },
 // });
 export const getUserProjects = query({
-  handler: async (ctx) => {
+  args: { userEmail: v.optional(v.string()) },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       console.log("🚫 No user identity - returning empty array");
@@ -124,16 +125,20 @@ export const getUserProjects = query({
 
     console.log("🔐 User authenticated:", identity.subject);
 
-    // Récupérer TOUS les projets (sans filtre initial)
+    // Récupérer TOUS les projets
     const allProjects = await ctx.db
       .query("projects")
       .collect();
 
-    // Filtrer manuellement pour trouver les projets de l'utilisateur
+    // Filtrer pour trouver les projets de l'utilisateur (incluant invitations par email)
+    const userEmail = args.userEmail || identity.email;
     const userProjects = allProjects.filter(project => 
       project.ownerId === identity.subject || 
       project.isPublic ||
-      project.members.some(member => member.userId === identity.subject)
+      project.members.some(member => 
+        member.userId === identity.subject ||
+        (userEmail && member.userId === userEmail) // Inclure les invitations par email
+      )
     );
 
     console.log("📁 User projects found:", userProjects.length);

@@ -22,10 +22,11 @@ const ProjectPage = () => {
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [projectName, setProjectName] = useState("");
 
-  const projects = useQuery(api.projects.getUserProjects);
-  const createProject = useMutation(api.projects.createProject);
-
   const userEmail = user?.emailAddresses?.[0]?.emailAddress;
+  const projects = useQuery(api.projects.getUserProjects, { 
+    userEmail 
+  });
+  const createProject = useMutation(api.projects.createProject);
 
   // Separate owner vs member projects
   const ownerProjects = projects?.filter(project => project.ownerId === userId) || [];

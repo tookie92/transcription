@@ -34,15 +34,20 @@ export function AppSidebar() {
   const { user } = useUser()
   const [searchQuery, setSearchQuery] = useState("")
   
-  const projects = useQuery(api.projects.getUserProjects)
+  const userEmail = user?.emailAddresses?.[0]?.emailAddress;
+  const projects = useQuery(api.projects.getUserProjects, { userEmail })
   const [inviteStates, setInviteStates] = useState<Record<string, "accepting" | "declining" | null>>({})
 
-  const filteredProjects = projects?.filter(project => 
-    project.name.toLowerCase().includes(searchQuery.toLowerCase())
+  // Only show projects user is a member of (not just invited)
+  const memberProjects = projects?.filter(p => 
+    p.ownerId !== userId || !p.members.some(m => m.userId.includes('@') && m.userId === userEmail)
   ) || []
 
+  const filteredProjects = memberProjects.filter(project => 
+    project.name.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
   // Only show invitations where the email matches the current user's email
-  const userEmail = user?.emailAddresses?.[0]?.emailAddress;
   const pendingInvitations = projects?.flatMap(project => 
     project.members
       .filter(m => m.userId.includes('@') && m.userId === userEmail)

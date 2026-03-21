@@ -5,19 +5,14 @@ import { AffinityGroup as AffinityGroupType, ActivePanel, DetectedTheme, Insight
 import { ThemeDiscoveryPanel } from "../ThemeDiscoveryPanel";
 import { AnalyticsDashboard } from "../AnalyticsDashboard";
 import { PersonaGenerator } from "../PersonaGenerator";
-import { ActivityPanel } from "../ActivityPanel";
-import { VotingHistoryPanel } from "../VotingHistoryPanel";
 import { ExportPanel } from "../ExportPanel";
-import { FigJamDotVoting } from "../FigJamDotVoting";
 import { Id } from "@/convex/_generated/dataModel";
-import { useAuth, useUser } from "@clerk/nextjs";
 
 interface CanvasSidePanelsProps {
   isPresentMode: boolean;
   activePanel: ActivePanel;
   setActivePanel: (panel: ActivePanel) => void;
 
-  // Data props
   groups: AffinityGroupType[];
   insights: Insight[];
   projectId: string;
@@ -26,7 +21,6 @@ interface CanvasSidePanelsProps {
   userId?: string;
   userName?: string;
 
-  // Theme props
   selectedTheme: DetectedTheme | null;
   setSelectedTheme: (theme: DetectedTheme) => void;
   onApplyRecommendation: (recommendation: ThemeRecommendation) => void;
@@ -47,8 +41,6 @@ export function CanvasSidePanels({
   projectId,
   projectInfo,
   mapId,
-  userId,
-  userName,
   selectedTheme,
   setSelectedTheme,
   onApplyRecommendation,
@@ -63,24 +55,6 @@ export function CanvasSidePanels({
 
   return (
     <AnimatePresence>
-      {/* Dot Voting Panel - New FigJam Style */}
-      {activePanel === "voting" && (
-        <motion.div
-          initial={{ x: 600, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: 600, opacity: 0 }}
-          className="w-80 bg-card border-l border-border flex flex-col shrink-0 z-30 h-full overflow-y-auto"
-        >
-          <FigJamDotVoting
-            mapId={mapId}
-            projectId={projectId}
-            groups={groups.map(g => ({ id: g.id, title: g.title, color: g.color, insightIds: g.insightIds }))}
-            userId={userId}
-            userName={userName}
-          />
-        </motion.div>
-      )}
-
       {activePanel === "themeDiscovery" && (
         <motion.div
           initial={{ x: 600, opacity: 0 }}
@@ -141,50 +115,18 @@ export function CanvasSidePanels({
         </motion.div>
       )}
 
-      {activePanel === "activity" && (
-        <motion.div
-          initial={{ x: 600, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: 600, opacity: 0 }}
-          className="w-80 bg-card border-l border-border flex flex-col shrink-0 z-30 h-full"
-        >
-          <ActivityPanel
-            mapId={mapId as Id<"affinityMaps">}
-            isOpen={activePanel === "activity"}
-            onClose={() => setActivePanel(null)}
-          />
-        </motion.div>
-      )}
-
-      {activePanel === "votingHistory" && (
-        <motion.div
-          initial={{ x: 600, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: 600, opacity: 0 }}
-          className="w-80 bg-card border-l border-border flex flex-col shrink-0 z-30 h-full"
-        >
-          <VotingHistoryPanel
-            projectId={projectId}
-            mapId={mapId}
-            groups={groups}
-          />
-        </motion.div>
-      )}
-
       {activePanel === "export" && (
         <motion.div
           initial={{ x: 600, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: 600, opacity: 0 }}
-          className="w-80 bg-card border-l border-border flex flex-col shrink-0 z-30 h-full overflow-hidden"
+          className="w-80 bg-card border-l border-border flex flex-col shrink-0 z-30 h-full"
         >
-          <div className="flex-1 overflow-y-auto">
-            <ExportPanel
-              mapId={mapId}
-              projectId={projectId}
-              onClose={() => setActivePanel(null)}
-            />
-          </div>
+          <ExportPanel
+            mapId={mapId}
+            projectId={projectId}
+            onClose={() => setActivePanel(null)}
+          />
         </motion.div>
       )}
     </AnimatePresence>

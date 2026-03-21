@@ -1,69 +1,42 @@
-// components/FloatingToolbar.tsx - CORRECTION FINALE
 "use client";
 
-import { act, useState } from "react";
+import { useState } from "react";
 import { 
   Users, 
   Vote, 
   BarChart3, 
   Sparkles, 
   Download, 
-  Upload, 
   Presentation,
-  ActivityIcon,
   MoreHorizontal,
-  Calendar,
-  History,
   User,
-  VolumeX
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ThemeAnalysis, ConvexActivityLog, ActivePanel, WorkspaceMode } from "@/types";
-import { motion, AnimatePresence } from "framer-motion";
-import { on } from "events";
-import { toast } from "sonner";
+import { ThemeAnalysis, ActivePanel, WorkspaceMode } from "@/types";
+import { motion } from "framer-motion";
 
 interface FloatingToolbarProps {
-  // Stats
   stats: {
     totalInsights: number;
     groupCount: number;
     completion: number;
   };
   
-  // États
   workspaceMode: WorkspaceMode;
   setWorkspaceMode: (mode: WorkspaceMode) => void;
   activePanel: ActivePanel;
   setActivePanel: (panel: ActivePanel) => void;
-  showThemeDiscovery: boolean;
-  setShowThemeDiscovery: (show: boolean) => void;
-  showExportPanel: boolean;
-  setShowExportPanel: (show: boolean) => void;
-  showImportModal: boolean;
-  setShowImportModal: (show: boolean) => void;
-  showActivityPanel: boolean;
-  setShowActivityPanel: (show: boolean) => void;
   
-  // Actions
   onEnterPresentation: () => void;
   onAnalyzeThemes: () => void;
   
-  // Données
   themeAnalysis: ThemeAnalysis | null | undefined;
   isThemesAnalyzing: boolean;
-  activities?: ConvexActivityLog[];
 
-  // 🎯 HISTORIQUE DES VOTES
-  showVotingHistory?: boolean;
-  onShowVotingHistory?: (show: boolean) => void;
-  // 🎯 PERSONA GENERATOR
-  showPersonaGenerator?: boolean;
-  onShowPersonaGenerator?: (show: boolean) => void;
-  // 🎯 DOT VOTING
   hasActiveVotingSession?: boolean;
   isVotingPhase?: boolean;
 }
@@ -74,50 +47,24 @@ export function FloatingToolbar({
   setWorkspaceMode,
   activePanel,
   setActivePanel,
- 
-  showImportModal,
-  setShowImportModal,
- 
   onEnterPresentation,
   onAnalyzeThemes,
   themeAnalysis,
   isThemesAnalyzing,
-  activities,
-  onShowVotingHistory,
-  showVotingHistory = false,
   hasActiveVotingSession = false,
   isVotingPhase = false,
-
 }: FloatingToolbarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-
-  // 🎯 BASCULE HISTORIQUE DES VOTES
-  const handleToggleHistory = () => {
-    onShowVotingHistory?.(!showVotingHistory);
-  };
-
-  // Helper to close other panels when opening one
-  const handleOpenPanel = (panel: ActivePanel) => {
-    setActivePanel(activePanel === panel ? null : panel);
-  };
 
   return (
     <TooltipProvider>
       <motion.div
-          initial={{ opacity: 0, y: 10, x: 0 }}
-          animate={{ 
-            opacity: activePanel === 'analytics' || activePanel === 'persona' ? .5 : 1,
-            y: 0,
-            x: activePanel === 'analytics' || activePanel === 'persona' ? -250 : 0,
-          }}
-          transition={{ ease: "easeInOut", duration: 0.3 }}
-      className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40">
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40"
+      >
         {/* BARRE PRINCIPALE */}
-        <div className={`
-          bg-card/95 backdrop-blur-sm border border-border rounded-full shadow-xl
-          transition-all duration-300 ease-in-out
-          ${isExpanded ? 'px-6 py-3' : 'px-4 py-3'}
-        `}>
+        <div className="bg-card/95 backdrop-blur-sm border border-border rounded-full shadow-xl px-4 py-3">
           <div className="flex items-center gap-2">
             {/* MODES DE TRAVAIL */}
             <ToggleGroup 
@@ -126,19 +73,17 @@ export function FloatingToolbar({
               onValueChange={(value: string) => {
                 if (value === 'grouping' || value === 'voting') {
                   setWorkspaceMode(value);
-                   
                 }
               }}
-              className="flex items-center"
             >
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <ToggleGroupItem value="grouping" className="rounded-full w-10 h-10 text-foreground hover:bg-accent">
+                  <ToggleGroupItem value="grouping" className="rounded-full w-10 h-10">
                     <Users size={18} />
                   </ToggleGroupItem>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Grouping Mode <span className="text-muted-foreground ml-1">(default)</span></p>
+                  <p>Grouping Mode</p>
                 </TooltipContent>
               </Tooltip>
               
@@ -146,15 +91,14 @@ export function FloatingToolbar({
                 <TooltipTrigger asChild>
                   <ToggleGroupItem 
                     value="voting" 
-                    className="rounded-full w-10 h-10 text-foreground hover:bg-accent"
+                    className="rounded-full w-10 h-10"
                     disabled={!hasActiveVotingSession || !isVotingPhase}
-                    data-tour="dot-voting"
                   >
                     <Vote size={18} />
                   </ToggleGroupItem>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{!hasActiveVotingSession ? "No active voting session" : !isVotingPhase ? "Voting session ended" : "Dot Voting Mode"}</p>
+                  <p>{!hasActiveVotingSession ? "No voting session" : !isVotingPhase ? "Voting ended" : "Dot Voting"}</p>
                 </TooltipContent>
               </Tooltip>
             </ToggleGroup>
@@ -163,54 +107,36 @@ export function FloatingToolbar({
 
             {/* OUTILS PRINCIPAUX */}
             <div className="flex items-center gap-1">
-              {/* DOT VOTING
+              {/* THEME DISCOVERY */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant={activePanel === 'voting' ? "default" : "ghost"}
+                    variant={activePanel === 'themeDiscovery' ? "default" : "ghost"}
                     size="icon"
                     className="rounded-full w-10 h-10"
-                    onClick={() => setActivePanel(activePanel === 'voting' ? null : 'voting')}
+                    onClick={() => {
+                      if (activePanel === 'themeDiscovery') {
+                        setActivePanel(null);
+                      } else {
+                        setActivePanel('themeDiscovery');
+                        onAnalyzeThemes();
+                      }  
+                    }}
+                    disabled={stats.groupCount < 2}
                   >
-                    <Vote size={18} />
+                    <Sparkles size={18} />
+                    {themeAnalysis && !isThemesAnalyzing && (
+                      <Badge 
+                        variant="secondary" 
+                        className="absolute -top-1 -right-1 w-4 h-4 p-0 text-xs"
+                      >
+                        {themeAnalysis.themes.length}
+                      </Badge>
+                    )}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Dot Voting Panel</p>
-                </TooltipContent>
-              </Tooltip> */}
-
-              {/* Persona Generator */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                  variant={activePanel === 'persona' ? "default" : "ghost"}
-                  size="icon"
-                  className="rounded-full w-10 h-10"
-                  onClick={()=> setActivePanel(activePanel === 'persona' ? null : 'persona')}
-                >
-                  <User size={18} />
-                </Button>
-                </TooltipTrigger>
-              <TooltipContent>
-                  <p>Persona <span className="text-muted-foreground">(P)</span></p>
-                </TooltipContent>
-              </Tooltip>
-
-              {/* VOTING HISTORY */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={activePanel === 'votingHistory' ? "default" : "ghost"}
-                    size="icon"
-                    className="rounded-full w-10 h-10 text-foreground hover:bg-accent"
-                    onClick={() => setActivePanel(activePanel === 'votingHistory' ? null : 'votingHistory')}
-                  >
-                    <History size={18} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Vote History <span className="text-muted-foreground">(H)</span></p>
+                  <p>Theme Discovery {stats.groupCount < 2 && "(Need 2+ groups)"}</p>
                 </TooltipContent>
               </Tooltip>
 
@@ -227,70 +153,29 @@ export function FloatingToolbar({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Analytics Dashboard</p>
+                  <p>Analytics</p>
                 </TooltipContent>
               </Tooltip>
 
-              {/* THEME DISCOVERY */}
+              {/* PERSONA */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant={activePanel === 'themeDiscovery' ? "default" : "ghost"}
+                    variant={activePanel === 'persona' ? "default" : "ghost"}
                     size="icon"
-                    className="rounded-full w-10 h-10 relative"
-                    onClick={() => {
-                     if (activePanel === 'themeDiscovery') {
-                       setActivePanel(null);
-                     }else{
-                       setActivePanel('themeDiscovery');
-                       onAnalyzeThemes();
-                     }  
-                    }}
-                    disabled={stats.groupCount < 2}
+                    className="rounded-full w-10 h-10"
+                    onClick={() => setActivePanel(activePanel === 'persona' ? null : 'persona')}
                   >
-                    <Sparkles size={18} />
-                    {themeAnalysis && !isThemesAnalyzing && (
-                      <Badge 
-                        variant="secondary" 
-                        className="absolute -top-1 -right-1 w-4 h-4 p-0 text-xs bg-primary/20 text-primary"
-                      >
-                        {themeAnalysis.themes.length}
-                      </Badge>
-                    )}
+                    <User size={18} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Theme Discovery {stats.groupCount < 2 && "(Need 2+ groups)"}</p>
-                </TooltipContent>
-              </Tooltip>
-
-              {/* ACTIVITY */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={activePanel === 'activity' ? "default" : "ghost"}
-                    size="icon"
-                    className="rounded-full w-10 h-10 relative text-foreground hover:bg-accent"
-                    onClick={() => setActivePanel(activePanel === 'activity' ? null : 'activity')}
-                  >
-                    <ActivityIcon size={18} />
-                    {activities && activities.length > 0 && (
-                      <Badge 
-                        variant="secondary" 
-                        className="absolute -top-1 -right-1 w-4 h-4 p-0 text-xs bg-blue-500/20 text-blue-500"
-                      >
-                        {activities.length > 99 ? '99+' : activities.length}
-                      </Badge>
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Activity Feed</p>
+                  <p>Persona Generator</p>
                 </TooltipContent>
               </Tooltip>
             </div>
 
-            {/* BOUTON EXPAND POUR PLUS D'OPTIONS */}
+            {/* BOUTON EXPAND */}
             <Button
               variant="ghost"
               size="icon"
@@ -310,36 +195,18 @@ export function FloatingToolbar({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        variant={ activePanel === 'export' ? "default" : "ghost"}
+                        variant={activePanel === 'export' ? "default" : "ghost"}
                         size="icon"
-                        className="rounded-full w-8 h-8"
-                        onClick={   () => setActivePanel(activePanel === 'export' ? null : 'export')}
+                        className="rounded-full w-10 h-10"
+                        onClick={() => setActivePanel(activePanel === 'export' ? null : 'export')}
                       >
-                        <Download size={16} />
+                        <Download size={18} />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Export Project</p>
+                      <p>Export</p>
                     </TooltipContent>
                   </Tooltip>
-
-                  {/* IMPORT */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-full w-8 h-8"
-                        onClick={() => setShowImportModal(true)}
-                      >
-                        <Upload size={16} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Import Project</p>
-                    </TooltipContent>
-                  </Tooltip>
-
 
                   {/* PRESENTATION */}
                   <Tooltip>
@@ -347,14 +214,14 @@ export function FloatingToolbar({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="rounded-full w-8 h-8"
+                        className="rounded-full w-10 h-10"
                         onClick={onEnterPresentation}
                       >
-                        <Presentation size={16} />
+                        <Presentation size={18} />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Presentation Mode</p>
+                      <p>Present</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -366,13 +233,10 @@ export function FloatingToolbar({
         {/* INDICATEURS DE STATS */}
         <div className="flex justify-center mt-2 gap-3">
           <Badge variant="secondary" className="text-xs">
-            {stats.groupCount} groups
+            {stats.groupCount} clusters
           </Badge>
           <Badge variant="secondary" className="text-xs">
             {stats.totalInsights} insights
-          </Badge>
-          <Badge variant="secondary" className="text-xs">
-            {stats.completion}% complete
           </Badge>
         </div>
       </motion.div>
