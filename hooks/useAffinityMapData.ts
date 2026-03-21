@@ -22,6 +22,7 @@ export function useAffinityMapData(projectId: Id<"projects">) {
   const removeInsightFromGroup = useMutation(api.affinityMaps.removeInsightFromGroup);
   const replaceAllGroups = useMutation(api.affinityMaps.replaceAllGroups);
   const createManualInsight = useMutation(api.affinityMaps.createManualInsight);
+  const deleteInsight = useMutation(api.insights.deleteInsight);
 
   // Activities query
   const activities = useQuery(
@@ -44,6 +45,9 @@ export function useAffinityMapData(projectId: Id<"projects">) {
     }
   }, [project, affinityMap, projectId, createAffinityMap]);
 
+  // Mutations
+  const updateStickyPositionsMutation = useMutation(api.affinityMaps.updateStickyPositions);
+
   // Transform data
   const groups: AffinityGroup[] =
     affinityMap?.groups.map((group) => ({
@@ -53,6 +57,10 @@ export function useAffinityMapData(projectId: Id<"projects">) {
       position: group.position,
       insightIds: group.insightIds as string[],
     })) || [];
+
+  // Sticky positions on canvas
+  const stickyPositions: Record<string, { x: number; y: number }> =
+    affinityMap?.stickyPositions || {};
 
   const insights: Insight[] =
     insightsData?.map((insight) => ({
@@ -77,6 +85,7 @@ export function useAffinityMapData(projectId: Id<"projects">) {
     insights,
     activities,
     insightsData,
+    stickyPositions,
 
     // Mutations
     addGroup,
@@ -87,6 +96,8 @@ export function useAffinityMapData(projectId: Id<"projects">) {
     removeInsightFromGroup,
     replaceAllGroups,
     createManualInsight,
+    deleteInsight,
+    updateStickyPositions: updateStickyPositionsMutation,
 
     // Notifications
     broadcastGroupCreated,

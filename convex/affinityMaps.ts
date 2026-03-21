@@ -452,6 +452,29 @@ export const updateGroups = mutation({
   },
 });
 
+// Update sticky positions on canvas
+export const updateStickyPositions = mutation({
+  args: {
+    mapId: v.id("affinityMaps"),
+    positions: v.record(v.string(), v.object({
+      x: v.number(),
+      y: v.number(),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const map = await ctx.db.get(args.mapId);
+    if (!map) throw new Error("Affinity map not found");
+
+    await ctx.db.patch(args.mapId, {
+      stickyPositions: args.positions,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 // 🆕 AJOUTER CETTE MUTATION
 export const replaceAllGroups = mutation({
   args: {
@@ -461,15 +484,34 @@ export const replaceAllGroups = mutation({
       title: v.string(),
       color: v.string(),
       position: v.object({ x: v.number(), y: v.number() }),
-      insightIds: v.array(v.string()), // ← CHANGÉ: string[] au lieu de v.id("insights")
+      insightIds: v.array(v.string()),
     })),
+    stickyPositions: v.optional(v.record(v.string(), v.object({
+      x: v.number(),
+      y: v.number(),
+    }))),
+    preserveStickyPositions: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
+    const map = await ctx.db.get(args.mapId);
+    if (!map) throw new Error("Affinity map not found");
+
+    // Determine sticky positions to save
+    let stickyPositionsToSave: typeof map.stickyPositions;
+    if (args.preserveStickyPositions === false) {
+      stickyPositionsToSave = undefined;
+    } else if (args.stickyPositions) {
+      stickyPositionsToSave = args.stickyPositions;
+    } else {
+      stickyPositionsToSave = map.stickyPositions;
+    }
+
     await ctx.db.patch(args.mapId, {
       groups: args.groups,
+      stickyPositions: stickyPositionsToSave,
       updatedAt: Date.now(),
     });
   },

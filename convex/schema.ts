@@ -145,8 +145,12 @@ export default defineSchema({
         x: v.number(),
         y: v.number(),
       }),
-      insightIds: v.array(v.string()), // ← CHANGÉ: string[] au lieu de Id<"insights">[]
+      insightIds: v.array(v.string()),
     })),
+    stickyPositions: v.optional(v.record(v.string(), v.object({
+      x: v.number(),
+      y: v.number(),
+    }))),
     createdBy: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),

@@ -9,6 +9,7 @@ interface UseAffinityMapHandlersProps {
   affinityMap: {
     _id: Id<"affinityMaps">;
     groups: AffinityGroup[];
+    stickyPositions?: Record<string, { x: number; y: number }>;
   } | null | undefined;
 
   userId: string | null | undefined;
@@ -21,8 +22,10 @@ interface UseAffinityMapHandlersProps {
   updateGroupTitle: (args: { mapId: Id<"affinityMaps">; groupId: string; title: string }) => Promise<unknown>;
   removeGroup: (args: { mapId: Id<"affinityMaps">; groupId: string }) => Promise<unknown>;
   removeInsightFromGroup: (args: { mapId: Id<"affinityMaps">; groupId: string; insightId: Id<"insights"> }) => Promise<unknown>;
-  replaceAllGroups: (args: { mapId: Id<"affinityMaps">; groups: AffinityGroup[] }) => Promise<unknown>;
-  createManualInsight: (args: { projectId: Id<"projects">; text: string; type: string }) => Promise<unknown>;
+  replaceAllGroups: (args: { mapId: Id<"affinityMaps">; groups: AffinityGroup[]; stickyPositions?: Record<string, { x: number; y: number }> }) => Promise<unknown>;
+  createManualInsight: (args: { projectId: Id<"projects">; text: string; type: string }) => Promise<string>;
+  deleteInsight: (args: { insightId: Id<"insights"> }) => Promise<unknown>;
+  updateStickyPositions: (args: { mapId: Id<"affinityMaps">; positions: Record<string, { x: number; y: number }> }) => Promise<unknown>;
 
   // Notifications
   broadcastGroupCreated: (args: {
@@ -68,6 +71,8 @@ export function useAffinityMapHandlers({
   removeInsightFromGroup,
   replaceAllGroups,
   createManualInsight,
+  deleteInsight,
+  updateStickyPositions,
   broadcastGroupCreated,
   broadcastInsightMoved,
   activity,
@@ -195,20 +200,38 @@ export function useAffinityMapHandlers({
   );
 
   const handleManualInsightCreate = useCallback(
-    async (text: string, type: Insight["type"]) => {
+    async (text: string, type: Insight["type"], position?: { x: number; y: number }) => {
+      if (!affinityMap) return;
+      
       try {
-        await createManualInsight({
+        // Create the insight
+        const insightId = await createManualInsight({
           projectId: projectId as Id<"projects">,
           text,
           type,
-        });
+        }) as string;
+
+        // If position provided, save it in stickyPositions
+        if (position && insightId) {
+          // Get current stickyPositions from the map
+          const currentPositions = affinityMap.stickyPositions || {};
+          await replaceAllGroups({
+            mapId: affinityMap._id,
+            groups: affinityMap.groups.map(g => ({ ...g })),
+            stickyPositions: {
+              ...currentPositions,
+              [insightId]: position,
+            },
+          });
+        }
+        
         toast.success("Manual insight created!");
       } catch (error) {
         console.error("Failed to create manual insight:", error);
         toast.error("Failed to create insight");
       }
     },
-    [projectId, createManualInsight]
+    [projectId, createManualInsight, affinityMap, replaceAllGroups]
   );
 
   const handleGroupTitleUpdate = useCallback(
@@ -316,6 +339,22 @@ export function useAffinityMapHandlers({
     [affinityMap, replaceAllGroups]
   );
 
+  const handleInsightDelete = useCallback(
+    async (insightId: string) => {
+      if (!affinityMap) return;
+
+      try {
+        await deleteInsight({
+          insightId: insightId as Id<"insights">,
+        });
+      } catch (error) {
+        console.error("Failed to delete insight:", error);
+        toast.error("Failed to delete note");
+      }
+    },
+    [affinityMap, deleteInsight]
+  );
+
   return {
     handleGroupCreate,
     handleGroupMove,
@@ -324,6 +363,7 @@ export function useAffinityMapHandlers({
     handleGroupTitleUpdate,
     handleGroupDelete,
     handleInsightRemoveFromGroup,
+    handleInsightDelete,
     handleGroupsReplace,
   };
 }

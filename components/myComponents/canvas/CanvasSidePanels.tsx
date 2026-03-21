@@ -57,10 +57,11 @@ export function CanvasSidePanels({
     <AnimatePresence>
       {activePanel === "themeDiscovery" && (
         <motion.div
-          initial={{ x: 600, opacity: 0 }}
+          initial={{ x: 320, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
-          exit={{ x: 600, opacity: 0 }}
-          className="w-80 bg-card border-l border-border flex flex-col shrink-0 z-30 h-full"
+          exit={{ x: 320, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          className="absolute top-0 right-0 w-80 h-full bg-card border-l border-border flex flex-col shadow-2xl z-40"
         >
           <ThemeDiscoveryPanel
             groups={groups}
@@ -82,10 +83,11 @@ export function CanvasSidePanels({
 
       {activePanel === "analytics" && (
         <motion.div
-          initial={{ x: 600, opacity: 0 }}
+          initial={{ x: 620, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
-          exit={{ x: 600, opacity: 0 }}
-          className="w-[600px] bg-card border-l border-border flex flex-col shrink-0 z-30 h-full"
+          exit={{ x: 620, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          className="absolute top-0 right-0 w-[600px] h-full bg-card border-l border-border flex flex-col shadow-2xl z-40"
         >
           <AnalyticsDashboard
             groups={groups}
@@ -98,10 +100,11 @@ export function CanvasSidePanels({
 
       {activePanel === "persona" && (
         <motion.div
-          initial={{ x: 600, opacity: 0 }}
+          initial={{ x: 820, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
-          exit={{ x: 600, opacity: 0 }}
-          className="w-[800px] bg-card border-l border-border flex flex-col shrink-0 z-30 h-full"
+          exit={{ x: 820, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          className="absolute top-0 right-0 w-[800px] h-full bg-card border-l border-border flex flex-col shadow-2xl z-40"
         >
           <PersonaGenerator
             projectId={projectId}
@@ -117,10 +120,11 @@ export function CanvasSidePanels({
 
       {activePanel === "export" && (
         <motion.div
-          initial={{ x: 600, opacity: 0 }}
+          initial={{ x: 320, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
-          exit={{ x: 600, opacity: 0 }}
-          className="w-80 bg-card border-l border-border flex flex-col shrink-0 z-30 h-full"
+          exit={{ x: 320, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          className="absolute top-0 right-0 w-80 h-full bg-card border-l border-border flex flex-col shadow-2xl z-40"
         >
           <ExportPanel
             mapId={mapId}

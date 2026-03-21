@@ -1,67 +1,36 @@
 "use client";
 
-// components/AffinityCanvas.tsx - REFACTORED VERSION
-
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
-
-import AffinityGroup from "./AffinityGroup";
 import { motion } from "framer-motion";
-import { ActivePanel, AffinityGroup as AffinityGroupType, Insight, WorkspaceMode, DetectedTheme } from "@/types";
+import { ActivePanel, AffinityGroup as AffinityGroupType, Insight, WorkspaceMode, DetectedTheme, ThemeAnalysis, ThemeRecommendation } from "@/types";
 import { toast } from "sonner";
-import { useCanvasShortcuts } from "@/hooks/useCanvasShortcuts";
 import { useHistory } from "@/hooks/useHistory";
-import { Button } from "../ui/button";
 import { InsightsOrganizationPanel } from "./InsightsOrganizationPanel";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { ThemeVisualizationFixed } from "./ThemeVisualizationFixed";
-import { ImportModal } from "./ImportModal";
 import { usePresence } from "@/hooks/usePresence";
-import { useAuth, useUser } from "@clerk/nextjs";
-import { CommentPanel } from "./CommentPanel";
-import { useFollowGroupRect } from "@/hooks/useFollowGroupRect";
-import { useActivity } from "@/hooks/useActivity";
+import { useAuth } from "@clerk/nextjs";
 import { FloatingToolbar } from "./FloatingToolbar";
-import { VotingSessionManager } from "./VotingSessionManager";
-import { useSilentSorting } from "@/hooks/useSilentSorting";
-
-// Extracted hooks
-import { usePresentationMode } from "@/hooks/usePresentationMode";
-import { useDotVotingCanvas } from "@/hooks/useDotVotingCanvas";
-import { useThemeManagement } from "@/hooks/useThemeManagement";
-import { useCanvasNavigation } from "@/hooks/useCanvasNavigation";
-
-// Extracted components
-import { PresentationOverlay } from "./canvas/PresentationOverlay";
-import { CanvasSidePanels } from "./canvas/CanvasSidePanels";
-import { CanvasStatusIndicators } from "./canvas/CanvasStatusIndicators";
-import { ZoomControls } from "./canvas/ZoomControls";
+import { useInfiniteCanvas } from "@/hooks/useInfiniteCanvas";
+import { useDragToCreate } from "@/hooks/useDragToCreate";
+import { useLassoSelection } from "@/hooks/useLassoSelection";
 import { MiniMap } from "./canvas/MiniMap";
-
-// ==================== UTILITIES ====================
+import { ZoomControls } from "./canvas/ZoomControls";
+import { ClusterCard } from "./canvas/ClusterCard";
+import { CreationRect, CreationHint } from "./canvas/CreationOverlay";
+import { SelectionBox, SelectionToolbar } from "./canvas/SelectionOverlay";
+import { MergeClustersModal } from "./canvas/MergeClustersModal";
+import { KeyboardShortcuts } from "./canvas/KeyboardShortcuts";
+import { CanvasSidePanels } from "./canvas/CanvasSidePanels";
 
 const CURSOR_COLORS = [
-  "#ef4444", // red
-  "#f97316", // orange
-  "#eab308", // yellow
-  "#22c55e", // green
-  "#14b8a6", // teal
-  "#3b82f6", // blue
-  "#8b5cf6", // violet
-  "#ec4899", // pink
+  "#ef4444", "#f97316", "#eab308", "#22c55e",
+  "#14b8a6", "#3b82f6", "#8b5cf6", "#ec4899",
 ];
 
-const OFFLINE_THRESHOLD_MS = 30000; // 30 seconds
-const INACTIVE_THRESHOLD_MS = 5000; // 5 seconds
-
-function isUserOnline(lastSeen: number): boolean {
-  return Date.now() - lastSeen < OFFLINE_THRESHOLD_MS;
-}
-
-function isUserInactive(lastSeen: number): boolean {
-  return Date.now() - lastSeen > INACTIVE_THRESHOLD_MS;
-}
+const OFFLINE_THRESHOLD_MS = 30000;
+const INACTIVE_THRESHOLD_MS = 5000;
 
 function getUserColor(userId: string): string {
   let hash = 0;
@@ -71,17 +40,11 @@ function getUserColor(userId: string): string {
   return CURSOR_COLORS[Math.abs(hash) % CURSOR_COLORS.length];
 }
 
-// ==================== INTERFACES ====================
-
 interface PresenceUser {
   userId: string;
   cursor: { x: number; y: number };
   selection: string[];
-  user: {
-    id: string;
-    name: string;
-    avatar?: string;
-  };
+  user: { id: string; name: string; avatar?: string };
   lastSeen: number;
 }
 
@@ -89,10 +52,7 @@ interface AffinityCanvasProps {
   groups: AffinityGroupType[];
   insights: Insight[];
   projectId: string;
-  projectInfo?: {
-    name: string;
-    description?: string;
-  };
+  projectInfo?: { name: string; description?: string };
   mapId: string;
   activePanel?: ActivePanel;
   setActivePanel?: (panel: ActivePanel) => void;
@@ -101,9 +61,18 @@ interface AffinityCanvasProps {
   onInsightDrop: (insightId: string, groupId: string) => void;
   onInsightRemoveFromGroup?: (insightId: string, groupId: string) => void;
   onGroupDelete?: (groupId: string) => void;
-  onManualInsightCreate: (text: string, type: Insight['type']) => void;
+  onManualInsightCreate: (text: string, type: Insight["type"]) => void;
   onGroupTitleUpdate?: (groupId: string, title: string) => void;
   onGroupsReplace?: (groups: AffinityGroupType[]) => void;
+  selectedTheme?: DetectedTheme | null;
+  setSelectedTheme?: (theme: DetectedTheme) => void;
+  onApplyRecommendation?: (recommendation: ThemeRecommendation) => void;
+  onGroupsMerge?: (groupIds: string[], newTitle: string) => void;
+  filteredRecommendations?: ThemeRecommendation[];
+  themeAnalysis?: ThemeAnalysis | null;
+  isThemesAnalyzing?: boolean;
+  onAnalyzeThemes?: () => void;
+  onClearThemes?: () => void;
 }
 
 export default function AffinityCanvas(props: AffinityCanvasProps) {
@@ -112,377 +81,86 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
     activePanel: controlledActivePanel, setActivePanel: controlledSetActivePanel,
     onGroupMove, onGroupCreate, onInsightDrop,
     onInsightRemoveFromGroup, onGroupDelete, onManualInsightCreate,
-    onGroupTitleUpdate, onGroupsReplace
+    onGroupTitleUpdate, onGroupsReplace,
   } = props;
 
-  // Use controlled state if provided, otherwise use internal state
   const [internalActivePanel, setInternalActivePanel] = useState<ActivePanel>(null);
-  const activePanel = controlledActivePanel !== undefined ? controlledActivePanel : internalActivePanel;
-  const setActivePanel = controlledSetActivePanel || setInternalActivePanel;
+  const activePanel = controlledActivePanel ?? internalActivePanel;
+  const setActivePanel = controlledSetActivePanel ?? setInternalActivePanel;
 
-  // ==================== HOOKS CLERK ====================
   const { userId } = useAuth();
-  const { user } = useUser();
-  const currentUserId = userId || "anonymous";
+  const currentUserId = userId ?? "anonymous";
 
-  // ==================== HOOKS PRESENCE ====================
   const updatePresence = usePresence(mapId as Id<"affinityMaps">);
   const otherUsers = useQuery(api.presence.getByMap, { mapId: mapId as Id<"affinityMaps"> });
 
-  // ==================== HOOKS SILENT SORTING ====================
-  const { isSilentSortingActive, currentPhase, groupTimeLeft, personalTimeLeft } = useSilentSorting(mapId as Id<"affinityMaps">);
-
-  // ==================== HOOKS EXTERNES ====================
   const history = useHistory();
-  const activity = useActivity();
-
-  // ==================== EXTRACTED HOOKS ====================
-  const projectContext = useMemo(() => {
-    return projectInfo ? `PROJECT: ${projectInfo.name}\nDESCRIPTION: ${projectInfo.description || 'No description'}`.trim() : 'General user research project';
-  }, [projectInfo]);
-
-  const saveCurrentState = useCallback((action: string, description: string) => {
-    history.pushState(groups, insights, action, description);
-  }, [groups, insights, history]);
-
-  const presentation = usePresentationMode(groups);
-  const dotVoting = useDotVotingCanvas(mapId);
-  const canvasNav = useCanvasNavigation();
-  const themeManagement = useThemeManagement({
-    groups, insights, projectContext,
-    onGroupCreate, onGroupMove, onInsightDrop,
-    onGroupDelete, onGroupTitleUpdate, saveCurrentState,
-  });
-
-  // Auto-zoom to current group in presentation mode
-  useEffect(() => {
-    if (!presentation.presentationState.isActive) return;
-    if (presentation.presentationState.isOverview) return;
-    
-    const groupPos = presentation.currentGroupPosition;
-    if (!groupPos || !canvasWrapperRef.current) return;
-
-    const wrapper = canvasWrapperRef.current;
-    const viewportWidth = wrapper.clientWidth;
-    const viewportHeight = wrapper.clientHeight;
-
-    const targetScale = 1.2;
-    const targetX = viewportWidth / 2 - (groupPos.x + groupPos.width / 2) * targetScale;
-    const targetY = viewportHeight / 2 - (groupPos.y + groupPos.height / 2) * targetScale;
-
-    canvasNav.setScale(targetScale);
-    canvasNav.setPosition({ x: targetX, y: targetY });
-  }, [presentation.presentationState.currentGroupIndex, presentation.presentationState.isActive, presentation.presentationState.isOverview]);
-
-  // ==================== useRef ====================
+  const canvas = useInfiniteCanvas();
   const canvasRef = useRef<HTMLDivElement>(null);
   const canvasWrapperRef = useRef<HTMLDivElement>(null);
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const clickCountRef = useRef(0);
-  const zoomControlsRef = useRef<{
-    zoomIn: () => void; zoomOut: () => void;
-    resetTransform: () => void; centerView: () => void;
-  } | null>(null);
+  const cursorPositionRef = useRef({ x: 0, y: 0 });
 
-  // ==================== useState ====================
-  const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('grouping');
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("grouping");
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
-  const [isMovingWithArrows, setIsMovingWithArrows] = useState(false);
-  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
-  const [showThemeDiscovery, setShowThemeDiscovery] = useState(false);
-  const [optimisticPositions, setOptimisticPositions] = useState<Map<string, {x: number, y: number}>>(new Map());
+  const [, setIsMovingWithArrows] = useState(false);
+  const [optimisticPositions, setOptimisticPositions] = useState<Map<string, { x: number; y: number }>>(new Map());
   const [renderKey, setRenderKey] = useState(0);
-  const [isInputFocused, setIsInputFocused] = useState(false);
-  const [draggedInsightId, setDraggedInsightId] = useState<string | null>(null);
-  const [dragSourceGroupId, setDragSourceGroupId] = useState<string | null>(null);
+  const [, setDraggedInsightId] = useState<string | null>(null);
+  const [, setDragSourceGroupId] = useState<string | null>(null);
   const [lastSelectedGroup, setLastSelectedGroup] = useState<string | null>(null);
-  const [showExportPanel, setShowExportPanel] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
   const [sharedSelections, setSharedSelections] = useState<Record<string, string[]>>({});
   const [isPresentMode, setPresentMode] = useState(false);
-  const [showVotingHistory, setShowVotingHistory] = useState(false);
-  const [showPersonaGenerator, setShowPersonaGenerator] = useState(false);
-  const [showComments, setShowComments] = useState<{
-    groupId: string; screenRect: DOMRect; groupTitle: string;
-  } | null>(null);
-  const [showActivityPanel, setShowActivityPanel] = useState(false);
-  const [groupSizes, setGroupSizes] = useState<Record<string, { width: number; height: number }>>({});
+  const [, setShowVotingHistory] = useState(false);
+  const [, setShowPersonaGenerator] = useState(false);
+  const [, setGroupSizes] = useState<Record<string, { width: number; height: number }>>({});
+  const [isAnalyzingThemes, setIsAnalyzingThemes] = useState(false);
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [toolMode, setToolMode] = useState<"select" | "lasso" | "create">("select");
 
-  // Handler for resizing groups
-  const handleGroupResize = useCallback((groupId: string, size: { width: number; height: number }) => {
-    setGroupSizes(prev => ({ ...prev, [groupId]: size }));
-  }, []);
-
-  // ==================== QUERIES ====================
-  const commentCounts = useQuery(api.comments.getCommentCountsByMap, {
-    mapId: mapId as Id<"affinityMaps">,
+  // Drag to create
+  const dragToCreate = useDragToCreate({
+    minWidth: 100,
+    minHeight: 80,
+    onCreate: (rect) => {
+      onGroupCreate({ x: rect.x, y: rect.y });
+      toast.success("Cluster created");
+    },
   });
 
-  // ==================== useMemo ====================
+  // Lasso selection
+  const lassoSelection = useLassoSelection(
+    groups.map((g) => ({ id: g.id, position: g.position })),
+    {
+      onSelectionChange: (ids) => {
+        setSelectedGroups(new Set(ids));
+      },
+    }
+  );
+
+  const saveCurrentState = useCallback(
+    (action: string, description: string) => {
+      history.pushState(groups, insights, action, description);
+    },
+    [groups, insights, history]
+  );
+
   const stats = useMemo(() => {
     const totalInsights = insights.length;
     const groupedInsights = groups.reduce((sum, group) => sum + group.insightIds.length, 0);
     return {
-      totalInsights, 
-      groupedInsights, 
-      ungroupedInsights: totalInsights - groupedInsights,
+      totalInsights,
       groupCount: groups.length,
-      completion: totalInsights > 0 ? Math.round((groupedInsights / totalInsights) * 100) : 0
+      completion: totalInsights > 0 ? Math.round((groupedInsights / totalInsights) * 100) : 0,
     };
   }, [groups, insights]);
 
-  const presenceUsers = useMemo(
-    () => otherUsers?.map((u: PresenceUser) => ({ id: u.userId, name: u.user?.name || "Unknown" })) ?? [],
-    [otherUsers]
-  );
-
-  const followRect = useFollowGroupRect(showComments?.groupId ?? null, { scale: canvasNav.scale, position: canvasNav.position });
-
-  // ==================== useCallback ====================
-
-  const handleGroupSelect = useCallback((groupId: string, e: React.MouseEvent) => {
-    if (presentation.presentationState.isActive) { e.stopPropagation(); return; }
-
-    const isTaken = Object.entries(sharedSelections || {}).some(
-      ([uId, groupIds]) => uId !== currentUserId && (groupIds as string[]).includes(groupId)
-    );
-    if (isTaken) return;
-    e.stopPropagation();
-
-    if (e.shiftKey && lastSelectedGroup && lastSelectedGroup !== groupId) {
-      const groupIds = groups.map(g => g.id);
-      const startIndex = groupIds.indexOf(lastSelectedGroup);
-      const endIndex = groupIds.indexOf(groupId);
-      if (startIndex !== -1 && endIndex !== -1) {
-        const start = Math.min(startIndex, endIndex);
-        const end = Math.max(startIndex, endIndex);
-        const groupsToSelect = groupIds.slice(start, end + 1);
-        setSelectedGroups(prev => {
-          const newSelection = new Set(prev);
-          groupsToSelect.forEach(id => newSelection.add(id));
-          return newSelection;
-        });
-        toast.info(`Selected ${groupsToSelect.length} groups with Shift+click`);
-        return;
-      }
-    }
-
-    if (e.ctrlKey || e.metaKey) {
-      setSelectedGroups(prev => {
-        const newSelection = new Set(prev);
-        if (newSelection.has(groupId)) { newSelection.delete(groupId); setLastSelectedGroup(null); }
-        else { newSelection.add(groupId); setLastSelectedGroup(groupId); }
-        return newSelection;
-      });
-    } else {
-      setSelectedGroups(new Set([groupId]));
-      setLastSelectedGroup(groupId);
-    }
-  }, [groups, lastSelectedGroup, presentation.presentationState.isActive, sharedSelections, currentUserId]);
-
-  const handleOpenComments = useCallback((groupId: string, position: { x: number; y: number }) => {
-    const group = groups.find(g => g.id === groupId);
-    if (!group) return;
-    const rect = new DOMRect(position.x, position.y, 0, 0);
-    setShowComments({ groupId, screenRect: rect, groupTitle: group.title });
-  }, [groups]);
-
-  const handleImportSuccess = (newMapId: string) => {
-    console.log('✅ Map imported successfully:', newMapId);
-    toast.success("Map imported successfully!");
-  };
-
-  const handleArrowKeys = useCallback((direction: 'up' | 'down' | 'left' | 'right', shiftKey: boolean) => {
-    if (selectedGroups.size === 0) return;
-    const moveDistance = shiftKey ? 20 : 5;
-    let deltaX = 0, deltaY = 0;
-    switch (direction) {
-      case 'up': deltaY = -moveDistance; break;
-      case 'down': deltaY = moveDistance; break;
-      case 'left': deltaX = -moveDistance; break;
-      case 'right': deltaX = moveDistance; break;
-    }
-    setIsMovingWithArrows(true);
-    setTimeout(() => setIsMovingWithArrows(false), 150);
-
-    selectedGroups.forEach(groupId => {
-      const group = groups.find(g => g.id === groupId);
-      if (group) {
-        const newPosition = { x: group.position.x + deltaX, y: group.position.y + deltaY };
-        setOptimisticPositions(prev => { const m = new Map(prev); m.set(groupId, newPosition); return m; });
-        onGroupMove(groupId, newPosition);
-      }
-    });
-  }, [selectedGroups, groups, onGroupMove]);
-
-  const handleGroupMoveOptimistic = useCallback((groupId: string, newPosition: { x: number; y: number }) => {
-    const group = groups.find(g => g.id === groupId);
-    const oldPosition = group?.position;
-    setOptimisticPositions(prev => { const m = new Map(prev); m.set(groupId, newPosition); return m; });
-    onGroupMove(groupId, newPosition);
-    if (group && oldPosition) {
-      activity.logGroupMoved(mapId as Id<"affinityMaps">, groupId, group.title, oldPosition, newPosition);
-    }
-  }, [groups, onGroupMove, mapId, activity]);
-
-  const handleUndo = useCallback(() => {
-    const previousState = history.undo();
-    if (previousState) { onGroupsReplace?.(previousState.groups); toast.success("Undone"); }
-    else { toast.info("Nothing to undo"); }
-  }, [history, onGroupsReplace]);
-
-  const handleRedo = useCallback(() => {
-    const nextState = history.redo();
-    if (nextState) { onGroupsReplace?.(nextState.groups); toast.success("Redone"); }
-    else { toast.info("Nothing to redo"); }
-  }, [history, onGroupsReplace]);
-
-  // ==================== ZOOM/PAN FUNCTIONS ====================
-  const { zoomIn, zoomOut, resetTransform, centerView, setPosition, setScale, position, scale, isPanning, setIsPanning } = canvasNav;
-
-  const isControlled = controlledSetActivePanel !== undefined;
-  
-  const togglePanel = useCallback((panel: ActivePanel) => {
-    if (isControlled) {
-      const currentPanel = controlledActivePanel;
-      setActivePanel(currentPanel === panel ? null : panel);
-    } else {
-      setInternalActivePanel(prev => prev === panel ? null : panel);
-    }
-  }, [isControlled, controlledActivePanel, setActivePanel]);
-
-  const toggleAnalyticsPanel = useCallback(() => togglePanel('analytics'), [togglePanel]);
-  const togglePersonaPanel = useCallback(() => togglePanel('persona'), [togglePanel]);
-  const toggleExportPanel = useCallback(() => togglePanel('export'), [togglePanel]);
-  const toggleVotingHistoryPanel = useCallback(() => togglePanel('votingHistory'), [togglePanel]);
-  const toggleThemeDiscoveryPanel = useCallback(() => togglePanel('themeDiscovery'), [togglePanel]);
-  const toggleActivityPanel = useCallback(() => togglePanel('activity'), [togglePanel]);
-
-  const handleMinimapNavigate = useCallback((x: number, y: number) => {
-    const viewportWidth = 800;
-    const viewportHeight = 600;
-    setPosition({ x: -x * scale + viewportWidth / 2, y: -y * scale + viewportHeight / 2 });
-    toast.info(`Navigated to ${Math.round(x)}, ${Math.round(y)}`);
-  }, [scale, setPosition]);
-
-  // ==================== HANDLERS SOURIS/CLAVIER ====================
-  const wheelTimeout = useRef<NodeJS.Timeout | null>(null);
-  const rafId = useRef<number | null>(null);
-  const pendingWheel = useRef<{deltaX: number, deltaY: number, ctrlKey: boolean, clientX: number, clientY: number} | null>(null);
-
-  const handleWheel = useCallback((e: WheelEvent) => {
-    const target = e.target as HTMLElement;
-    const isScrollableElement = target.classList.contains('overflow-y-auto') || target.classList.contains('overflow-auto') || target.closest('.overflow-y-auto') || target.closest('.overflow-auto');
-    if (isScrollableElement) return;
-    
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const { ctrlKey, deltaX, deltaY, clientX, clientY } = e;
-    
-    if (ctrlKey) {
-      const delta = -deltaY * 0.002;
-      const newScale = Math.min(3, Math.max(0.3, scale * (1 + delta)));
-      
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const rect = canvas.getBoundingClientRect();
-        const mouseX = clientX - rect.left;
-        const mouseY = clientY - rect.top;
-        const worldX = (mouseX - position.x) / scale;
-        const worldY = (mouseY - position.y) / scale;
-        
-        setScale(newScale);
-        setPosition({ 
-          x: mouseX - worldX * newScale, 
-          y: mouseY - worldY * newScale 
-        });
-      }
-    } else {
-      setPosition(prev => ({ 
-        x: prev.x - deltaX, 
-        y: prev.y - deltaY 
-      }));
-    }
-  }, [scale, position, setScale, setPosition, canvasRef]);
-
-  const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 2) return;
-    if (e.button === 1) {
-      e.preventDefault();
-      setIsPanning(true);
-      return;
-    }
-    if (e.button === 0 && isSpacePressed) { 
-      setIsPanning(true); 
-      return; 
-    }
-  };
-
-  const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!canvasRef.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    setCursorPosition({ x, y });
-    if (updatePresence) {
-      const worldX = (x - position.x) / scale;
-      const worldY = (y - position.y) / scale;
-      updatePresence(worldX, worldY, Array.from(selectedGroups));
-    }
-    if (isPanning && (e.buttons & 1 || e.buttons & 4)) {
-      setPosition(prev => ({ x: prev.x + e.movementX, y: prev.y + e.movementY }));
-    }
-  }, [isPanning, position, scale, selectedGroups, updatePresence]);
-
-  const handleCanvasMouseUp = () => setIsPanning(false);
-
-  const handleDoubleClick = (e: React.MouseEvent) => {
-    if (e.target === canvasRef.current) {
-      const rect = canvasRef.current!.getBoundingClientRect();
-      const x = (e.clientX - rect.left - position.x) / scale;
-      const y = (e.clientY - rect.top - position.y) / scale;
-      onGroupCreate({ x, y });
-      toast.success("Group created! Double-click on canvas");
-    }
-  };
-
-  const handleCanvasClick = (e: React.MouseEvent) => {
-    // Clear selection when clicking on empty canvas (outside groups)
-    if (selectedGroups.size > 0 && e.target === canvasRef.current) {
-      setSelectedGroups(new Set());
-      toast.info("Selection cleared");
-    }
-    
-    if (dotVoting.isPlacingDot) return;
-    if (e.target === canvasRef.current) {
-      clickCountRef.current++;
-      if (clickCountRef.current === 1) {
-        clickTimeoutRef.current = setTimeout(() => { clickCountRef.current = 0; }, 300);
-      } else if (clickCountRef.current === 2) {
-        if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
-        const rect = canvasRef.current!.getBoundingClientRect();
-        const x = (e.clientX - rect.left - position.x) / scale;
-        const y = (e.clientY - rect.top - position.y) / scale;
-        onGroupCreate({ x, y });
-        toast.success("Group created with double-click");
-        clickCountRef.current = 0;
-      }
-    } else {
-      if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
-      clickCountRef.current = 0;
-    }
-  };
-
-  const handleContextMenu = (e: React.MouseEvent) => e.preventDefault();
-
-  // ==================== EFFETS ====================
-
   useEffect(() => {
     const selections: Record<string, string[]> = {};
-    otherUsers?.forEach(user => { selections[user.userId] = user.selection || []; });
+    otherUsers?.forEach((u) => { selections[u.userId] = u.selection || []; });
     setSharedSelections(selections);
   }, [otherUsers]);
 
@@ -492,143 +170,408 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
   }, [selectedGroups]);
 
   useEffect(() => {
-    const wrapper = canvasWrapperRef.current;
-    const canvas = canvasRef.current;
-    
-    if (wrapper) {
-      wrapper.addEventListener('wheel', handleWheel, { passive: false });
-    }
-    if (canvas) {
-      canvas.addEventListener('wheel', handleWheel, { passive: false });
-    }
-    
-    return () => {
-      if (wrapper) wrapper.removeEventListener('wheel', handleWheel);
-      if (canvas) canvas.removeEventListener('wheel', handleWheel);
-    };
-  }, [handleWheel]);
+    setOptimisticPositions(new Map());
+  }, [groups]);
 
   useEffect(() => {
-    const handleFocusChange = () => {
-      const activeElement = document.activeElement;
-      const isInput = activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement || (activeElement instanceof HTMLElement && activeElement.isContentEditable);
-      setIsInputFocused(isInput);
+    setRenderKey((k) => k + 1);
+  }, [optimisticPositions]);
+
+  useEffect(() => {
+    return () => {
+      if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
     };
-    document.addEventListener('focusin', handleFocusChange);
-    document.addEventListener('focusout', handleFocusChange);
-    return () => { document.removeEventListener('focusin', handleFocusChange); document.removeEventListener('focusout', handleFocusChange); };
   }, []);
+
+  const handleGroupResize = useCallback(
+    (groupId: string, size: { width: number; height: number }) => {
+      setGroupSizes((prev) => ({ ...prev, [groupId]: size }));
+    },
+    []
+  );
+
+  const handleGroupSelect = useCallback(
+    (groupId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      const isTaken = Object.entries(sharedSelections || {}).some(
+        ([uId, groupIds]) => uId !== currentUserId && (groupIds as string[]).includes(groupId)
+      );
+      if (isTaken) return;
+
+      if (e.shiftKey && lastSelectedGroup && lastSelectedGroup !== groupId) {
+        const groupIds = groups.map((g) => g.id);
+        const startIndex = groupIds.indexOf(lastSelectedGroup);
+        const endIndex = groupIds.indexOf(groupId);
+        if (startIndex !== -1 && endIndex !== -1) {
+          const start = Math.min(startIndex, endIndex);
+          const end = Math.max(startIndex, endIndex);
+          const groupsToSelect = groupIds.slice(start, end + 1);
+          setSelectedGroups((prev) => {
+            const newSelection = new Set(prev);
+            groupsToSelect.forEach((id) => newSelection.add(id));
+            return newSelection;
+          });
+          toast.info(`Selected ${groupsToSelect.length} groups`);
+          return;
+        }
+      }
+
+      if (e.ctrlKey || e.metaKey) {
+        setSelectedGroups((prev) => {
+          const newSelection = new Set(prev);
+          if (newSelection.has(groupId)) {
+            newSelection.delete(groupId);
+            setLastSelectedGroup(null);
+          } else {
+            newSelection.add(groupId);
+            setLastSelectedGroup(groupId);
+          }
+          return newSelection;
+        });
+      } else {
+        setSelectedGroups(new Set([groupId]));
+        setLastSelectedGroup(groupId);
+      }
+    },
+    [groups, lastSelectedGroup, sharedSelections, currentUserId]
+  );
+
+  const handleArrowKeys = useCallback(
+    (direction: "up" | "down" | "left" | "right", shiftKey: boolean) => {
+      if (selectedGroups.size === 0) return;
+      const moveDistance = shiftKey ? 20 : 5;
+      let deltaX = 0,
+        deltaY = 0;
+      switch (direction) {
+        case "up":
+          deltaY = -moveDistance;
+          break;
+        case "down":
+          deltaY = moveDistance;
+          break;
+        case "left":
+          deltaX = -moveDistance;
+          break;
+        case "right":
+          deltaX = moveDistance;
+          break;
+      }
+      setIsMovingWithArrows(true);
+      setTimeout(() => setIsMovingWithArrows(false), 150);
+
+      selectedGroups.forEach((groupId) => {
+        const group = groups.find((g) => g.id === groupId);
+        if (group) {
+          const newPosition = { x: group.position.x + deltaX, y: group.position.y + deltaY };
+          setOptimisticPositions((prev) => {
+            const m = new Map(prev);
+            m.set(groupId, newPosition);
+            return m;
+          });
+          onGroupMove(groupId, newPosition);
+        }
+      });
+    },
+    [selectedGroups, groups, onGroupMove]
+  );
+
+  const handleGroupMoveOptimistic = useCallback(
+    (groupId: string, newPosition: { x: number; y: number }) => {
+      setOptimisticPositions((prev) => {
+        const m = new Map(prev);
+        m.set(groupId, newPosition);
+        return m;
+      });
+      onGroupMove(groupId, newPosition);
+    },
+    [onGroupMove]
+  );
+
+  const handleUndo = useCallback(() => {
+    const previousState = history.undo();
+    if (previousState) {
+      onGroupsReplace?.(previousState.groups);
+      toast.success("Undone");
+    } else {
+      toast.info("Nothing to undo");
+    }
+  }, [history, onGroupsReplace]);
+
+  const handleRedo = useCallback(() => {
+    const nextState = history.redo();
+    if (nextState) {
+      onGroupsReplace?.(nextState.groups);
+      toast.success("Redone");
+    } else {
+      toast.info("Nothing to redo");
+    }
+  }, [history, onGroupsReplace]);
+
+  const handleMinimapNavigate = useCallback(
+    (x: number, y: number) => {
+      const viewportWidth = canvasWrapperRef.current?.clientWidth ?? 800;
+      const viewportHeight = canvasWrapperRef.current?.clientHeight ?? 600;
+      canvas.setPosition({
+        x: viewportWidth / 2 - x * canvas.scale,
+        y: viewportHeight / 2 - y * canvas.scale,
+      });
+    },
+    [canvas]
+  );
+
+  const handleCreateGroup = useCallback(() => {
+    const x = (cursorPositionRef.current.x - canvas.x) / canvas.scale;
+    const y = (cursorPositionRef.current.y - canvas.y) / canvas.scale;
+    onGroupCreate({ x, y });
+    toast.success("Cluster created");
+  }, [canvas, onGroupCreate]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !isInputFocused) { e.preventDefault(); setIsSpacePressed(true); if (canvasRef.current) canvasRef.current.style.cursor = 'grab'; }
-    };
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !isInputFocused) { setIsSpacePressed(false); if (canvasRef.current) canvasRef.current.style.cursor = 'default'; }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('keyup', handleKeyUp);
-    return () => { document.removeEventListener('keydown', handleKeyDown); document.removeEventListener('keyup', handleKeyUp); };
-  }, [isInputFocused]);
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-  useEffect(() => {
-    if (canvasRef.current) {
-      canvasRef.current.style.cursor = isSpacePressed && !isInputFocused
-        ? (isPanning ? 'grabbing' : 'grab')
-        : (isPanning ? 'grabbing' : 'default');
-    }
-  }, [isSpacePressed, isPanning, isInputFocused]);
-
-  useEffect(() => { setOptimisticPositions(new Map()); }, [groups]);
-  useEffect(() => { setRenderKey(prev => prev + 1); }, [optimisticPositions]);
-
-  useEffect(() => {
-    if (showThemeDiscovery && groups.length >= 2) {
-      const hasNewGroups = groups.some(group => !themeManagement.themeAnalysis?.themes.some(theme => theme.groupIds.includes(group.id)));
-      if (hasNewGroups || !themeManagement.themeAnalysis) {
-        const timer = setTimeout(() => themeManagement.handleAnalyzeThemes(), 1500);
-        return () => clearTimeout(timer);
+      if (e.key === "n" && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        handleCreateGroup();
+        return;
       }
-    }
-  }, [groups, showThemeDiscovery, themeManagement]);
 
-  useEffect(() => { return () => { if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current); }; }, []);
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        e.preventDefault();
+        if (selectedGroups.size > 0) {
+          const direction = e.key.replace("Arrow", "").toLowerCase() as "up" | "down" | "left" | "right";
+          handleArrowKeys(direction, e.shiftKey);
+        }
+        return;
+      }
 
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isPresentMode) { e.preventDefault(); setPresentMode(false); }
-      if (e.key === 'v') { e.preventDefault(); setWorkspaceMode('voting'); }
-      if (e.key === 'Escape' && workspaceMode === 'voting' && !isPresentMode) { e.preventDefault(); setWorkspaceMode('grouping'); toast.info("Voting mode disabled"); }
-    };
-    document.addEventListener('keydown', handleEsc);
-    return () => document.removeEventListener('keydown', handleEsc);
-  }, [isPresentMode, workspaceMode]);
+      if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+        e.preventDefault();
+        setSelectedGroups(new Set(groups.map((g) => g.id)));
+        toast.info(`Selected all ${groups.length} clusters`);
+        return;
+      }
 
-  useEffect(() => {
-    const handleQuitPanel = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && activePanel) { setActivePanel(null); return; }
-      return;
-    };
-    document.addEventListener('keydown', handleQuitPanel);
-    return () => document.removeEventListener('keydown', handleQuitPanel);
-  }, [activePanel]);
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedGroups.size > 0) {
+          saveCurrentState("before_delete", `Before deleting ${selectedGroups.size} clusters`);
+          if (confirm(`Delete ${selectedGroups.size} selected cluster(s)?`)) {
+            selectedGroups.forEach((groupId) => onGroupDelete?.(groupId));
+            setSelectedGroups(new Set());
+            toast.success(`Deleted ${selectedGroups.size} cluster(s)`);
+          }
+        }
+        return;
+      }
 
-  // ==================== CUSTOM HOOKS ====================
-  useCanvasShortcuts({
-    onNewGroup: () => {
-      const x = (cursorPosition.x - position.x) / scale;
-      const y = (cursorPosition.y - position.y) / scale;
-      onGroupCreate({ x, y });
-      toast.success("New group created (N)");
-    },
-    onSelectAll: () => { setSelectedGroups(new Set(groups.map(g => g.id))); toast.info(`Selected all ${groups.length} groups`); },
-    onDeleteSelected: () => {
-      if (selectedGroups.size > 0) {
-        saveCurrentState("before_multiple_delete", `Before deleting ${selectedGroups.size} groups`);
-        if (confirm(`Delete ${selectedGroups.size} selected group(s)?`)) {
-          selectedGroups.forEach(groupId => onGroupDelete?.(groupId));
+      if (e.key === "Escape") {
+        if (selectedGroups.size > 0) {
           setSelectedGroups(new Set());
-          toast.success(`Deleted ${selectedGroups.size} group(s)`);
+          toast.info("Selection cleared");
+        }
+        if (activePanel) {
+          setActivePanel(null);
+        }
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+        e.preventDefault();
+        handleRedo();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "=")) {
+        e.preventDefault();
+        canvas.zoomIn();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === "-") {
+        e.preventDefault();
+        canvas.zoomOut();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === "0") {
+        e.preventDefault();
+        canvas.resetView();
+        return;
+      }
+
+      // Tool modes
+      if (e.key === "v" && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        e.preventDefault();
+        setToolMode((prev) => (prev === "lasso" ? "select" : "lasso"));
+        toast.info(toolMode === "lasso" ? "Select mode" : "Lasso mode");
+        return;
+      }
+
+      if (e.key === "c" && !e.ctrlKey && !e.metaKey && !e.shiftKey && selectedGroups.size === 0) {
+        e.preventDefault();
+        setToolMode((prev) => (prev === "create" ? "select" : "create"));
+        toast.info(toolMode === "create" ? "Select mode" : "Draw to create mode");
+        return;
+      }
+
+      // Merge selected (Ctrl+G)
+      if ((e.ctrlKey || e.metaKey) && e.key === "g") {
+        e.preventDefault();
+        if (selectedGroups.size >= 2) {
+          setShowMergeModal(true);
+        } else {
+          toast.error("Select at least 2 clusters to merge");
+        }
+        return;
+      }
+
+      // Show shortcuts (?)
+      if (e.key === "?") {
+        e.preventDefault();
+        setShowShortcuts((prev) => !prev);
+        return;
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [selectedGroups, groups, handleArrowKeys, handleUndo, handleRedo, handleCreateGroup, activePanel, canvas, saveCurrentState, onGroupDelete, setActivePanel, toolMode]);
+
+  const handleCanvasMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!canvasRef.current) return;
+      const rect = canvasRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      cursorPositionRef.current = { x, y };
+
+      // Drag to create
+      if (toolMode === "create" && dragToCreate.isCreating) {
+        const worldX = (x - canvas.x) / canvas.scale;
+        const worldY = (y - canvas.y) / canvas.scale;
+        dragToCreate.updateCreating({ x: worldX, y: worldY });
+        return;
+      }
+
+      // Lasso selection
+      if (toolMode === "lasso" && lassoSelection.isSelecting) {
+        const worldX = (x - canvas.x) / canvas.scale;
+        const worldY = (y - canvas.y) / canvas.scale;
+        lassoSelection.updateSelection({ x: worldX, y: worldY });
+        return;
+      }
+
+      if (updatePresence) {
+        const worldX = (x - canvas.x) / canvas.scale;
+        const worldY = (y - canvas.y) / canvas.scale;
+        updatePresence(worldX, worldY, Array.from(selectedGroups));
+      }
+    },
+    [canvas, selectedGroups, updatePresence, toolMode, dragToCreate, lassoSelection]
+  );
+
+  const handleCanvasMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+
+      // Check if clicking on canvas (not on a cluster)
+      const target = e.target as HTMLElement;
+      const isCanvasClick = target === canvasRef.current || target.classList.contains("canvas-background");
+
+      if (isCanvasClick) {
+        // Create mode - start drag to create
+        if (toolMode === "create") {
+          const rect = canvasRef.current!.getBoundingClientRect();
+          const worldX = (e.clientX - rect.left - canvas.x) / canvas.scale;
+          const worldY = (e.clientY - rect.top - canvas.y) / canvas.scale;
+          dragToCreate.startCreating({ x: worldX, y: worldY });
+          return;
+        }
+
+        // Lasso mode - start lasso selection
+        if (toolMode === "lasso") {
+          const rect = canvasRef.current!.getBoundingClientRect();
+          const worldX = (e.clientX - rect.left - canvas.x) / canvas.scale;
+          const worldY = (e.clientY - rect.top - canvas.y) / canvas.scale;
+          lassoSelection.startSelection({ x: worldX, y: worldY });
+          return;
         }
       }
     },
-    onEscape: () => { if (selectedGroups.size > 0) { setSelectedGroups(new Set()); toast.info("Selection cleared"); } },
-    onArrowMove: handleArrowKeys,
-    onUndo: handleUndo,
-    onRedo: handleRedo,
-    onToggleAnalyticsPanel: toggleAnalyticsPanel,
-    onTogglePersonaPanel: togglePersonaPanel,
-    onToggleThemeDiscoveryPanel: toggleThemeDiscoveryPanel,
-    onToggleExportPanel: toggleExportPanel,
-    onZoomIn: () => zoomControlsRef.current?.zoomIn(),
-    onZoomOut: () => zoomControlsRef.current?.zoomOut(),
-    onResetZoom: () => zoomControlsRef.current?.resetTransform(),
-    onCenterZoom: () => zoomControlsRef.current?.centerView(),
-    selectedGroups,
-  });
+    [toolMode, canvas, dragToCreate, lassoSelection]
+  );
 
-  // ==================== RENDER ====================
+  const handleCanvasMouseUp = useCallback(
+    (e: React.MouseEvent) => {
+      // End drag to create
+      if (dragToCreate.isCreating) {
+        dragToCreate.endCreating();
+      }
+
+      // End lasso selection
+      if (lassoSelection.isSelecting) {
+        lassoSelection.endSelection();
+      }
+    },
+    [dragToCreate, lassoSelection]
+  );
+
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target === canvasRef.current) {
+        const rect = canvasRef.current!.getBoundingClientRect();
+        const x = (e.clientX - rect.left - canvas.x) / canvas.scale;
+        const y = (e.clientY - rect.top - canvas.y) / canvas.scale;
+        onGroupCreate({ x, y });
+        toast.success("Cluster created");
+      }
+    },
+    [canvas, onGroupCreate]
+  );
+
+  const handleCanvasClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (selectedGroups.size > 0 && e.target === canvasRef.current) {
+        setSelectedGroups(new Set());
+      }
+
+      if (e.target === canvasRef.current) {
+        clickCountRef.current++;
+        if (clickCountRef.current === 1) {
+          clickTimeoutRef.current = setTimeout(() => {
+            clickCountRef.current = 0;
+          }, 300);
+        } else if (clickCountRef.current === 2) {
+          if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
+          const rect = canvasRef.current!.getBoundingClientRect();
+          const x = (e.clientX - rect.left - canvas.x) / canvas.scale;
+          const y = (e.clientY - rect.top - canvas.y) / canvas.scale;
+          onGroupCreate({ x, y });
+          toast.success("Cluster created");
+          clickCountRef.current = 0;
+        }
+      } else {
+        if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
+        clickCountRef.current = 0;
+      }
+    },
+    [canvas, selectedGroups, onGroupCreate]
+  );
 
   return (
     <div className="h-full flex flex-col bg-background">
       {isPresentMode && (
-        <div className="fixed top-4 right-4 bg-black/70 text-white px-3 py-1 rounded text-xs">
+        <div className="fixed top-4 right-4 bg-black/70 text-white px-3 py-1 rounded text-xs z-50">
           Present mode – press ESC to exit
         </div>
       )}
 
-      {/* VOTING SESSION MANAGER */}
-      {!isPresentMode && workspaceMode === 'voting' && (
-        <VotingSessionManager
-          mapId={mapId}
-          projectId={projectId}
-          isPlacingDot={dotVoting.isPlacingDot}
-          onToggleDotPlacement={dotVoting.toggleDotPlacement}
-          onSessionEnd={dotVoting.handleSessionEnd}
-        />
-      )}
-
-      {/* FLOATING TOOLBAR */}
       {!isPresentMode && (
         <FloatingToolbar
           stats={stats}
@@ -636,31 +579,16 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
           setWorkspaceMode={setWorkspaceMode}
           activePanel={activePanel}
           setActivePanel={setActivePanel}
-          showThemeDiscovery={showThemeDiscovery}
-          setShowThemeDiscovery={setShowThemeDiscovery}
-          showExportPanel={showExportPanel}
-          setShowExportPanel={setShowExportPanel}
-          showImportModal={showImportModal}
-          setShowImportModal={setShowImportModal}
-          showActivityPanel={showActivityPanel}
-          setShowActivityPanel={setShowActivityPanel}
-          onEnterPresentation={presentation.enterPresentationMode}
-          onAnalyzeThemes={themeManagement.handleAnalyzeThemes}
-          themeAnalysis={themeManagement.themeAnalysis}
-          isThemesAnalyzing={themeManagement.isThemesAnalyzing}
-          activities={[]}
-          showVotingHistory={showVotingHistory}
-          onShowVotingHistory={setShowVotingHistory}
-          showPersonaGenerator={showPersonaGenerator}
-          onShowPersonaGenerator={setShowPersonaGenerator}
-          hasActiveVotingSession={!!dotVoting.activeSessions?.[0]}
-          isVotingPhase={dotVoting.activeSessions?.[0]?.votingPhase === "voting"}
+          onEnterPresentation={() => setPresentMode(true)}
+          onAnalyzeThemes={() => setIsAnalyzingThemes(true)}
+          themeAnalysis={null}
+          isThemesAnalyzing={isAnalyzingThemes}
+          hasActiveVotingSession={false}
+          isVotingPhase={false}
         />
       )}
 
-      {/* MAIN WORKSPACE */}
       <div className="flex-1 flex min-h-0">
-        {/* SIDEBAR - INSIGHTS */}
         <div data-tour="insights-panel">
           <InsightsOrganizationPanel
             groups={groups}
@@ -673,291 +601,283 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
           />
         </div>
 
-        {/* CANVAS PRINCIPAL */}
+        {/* Main Canvas Area */}
         <div
           className="flex-1 relative overflow-hidden bg-background"
           data-tour="groups"
           onClick={(e: React.MouseEvent) => {
             const target = e.target as HTMLElement;
-            const isGroupClick = target.closest('[data-group-id]');
-            const isPanelClick = target.closest('[data-panel]');
+            const isGroupClick = target.closest("[data-group-id]");
+            const isPanelClick = target.closest("[data-panel]");
             if (!isGroupClick && !isPanelClick && selectedGroups.size > 0) {
               setSelectedGroups(new Set());
             }
           }}
           onDragOver={(e: React.DragEvent) => {
-            if (workspaceMode === 'grouping') { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+            if (workspaceMode === "grouping") {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+            }
           }}
           onDrop={(e: React.DragEvent) => {
-            if (workspaceMode === 'grouping') {
+            if (workspaceMode === "grouping") {
               e.preventDefault();
-              const insightId = e.dataTransfer.getData('text/plain');
-              const sourceGroupId = e.dataTransfer.getData('application/group-id');
+              const insightId = e.dataTransfer.getData("text/plain");
+              const sourceGroupId = e.dataTransfer.getData("application/group-id");
               if (insightId && sourceGroupId) {
-                saveCurrentState("before_insight_remove", `Removing insight from group`);
+                saveCurrentState("before_insight_remove", "Removing insight from cluster");
                 onInsightRemoveFromGroup?.(insightId, sourceGroupId);
-                toast.info("Insight removed from group and returned to available insights");
+                toast.info("Insight removed from cluster");
               }
               setDraggedInsightId(null);
               setDragSourceGroupId(null);
             }
           }}
         >
-          {/* COMMENT PANEL */}
-          {!isPresentMode && showComments && (
-            <CommentPanel
-              mapId={mapId}
-              groupId={showComments.groupId}
-              groupTitle={showComments.groupTitle}
-              projectId={projectId}
-              presenceUsers={presenceUsers}
-              screenRect={followRect ?? showComments.screenRect}
-              onClose={() => setShowComments(null)}
-            />
-          )}
-
-          {/* PRESENTATION OVERLAY */}
-          <PresentationOverlay
-            presentationState={presentation.presentationState}
-            groups={groups}
-            exitPresentationMode={presentation.exitPresentationMode}
-            nextGroup={presentation.nextGroup}
-            prevGroup={presentation.prevGroup}
-            toggleOverview={presentation.toggleOverview}
-            isFullscreen={presentation.isFullscreen}
-          />
-
-          {/* THEME VISUALIZATION */}
-          {themeManagement.detectedThemes.length > 0 && (
-            <ThemeVisualizationFixed
-              groups={groups}
-              themes={themeManagement.detectedThemes}
-              selectedTheme={themeManagement.selectedTheme}
-              canvasPosition={position}
-              canvasScale={scale}
-            />
-          )}
-
-          {/* CANVAS WITH ZOOM/PAN */}
           <div
             ref={canvasWrapperRef}
             className="absolute inset-0 z-20 overflow-hidden"
+            {...canvas.containerProps}
           >
             <div
               ref={canvasRef}
+              className="absolute inset-0"
               style={{
-                cursor: isSpacePressed ? 'grab' : (isPanning ? 'grabbing' : 'default'),
-                width: '5000px',
-                height: '5000px',
-                position: 'absolute',
-                transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-                transformOrigin: '0 0',
+                transform: `translate(${canvas.x}px, ${canvas.y}px) scale(${canvas.scale})`,
+                transformOrigin: "0 0",
+                cursor: toolMode === "lasso" ? "crosshair" : toolMode === "create" ? "crosshair" : "default",
               }}
               onMouseDown={handleCanvasMouseDown}
-              onMouseMove={handleCanvasMouseMove}
               onMouseUp={handleCanvasMouseUp}
-              onMouseLeave={handleCanvasMouseUp}
+              onMouseMove={handleCanvasMouseMove}
               onDoubleClick={handleDoubleClick}
-              onContextMenu={handleContextMenu}
               onClick={handleCanvasClick}
             >
-                      {/* OTHER USERS CURSORS */}
-                      {!isPresentMode && otherUsers?.filter((user: PresenceUser) => isUserOnline(user.lastSeen)).map((user: PresenceUser, index: number) => {
-                        const userColor = getUserColor(user.userId);
-                        const isInactive = isUserInactive(user.lastSeen);
-                        const labelOnRight = index % 2 === 0;
-                        
-                        return (
-                          <motion.div
-                            key={user.userId}
-                            className="absolute pointer-events-none z-50"
-                            style={{ 
-                              left: user.cursor.x, 
-                              top: user.cursor.y,
-                              opacity: isInactive ? 0.5 : 1,
-                              transition: "opacity 0.3s ease",
-                            }}
-                          >
-                            <div className={`flex items-center ${labelOnRight ? 'gap-2' : 'gap-2 flex-row-reverse'}`}>
-                              <img
-                                src="/cursor.svg"
-                                alt="cursor"
-                                className="w-6 h-6"
-                                style={{ filter: `drop-shadow(0 0 2px ${userColor})` }}
-                              />
-                              {user.user?.avatar ? (
-                                <img
-                                  src={user.user.avatar}
-                                  alt={user.user.name}
-                                  className="w-6 h-6 rounded-full border-2 border-white shadow"
-                                />
-                              ) : (
-                                <span
-                                  className="text-xs text-white px-2 py-1 rounded shadow whitespace-nowrap"
-                                  style={{ backgroundColor: userColor }}
-                                >
-                                  {user.user?.name || "User"}
-                                </span>
-                              )}
-                            </div>
-                          </motion.div>
-                        );
-                      })}
+              {otherUsers
+                ?.filter((u: PresenceUser) => Date.now() - u.lastSeen < OFFLINE_THRESHOLD_MS)
+                .map((userData: PresenceUser) => (
+                  <motion.div
+                    key={userData.userId}
+                    className="absolute pointer-events-none z-50"
+                    style={{
+                      left: userData.cursor.x,
+                      top: userData.cursor.y,
+                      opacity: Date.now() - userData.lastSeen > INACTIVE_THRESHOLD_MS ? 0.5 : 1,
+                      transition: "opacity 0.3s ease",
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <img src="/cursor.svg" alt="cursor" className="w-6 h-6" style={{ filter: `drop-shadow(0 0 2px ${getUserColor(userData.userId)})` }} />
+                      <span
+                        className="text-xs text-white px-2 py-1 rounded shadow whitespace-nowrap"
+                        style={{ backgroundColor: getUserColor(userData.userId) }}
+                      >
+                        {userData.user?.name || "User"}
+                      </span>
+                    </div>
+                  </motion.div>
+                ))}
 
-                      {/* CANVAS CONTENT */}
-                      <div key={renderKey} style={{ width: '100%', height: '100%', position: 'relative' }}>
-                        {/* GRID BACKGROUND */}
-                        <div
-                          className="absolute inset-0 canvas-background"
-                          style={{
-                            backgroundImage: `linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)`,
-                            backgroundSize: '40px 40px',
-                            opacity: 0.5,
+              <div key={renderKey} style={{ width: "100%", height: "100%", position: "relative" }}>
+                <div
+                  className="absolute inset-0 canvas-background"
+                  style={{
+                    backgroundImage: `linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)`,
+                    backgroundSize: "40px 40px",
+                    opacity: 0.5,
+                  }}
+                />
+
+                <div className="p-8">
+                  {groups.map((group) => {
+                    const displayPosition = optimisticPositions.get(group.id) ?? group.position;
+                    return (
+                      <div
+                        key={group.id}
+                        style={{
+                          position: "absolute",
+                          left: displayPosition.x,
+                          top: displayPosition.y,
+                        }}
+                      >
+                        <ClusterCard
+                          group={group}
+                          insights={insights}
+                          scale={canvas.scale}
+                          isSelected={selectedGroups.has(group.id)}
+                          isDragOver={dragOverGroup === group.id}
+                          onMove={(groupId, pos) => handleGroupMoveOptimistic(groupId, pos)}
+                          onDelete={onGroupDelete}
+                          onTitleUpdate={onGroupTitleUpdate}
+                          onColorUpdate={(groupId, color) => {
+                            // TODO: Add color update mutation
+                            toast.info(`Color changed to ${color}`);
                           }}
+                          onDuplicate={(groupId) => {
+                            toast.info("Duplicate functionality coming soon");
+                          }}
+                          onSelect={handleGroupSelect}
+                          onDragOver={(e: React.DragEvent) => {
+                            if (workspaceMode === "grouping") {
+                              e.preventDefault();
+                              setDragOverGroup(group.id);
+                            }
+                          }}
+                          onDragLeave={() => setDragOverGroup(null)}
+                          onDrop={(e: React.DragEvent) => {
+                            if (workspaceMode === "grouping") {
+                              e.preventDefault();
+                              const insightId = e.dataTransfer.getData("text/plain");
+                              const sourceGroupId = e.dataTransfer.getData("application/group-id");
+                              if (insightId) {
+                                saveCurrentState("before_insight_add", `Adding insight to "${group.title}"`);
+                                onInsightDrop(insightId, group.id);
+                                toast.success(sourceGroupId ? `Insight moved` : "Insight added");
+                              }
+                              setDragOverGroup(null);
+                            }
+                          }}
+                          onInsightDragStart={(insightId, sourceGroupId) => {
+                            setDraggedInsightId(insightId);
+                            setDragSourceGroupId(sourceGroupId);
+                          }}
+                          onInsightDrop={(insightId, targetGroupId) => {
+                            saveCurrentState("before_insight_move", "Moving insight to different cluster");
+                            onInsightDrop(insightId, targetGroupId);
+                            toast.success("Insight moved");
+                            setDraggedInsightId(null);
+                            setDragSourceGroupId(null);
+                          }}
+                          onRemoveInsight={onInsightRemoveFromGroup}
+                          onResize={handleGroupResize}
                         />
+                      </div>
+                    );
+                  })}
 
-                        {/* GROUPS */}
-                        <div className="p-8">
-                          {groups.map((group, index) => {
-                            const isCurrentInPresentation = presentation.presentationState.isActive &&
-                              !presentation.presentationState.isOverview &&
-                              index === presentation.presentationState.currentGroupIndex;
-
-                            return (
-                              <AffinityGroup
-                                key={group.id}
-                                group={group}
-                                activeSessionId={dotVoting.activeSessions?.[0]?._id}
-                                myDotsCount={dotVoting.myDots?.length ?? 0}
-                                insights={insights}
-                                scale={scale}
-                                isPlacingDot={dotVoting.isPlacingDot && !!dotVoting.activeSessions?.[0]}
-                                onMove={(groupId, pos) => {
-                                  if (presentation.presentationState.isActive) return;
-                                  handleGroupMoveOptimistic(groupId, pos);
-                                }}
-                                onDragOver={(e: React.DragEvent) => {
-                                  if (presentation.presentationState.isActive) { e.preventDefault(); return; }
-                                  if (workspaceMode === 'grouping') { e.preventDefault(); setDragOverGroup(group.id); }
-                                }}
-                                onDragLeave={() => {
-                                  if (presentation.presentationState.isActive) return;
-                                  setDragOverGroup(null);
-                                }}
-                                onDrop={(e: React.DragEvent) => {
-                                  if (presentation.presentationState.isActive) { e.preventDefault(); return; }
-                                  if (workspaceMode === 'grouping') {
-                                    e.preventDefault();
-                                    const insightId = e.dataTransfer.getData('text/plain');
-                                    const sourceGroupId = e.dataTransfer.getData('application/group-id');
-                                    if (insightId) {
-                                      saveCurrentState("before_insight_add", `Adding insight to group "${group.title}"`);
-                                      onInsightDrop(insightId, group.id);
-                                      toast.success(sourceGroupId ? `Insight moved to "${group.title}"` : `Insight added to "${group.title}"`);
-                                    }
-                                    setDragOverGroup(null);
-                                  }
-                                }}
-                                onSelect={handleGroupSelect}
-                                isSelected={presentation.presentationState.isActive ? false : selectedGroups.has(group.id)}
-                                isDragOver={presentation.presentationState.isActive ? false : dragOverGroup === group.id}
-                                isHighlighted={isCurrentInPresentation || themeManagement.highlightedGroups.has(group.id)}
-                                isPresentationMode={presentation.presentationState.isActive}
-                                isFocusedInPresentation={isCurrentInPresentation}
-                                presentationScale={1.1}
-                                onDelete={onGroupDelete}
-                                onTitleUpdate={onGroupTitleUpdate}
-                                onRemoveInsight={onInsightRemoveFromGroup}
-                                onInsightDragStart={(insightId, sourceGroupId) => {
-                                  if (!presentation.presentationState.isActive) {
-                                    setDraggedInsightId(insightId);
-                                    setDragSourceGroupId(sourceGroupId);
-                                  }
-                                }}
-                                onInsightDrop={(insightId, targetGroupId) => {
-                                  if (!presentation.presentationState.isActive) {
-                                    saveCurrentState("before_insight_move", `Moving insight to different group`);
-                                    onInsightDrop(insightId, targetGroupId);
-                                    toast.success("Insight moved to new group");
-                                    setDraggedInsightId(null);
-                                    setDragSourceGroupId(null);
-                                  }
-                                }}
-                                onOpenComments={handleOpenComments}
-                                workspaceMode={workspaceMode}
-                                projectContext={projectInfo ? `PROJECT: ${projectInfo.name}` : undefined}
-                                sharedSelections={sharedSelections}
-                                currentUserId={currentUserId!}
-                                mapId={mapId}
-                                commentCounts={commentCounts}
-                                activeSession={dotVoting.activeSessions?.[0]}
-                                isChatOpen={!!showComments}
-                                onResize={handleGroupResize}
-                              />
-                            );
-                          })}
-
-                          {/* EMPTY STATE - Centered in viewport */}
-                          {groups.length === 0 && (
-                            <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-50" style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}>
-                              <div className="text-center bg-background/95 backdrop-blur-sm p-8 rounded-2xl border shadow-2xl pointer-events-auto">
-                                <div className="text-6xl mb-4">📊</div>
-                                <h3 className="text-xl font-semibold mb-2">Start Creating Groups</h3>
-                                <p className="text-muted-foreground mb-4">Double-click on the canvas to create your first group</p>
-                                <div className="flex justify-center gap-4 text-sm mb-6">
-                                  <div className="flex items-center gap-2">
-                                    <kbd className="px-2 py-1 bg-muted rounded border text-xs">Double-click</kbd>
-                                    <span>Create group</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <kbd className="px-2 py-1 bg-muted rounded border text-xs">N</kbd>
-                                    <span>New group</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
+                  {groups.length === 0 && (
+                    <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-50">
+                      <div className="text-center bg-background/95 backdrop-blur-sm p-8 rounded-2xl border shadow-2xl pointer-events-auto">
+                        <div className="text-6xl mb-4">📊</div>
+                        <h3 className="text-xl font-semibold mb-2">Start Creating Clusters</h3>
+                        <p className="text-muted-foreground mb-4">Double-click on the canvas to create your first cluster</p>
+                        <div className="flex justify-center gap-4 text-sm mb-6">
+                          <div className="flex items-center gap-2">
+                            <kbd className="px-2 py-1 bg-muted rounded border text-xs">Double-click</kbd>
+                            <span>Create cluster</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <kbd className="px-2 py-1 bg-muted rounded border text-xs">N</kbd>
+                            <span>New cluster</span>
+                          </div>
                         </div>
                       </div>
-
-                      {/* ZOOM CONTROLS */}
-                      <ZoomControls
-                        zoomIn={zoomIn}
-                        zoomOut={zoomOut}
-                        resetTransform={resetTransform}
-                        centerView={centerView}
-                        scale={scale}
-                      />
                     </div>
+                    )}
+                </div>
+              </div>
+
+              {/* ZoomControls - outside canvasWrapper to stay fixed */}
+              <div className="absolute bottom-4 right-4 z-40">
+                <ZoomControls
+                  zoomIn={canvas.zoomIn}
+                  zoomOut={canvas.zoomOut}
+                  resetTransform={canvas.resetView}
+                  centerView={() => {
+                    if (groups.length > 0) {
+                      const bounds = {
+                        minX: Math.min(...groups.map((g) => g.position.x)),
+                        minY: Math.min(...groups.map((g) => g.position.y)),
+                        maxX: Math.max(...groups.map((g) => g.position.x + 500)),
+                        maxY: Math.max(...groups.map((g) => g.position.y + 400)),
+                      };
+                      const vp = canvasWrapperRef.current;
+                      if (vp) canvas.zoomToFit(bounds, vp.clientWidth, vp.clientHeight);
+                    }
+                  }}
+                  scale={canvas.scale}
+                />
+              </div>
+            </div>
           </div>
 
-          {/* MINI MAP - Outside canvas for visibility */}
           <MiniMap
             groups={groups}
-            position={position}
-            scale={scale}
+            position={{ x: canvas.x, y: canvas.y }}
+            scale={canvas.scale}
             onNavigate={handleMinimapNavigate}
-            viewportSize={{ width: 800, height: 600 }}
+            viewportSize={{
+              width: canvasWrapperRef.current?.clientWidth ?? 800,
+              height: canvasWrapperRef.current?.clientHeight ?? 600,
+            }}
           />
 
-          {/* STATUS INDICATORS */}
-          <CanvasStatusIndicators
-            isPlacingDot={dotVoting.isPlacingDot}
-            isMovingWithArrows={isMovingWithArrows}
-            selectedGroupsCount={selectedGroups.size}
-            isSpacePressed={isSpacePressed}
-            applyingAction={themeManagement.applyingAction}
-            isSilentSortingActive={isSilentSortingActive}
-            currentPhase={currentPhase}
-            groupTimeLeft={groupTimeLeft}
-            personalTimeLeft={personalTimeLeft}
-            cursorPosition={cursorPosition}
-            scale={scale}
-            isVotingActive={!!dotVoting.activeSessions?.[0] && dotVoting.activeSessions[0].votingPhase === 'voting'}
+          {/* Drag to Create Overlay */}
+          <CreationRect
+            rect={dragToCreate.creationRect}
+            scale={canvas.scale}
+            position={{ x: canvas.x, y: canvas.y }}
           />
+          {toolMode === "create" && !dragToCreate.isCreating && (
+            <CreationHint message="Click and drag to create a cluster" shortcut="C" />
+          )}
+
+          {/* Lasso Selection Overlay */}
+          <SelectionBox
+            rect={lassoSelection.selectionRect}
+            scale={canvas.scale}
+            position={{ x: canvas.x, y: canvas.y }}
+          />
+          {toolMode === "lasso" && !lassoSelection.isSelecting && lassoSelection.selectedIds.size === 0 && (
+            <CreationHint message="Click and drag to select clusters" shortcut="V" />
+          )}
+
+          {/* Selection Toolbar */}
+          {selectedGroups.size > 0 && (
+            <SelectionToolbar
+              selectedCount={selectedGroups.size}
+              position={cursorPositionRef.current}
+              onMove={(direction) => {
+                const distance = 5;
+                let dx = 0,
+                  dy = 0;
+                switch (direction) {
+                  case "up":
+                    dy = -distance;
+                    break;
+                  case "down":
+                    dy = distance;
+                    break;
+                  case "left":
+                    dx = -distance;
+                    break;
+                  case "right":
+                    dx = distance;
+                    break;
+                }
+                selectedGroups.forEach((groupId) => {
+                  const group = groups.find((g) => g.id === groupId);
+                  if (group) {
+                    onGroupMove(groupId, {
+                      x: group.position.x + dx,
+                      y: group.position.y + dy,
+                    });
+                  }
+                });
+              }}
+              onDelete={() => {
+                if (confirm(`Delete ${selectedGroups.size} cluster(s)?`)) {
+                  selectedGroups.forEach((groupId) => onGroupDelete?.(groupId));
+                  setSelectedGroups(new Set());
+                }
+              }}
+              onDuplicate={() => toast.info("Duplicate coming soon")}
+              onGroup={() => setShowMergeModal(true)}
+            />
+          )}
         </div>
 
-        {/* SIDE PANELS */}
+        {/* Side Panels (Theme Discovery, Analytics, Persona, Export) */}
         <CanvasSidePanels
           isPresentMode={isPresentMode}
           activePanel={activePanel}
@@ -968,26 +888,51 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
           projectInfo={projectInfo}
           mapId={mapId}
           userId={currentUserId}
-          userName={user?.fullName || user?.username || "Anonymous"}
-          selectedTheme={themeManagement.selectedTheme}
-          setSelectedTheme={themeManagement.setSelectedTheme}
-          onApplyRecommendation={themeManagement.handleApplyRecommendation}
-          onGroupsMerge={themeManagement.handleGroupsMerge}
-          filteredRecommendations={themeManagement.filteredRecommendations}
-          themeAnalysis={themeManagement.themeAnalysis}
-          isThemesAnalyzing={themeManagement.isThemesAnalyzing}
-          onAnalyzeThemes={themeManagement.handleAnalyzeThemes}
-          onClearThemes={themeManagement.clearThemes}
+          selectedTheme={props.selectedTheme ?? null}
+          setSelectedTheme={props.setSelectedTheme ?? (() => {})}
+          onApplyRecommendation={props.onApplyRecommendation ?? (() => {})}
+          onGroupsMerge={props.onGroupsMerge ?? ((() => {}) as (groupIds: string[], newTitle: string) => void)}
+          filteredRecommendations={props.filteredRecommendations}
+          themeAnalysis={props.themeAnalysis ?? null}
+          isThemesAnalyzing={props.isThemesAnalyzing ?? false}
+          onAnalyzeThemes={props.onAnalyzeThemes ?? (() => {})}
+          onClearThemes={props.onClearThemes ?? (() => {})}
         />
       </div>
 
-      {/* IMPORT MODAL */}
-      <ImportModal
-        open={showImportModal}
-        onOpenChange={setShowImportModal}
-        projectId={projectId}
-        onImportSuccess={handleImportSuccess}
+      {/* Merge Modal */}
+      <MergeClustersModal
+        open={showMergeModal}
+        onOpenChange={setShowMergeModal}
+        clusters={groups}
+        selectedIds={Array.from(selectedGroups)}
+        onMerge={(merged) => {
+          // Remove old clusters and create merged one
+          selectedGroups.forEach((id) => onGroupDelete?.(id));
+          onGroupCreate(merged.position);
+          toast.success(`Merged into "${merged.title}"`);
+          setSelectedGroups(new Set());
+        }}
       />
+
+      {/* Keyboard Shortcuts */}
+      {showShortcuts && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center" onClick={() => setShowShortcuts(false)}>
+          <div onClick={(e) => e.stopPropagation()}>
+            <KeyboardShortcuts />
+          </div>
+        </div>
+      )}
+
+      {/* Shortcut Hint */}
+      <div className="fixed bottom-4 right-4 z-50">
+        <kbd
+          onClick={() => setShowShortcuts(true)}
+          className="px-3 py-2 bg-card border border-border rounded-lg shadow-lg text-sm text-muted-foreground hover:bg-muted/50 cursor-pointer transition-colors"
+        >
+          Press <kbd className="px-1 bg-muted rounded">?</kbd> for shortcuts
+        </kbd>
+      </div>
     </div>
   );
 }
