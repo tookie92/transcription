@@ -17,6 +17,7 @@ import { CopyInviteLink } from "./CopyInviteLink";
 import { MemberManagerDialog } from "./MemberManagerDialog";
 import { TeamMembersModal } from "./TeamMembersModal";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ShareProjectModal } from "./ShareProjectModal";
 import { Dialog, DialogContent } from "../ui/dialog";
 import { DialogTitle, DialogTrigger } from "@radix-ui/react-dialog";
 import { DropdownMenu } from "@radix-ui/react-dropdown-menu";
@@ -132,7 +133,7 @@ useEffect(() => {
             )}
           </div>
           <div className="flex gap-x-3">
-              
+              <ShareProjectModal projectId={projectId} projectName={project.name} />
               <Button onClick={() => router.push(`/project/${projectId}/interview/`)}>
                 <Plus className="w-4 h-4" />
                 New Interview

@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Bell, RefreshCcwIcon, Plus, Users, Folder, ArrowRight, Clock, Mic, Sparkles, FileText } from "lucide-react";
+import { Bell, RefreshCcwIcon, Plus, Users, Folder, ArrowRight, Clock, Mic, Sparkles, FileText, Crown, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Id } from "@/convex/_generated/dataModel";
@@ -12,9 +12,12 @@ import { motion } from "framer-motion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useAuth, useUser } from "@clerk/nextjs";
 
 const ProjectPage = () => {
   const router = useRouter();
+  const { userId } = useAuth();
+  const { user } = useUser();
   const [isCreating, setIsCreating] = useState(false);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [projectName, setProjectName] = useState("");
@@ -22,10 +25,19 @@ const ProjectPage = () => {
   const projects = useQuery(api.projects.getUserProjects);
   const createProject = useMutation(api.projects.createProject);
 
-  // Find pending invitations
+  const userEmail = user?.emailAddresses?.[0]?.emailAddress;
+
+  // Separate owner vs member projects
+  const ownerProjects = projects?.filter(project => project.ownerId === userId) || [];
+  const memberProjects = projects?.filter(project => 
+    project.ownerId !== userId && 
+    project.members.some(m => m.userId === userId || m.userId === userEmail)
+  ) || [];
+
+  // Only show invitations where the email matches the current user
   const pendingInvitations = projects?.flatMap(project => 
     project.members
-      .filter(m => m.userId.includes('@'))
+      .filter(m => m.userId.includes('@') && m.userId === userEmail)
       .map(m => ({
         projectId: project._id,
         projectName: project.name,
@@ -199,43 +211,103 @@ const ProjectPage = () => {
       {/* Projects Grid */}
       <div className="max-w-4xl mx-auto">
         {projects && projects.length > 0 ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project, index) => (
-              <motion.div
-                key={project._id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                onClick={() => router.push(`/project/${project._id}`)}
-                className="group bg-card rounded-xl border border-border p-5 hover:border-primary hover:shadow-lg transition-all cursor-pointer"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-12 h-12 bg-linear-to-br from-primary/10 to-purple-100 dark:to-purple-900/30 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Folder className="w-6 h-6 text-primary" />
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+          <>
+            {/* Owner Projects */}
+            {ownerProjects.length > 0 && (
+              <div className="mb-8">
+                <div className="flex items-center gap-2 mb-4">
+                  <Crown className="w-5 h-5 text-primary" />
+                  <h2 className="text-xl font-semibold">My Projects</h2>
+                  <span className="text-sm text-muted-foreground">({ownerProjects.length})</span>
                 </div>
-                
-                <h3 className="font-semibold text-lg text-foreground mb-1 truncate">
-                  {project.name}
-                </h3>
-                <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-                  {project.description || "No description"}
-                </p>
-                
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Users className="w-3 h-3" />
-                    {project.members.length} member{project.members.length !== 1 ? 's' : ''}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {new Date(project.updatedAt).toLocaleDateString()}
-                  </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {ownerProjects.map((project, index) => (
+                    <motion.div
+                      key={project._id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      onClick={() => router.push(`/project/${project._id}`)}
+                      className="group bg-card rounded-xl border border-border p-5 hover:border-primary hover:shadow-lg transition-all cursor-pointer"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="w-12 h-12 bg-linear-to-br from-primary/10 to-purple-100 dark:to-purple-900/30 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <Folder className="w-6 h-6 text-primary" />
+                        </div>
+                        <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                      </div>
+                      
+                      <h3 className="font-semibold text-lg text-foreground mb-1 truncate">
+                        {project.name}
+                      </h3>
+                      <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
+                        {project.description || "No description"}
+                      </p>
+                      
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          {project.members.length} member{project.members.length !== 1 ? 's' : ''}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {new Date(project.updatedAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
-              </motion.div>
-            ))}
-          </div>
+              </div>
+            )}
+
+            {/* Member Projects */}
+            {memberProjects.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <UserPlus className="w-5 h-5 text-blue-500" />
+                  <h2 className="text-xl font-semibold">Shared with Me</h2>
+                  <span className="text-sm text-muted-foreground">({memberProjects.length})</span>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {memberProjects.map((project, index) => (
+                    <motion.div
+                      key={project._id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      onClick={() => router.push(`/project/${project._id}`)}
+                      className="group bg-card rounded-xl border border-border p-5 hover:border-blue-500 hover:shadow-lg transition-all cursor-pointer"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="w-12 h-12 bg-linear-to-br from-blue-100 to-blue-100 dark:from-blue-900/30 dark:to-blue-900/30 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <Folder className="w-6 h-6 text-blue-600" />
+                        </div>
+                        <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
+                      </div>
+                      
+                      <h3 className="font-semibold text-lg text-foreground mb-1 truncate">
+                        {project.name}
+                      </h3>
+                      <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
+                        {project.description || "No description"}
+                      </p>
+                      
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          {project.members.length} member{project.members.length !== 1 ? 's' : ''}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {new Date(project.updatedAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-20">
             <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">

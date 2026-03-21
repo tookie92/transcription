@@ -19,6 +19,32 @@ export default defineSchema({
     updatedAt: v.number(),
   }),
 
+  // Table Project Share Links
+  projectShareLinks: defineTable({
+    projectId: v.id("projects"),
+    shareToken: v.string(),
+    password: v.optional(v.string()),
+    expiresAt: v.optional(v.number()),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    // Configuration
+    config: v.object({
+      interviewIds: v.array(v.id("interviews")), // interviews to include
+      includeCrossThemes: v.boolean(),
+      interviewConfig: v.record(v.id("interviews"), v.object({
+        showSummary: v.boolean(),
+        showInsights: v.boolean(),
+        showTranscriptExcerpts: v.boolean(),
+        maxExcerpts: v.number(), // max transcript excerpts per interview
+      })),
+    }),
+    // Template info (if saved as template)
+    isTemplate: v.boolean(),
+    templateName: v.optional(v.string()),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_token", ["shareToken"]),
+
   // Table Interviews
   interviews: defineTable({
     projectId: v.id("projects"),

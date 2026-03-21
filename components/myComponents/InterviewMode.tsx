@@ -66,6 +66,7 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const segmentRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   const interview = useQuery(api.interviews.getById, { interviewId });
   const project = useQuery(api.projects.getById, { projectId });
@@ -319,19 +320,55 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
               ref={transcriptRef}
               className="flex-1 overflow-y-auto p-4 space-y-2"
             >
-              {interview.segments.map((segment) => {
+              {interview.segments.map((segment, index) => {
                 const isActive = currentTime >= segment.start && currentTime < segment.end;
+                const segmentNotes = notes?.filter(
+                  (n) => n.timestamp >= segment.start && n.timestamp < segment.end
+                ) || [];
+                const hasNotes = segmentNotes.length > 0;
+                
                 return (
                   <div
                     key={segment.id}
+                    ref={(el) => {
+                      if (el) segmentRefs.current.set(index, el);
+                    }}
                     onClick={() => handleSegmentClick(segment.start)}
                     className={cn(
-                      "p-3 rounded-lg cursor-pointer transition-all",
+                      "p-3 rounded-lg cursor-pointer transition-all relative",
                       isActive 
                         ? "bg-primary/20 border border-primary/50" 
-                        : "hover:bg-muted"
+                        : "hover:bg-muted",
+                      hasNotes && "pl-8"
                     )}
                   >
+                    {hasNotes && (
+                      <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col gap-1">
+                        {segmentNotes.slice(0, 3).map((note) => {
+                          const noteTag = note.tag as NoteTag;
+                          const tagColor = tagConfig[noteTag]?.color || "bg-muted";
+                          const bgClass = tagColor.split(' ')[0];
+                          return (
+                            <div
+                              key={note._id}
+                              className={cn(
+                                "w-2 h-2 rounded-full cursor-pointer transition-transform hover:scale-150",
+                                bgClass,
+                                currentTime >= note.timestamp && currentTime < note.timestamp + 5 && "ring-2 ring-primary ring-offset-1 ring-offset-background scale-125"
+                              )}
+                              title={note.content.substring(0, 50)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSegmentClick(note.timestamp);
+                              }}
+                            />
+                          );
+                        })}
+                        {segmentNotes.length > 3 && (
+                          <span className="text-[10px] text-muted-foreground">+{segmentNotes.length - 3}</span>
+                        )}
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 mb-1">
                       <span className={cn(
                         "text-xs font-mono px-1.5 py-0.5 rounded",
@@ -342,6 +379,12 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
                       {segment.speaker && (
                         <Badge variant="outline" className="text-xs">
                           {segment.speaker}
+                        </Badge>
+                      )}
+                      {hasNotes && (
+                        <Badge variant="secondary" className="text-xs gap-1">
+                          <StickyNote className="w-3 h-3" />
+                          {segmentNotes.length}
                         </Badge>
                       )}
                     </div>
@@ -446,13 +489,17 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
                 <p className="text-xs mt-1">They will be timestamped automatically</p>
               </div>
             ) : (
-              notes.slice().reverse().map((note) => (
+              notes.slice().reverse().map((note) => {
+                const isNearCurrentTime = currentTime >= note.timestamp && currentTime < note.timestamp + 10;
+                return (
                 <Card 
                   key={note._id}
                   className={cn(
-                    "group transition-all",
-                    note.insightId && "opacity-60"
+                    "group transition-all cursor-pointer",
+                    note.insightId && "opacity-60",
+                    isNearCurrentTime && !note.insightId && "ring-2 ring-primary bg-primary/5"
                   )}
+                  onClick={() => handleSegmentClick(note.timestamp)}
                 >
                   <CardContent className="p-3">
                     <div className="flex items-start justify-between">
@@ -495,7 +542,8 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
                     </div>
                   </CardContent>
                 </Card>
-              ))
+                );
+              })
             )}
           </div>
         </div>

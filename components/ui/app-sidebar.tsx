@@ -41,9 +41,11 @@ export function AppSidebar() {
     project.name.toLowerCase().includes(searchQuery.toLowerCase())
   ) || []
 
+  // Only show invitations where the email matches the current user's email
+  const userEmail = user?.emailAddresses?.[0]?.emailAddress;
   const pendingInvitations = projects?.flatMap(project => 
     project.members
-      .filter(m => m.userId.includes('@'))
+      .filter(m => m.userId.includes('@') && m.userId === userEmail)
       .map(m => ({
         projectId: project._id,
         projectName: project.name,
