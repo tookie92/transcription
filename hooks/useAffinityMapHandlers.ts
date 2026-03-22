@@ -18,6 +18,7 @@ interface UseAffinityMapHandlersProps {
   // Mutations
   addGroup: (args: { mapId: Id<"affinityMaps">; title: string; color: string; position: { x: number; y: number } }) => Promise<string>;
   moveGroup: (args: { mapId: Id<"affinityMaps">; groupId: string; position: { x: number; y: number } }) => Promise<unknown>;
+  resizeGroup: (args: { mapId: Id<"affinityMaps">; groupId: string; size: { width: number; height: number } }) => Promise<unknown>;
   addInsightToGroup: (args: { mapId: Id<"affinityMaps">; groupId: string; insightId: Id<"insights"> }) => Promise<unknown>;
   updateGroupTitle: (args: { mapId: Id<"affinityMaps">; groupId: string; title: string }) => Promise<unknown>;
   removeGroup: (args: { mapId: Id<"affinityMaps">; groupId: string }) => Promise<unknown>;
@@ -65,6 +66,7 @@ export function useAffinityMapHandlers({
   userName,
   addGroup,
   moveGroup,
+  resizeGroup,
   addInsightToGroup,
   updateGroupTitle,
   removeGroup,
@@ -141,6 +143,24 @@ export function useAffinityMapHandlers({
       }
     },
     [affinityMap, moveGroup, activity]
+  );
+
+  const handleGroupResize = useCallback(
+    async (groupId: string, size: { width: number; height: number }) => {
+      if (!affinityMap) return;
+
+      try {
+        await resizeGroup({
+          mapId: affinityMap._id,
+          groupId,
+          size,
+        });
+      } catch (error) {
+        console.error("Failed to resize group:", error);
+        toast.error("Failed to resize section");
+      }
+    },
+    [affinityMap, resizeGroup]
   );
 
   const handleInsightDrop = useCallback(
@@ -364,6 +384,7 @@ export function useAffinityMapHandlers({
   return {
     handleGroupCreate,
     handleGroupMove,
+    handleGroupResize,
     handleInsightDrop,
     handleManualInsightCreate,
     handleGroupTitleUpdate,

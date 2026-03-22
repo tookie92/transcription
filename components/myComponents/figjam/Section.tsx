@@ -1,685 +1,295 @@
-/**
- * FigJam-style Section Component for Clusters
- * 
- * Features:
- * - Dotted border (FigJam style)
- * - Individual colors
- * - Lock/unlock section
- * - Opacity control
- * - Aspect ratio constraints
- * - Auto-fit content
- * - Resizable with handles
- */
-
 "use client";
 
-import React, { useState, useCallback, useRef, useEffect, memo, useMemo } from "react";
-import { cn } from "@/lib/utils";
-import { AffinityGroup as AffinityGroupType, Insight } from "@/types";
-import { CLUSTER_MIN_WIDTH, CLUSTER_MIN_HEIGHT, STICKY_WIDTH, STICKY_HEIGHT } from "@/lib/canvas-utils";
-import { MessageCircle, Lock, Unlock, Maximize2, SlidersHorizontal } from "lucide-react";
-import { GroupNameAssistant } from "../GroupNameAssistant";
+import React, { useCallback, useRef, useState } from "react";
+import type { SectionData } from "@/types/figjam";
+
+// ─── Section color palette ───────────────────────────────────────────────────
 
 export const SECTION_COLORS = [
-  { name: "Purple", value: "#9747FF" },
-  { name: "Blue", value: "#4499FF" },
-  { name: "Green", value: "#0ACF83" },
-  { name: "Orange", value: "#FF9500" },
-  { name: "Red", value: "#FF4444" },
-  { name: "Pink", value: "#FF6EB0" },
-] as const;
+  { bg: "#e8f4fd", border: "#90CAF9", label: "Blue"   },
+  { bg: "#e8f5e9", border: "#A5D6A7", label: "Green"  },
+  { bg: "#fce4ec", border: "#F48FB1", label: "Pink"   },
+  { bg: "#fff8e1", border: "#FFE082", label: "Yellow" },
+  { bg: "#f3e5f5", border: "#CE93D8", label: "Purple" },
+  { bg: "#fbe9e7", border: "#FFAB91", label: "Orange" },
+  { bg: "#f5f5f5", border: "#E0E0E0", label: "Gray"   },
+];
 
-export type SectionColor = typeof SECTION_COLORS[number]["value"];
-
-interface NameSuggestion {
-  title: string;
-  reason: string;
-  confidence: number;
-  category: "descriptive" | "actionable" | "thematic" | "problem-focused";
-}
+// ─── Props ───────────────────────────────────────────────────────────────────
 
 interface SectionProps {
-  group: AffinityGroupType;
-  insightCount: number;
-  insights?: Insight[];
-  scale?: number;
-  isSelected?: boolean;
-  isDropTarget?: boolean;
-  onClick?: (group: AffinityGroupType, e: React.MouseEvent) => void;
-  onTitleChange?: (id: string, title: string) => void;
-  onPositionChange?: (id: string, position: { x: number; y: number }) => void;
-  onSizeChange?: (id: string, size: { width: number; height: number }) => void;
-  onColorChange?: (id: string, color: SectionColor) => void;
-  onDelete?: (id: string) => void;
-  onOpenComments?: (groupId: string, rect: DOMRect) => void;
-  onLockChange?: (id: string, locked: boolean) => void;
-  onOpacityChange?: (id: string, opacity: number) => void;
-  onAutoFit?: (id: string) => void;
-  autoSize?: { width: number; height: number };
-  unreadCount?: number;
-  amIMentioned?: boolean;
-  projectContext?: string;
+  section: SectionData;
+  zoom: number;
+  isSelected: boolean;
+  /** True when a sticky being dragged hovers over this section */
+  isHovered?: boolean;
+  onSelect: (id: string, multi: boolean) => void;
+  /**
+   * Move the section AND all its children by (dx, dy) canvas units.
+   * Called on every pointer-move frame during drag.
+   */
+  onMoveWithChildren: (sectionId: string, dx: number, dy: number) => void;
+  onUpdate: (id: string, patch: Partial<SectionData>) => void;
+  onDelete: (id: string) => void;
 }
 
-export const Section = memo(function Section({
-  group,
-  insightCount,
-  insights = [],
-  scale = 1,
-  isSelected = false,
-  isDropTarget = false,
-  onClick,
-  onTitleChange,
-  onPositionChange,
-  onSizeChange,
-  onColorChange,
+// ─── Component ───────────────────────────────────────────────────────────────
+
+export function Section({
+  section,
+  zoom,
+  isSelected,
+  isHovered = false,
+  onSelect,
+  onMoveWithChildren,
+  onUpdate,
   onDelete,
-  onOpenComments,
-  onLockChange,
-  onOpacityChange,
-  onAutoFit,
-  autoSize,
-  unreadCount,
-  amIMentioned,
-  projectContext,
 }: SectionProps) {
-  const sectionRef = useRef<HTMLDivElement>(null);
-  const dragStartRef = useRef<{ x: number; y: number; posX: number; posY: number } | null>(null);
-  const resizeStartRef = useRef<{ x: number; y: number; width: number; height: number; aspectRatio: number } | null>(null);
-  const currentPosRef = useRef(group.position);
-  const currentSizeRef = useRef({ width: CLUSTER_MIN_WIDTH, height: CLUSTER_MIN_HEIGHT });
-  const isDraggingRef = useRef(false);
-
-  const [localPosition, setLocalPosition] = useState(group.position);
-  const [localSize, setLocalSize] = useState(
-    group.size || autoSize || { width: CLUSTER_MIN_WIDTH, height: CLUSTER_MIN_HEIGHT }
-  );
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [titleValue, setTitleValue] = useState(group.title);
-  const [showContextMenu, setShowContextMenu] = useState(false);
-  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
-  const [showSettings, setShowSettings] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [isLocked, setIsLocked] = useState(false);
-  const [opacity, setOpacity] = useState(100);
-  const [maintainAspectRatio, setMaintainAspectRatio] = useState(false);
-  const titleInputRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    currentPosRef.current = group.position;
-    if (!isDraggingRef.current) {
-      setLocalPosition(group.position);
-    }
-  }, [group.position]);
+  const colorConfig =
+    SECTION_COLORS.find((c) => c.bg === section.color) ?? SECTION_COLORS[0];
 
-  useEffect(() => {
-    isDraggingRef.current = isDragging;
-  }, [isDragging]);
+  // Default to false for sections that don't have this field yet
+  const autoResize = section.autoResize ?? false;
 
-  // Only update size from group.size when it changes (not from autoSize)
-  useEffect(() => {
-    if (group.size && !isDraggingRef.current) {
-      setLocalSize(group.size);
-    }
-  }, [group.size]);
+  // ── Drag — moves section + all child stickies atomically ─────────────────
 
-  useEffect(() => {
-    if (isEditingTitle && titleInputRef.current) {
-      titleInputRef.current.focus();
-      titleInputRef.current.select();
-    }
-  }, [isEditingTitle]);
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (isEditingTitle) return;
+      if (e.button !== 0) return;
 
-  const colorInfo = useMemo(() => {
-    return SECTION_COLORS.find((c) => c.value === group.color) || SECTION_COLORS[0];
-  }, [group.color]);
-
-  const handleHeaderMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.button !== 0 || isEditingTitle || isLocked) return;
-      e.preventDefault();
       e.stopPropagation();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      onSelect(section.id, e.shiftKey || e.metaKey);
+
+      const startClientX = e.clientX;
+      const startClientY = e.clientY;
+      let lastDx = 0;
+      let lastDy = 0;
 
       setIsDragging(true);
-      isDraggingRef.current = true;
 
-      dragStartRef.current = {
-        x: e.clientX,
-        y: e.clientY,
-        posX: localPosition.x,
-        posY: localPosition.y,
+      const onMovePtr = (mv: PointerEvent) => {
+        // Total delta from drag start (in canvas units)
+        const totalDx = (mv.clientX - startClientX) / zoom;
+        const totalDy = (mv.clientY - startClientY) / zoom;
+        // Frame delta = total - what we already applied
+        const frameDx = totalDx - lastDx;
+        const frameDy = totalDy - lastDy;
+        lastDx = totalDx;
+        lastDy = totalDy;
+        onMoveWithChildren(section.id, frameDx, frameDy);
       };
 
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        if (!dragStartRef.current) return;
-        const dx = (moveEvent.clientX - dragStartRef.current.x) / scale;
-        const dy = (moveEvent.clientY - dragStartRef.current.y) / scale;
-        const newPos = {
-          x: dragStartRef.current.posX + dx,
-          y: dragStartRef.current.posY + dy,
-        };
-        setLocalPosition(newPos);
-        currentPosRef.current = newPos;
-      };
-
-      const handleMouseUp = () => {
-        if (dragStartRef.current && onPositionChange) {
-          onPositionChange(group.id, currentPosRef.current);
-        }
+      const onUp = () => {
         setIsDragging(false);
-        isDraggingRef.current = false;
-        dragStartRef.current = null;
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
+        window.removeEventListener("pointermove", onMovePtr);
+        window.removeEventListener("pointerup", onUp);
       };
 
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
+      window.addEventListener("pointermove", onMovePtr);
+      window.addEventListener("pointerup", onUp);
     },
-    [localPosition, scale, group.id, onPositionChange, isEditingTitle, isLocked]
+    [isEditingTitle, section.id, zoom, onSelect, onMoveWithChildren]
   );
 
-  const handleResizeMouseDown = useCallback(
-    (e: React.MouseEvent, corner: "se" | "e" | "s") => {
-      if (isLocked) return;
-      e.preventDefault();
+  // ── Resize — SE corner handle ─────────────────────────────────────────────
+
+  const handleResizePointerDown = useCallback(
+    (e: React.PointerEvent) => {
       e.stopPropagation();
+      e.currentTarget.setPointerCapture(e.pointerId);
 
-      const aspectRatio = localSize.width / localSize.height;
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startW = section.size.width;
+      const startH = section.size.height;
 
-      resizeStartRef.current = {
-        x: e.clientX,
-        y: e.clientY,
-        width: localSize.width,
-        height: localSize.height,
-        aspectRatio,
+      const onMovePtr = (mv: PointerEvent) => {
+        const newW = Math.max(200, startW + (mv.clientX - startX) / zoom);
+        const newH = Math.max(120, startH + (mv.clientY - startY) / zoom);
+        onUpdate(section.id, { size: { width: newW, height: newH } });
       };
-
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        if (!resizeStartRef.current) return;
-        const dx = (moveEvent.clientX - resizeStartRef.current.x) / scale;
-        const dy = (moveEvent.clientY - resizeStartRef.current.y) / scale;
-
-        let newWidth = resizeStartRef.current.width;
-        let newHeight = resizeStartRef.current.height;
-
-        if (corner === "se" || corner === "e") {
-          newWidth = Math.max(CLUSTER_MIN_WIDTH, resizeStartRef.current.width + dx);
-        }
-        if (corner === "se" || corner === "s") {
-          newHeight = Math.max(CLUSTER_MIN_HEIGHT, resizeStartRef.current.height + dy);
-        }
-
-        if (maintainAspectRatio && corner === "se") {
-          const ratio = resizeStartRef.current.aspectRatio;
-          if (Math.abs(dx) > Math.abs(dy)) {
-            newHeight = newWidth / ratio;
-          } else {
-            newWidth = newHeight * ratio;
-          }
-        }
-
-        const newSize = { width: newWidth, height: newHeight };
-        setLocalSize(newSize);
-        currentSizeRef.current = newSize;
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMovePtr);
+        window.removeEventListener("pointerup", onUp);
       };
-
-      const handleMouseUp = () => {
-        if (resizeStartRef.current && onSizeChange) {
-          onSizeChange(group.id, currentSizeRef.current);
-        }
-        resizeStartRef.current = null;
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
-      };
-
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
+      window.addEventListener("pointermove", onMovePtr);
+      window.addEventListener("pointerup", onUp);
     },
-    [localSize, scale, group.id, onSizeChange, isLocked, maintainAspectRatio]
+    [section.id, section.size, zoom, onUpdate]
   );
 
-  const handleAutoFit = useCallback(() => {
-    if (insights.length === 0) return;
+  // ── Border style ───────────────────────────────────────────────────────────
 
-    const cols = Math.ceil(Math.sqrt(insights.length));
-    const rows = Math.ceil(insights.length / cols);
-
-    const padding = 40;
-    const headerHeight = 60;
-    const spacingX = STICKY_WIDTH + 20;
-    const spacingY = STICKY_HEIGHT + 20;
-
-    const newWidth = padding * 2 + cols * spacingX;
-    const newHeight = headerHeight + padding * 2 + rows * spacingY;
-
-    const newSize = { width: newWidth, height: newHeight };
-    setLocalSize(newSize);
-    currentSizeRef.current = newSize;
-    onSizeChange?.(group.id, newSize);
-    onAutoFit?.(group.id);
-  }, [insights.length, group.id, onSizeChange, onAutoFit]);
-
-  const handleClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      onClick?.(group, e);
-    },
-    [group, onClick]
-  );
-
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    if (isLocked) return;
-    e.stopPropagation();
-    setIsEditingTitle(true);
-    setTitleValue(group.title);
-  }, [group.title, isLocked]);
-
-  const handleTitleSave = useCallback(() => {
-    if (titleValue.trim() && titleValue !== group.title) {
-      onTitleChange?.(group.id, titleValue.trim());
-    }
-    setIsEditingTitle(false);
-  }, [titleValue, group.id, group.title, onTitleChange]);
-
-  const handleTitleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") handleTitleSave();
-      else if (e.key === "Escape") {
-        setTitleValue(group.title);
-        setIsEditingTitle(false);
-      }
-    },
-    [handleTitleSave, group.title]
-  );
-
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setContextMenuPos({ x: e.clientX, y: e.clientY });
-    setShowContextMenu(true);
-  }, []);
-
-  const handleLockToggle = useCallback(() => {
-    const newLocked = !isLocked;
-    setIsLocked(newLocked);
-    onLockChange?.(group.id, newLocked);
-    setShowContextMenu(false);
-  }, [isLocked, group.id, onLockChange]);
-
-  const handleOpacityChange = useCallback((newOpacity: number) => {
-    setOpacity(newOpacity);
-    onOpacityChange?.(group.id, newOpacity);
-  }, [group.id, onOpacityChange]);
-
-  useEffect(() => {
-    const handleClickOutside = () => {
-      setShowContextMenu(false);
-      setShowSettings(false);
-    };
-    if (showContextMenu || showSettings) {
-      document.addEventListener("click", handleClickOutside);
-      return () => document.removeEventListener("click", handleClickOutside);
-    }
-  }, [showContextMenu, showSettings]);
+  const border = isSelected
+    ? "2px solid #0d99ff"
+    : isHovered
+    ? `2px dashed ${colorConfig.border}`
+    : `2px solid ${colorConfig.border}`;
 
   return (
-    <>
+    <div
+      className="absolute"
+      style={{
+        left:   section.position.x,
+        top:    section.position.y,
+        width:  section.size.width,
+        height: section.size.height,
+        zIndex: section.zIndex,
+        // Subtle lift during drag
+        filter: isDragging ? "drop-shadow(0 8px 24px rgba(0,0,0,0.12))" : "none",
+        transition: isDragging ? "none" : "filter 0.2s ease",
+      }}
+    >
+      {/* ── Section body ── */}
       <div
-        ref={sectionRef}
-        className={cn(
-          "absolute transition-shadow",
-          isLocked && "pointer-events-none",
-          !isLocked && "cursor-grab",
-          isDragging && "cursor-grabbing"
-        )}
+        className="w-full h-full rounded-xl flex flex-col"
         style={{
-          left: localPosition.x,
-          top: localPosition.y,
-          width: localSize.width,
-          height: localSize.height,
-          zIndex: isSelected || isDropTarget ? 5 : 1,
-          opacity: opacity / 100,
+          background: colorConfig.bg,
+          border,
+          cursor: isDragging ? "grabbing" : "grab",
+          // Highlight ring when a sticky hovers over this section
+          boxShadow: isHovered
+            ? `0 0 0 3px ${colorConfig.border}88`
+            : "none",
+          transition: "box-shadow 0.15s ease, border 0.15s ease",
         }}
-        onClick={handleClick}
-        onContextMenu={handleContextMenu}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onPointerDown={handlePointerDown}
       >
-        {/* Border */}
+        {/* ── Title bar ── */}
         <div
-          className={cn(
-            "absolute inset-0 rounded-2xl border-[2.5px] border-dash transition-all",
-            (isHovered || isDropTarget) && "shadow-xl"
-          )}
+          className="flex items-center gap-2 px-3 py-2 rounded-t-xl shrink-0"
           style={{
-            borderColor: isDropTarget ? "#9747FF" : isHovered ? colorInfo.value : `${colorInfo.value}80`,
-            borderStyle: "dashed",
+            background:   colorConfig.border + "44",
+            borderBottom: `1px solid ${colorConfig.border}`,
+            height: 40,
           }}
-        />
-
-        {/* Selection outline */}
-        {isSelected && (
-          <div
-            className="absolute inset-0 rounded-2xl pointer-events-none"
-            style={{ outline: `2px solid ${colorInfo.value}`, outlineOffset: 4 }}
-          />
-        )}
-
-        {/* Lock indicator */}
-        {isLocked && (
-          <div className="absolute inset-0 rounded-2xl bg-muted/20 pointer-events-auto flex items-center justify-center">
-            <div className="bg-card/90 px-3 py-2 rounded-lg shadow-md flex items-center gap-2">
-              <Lock size={14} className="text-muted-foreground" />
-              <span className="text-xs font-medium text-muted-foreground">Locked</span>
-            </div>
-          </div>
-        )}
-
-        {/* Drop indicator */}
-        {(isHovered || isDropTarget) && !isLocked && (
-          <div
-            className="absolute inset-2 rounded-xl border-2 border-dashed flex items-center justify-center pointer-events-none animate-pulse"
-            style={{ borderColor: isDropTarget ? "#9747FF" : `${colorInfo.value}80` }}
-          >
-            <span
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg"
-              style={{
-                color: isDropTarget ? "#fff" : colorInfo.value,
-                backgroundColor: isDropTarget ? "#9747FF" : `${colorInfo.value}20`,
-              }}
-            >
-              {isDropTarget ? "Release to drop" : "Drop here"}
-            </span>
-          </div>
-        )}
-
-        {/* Header */}
-        <div
-          className={cn(
-            "absolute -top-9 left-0 flex items-center gap-1.5",
-            !isLocked && "cursor-move"
-          )}
-          onMouseDown={handleHeaderMouseDown}
-          onDoubleClick={handleDoubleClick}
         >
-          {/* Lock button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleLockToggle();
-            }}
-            className={cn(
-              "p-1.5 rounded-lg transition-all",
-              isLocked
-                ? "bg-muted text-muted-foreground"
-                : "hover:bg-accent text-muted-foreground hover:text-foreground"
-            )}
-            title={isLocked ? "Unlock section" : "Lock section"}
-          >
-            {isLocked ? <Lock size={14} /> : <Unlock size={14} />}
-          </button>
-
-          {/* Title */}
-          {isEditingTitle ? (
-            <input
-              ref={titleInputRef}
-              type="text"
-              value={titleValue}
-              onChange={(e) => setTitleValue(e.target.value)}
-              onBlur={handleTitleSave}
-              onKeyDown={handleTitleKeyDown}
-              onClick={(e) => e.stopPropagation()}
-              className="text-[13px] font-semibold text-foreground bg-background border border-primary rounded px-2 py-0.5 outline-none"
-            />
-          ) : (
-            <span className="text-[13px] font-semibold text-foreground bg-card px-2 py-0.5 rounded shadow-sm border border-border">
-              {group.title}
-            </span>
-          )}
-
-          {/* Count badge */}
-          <span
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium shadow-sm"
-            style={{ backgroundColor: `${colorInfo.value}20`, color: colorInfo.value }}
-          >
-            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: colorInfo.value }} />
-            {insightCount}
-          </span>
-
-          {/* AI suggestion button */}
-          {insights.length > 0 && !isLocked && onTitleChange && (
-            <GroupNameAssistant
-              group={group}
-              insights={insights}
-              currentTitle={group.title}
-              onTitleUpdate={(newTitle) => onTitleChange(group.id, newTitle)}
-              projectContext={projectContext}
-            />
-          )}
-
-          {/* Comments button */}
-          {onOpenComments && (
+          {/* Color dot / picker */}
+          <div className="relative shrink-0">
             <button
+              className="w-4 h-4 rounded-full border border-white/60 shadow-sm hover:scale-110 transition-transform"
+              style={{ background: colorConfig.border }}
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
-                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                onOpenComments(group.id, rect);
+                setShowColorPicker((v) => !v);
               }}
-              className={cn(
-                "p-1.5 rounded-lg transition-all relative hover:bg-accent",
-                amIMentioned ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" : "text-muted-foreground hover:text-primary"
-              )}
-              title="Comments"
+            />
+            {showColorPicker && (
+              <>
+                <div className="fixed inset-0 z-40" onPointerDown={() => setShowColorPicker(false)} />
+                <div
+                  className="absolute left-0 top-6 z-50 bg-white rounded-xl shadow-xl border border-gray-100 p-2 flex gap-1.5"
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  {SECTION_COLORS.map((c) => (
+                    <button
+                      key={c.bg}
+                      title={c.label}
+                      className="w-5 h-5 rounded-full border-2 border-white shadow hover:scale-110 transition-transform"
+                      style={{ background: c.border }}
+                      onClick={() => {
+                        onUpdate(section.id, { color: c.bg });
+                        setShowColorPicker(false);
+                      }}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Title — double-click to edit */}
+          {isEditingTitle ? (
+            <input
+              ref={titleRef}
+              autoFocus
+              className="flex-1 bg-transparent outline-none text-sm font-semibold text-gray-700 min-w-0"
+              value={section.title}
+              onPointerDown={(e) => e.stopPropagation()}
+              onChange={(e) => onUpdate(section.id, { title: e.target.value })}
+              onBlur={() => setIsEditingTitle(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === "Escape") setIsEditingTitle(false);
+              }}
+            />
+          ) : (
+            <span
+              className="flex-1 text-sm font-semibold text-gray-700 truncate select-none"
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                setIsEditingTitle(true);
+                setTimeout(() => titleRef.current?.focus(), 0);
+              }}
             >
-              <MessageCircle size={14} />
-              {unreadCount !== undefined && unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-              {amIMentioned && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-white dark:border-background" />}
-            </button>
+              {section.title}
+            </span>
           )}
 
-          {/* Settings button */}
+          {/* Auto-resize toggle */}
           <button
+            className={`w-6 h-6 flex items-center justify-center rounded-md text-xs shrink-0 transition-all ${
+              autoResize
+                ? "bg-green-500 text-white hover:bg-green-600 shadow-sm"
+                : "text-gray-400 hover:text-gray-600 hover:bg-gray-100 border border-dashed border-gray-300"
+            }`}
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
-              setShowSettings(!showSettings);
+              onUpdate(section.id, { autoResize: !autoResize });
             }}
-            className={cn(
-              "p-1.5 rounded-lg transition-all",
-              showSettings ? "bg-accent text-foreground" : "hover:bg-accent text-muted-foreground hover:text-foreground"
-            )}
-            title="Section settings"
+            title={autoResize ? "Auto-fit: Section automatically adjusts to fit content. Click to disable." : "Click to enable auto-fit: Section will grow to fit sticky notes inside."}
           >
-            <SlidersHorizontal size={14} />
+            {autoResize ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+              </svg>
+            )}
           </button>
 
-          {/* Auto-fit button */}
+          {/* Delete button */}
           <button
+            className="w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors text-xs shrink-0"
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
-              handleAutoFit();
+              onDelete(section.id);
             }}
-            className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all"
-            title="Fit content"
           >
-            <Maximize2 size={14} />
+            ✕
           </button>
         </div>
 
-        {/* Resize handles */}
-        {!isLocked && (
-          <>
-            {/* Bottom-right corner */}
-            <div
-              className="absolute -bottom-2.5 -right-2.5 w-5 h-5 cursor-se-resize z-10 flex items-center justify-center"
-              onMouseDown={(e) => handleResizeMouseDown(e, "se")}
-            >
-              <svg viewBox="0 0 16 16" className="w-full h-full" style={{ color: colorInfo.value }}>
-                <path d="M14 14L8 14M14 14L14 8M14 14L6 6" stroke="currentColor" strokeWidth="2" fill="none" />
-              </svg>
-            </div>
-            {/* Bottom edge */}
-            <div
-              className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-16 h-2 cursor-s-resize z-10 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
-              onMouseDown={(e) => handleResizeMouseDown(e, "s")}
-            >
-              <div className="w-8 h-1 bg-muted-foreground/30 rounded-full" />
-            </div>
-            {/* Right edge */}
-            <div
-              className="absolute top-1/2 -right-1 -translate-y-1/2 w-2 h-16 cursor-e-resize z-10 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
-              onMouseDown={(e) => handleResizeMouseDown(e, "e")}
-            >
-              <div className="w-1 h-8 bg-muted-foreground/30 rounded-full" />
-            </div>
-          </>
-        )}
+        {/* ── Size badge (bottom-left) ── */}
+        <div
+          className="absolute bottom-2 left-3 text-[10px] text-gray-300 select-none pointer-events-none"
+          style={{ fontFamily: "monospace" }}
+        >
+          {Math.round(section.size.width)} × {Math.round(section.size.height)}
+        </div>
       </div>
 
-      {/* Settings dropdown */}
-      {showSettings && (
-        <div
-          className="absolute top-full left-0 mt-2 z-[100] bg-card rounded-xl shadow-xl border border-border p-3 min-w-[200px] dark:shadow-none"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Section Settings</h4>
-
-          {/* Opacity */}
-          <div className="mb-3">
-            <label className="text-xs font-medium text-foreground mb-1 block">Opacity</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="range"
-                min="30"
-                max="100"
-                value={opacity}
-                onChange={(e) => handleOpacityChange(Number(e.target.value))}
-                className="flex-1 h-1.5 bg-muted rounded-full appearance-none cursor-pointer"
-              />
-              <span className="text-xs text-muted-foreground w-8">{opacity}%</span>
-            </div>
-          </div>
-
-          {/* Aspect ratio */}
-          <div className="mb-3">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={maintainAspectRatio}
-                onChange={(e) => setMaintainAspectRatio(e.target.checked)}
-                className="rounded border-border"
-              />
-              <span className="text-xs font-medium text-foreground">Maintain aspect ratio</span>
-            </label>
-          </div>
-
-          {/* Fit content button */}
-          <button
-            onClick={() => {
-              handleAutoFit();
-              setShowSettings(false);
-            }}
-            className="w-full px-3 py-2 text-xs font-medium text-foreground bg-muted hover:bg-accent rounded-lg transition-colors flex items-center gap-2"
-          >
-            <Maximize2 size={12} />
-            Fit content to section
-          </button>
-        </div>
-      )}
-
-      {/* Context menu */}
-      {showContextMenu && (
-        <div
-          className="fixed z-[200] bg-card rounded-xl shadow-xl border border-border py-1 min-w-[160px] dark:shadow-none"
-          style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Lock/Unlock */}
-          <button
-            onClick={handleLockToggle}
-            className="w-full px-3 py-2 text-left text-[13px] hover:bg-accent flex items-center gap-2 text-foreground"
-          >
-            {isLocked ? <Unlock size={14} /> : <Lock size={14} />}
-            {isLocked ? "Unlock section" : "Lock section"}
-          </button>
-
-          <div className="border-t border-border my-1" />
-
-          {/* Color picker */}
-          <div className="px-3 py-1.5">
-            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Color</span>
-            <div className="flex gap-1 mt-1.5">
-              {SECTION_COLORS.map((c) => (
-                <button
-                  key={c.value}
-                  onClick={() => {
-                    onColorChange?.(group.id, c.value);
-                    setShowContextMenu(false);
-                  }}
-                  className={cn(
-                    "w-6 h-6 rounded-full border-2 transition-transform hover:scale-110",
-                    colorInfo.value === c.value ? "border-foreground" : "border-transparent"
-                  )}
-                  style={{ backgroundColor: c.value }}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="border-t border-border my-1" />
-
-          {/* Rename */}
-          <button
-            onClick={() => {
-              setIsEditingTitle(true);
-              setTitleValue(group.title);
-              setShowContextMenu(false);
-            }}
-            className="w-full px-3 py-2 text-left text-[13px] hover:bg-accent flex items-center gap-2 text-foreground"
-          >
-            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-            </svg>
-            Rename
-          </button>
-
-          {/* Auto-fit */}
-          <button
-            onClick={() => {
-              handleAutoFit();
-              setShowContextMenu(false);
-            }}
-            className="w-full px-3 py-2 text-left text-[13px] hover:bg-accent flex items-center gap-2 text-foreground"
-          >
-            <Maximize2 size={14} />
-            Fit content
-          </button>
-
-          <div className="border-t border-border my-1" />
-
-          {/* Delete */}
-          <button
-            onClick={() => {
-              setShowContextMenu(false);
-              if (confirm("Delete this cluster and all its notes?")) {
-                onDelete?.(group.id);
-              }
-            }}
-            className="w-full px-3 py-2 text-left text-[13px] text-red-500 hover:bg-red-50 flex items-center gap-2"
-          >
-            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
-            Delete
-          </button>
-        </div>
-      )}
-    </>
+      {/* ── Resize handle (SE corner) ── */}
+      <div
+        className="absolute bottom-0 right-0 w-6 h-6 flex items-center justify-center cursor-se-resize z-10 rounded-br-xl"
+        style={{ transform: "translate(20%, 20%)" }}
+        onPointerDown={handleResizePointerDown}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M2 8 L8 8 L8 2" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+      </div>
+    </div>
   );
-});
+}

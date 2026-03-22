@@ -64,7 +64,7 @@ export interface Interview {
   status: 'uploading' | 'transcribing' | 'completed' | 'analyzing' | 'ready';
 }
 
-// Insight types
+// Insight types - RELATIVE positioning: position is relative to parent cluster if clusterId set, absolute if null
 export interface Insight {
   id: string;
   interviewId?: string;
@@ -78,7 +78,8 @@ export interface Insight {
   createdAt: string;
   tags?: string[];
   priority?: 'low' | 'medium' | 'high';
-  clusterId?: string | null;
+  clusterId?: string | null; // null = free floating on canvas
+  position?: { x: number; y: number }; // RELATIVE to parent cluster if clusterId set, ABSOLUTE if null
 }
 
 // Affinity Map types - UNIFIÉS
@@ -102,9 +103,9 @@ export interface AffinityGroup {
   id: string;
   title: string;
   color: string;
-  position: { x: number; y: number };
+  position: { x: number; y: number }; // always absolute on canvas
   insightIds: string[];
-  size?: { width: number; height: number };
+  size?: { width: number; height: number }; // explicit size, auto-expands (defaults to 400x300)
 }
 
 // API Request/Response types

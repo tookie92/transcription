@@ -16,6 +16,7 @@ export function useAffinityMapData(projectId: Id<"projects">) {
   const createAffinityMap = useMutation(api.affinityMaps.create);
   const addGroup = useMutation(api.affinityMaps.addGroup);
   const moveGroup = useMutation(api.affinityMaps.moveGroup);
+  const resizeGroup = useMutation(api.affinityMaps.resizeGroup);
   const addInsightToGroup = useMutation(api.affinityMaps.addInsightToGroup);
   const updateGroupTitle = useMutation(api.affinityMaps.updateGroupTitle);
   const removeGroup = useMutation(api.affinityMaps.removeGroup);
@@ -56,6 +57,7 @@ export function useAffinityMapData(projectId: Id<"projects">) {
       color: group.color,
       position: group.position,
       insightIds: group.insightIds as string[],
+      size: group.size || { width: 400, height: 300 },
     })) || [];
 
   // Sticky positions on canvas
@@ -90,6 +92,7 @@ export function useAffinityMapData(projectId: Id<"projects">) {
     // Mutations
     addGroup,
     moveGroup,
+    resizeGroup,
     addInsightToGroup,
     updateGroupTitle,
     removeGroup,

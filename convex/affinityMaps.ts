@@ -116,6 +116,7 @@ export const addGroup = mutation({
       color: args.color,
       position: args.position,
       insightIds: [],
+      size: { width: 400, height: 300 },
     };
 
     const updatedGroups = [...map.groups, newGroup];
@@ -245,6 +246,7 @@ export const createIndependentInsight = mutation({
       color: "#6B7280",
       position: args.position,
       insightIds: [insightId],
+      size: { width: 200, height: 120 },
     };
 
     const updatedGroups = [...map.groups, newGroup];

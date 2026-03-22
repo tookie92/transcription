@@ -10,8 +10,8 @@ import { AffinityGroup, Insight, ActivePanel, ThemeAnalysis, ThemeRecommendation
 import { toast } from "sonner";
 import { useAuth, useUser } from "@clerk/nextjs";
 
-// Import the new FigJam-style canvas
-import { FigJamCanvas } from "./figjam/FigJamCanvas";
+// Import the FigJam board
+import { FigJamBoard } from "./figjam/FigJamBoard";
 
 // Extracted hooks
 import { useAffinityMapData } from "@/hooks/useAffinityMapData";
@@ -38,7 +38,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const { 
     project, affinityMap, groups, insights, insightsData, activities,
     stickyPositions, updateStickyPositions,
-    addGroup, moveGroup, addInsightToGroup, updateGroupTitle, 
+    addGroup, moveGroup, resizeGroup, addInsightToGroup, updateGroupTitle, 
     removeGroup, removeInsightFromGroup, replaceAllGroups, createManualInsight, deleteInsight,
     broadcastGroupCreated, broadcastInsightMoved
   } = useAffinityMapData(projectId);
@@ -74,6 +74,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     userName: user?.fullName || user?.firstName || "Un utilisateur",
     addGroup,
     moveGroup,
+    resizeGroup,
     addInsightToGroup,
     updateGroupTitle,
     removeGroup,
@@ -112,15 +113,17 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   // ==================== STICKY POSITION HANDLER ====================
   const handleStickyPositionChange = useCallback((insightId: string, position: { x: number; y: number }) => {
     if (affinityMap?._id) {
+      // Get current positions from affinityMap (fresh from query)
+      const currentPositions = affinityMap.stickyPositions || {};
       updateStickyPositions({
         mapId: affinityMap._id as Id<"affinityMaps">,
         positions: {
-          ...stickyPositions,
+          ...currentPositions,
           [insightId]: position,
         },
       });
     }
-  }, [affinityMap, stickyPositions, updateStickyPositions]);
+  }, [affinityMap, updateStickyPositions]);
 
   // ==================== THEME ANALYSIS HANDLERS ====================
   const handleAnalyzeThemes = useCallback(async () => {
@@ -218,6 +221,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
                 y: groupToSplit.position.y,
               },
               insightIds: groupToSplit.insightIds.slice(startIdx, endIdx),
+              size: groupToSplit.size || { width: 400, height: 300 },
             });
           }
         }
@@ -246,6 +250,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           color: "#9747FF",
           position: { x: parentX, y: parentY },
           insightIds: [],
+          size: { width: 500, height: 400 },
         };
         handlers.handleGroupsReplace([
           ...groups,
@@ -279,7 +284,8 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         title: newTitle || mergedGroup.title,
         position: { x: avgX, y: avgY },
         insightIds: mergedInsightIds,
-      },
+        size: mergedGroup.size || { width: 400, height: 300 },
+      } as AffinityGroup,
     ]);
     toast.success(`Merged ${groupsToMerge.length} groups into "${newTitle}"`);
   }, [groups, handlers]);
@@ -309,39 +315,13 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   // ==================== RENDER ====================
   return (
     <div className="h-full relative bg-background">
-      {/* Main Canvas with FigJam Style */}
-      <FigJamCanvas
-        groups={groups}
-        insights={insights}
-        stickyPositions={stickyPositions}
-        onStickyPositionChange={handleStickyPositionChange}
-        projectId={projectId}
+      {/* Main Canvas with FigJam Board */}
+      <FigJamBoard
         projectName={project.name}
-        currentUserId={userId || undefined}
-        currentUserName={user?.fullName || user?.firstName || "User"}
-        otherUsers={otherUsers?.map((u: { userId: string; user?: { name?: string }; cursor: { x: number; y: number }; lastSeen: number }) => ({
-          id: u.userId,
-          name: u.user?.name || "User",
-          initials: (u.user?.name || "U").substring(0, 2).toUpperCase(),
-          color: "#9747FF",
-          cursor: u.cursor,
-          lastSeen: u.lastSeen,
-        })) || []}
-        onGroupMove={handlers.handleGroupMove}
-        onGroupCreate={handlers.handleGroupCreate}
-        onInsightDrop={handlers.handleInsightDrop}
-        onInsightRemove={handlers.handleInsightRemoveFromGroup}
-        onGroupDelete={handlers.handleGroupDelete}
-        onGroupTitleUpdate={handlers.handleGroupTitleUpdate}
-        onGroupSelect={setSelectedGroupId}
-        onOpenComments={(groupId, rect) => setCommentPanel({ groupId, rect })}
-        onStickyCreate={(position, color) => {
-          handlers.handleManualInsightCreate(`New note`, "custom", position);
+        maxVotesPerUser={5}
+        onChange={(elements) => {
+          console.log("Board changed:", Object.keys(elements).length, "elements");
         }}
-        onInsightDelete={handlers.handleInsightDelete}
-        isVotingMode={isVotingMode}
-        userVotes={userVotes}
-        onVote={handleVote}
       />
 
       {/* Side Panels (Theme Discovery, Analytics, Persona, Export) - slide in from right as overlay */}
