@@ -329,12 +329,10 @@ export const resizeGroup = mutation({
 
     const updatedGroups = map.groups.map(group =>
       group.id === args.groupId
-        ? { ...group }
+        ? { ...group, size: args.size }
         : group
     );
 
-    // On stocke la taille dans l'état local pour l'instant
-    // Si tu veux la persister, ajoute un champ `size` dans le schema
     await ctx.db.patch(args.mapId, {
       groups: updatedGroups,
       updatedAt: Date.now(),
@@ -435,7 +433,11 @@ export const updateGroups = mutation({
       title: v.string(),
       color: v.string(),
       position: v.object({ x: v.number(), y: v.number() }),
-      insightIds: v.array(v.string()), // ← CHANGÉ: string[] 
+      insightIds: v.array(v.string()),
+      size: v.optional(v.object({
+        width: v.number(),
+        height: v.number(),
+      })),
     })),
   },
   handler: async (ctx, args) => {
@@ -485,6 +487,10 @@ export const replaceAllGroups = mutation({
       color: v.string(),
       position: v.object({ x: v.number(), y: v.number() }),
       insightIds: v.array(v.string()),
+      size: v.optional(v.object({
+        width: v.number(),
+        height: v.number(),
+      })),
     })),
     stickyPositions: v.optional(v.record(v.string(), v.object({
       x: v.number(),

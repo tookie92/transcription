@@ -24,6 +24,13 @@ import { BottomBar } from "./BottomBar";
 import { MiniMap } from "./MiniMap";
 
 import { useInfiniteCanvas } from "@/hooks/useInfiniteCanvas";
+import {
+  getAbsolutePosition,
+  getClusterAtPosition,
+  computeClusterSize,
+  InsightWithPosition,
+} from "@/lib/canvas-utils";
+import Image from "next/image";
 
 /**
  * Cursor colors for presence
@@ -86,6 +93,10 @@ interface FigJamCanvasProps {
   onGroupDelete?: (groupId: string) => void;
   /** Callback when group title is updated */
   onGroupTitleUpdate?: (groupId: string, title: string) => void;
+  /** Callback when group is selected */
+  onGroupSelect?: (groupId: string | null) => void;
+  /** Callback when comments panel is opened */
+  onOpenComments?: (groupId: string, rect: DOMRect) => void;
   /** Callback when sticky note is created */
   onStickyCreate?: (position: { x: number; y: number }, color: StickyColor) => void;
   /** Active voting mode */
@@ -116,6 +127,8 @@ export const FigJamCanvas = memo(function FigJamCanvas({
   onInsightRemove,
   onGroupDelete,
   onGroupTitleUpdate,
+  onGroupSelect,
+  onOpenComments,
   onStickyCreate,
   isVotingMode = false,
   userVotes = [],
@@ -140,46 +153,18 @@ export const FigJamCanvas = memo(function FigJamCanvas({
 
   /**
    * Map insights to their group positions
-   * PRIORITIZE stored positions over calculated ones
+   * Uses RELATIVE positioning: clustered stickies are positioned relative to cluster
+   * Absolute position is computed at render time using getAbsolutePosition()
    */
-  const insightsWithPositions = useMemo(() => {
+  const insightsWithPositions = useMemo((): InsightWithPosition[] => {
     return insights.map((insight, index) => {
-      // Find which group this insight belongs to
+      const position = getAbsolutePosition(insight, stickyPositions, groups, index);
       const group = groups.find((g) => g.insightIds.includes(insight.id));
 
-      // If there's a stored position, ALWAYS use it (user dragged this sticky)
-      if (stickyPositions[insight.id]) {
-        return {
-          ...insight,
-          position: stickyPositions[insight.id],
-          groupId: group?.id || null,
-        };
-      }
-
-      // Otherwise, calculate position based on whether it's in a group
-      if (group) {
-        const insightIndex = group.insightIds.indexOf(insight.id);
-        const col = insightIndex % 2;
-        const row = Math.floor(insightIndex / 2);
-        const spacing = 180;
-        return {
-          ...insight,
-          position: {
-            x: group.position.x + 20 + col * spacing,
-            y: group.position.y + 50 + row * 160,
-          },
-          groupId: group.id,
-        };
-      }
-
-      // Ungrouped insights - arrange in a grid
       return {
         ...insight,
-        position: {
-          x: 200 + (index % 4) * 180,
-          y: 400 + Math.floor(index / 4) * 160,
-        },
-        groupId: null,
+        position,
+        groupId: group?.id || null,
       };
     });
   }, [insights, groups, stickyPositions]);
@@ -238,8 +223,9 @@ export const FigJamCanvas = memo(function FigJamCanvas({
     (group: AffinityGroupType, e: React.MouseEvent) => {
       setSelectedGroupId(group.id);
       setSelectedInsightId(null);
+      onGroupSelect?.(group.id);
     },
-    []
+    [onGroupSelect]
   );
 
   /**
@@ -350,25 +336,19 @@ export const FigJamCanvas = memo(function FigJamCanvas({
   }, [isSpacePressed, canvas.isPanning, activeTool]);
 
   return (
-    <div className="h-full flex flex-col bg-[#f5f5f0] overflow-hidden">
+    <div className="h-full flex flex-col bg-background overflow-hidden">
       {/* Top bar */}
-      <div className="h-[52px] shrink-0 bg-white border-b border-[#e8e8e8] flex items-center px-3 gap-2 shadow-sm">
+      <div className="h-[52px] shrink-0 bg-card border-b border-border flex items-center px-3 gap-2 shadow-sm dark:shadow-none">
         {/* Logo */}
         <div className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 mr-2">
-          <svg width="22" height="22" viewBox="0 0 38 57" fill="none">
-            <path d="M19 28.5a9.5 9.5 0 1 1 19 0 9.5 9.5 0 0 1-19 0z" fill="#1ABCFE"/>
-            <path d="M0 47.5A9.5 9.5 0 0 1 9.5 38H19v9.5a9.5 9.5 0 0 1-19 0z" fill="#0ACF83"/>
-            <path d="M19 0v19h9.5a9.5 9.5 0 0 0 0-19H19z" fill="#FF7262"/>
-            <path d="M0 9.5A9.5 9.5 0 0 0 9.5 19H19V0H9.5A9.5 9.5 0 0 0 0 9.5z" fill="#F24E1E"/>
-            <path d="M0 28.5A9.5 9.5 0 0 0 9.5 38H19V19H9.5A9.5 9.5 0 0 0 0 28.5z" fill="#FF7262"/>
-          </svg>
-          <span className="text-sm font-semibold text-[#1d1d1d]">Skripta</span>
+          <Image src="/logomark.svg" width={22} height={22} alt="Skripta Logo" />
+          <span className="text-sm font-semibold text-foreground dark:text-neutral-100">Skripta</span>
         </div>
 
         {/* File name */}
-        <div className="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-[#f5f5f5] cursor-pointer">
-          <span className="text-sm font-medium text-[#1d1d1d]">{projectName} ✦</span>
-          <svg width="12" height="12" fill="#8a8a8a" viewBox="0 0 20 20">
+        <div className="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-accent cursor-pointer">
+          <span className="text-sm font-medium text-foreground dark:text-neutral-100">{projectName} ✦</span>
+          <svg width="12" height="12" fill="currentColor" viewBox="0 0 20 20" className="text-muted-foreground">
             <path d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/>
           </svg>
         </div>
@@ -380,7 +360,7 @@ export const FigJamCanvas = memo(function FigJamCanvas({
           {otherUsers.slice(0, 4).map((user, i) => (
             <div
               key={user.id}
-              className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white z-[30]"
+              className="w-7 h-7 rounded-full border-2 border-background flex items-center justify-center text-[10px] font-bold text-white z-[30]"
               style={{ backgroundColor: user.color, zIndex: 30 - i }}
               title={user.name}
             >
@@ -388,8 +368,8 @@ export const FigJamCanvas = memo(function FigJamCanvas({
             </div>
           ))}
           {otherUsers.length > 4 && (
-            <div className="w-7 h-7 rounded-full bg-[#9747FF] border-2 border-white flex items-center justify-center text-[10px] font-bold text-white">
-              +{otherUsers.length - 4}
+            <div className="w-7 h-7 rounded-full bg-[#9747FF] border-2 border-background flex items-center justify-center text-[10px] font-bold text-white">
+                +{otherUsers.length - 4}
             </div>
           )}
         </div>
@@ -424,9 +404,8 @@ export const FigJamCanvas = memo(function FigJamCanvas({
           >
             {/* Dot grid background */}
             <div
-              className="absolute inset-0 pointer-events-none"
+              className="absolute inset-0 pointer-events-none dark:opacity-20"
               style={{
-                backgroundColor: "#f5f5f0",
                 backgroundImage: "radial-gradient(circle, #c8c8c0 1px, transparent 1px)",
                 backgroundSize: "24px 24px",
               }}
@@ -436,49 +415,33 @@ export const FigJamCanvas = memo(function FigJamCanvas({
             {groups.map((group) => {
               const insightCount = group.insightIds.length;
               const groupInsights = insights.filter(i => group.insightIds.includes(i.id));
-              const groupInsightsWithPos = insightsWithPositions.filter(i => group.insightIds.includes(i.id));
               
-              // Calculate cluster size based on content
-              const clusterWidth = Math.max(300, 200 + Math.max(...groupInsightsWithPos.map(i => i.position.x - group.position.x + 200)));
-              const clusterHeight = Math.max(200, 100 + Math.max(...groupInsightsWithPos.map(i => i.position.y - group.position.y + 120)));
+              const clusterSize = computeClusterSize(insights, group.id, groups);
               
               return (
                 <Section
                   key={group.id}
                   group={group}
                   insightCount={insightCount}
-                  insights={groupInsights.map(i => ({ text: i.text, type: i.type }))}
+                  insights={groupInsights}
                   scale={canvas.scale}
                   isSelected={selectedGroupId === group.id}
                   isDropTarget={hoveringGroupId === group.id}
                   onClick={handleGroupClick}
-                  onPositionChange={(id, position) => {
-                    // Calculate delta from old position
-                    const deltaX = position.x - group.position.x;
-                    const deltaY = position.y - group.position.y;
-                    
-                    // Move the group
-                    onGroupMove(id, position);
-                    
-                    // Also move all stickies in this group
-                    group.insightIds.forEach(insightId => {
-                      const currentPos = stickyPositions[insightId] || insightsWithPositions.find(i => i.id === insightId)?.position;
-                      if (currentPos) {
-                        onStickyPositionChange?.(insightId, {
-                          x: currentPos.x + deltaX,
-                          y: currentPos.y + deltaY,
-                        });
-                      }
-                    });
-                  }}
+                  onPositionChange={onGroupMove}
                   onTitleChange={handleGroupTitleChange}
                   onSizeChange={(id, size) => console.log("Size change:", id, size)}
+                  onLockChange={(id, locked) => console.log("Lock change:", id, locked)}
+                  onOpacityChange={(id, opacity) => console.log("Opacity change:", id, opacity)}
+                  onAutoFit={(id) => console.log("Auto-fit:", id)}
                   onDelete={(id) => {
                     if (confirm("Delete this cluster?")) {
                       onGroupDelete?.(id);
                     }
                   }}
-                  autoSize={{ width: clusterWidth, height: clusterHeight }}
+                  onOpenComments={onOpenComments}
+                  autoSize={clusterSize}
+                  projectContext={projectName}
                 />
               );
             })}
@@ -508,22 +471,20 @@ export const FigJamCanvas = memo(function FigJamCanvas({
                 onDragStart={() => setDraggingInsightId(insight.id)}
                 onDragEnd={(position) => {
                   setDraggingInsightId(null);
-                  // Check if dropped over a group
-                  const targetGroup = groups.find(g => {
-                    const gx = g.position.x;
-                    const gy = g.position.y;
-                    const clusterWidth = 400;
-                    const clusterHeight = 300;
-                    return (
-                      position.x >= gx - 20 &&
-                      position.x <= gx + clusterWidth &&
-                      position.y >= gy - 50 &&
-                      position.y <= gy + clusterHeight
-                    );
-                  });
-                  if (targetGroup && !targetGroup.insightIds.includes(insight.id)) {
-                    onInsightDrop?.(insight.id, targetGroup.id);
-                    toast.success(`Added to "${targetGroup.title}"`);
+                  
+                  const targetGroup = getClusterAtPosition(position, groups);
+                  
+                  if (targetGroup) {
+                    const isInCluster = targetGroup.insightIds.includes(insight.id);
+                    if (!isInCluster) {
+                      onInsightDrop?.(insight.id, targetGroup.id);
+                      toast.success(`Added to "${targetGroup.title}"`);
+                    }
+                  } else {
+                    const currentCluster = groups.find(g => g.insightIds.includes(insight.id));
+                    if (currentCluster) {
+                      onInsightRemove?.(insight.id, currentCluster.id);
+                    }
                   }
                 }}
                 onPositionChange={handleInsightPositionChange}
@@ -559,7 +520,7 @@ export const FigJamCanvas = memo(function FigJamCanvas({
                 </svg>
                 {/* Name label */}
                 <div
-                  className="ml-4 -mt-1 bg-white text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap shadow-sm border border-[#e8e8e8]"
+                  className="ml-4 -mt-1 bg-card text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap shadow-sm border border-border"
                   style={{ color: user.color }}
                 >
                   {user.name}

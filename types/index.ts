@@ -2,7 +2,7 @@
 
 import { Id } from "@/convex/_generated/dataModel";
 
-export type ActivePanel = 'voting' | 'analytics' | 'persona' | 'export' | 'votingHistory' | "themeDiscovery" | "activity" | "presentation" | "silentSorting" | null;
+export type ActivePanel = 'voting' | 'analytics' | 'persona' | 'export' | 'votingHistory' | "themeDiscovery" | "aiAssistant" | "activity" | "presentation" | "silentSorting" | null;
 
 export type WorkspaceMode = 'grouping' | 'voting';
 
@@ -78,6 +78,7 @@ export interface Insight {
   createdAt: string;
   tags?: string[];
   priority?: 'low' | 'medium' | 'high';
+  clusterId?: string | null;
 }
 
 // Affinity Map types - UNIFIÉS
@@ -103,6 +104,7 @@ export interface AffinityGroup {
   color: string;
   position: { x: number; y: number };
   insightIds: string[];
+  size?: { width: number; height: number };
 }
 
 // API Request/Response types

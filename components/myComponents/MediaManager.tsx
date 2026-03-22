@@ -31,7 +31,7 @@ export  function MediaManager({ currentProjectId }: MediaManagerProps) {
 
   // Convex
   const createInterview = useMutation(api.interviews.createInterview);
-  const projects = useQuery(api.projects.getUserProjects);
+  const projects = useQuery(api.projects.getUserProjects, {});
   // const { currentProjectId, setCurrentProject } = useCurrentProject();
 
   const handleFileSelect = (file: File) => {

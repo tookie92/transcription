@@ -116,9 +116,9 @@ export const MiniMap = memo(function MiniMap({
     <div
       className={cn(
         "absolute right-4 top-16",
-        "bg-white rounded-[10px]",
-        "shadow-[0_2px_12px_rgba(0,0,0,0.1)]",
-        "border border-[#e8e8e8]",
+        "bg-card rounded-[10px]",
+        "shadow-[0_2px_12px_rgba(0,0,0,0.1)] dark:shadow-none",
+        "border border-border",
         "p-2",
         "z-20",
         className
@@ -126,24 +126,23 @@ export const MiniMap = memo(function MiniMap({
       onClick={handleClick}
     >
       {/* Header */}
-      <div className="text-[10px] text-[#8a8a8a] font-semibold tracking-[0.5px] mb-1.5">
+      <div className="text-[10px] text-muted-foreground font-semibold tracking-[0.5px] mb-1.5">
         MINIMAP
       </div>
 
       {/* Map area */}
       <div
-        className="relative rounded-[6px] overflow-hidden"
+        className="relative rounded-[6px] overflow-hidden bg-muted"
         style={{
           width: MINIMAP_WIDTH,
           height: MINIMAP_HEIGHT,
-          backgroundColor: "#f5f5f0",
         }}
       >
         {/* Dot grid pattern */}
         <div
-          className="absolute inset-0"
+          className="absolute inset-0 opacity-30 dark:opacity-20"
           style={{
-            backgroundImage: "radial-gradient(circle, #c8c8c0 0.5px, transparent 0.5px)",
+            backgroundImage: "radial-gradient(circle, currentColor 0.5px, transparent 0.5px)",
             backgroundSize: "8px 8px",
           }}
         />

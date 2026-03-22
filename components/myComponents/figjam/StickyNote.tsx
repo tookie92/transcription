@@ -169,8 +169,8 @@ export const StickyNote = memo(function StickyNote({
         style={{
           left: localPosition.x,
           top: localPosition.y,
-          width: 160,
-          minHeight: 140,
+          width: 180,
+          minHeight: 80,
           backgroundColor: color,
           boxShadow: isDragging
             ? "0 25px 50px -12px rgba(0,0,0,0.4)"
@@ -194,7 +194,7 @@ export const StickyNote = memo(function StickyNote({
           />
         )}
 
-        <p className="text-[13px] font-medium leading-relaxed text-[#1d1d1d] flex-1">
+        <p className="text-[13px] font-medium leading-relaxed text-[#1d1d1d] flex-1 break-words whitespace-pre-wrap">
           {insight.text}
         </p>
 

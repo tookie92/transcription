@@ -3,7 +3,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuth, useUser } from "@clerk/nextjs";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Send } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
@@ -20,17 +20,36 @@ interface CommentPanelProps {
   presenceUsers: MentionUser[];
   groupTitle: string;
   projectId: string;
+  projectMembers?: Array<{ userId: string; name?: string; email?: string }>;
 }
 
-export function CommentPanel({ mapId, groupId, onClose, screenRect, presenceUsers, groupTitle, projectId }: CommentPanelProps) {
+export function CommentPanel({ mapId, groupId, onClose, screenRect, presenceUsers, groupTitle, projectId, projectMembers = [] }: CommentPanelProps) {
   const { userId } = useAuth();
   const { user } = useUser();
   const [text, setText] = useState("");
 
-  const userName =
-    user?.fullName || user?.firstName || user?.emailAddresses?.[0]?.emailAddress || "You";
+  const userName = user?.fullName || user?.firstName || user?.emailAddresses?.[0]?.emailAddress || "You";
 
-  // 🎯 HOOK POUR LE TYPING - CORRIGÉ (SANS DOUBLON)
+  const allMentionUsers: MentionUser[] = useMemo(() => {
+    const userMap = new Map<string, MentionUser>();
+    
+    presenceUsers.forEach(u => userMap.set(u.id, u));
+    
+    projectMembers.forEach(m => {
+      if (m.userId && !userMap.has(m.userId)) {
+        userMap.set(m.userId, {
+          id: m.userId,
+          name: m.name || m.email || "Unknown User"
+        });
+      }
+    });
+    
+    return Array.from(userMap.values());
+  }, [presenceUsers, projectMembers]);
+
+  const { query, setQuery, suggestions, reset } = useMentions(allMentionUsers);
+
+  // 🎯 HOOK POUR LE TYPING
   const { typingUsers, startTyping, stopTyping, isTyping } = useTyping(
     mapId as Id<"affinityMaps">,
     groupId,
@@ -45,8 +64,6 @@ export function CommentPanel({ mapId, groupId, onClose, screenRect, presenceUser
   const createMentionNotification = useMutation(api.notifications.createMentionNotification);
   const addComment = useMutation(api.comments.addComment);
   const markAsViewed = useMutation(api.comments.markAsViewed);
-
-  const { query, setQuery, suggestions, reset } = useMentions(presenceUsers);
 
   /* -------- @mention logic -------- */
   // 🎯 GESTIONNAIRE POUR LE TYPING - CORRIGÉ

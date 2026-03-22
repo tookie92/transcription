@@ -1,15 +1,24 @@
 /**
- * FigJam-style Section/Frame Component for Clusters
+ * FigJam-style Section Component for Clusters
+ * 
+ * Features:
+ * - Dotted border (FigJam style)
  * - Individual colors
- * - Right-click context menu
- * - Resizable
+ * - Lock/unlock section
+ * - Opacity control
+ * - Aspect ratio constraints
+ * - Auto-fit content
+ * - Resizable with handles
  */
 
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect, memo, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { AffinityGroup as AffinityGroupType } from "@/types";
+import { AffinityGroup as AffinityGroupType, Insight } from "@/types";
+import { CLUSTER_MIN_WIDTH, CLUSTER_MIN_HEIGHT, STICKY_WIDTH, STICKY_HEIGHT } from "@/lib/canvas-utils";
+import { MessageCircle, Lock, Unlock, Maximize2, SlidersHorizontal } from "lucide-react";
+import { GroupNameAssistant } from "../GroupNameAssistant";
 
 export const SECTION_COLORS = [
   { name: "Purple", value: "#9747FF" },
@@ -32,7 +41,7 @@ interface NameSuggestion {
 interface SectionProps {
   group: AffinityGroupType;
   insightCount: number;
-  insights?: Array<{ text: string; type: string }>;
+  insights?: Insight[];
   scale?: number;
   isSelected?: boolean;
   isDropTarget?: boolean;
@@ -42,7 +51,14 @@ interface SectionProps {
   onSizeChange?: (id: string, size: { width: number; height: number }) => void;
   onColorChange?: (id: string, color: SectionColor) => void;
   onDelete?: (id: string) => void;
+  onOpenComments?: (groupId: string, rect: DOMRect) => void;
+  onLockChange?: (id: string, locked: boolean) => void;
+  onOpacityChange?: (id: string, opacity: number) => void;
+  onAutoFit?: (id: string) => void;
   autoSize?: { width: number; height: number };
+  unreadCount?: number;
+  amIMentioned?: boolean;
+  projectContext?: string;
 }
 
 export const Section = memo(function Section({
@@ -58,33 +74,55 @@ export const Section = memo(function Section({
   onSizeChange,
   onColorChange,
   onDelete,
+  onOpenComments,
+  onLockChange,
+  onOpacityChange,
+  onAutoFit,
   autoSize,
+  unreadCount,
+  amIMentioned,
+  projectContext,
 }: SectionProps) {
   const sectionRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ x: number; y: number; posX: number; posY: number } | null>(null);
-  const resizeStartRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const resizeStartRef = useRef<{ x: number; y: number; width: number; height: number; aspectRatio: number } | null>(null);
+  const currentPosRef = useRef(group.position);
+  const currentSizeRef = useRef({ width: CLUSTER_MIN_WIDTH, height: CLUSTER_MIN_HEIGHT });
+  const isDraggingRef = useRef(false);
 
   const [localPosition, setLocalPosition] = useState(group.position);
-  const [localSize, setLocalSize] = useState(autoSize || { width: 400, height: 280 });
+  const [localSize, setLocalSize] = useState(
+    group.size || autoSize || { width: CLUSTER_MIN_WIDTH, height: CLUSTER_MIN_HEIGHT }
+  );
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(group.title);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [suggestions, setSuggestions] = useState<NameSuggestion[]>([]);
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
+  const [opacity, setOpacity] = useState(100);
+  const [maintainAspectRatio, setMaintainAspectRatio] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setLocalPosition(group.position);
+    currentPosRef.current = group.position;
+    if (!isDraggingRef.current) {
+      setLocalPosition(group.position);
+    }
   }, [group.position]);
 
   useEffect(() => {
-    if (autoSize) {
-      setLocalSize(autoSize);
+    isDraggingRef.current = isDragging;
+  }, [isDragging]);
+
+  // Only update size from group.size when it changes (not from autoSize)
+  useEffect(() => {
+    if (group.size && !isDraggingRef.current) {
+      setLocalSize(group.size);
     }
-  }, [autoSize]);
+  }, [group.size]);
 
   useEffect(() => {
     if (isEditingTitle && titleInputRef.current) {
@@ -99,9 +137,12 @@ export const Section = memo(function Section({
 
   const handleHeaderMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (e.button !== 0 || isEditingTitle) return;
+      if (e.button !== 0 || isEditingTitle || isLocked) return;
       e.preventDefault();
       e.stopPropagation();
+
+      setIsDragging(true);
+      isDraggingRef.current = true;
 
       dragStartRef.current = {
         x: e.clientX,
@@ -114,16 +155,20 @@ export const Section = memo(function Section({
         if (!dragStartRef.current) return;
         const dx = (moveEvent.clientX - dragStartRef.current.x) / scale;
         const dy = (moveEvent.clientY - dragStartRef.current.y) / scale;
-        setLocalPosition({
+        const newPos = {
           x: dragStartRef.current.posX + dx,
           y: dragStartRef.current.posY + dy,
-        });
+        };
+        setLocalPosition(newPos);
+        currentPosRef.current = newPos;
       };
 
       const handleMouseUp = () => {
         if (dragStartRef.current && onPositionChange) {
-          onPositionChange(group.id, localPosition);
+          onPositionChange(group.id, currentPosRef.current);
         }
+        setIsDragging(false);
+        isDraggingRef.current = false;
         dragStartRef.current = null;
         document.removeEventListener("mousemove", handleMouseMove);
         document.removeEventListener("mouseup", handleMouseUp);
@@ -132,34 +177,57 @@ export const Section = memo(function Section({
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
     },
-    [localPosition, scale, group.id, onPositionChange, isEditingTitle]
+    [localPosition, scale, group.id, onPositionChange, isEditingTitle, isLocked]
   );
 
   const handleResizeMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.MouseEvent, corner: "se" | "e" | "s") => {
+      if (isLocked) return;
       e.preventDefault();
       e.stopPropagation();
+
+      const aspectRatio = localSize.width / localSize.height;
 
       resizeStartRef.current = {
         x: e.clientX,
         y: e.clientY,
         width: localSize.width,
         height: localSize.height,
+        aspectRatio,
       };
 
       const handleMouseMove = (moveEvent: MouseEvent) => {
         if (!resizeStartRef.current) return;
         const dx = (moveEvent.clientX - resizeStartRef.current.x) / scale;
         const dy = (moveEvent.clientY - resizeStartRef.current.y) / scale;
-        setLocalSize({
-          width: Math.max(200, resizeStartRef.current.width + dx),
-          height: Math.max(150, resizeStartRef.current.height + dy),
-        });
+
+        let newWidth = resizeStartRef.current.width;
+        let newHeight = resizeStartRef.current.height;
+
+        if (corner === "se" || corner === "e") {
+          newWidth = Math.max(CLUSTER_MIN_WIDTH, resizeStartRef.current.width + dx);
+        }
+        if (corner === "se" || corner === "s") {
+          newHeight = Math.max(CLUSTER_MIN_HEIGHT, resizeStartRef.current.height + dy);
+        }
+
+        if (maintainAspectRatio && corner === "se") {
+          const ratio = resizeStartRef.current.aspectRatio;
+          if (Math.abs(dx) > Math.abs(dy)) {
+            newHeight = newWidth / ratio;
+          } else {
+            newWidth = newHeight * ratio;
+          }
+        }
+
+        const newSize = { width: newWidth, height: newHeight };
+        setLocalSize(newSize);
+        currentSizeRef.current = newSize;
       };
 
       const handleMouseUp = () => {
         if (resizeStartRef.current && onSizeChange) {
-          onSizeChange(group.id, localSize);
+          onSizeChange(group.id, currentSizeRef.current);
         }
         resizeStartRef.current = null;
         document.removeEventListener("mousemove", handleMouseMove);
@@ -169,8 +237,29 @@ export const Section = memo(function Section({
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
     },
-    [localSize, scale, group.id, onSizeChange]
+    [localSize, scale, group.id, onSizeChange, isLocked, maintainAspectRatio]
   );
+
+  const handleAutoFit = useCallback(() => {
+    if (insights.length === 0) return;
+
+    const cols = Math.ceil(Math.sqrt(insights.length));
+    const rows = Math.ceil(insights.length / cols);
+
+    const padding = 40;
+    const headerHeight = 60;
+    const spacingX = STICKY_WIDTH + 20;
+    const spacingY = STICKY_HEIGHT + 20;
+
+    const newWidth = padding * 2 + cols * spacingX;
+    const newHeight = headerHeight + padding * 2 + rows * spacingY;
+
+    const newSize = { width: newWidth, height: newHeight };
+    setLocalSize(newSize);
+    currentSizeRef.current = newSize;
+    onSizeChange?.(group.id, newSize);
+    onAutoFit?.(group.id);
+  }, [insights.length, group.id, onSizeChange, onAutoFit]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -181,10 +270,11 @@ export const Section = memo(function Section({
   );
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    if (isLocked) return;
     e.stopPropagation();
     setIsEditingTitle(true);
     setTitleValue(group.title);
-  }, [group.title]);
+  }, [group.title, isLocked]);
 
   const handleTitleSave = useCallback(() => {
     if (titleValue.trim() && titleValue !== group.title) {
@@ -211,63 +301,53 @@ export const Section = memo(function Section({
     setShowContextMenu(true);
   }, []);
 
+  const handleLockToggle = useCallback(() => {
+    const newLocked = !isLocked;
+    setIsLocked(newLocked);
+    onLockChange?.(group.id, newLocked);
+    setShowContextMenu(false);
+  }, [isLocked, group.id, onLockChange]);
+
+  const handleOpacityChange = useCallback((newOpacity: number) => {
+    setOpacity(newOpacity);
+    onOpacityChange?.(group.id, newOpacity);
+  }, [group.id, onOpacityChange]);
+
   useEffect(() => {
     const handleClickOutside = () => {
       setShowContextMenu(false);
-      setShowSuggestions(false);
+      setShowSettings(false);
     };
-    if (showContextMenu || showSuggestions) {
+    if (showContextMenu || showSettings) {
       document.addEventListener("click", handleClickOutside);
       return () => document.removeEventListener("click", handleClickOutside);
     }
-  }, [showContextMenu, showSuggestions]);
-
-  const fetchSuggestions = useCallback(async () => {
-    if (insights.length === 0) return;
-    
-    setIsLoadingSuggestions(true);
-    try {
-      const response = await fetch("/api/suggest-group-names", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          insights: insights.map(i => ({ text: i.text, type: i.type })),
-          currentTitle: group.title,
-        }),
-      });
-      const data = await response.json();
-      setSuggestions(data.suggestions || []);
-      setShowSuggestions(true);
-    } catch (error) {
-      console.error("Failed to fetch suggestions:", error);
-    } finally {
-      setIsLoadingSuggestions(false);
-    }
-  }, [insights, group.title]);
-
-  const handleSelectSuggestion = useCallback((title: string) => {
-    onTitleChange?.(group.id, title);
-    setShowSuggestions(false);
-    setTitleValue(title);
-  }, [group.id, onTitleChange]);
+  }, [showContextMenu, showSettings]);
 
   return (
     <>
       <div
         ref={sectionRef}
-        className="absolute transition-shadow"
+        className={cn(
+          "absolute transition-shadow",
+          isLocked && "pointer-events-none",
+          !isLocked && "cursor-grab",
+          isDragging && "cursor-grabbing"
+        )}
         style={{
           left: localPosition.x,
           top: localPosition.y,
           width: localSize.width,
           height: localSize.height,
           zIndex: isSelected || isDropTarget ? 5 : 1,
+          opacity: opacity / 100,
         }}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
+        {/* Border */}
         <div
           className={cn(
             "absolute inset-0 rounded-2xl border-[2.5px] border-dash transition-all",
@@ -275,11 +355,11 @@ export const Section = memo(function Section({
           )}
           style={{
             borderColor: isDropTarget ? "#9747FF" : isHovered ? colorInfo.value : `${colorInfo.value}80`,
-            backgroundColor: isDropTarget ? "rgba(151, 71, 255, 0.15)" : `${colorInfo.value}08`,
             borderStyle: "dashed",
           }}
         />
 
+        {/* Selection outline */}
         {isSelected && (
           <div
             className="absolute inset-0 rounded-2xl pointer-events-none"
@@ -287,26 +367,61 @@ export const Section = memo(function Section({
           />
         )}
 
+        {/* Lock indicator */}
+        {isLocked && (
+          <div className="absolute inset-0 rounded-2xl bg-muted/20 pointer-events-auto flex items-center justify-center">
+            <div className="bg-card/90 px-3 py-2 rounded-lg shadow-md flex items-center gap-2">
+              <Lock size={14} className="text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">Locked</span>
+            </div>
+          </div>
+        )}
+
         {/* Drop indicator */}
-        {(isHovered || isDropTarget) && (
+        {(isHovered || isDropTarget) && !isLocked && (
           <div
             className="absolute inset-2 rounded-xl border-2 border-dashed flex items-center justify-center pointer-events-none animate-pulse"
             style={{ borderColor: isDropTarget ? "#9747FF" : `${colorInfo.value}80` }}
           >
-            <span className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ 
-              color: isDropTarget ? "#fff" : colorInfo.value, 
-              backgroundColor: isDropTarget ? "#9747FF" : `${colorInfo.value}20` 
-            }}>
+            <span
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg"
+              style={{
+                color: isDropTarget ? "#fff" : colorInfo.value,
+                backgroundColor: isDropTarget ? "#9747FF" : `${colorInfo.value}20`,
+              }}
+            >
               {isDropTarget ? "Release to drop" : "Drop here"}
             </span>
           </div>
         )}
 
+        {/* Header */}
         <div
-          className="absolute -top-9 left-0 flex items-center gap-2 cursor-move"
+          className={cn(
+            "absolute -top-9 left-0 flex items-center gap-1.5",
+            !isLocked && "cursor-move"
+          )}
           onMouseDown={handleHeaderMouseDown}
           onDoubleClick={handleDoubleClick}
         >
+          {/* Lock button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleLockToggle();
+            }}
+            className={cn(
+              "p-1.5 rounded-lg transition-all",
+              isLocked
+                ? "bg-muted text-muted-foreground"
+                : "hover:bg-accent text-muted-foreground hover:text-foreground"
+            )}
+            title={isLocked ? "Unlock section" : "Lock section"}
+          >
+            {isLocked ? <Lock size={14} /> : <Unlock size={14} />}
+          </button>
+
+          {/* Title */}
           {isEditingTitle ? (
             <input
               ref={titleInputRef}
@@ -316,90 +431,216 @@ export const Section = memo(function Section({
               onBlur={handleTitleSave}
               onKeyDown={handleTitleKeyDown}
               onClick={(e) => e.stopPropagation()}
-              className="text-[13px] font-semibold text-[#1d1d1d] bg-white border border-[#9747FF] rounded px-2 py-0.5 outline-none"
+              className="text-[13px] font-semibold text-foreground bg-background border border-primary rounded px-2 py-0.5 outline-none"
             />
           ) : (
-            <span className="text-[13px] font-semibold text-[#1d1d1d]">
+            <span className="text-[13px] font-semibold text-foreground bg-card px-2 py-0.5 rounded shadow-sm border border-border">
               {group.title}
             </span>
           )}
 
+          {/* Count badge */}
           <span
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium shadow-sm"
             style={{ backgroundColor: `${colorInfo.value}20`, color: colorInfo.value }}
           >
             <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: colorInfo.value }} />
-            {insightCount} {insightCount === 1 ? "idea" : "ideas"}
+            {insightCount}
           </span>
 
-          {insights.length > 0 && (
+          {/* AI suggestion button */}
+          {insights.length > 0 && !isLocked && onTitleChange && (
+            <GroupNameAssistant
+              group={group}
+              insights={insights}
+              currentTitle={group.title}
+              onTitleUpdate={(newTitle) => onTitleChange(group.id, newTitle)}
+              projectContext={projectContext}
+            />
+          )}
+
+          {/* Comments button */}
+          {onOpenComments && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (!showSuggestions) {
-                  fetchSuggestions();
-                }
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                onOpenComments(group.id, rect);
               }}
-              disabled={isLoadingSuggestions}
-              className="px-2 py-0.5 text-[11px] font-medium bg-white border border-[#e8e8e8] rounded-full hover:bg-[#f5f5f5] transition-colors flex items-center gap-1"
-            >
-              {isLoadingSuggestions ? (
-                <span className="w-3 h-3 border-2 border-[#9747FF] border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                  <path d="M2 17l10 5 10-5" />
-                  <path d="M2 12l10 5 10-5" />
-                </svg>
+              className={cn(
+                "p-1.5 rounded-lg transition-all relative hover:bg-accent",
+                amIMentioned ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" : "text-muted-foreground hover:text-primary"
               )}
-              Suggest name
+              title="Comments"
+            >
+              <MessageCircle size={14} />
+              {unreadCount !== undefined && unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+              {amIMentioned && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-white dark:border-background" />}
             </button>
           )}
+
+          {/* Settings button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowSettings(!showSettings);
+            }}
+            className={cn(
+              "p-1.5 rounded-lg transition-all",
+              showSettings ? "bg-accent text-foreground" : "hover:bg-accent text-muted-foreground hover:text-foreground"
+            )}
+            title="Section settings"
+          >
+            <SlidersHorizontal size={14} />
+          </button>
+
+          {/* Auto-fit button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleAutoFit();
+            }}
+            className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all"
+            title="Fit content"
+          >
+            <Maximize2 size={14} />
+          </button>
         </div>
 
-        <div
-          className="absolute -bottom-2 -right-2 w-4 h-4 cursor-se-resize z-10"
-          onMouseDown={handleResizeMouseDown}
-        >
-          <svg viewBox="0 0 16 16" className="w-full h-full" style={{ color: colorInfo.value }}>
-            <path d="M14 14L8 14M14 14L14 8M14 14L6 6" stroke="currentColor" strokeWidth="2" fill="none" />
-          </svg>
-        </div>
+        {/* Resize handles */}
+        {!isLocked && (
+          <>
+            {/* Bottom-right corner */}
+            <div
+              className="absolute -bottom-2.5 -right-2.5 w-5 h-5 cursor-se-resize z-10 flex items-center justify-center"
+              onMouseDown={(e) => handleResizeMouseDown(e, "se")}
+            >
+              <svg viewBox="0 0 16 16" className="w-full h-full" style={{ color: colorInfo.value }}>
+                <path d="M14 14L8 14M14 14L14 8M14 14L6 6" stroke="currentColor" strokeWidth="2" fill="none" />
+              </svg>
+            </div>
+            {/* Bottom edge */}
+            <div
+              className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-16 h-2 cursor-s-resize z-10 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
+              onMouseDown={(e) => handleResizeMouseDown(e, "s")}
+            >
+              <div className="w-8 h-1 bg-muted-foreground/30 rounded-full" />
+            </div>
+            {/* Right edge */}
+            <div
+              className="absolute top-1/2 -right-1 -translate-y-1/2 w-2 h-16 cursor-e-resize z-10 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
+              onMouseDown={(e) => handleResizeMouseDown(e, "e")}
+            >
+              <div className="w-1 h-8 bg-muted-foreground/30 rounded-full" />
+            </div>
+          </>
+        )}
       </div>
 
+      {/* Settings dropdown */}
+      {showSettings && (
+        <div
+          className="absolute top-full left-0 mt-2 z-[100] bg-card rounded-xl shadow-xl border border-border p-3 min-w-[200px] dark:shadow-none"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Section Settings</h4>
+
+          {/* Opacity */}
+          <div className="mb-3">
+            <label className="text-xs font-medium text-foreground mb-1 block">Opacity</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min="30"
+                max="100"
+                value={opacity}
+                onChange={(e) => handleOpacityChange(Number(e.target.value))}
+                className="flex-1 h-1.5 bg-muted rounded-full appearance-none cursor-pointer"
+              />
+              <span className="text-xs text-muted-foreground w-8">{opacity}%</span>
+            </div>
+          </div>
+
+          {/* Aspect ratio */}
+          <div className="mb-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={maintainAspectRatio}
+                onChange={(e) => setMaintainAspectRatio(e.target.checked)}
+                className="rounded border-border"
+              />
+              <span className="text-xs font-medium text-foreground">Maintain aspect ratio</span>
+            </label>
+          </div>
+
+          {/* Fit content button */}
+          <button
+            onClick={() => {
+              handleAutoFit();
+              setShowSettings(false);
+            }}
+            className="w-full px-3 py-2 text-xs font-medium text-foreground bg-muted hover:bg-accent rounded-lg transition-colors flex items-center gap-2"
+          >
+            <Maximize2 size={12} />
+            Fit content to section
+          </button>
+        </div>
+      )}
+
+      {/* Context menu */}
       {showContextMenu && (
         <div
-          className="fixed z-[200] bg-white rounded-xl shadow-xl border border-[#e8e8e8] py-1 min-w-[160px]"
+          className="fixed z-[200] bg-card rounded-xl shadow-xl border border-border py-1 min-w-[160px] dark:shadow-none"
           style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-3 py-1.5 text-[10px] text-[#8a8a8a] font-medium uppercase tracking-wide">
-            Change color
+          {/* Lock/Unlock */}
+          <button
+            onClick={handleLockToggle}
+            className="w-full px-3 py-2 text-left text-[13px] hover:bg-accent flex items-center gap-2 text-foreground"
+          >
+            {isLocked ? <Unlock size={14} /> : <Lock size={14} />}
+            {isLocked ? "Unlock section" : "Lock section"}
+          </button>
+
+          <div className="border-t border-border my-1" />
+
+          {/* Color picker */}
+          <div className="px-3 py-1.5">
+            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Color</span>
+            <div className="flex gap-1 mt-1.5">
+              {SECTION_COLORS.map((c) => (
+                <button
+                  key={c.value}
+                  onClick={() => {
+                    onColorChange?.(group.id, c.value);
+                    setShowContextMenu(false);
+                  }}
+                  className={cn(
+                    "w-6 h-6 rounded-full border-2 transition-transform hover:scale-110",
+                    colorInfo.value === c.value ? "border-foreground" : "border-transparent"
+                  )}
+                  style={{ backgroundColor: c.value }}
+                />
+              ))}
+            </div>
           </div>
-          <div className="flex gap-1 px-3 py-1.5">
-            {SECTION_COLORS.map((c) => (
-              <button
-                key={c.value}
-                onClick={() => {
-                  onColorChange?.(group.id, c.value);
-                  setShowContextMenu(false);
-                }}
-                className={cn(
-                  "w-6 h-6 rounded-full border-2 transition-transform hover:scale-110",
-                  colorInfo.value === c.value ? "border-[#1d1d1d]" : "border-transparent"
-                )}
-                style={{ backgroundColor: c.value }}
-              />
-            ))}
-          </div>
-          <div className="border-t border-[#e8e8e8] my-1" />
+
+          <div className="border-t border-border my-1" />
+
+          {/* Rename */}
           <button
             onClick={() => {
               setIsEditingTitle(true);
               setTitleValue(group.title);
               setShowContextMenu(false);
             }}
-            className="w-full px-3 py-2 text-left text-[13px] hover:bg-[#f5f5f5] flex items-center gap-2"
+            className="w-full px-3 py-2 text-left text-[13px] hover:bg-accent flex items-center gap-2 text-foreground"
           >
             <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -407,6 +648,22 @@ export const Section = memo(function Section({
             </svg>
             Rename
           </button>
+
+          {/* Auto-fit */}
+          <button
+            onClick={() => {
+              handleAutoFit();
+              setShowContextMenu(false);
+            }}
+            className="w-full px-3 py-2 text-left text-[13px] hover:bg-accent flex items-center gap-2 text-foreground"
+          >
+            <Maximize2 size={14} />
+            Fit content
+          </button>
+
+          <div className="border-t border-border my-1" />
+
+          {/* Delete */}
           <button
             onClick={() => {
               setShowContextMenu(false);
@@ -421,50 +678,6 @@ export const Section = memo(function Section({
             </svg>
             Delete
           </button>
-        </div>
-      )}
-
-      {showSuggestions && (
-        <div
-          className="absolute top-full left-0 mt-2 z-[100] bg-white rounded-xl shadow-2xl border border-[#e8e8e8] p-3 min-w-[280px]"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-[13px] font-semibold text-[#1d1d1d]">Suggested names</h4>
-            <button
-              onClick={() => setShowSuggestions(false)}
-              className="p-1 hover:bg-[#f5f5f5] rounded"
-            >
-              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          {suggestions.length === 0 ? (
-            <p className="text-[12px] text-[#8a8a8a]">No suggestions available</p>
-          ) : (
-            <div className="space-y-2">
-              {suggestions.map((suggestion, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleSelectSuggestion(suggestion.title)}
-                  className="w-full p-2 text-left rounded-lg hover:bg-[#f5f5f5] transition-colors group"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-[13px] font-medium text-[#1d1d1d] group-hover:text-[#9747FF]">
-                      {suggestion.title}
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 bg-[#f5f5f5] rounded text-[#8a8a8a]">
-                      {suggestion.category}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-[#8a8a8a] mt-0.5 line-clamp-2">
-                    {suggestion.reason}
-                  </p>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </>

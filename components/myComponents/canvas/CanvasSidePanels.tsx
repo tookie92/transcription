@@ -6,6 +6,7 @@ import { ThemeDiscoveryPanel } from "../ThemeDiscoveryPanel";
 import { AnalyticsDashboard } from "../AnalyticsDashboard";
 import { PersonaGenerator } from "../PersonaGenerator";
 import { ExportPanel } from "../ExportPanel";
+import { AIPanel } from "../figjam/AIPanel";
 import { Id } from "@/convex/_generated/dataModel";
 
 interface CanvasSidePanelsProps {
@@ -30,6 +31,9 @@ interface CanvasSidePanelsProps {
   isThemesAnalyzing: boolean;
   onAnalyzeThemes: () => void;
   onClearThemes: () => void;
+
+  onCreateGroup?: (insightIds: string[], title: string) => void;
+  onAddToGroup?: (insightIds: string[], groupId: string) => void;
 }
 
 export function CanvasSidePanels({
@@ -50,11 +54,32 @@ export function CanvasSidePanels({
   isThemesAnalyzing,
   onAnalyzeThemes,
   onClearThemes,
+  onCreateGroup,
+  onAddToGroup,
 }: CanvasSidePanelsProps) {
   if (isPresentMode) return null;
 
   return (
     <AnimatePresence>
+      {activePanel === "aiAssistant" && onCreateGroup && onAddToGroup && (
+        <motion.div
+          initial={{ x: 320, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: 320, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          className="absolute top-0 right-0 w-72 h-full bg-card border-l border-border flex flex-col shadow-2xl z-40"
+        >
+          <AIPanel
+            groups={groups}
+            insights={insights}
+            projectContext={projectInfo ? `PROJECT: ${projectInfo.name}` : undefined}
+            onCreateGroup={onCreateGroup}
+            onAddToGroup={onAddToGroup}
+            onClose={() => setActivePanel(null)}
+          />
+        </motion.div>
+      )}
+
       {activePanel === "themeDiscovery" && (
         <motion.div
           initial={{ x: 320, opacity: 0 }}

@@ -17,12 +17,13 @@ import { ScrollArea } from "../ui/scroll-area";
 interface PersonaGeneratorProps {
   projectId: string;
   mapId: string;
-  groups: any[];
-  insights: any[];
+  groups: Array<{ id: string; title: string; insightIds: string[] }>;
+  insights: Array<{ id: string; text: string; type: string }>;
   projectContext?: string;
 }
 
 interface GeneratedPersona {
+  _id?: string;
   name: string;
   age: number;
   occupation: string;
@@ -52,7 +53,7 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
   const [viewMode, setViewMode] = useState<"saved" | "new">("saved");
   const [editingPersona, setEditingPersona] = useState<GeneratedPersona | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [selectedSavedPersona, setSelectedSavedPersona] = useState<any>(null);
+  const [selectedSavedPersona, setSelectedSavedPersona] = useState<GeneratedPersona | null>(null);
   const [imageError, setImageError] = useState(false);
 
   const createPersona = useMutation(api.personas.createPersona);
@@ -138,11 +139,11 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
   };
 
   const updateExistingPersona = async () => {
-    if (!selectedSavedPersona || !editingPersona) return;
+    if (!selectedSavedPersona?._id || !editingPersona) return;
 
     try {
       await updatePersona({
-        personaId: selectedSavedPersona._id,
+        personaId: selectedSavedPersona._id as Id<"personas">,
         ...editingPersona,
       });
 
@@ -169,7 +170,7 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
     }
   };
 
-  const startEditing = (persona: any, isNew: boolean = false) => {
+  const startEditing = (persona: GeneratedPersona, isNew: boolean = false) => {
     setEditingPersona({
       name: persona.name,
       age: persona.age,
@@ -208,15 +209,16 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
     }
   };
 
-  const updateField = (field: string, value: any) => {
+  const updateField = (field: string, value: string | number) => {
     setEditingPersona((prev) => {
       if (!prev) return null;
-      const updated = { ...prev };
+      const updated = { ...prev } as GeneratedPersona;
       if (field.includes(".")) {
         const [parent, child] = field.split(".");
-        (updated as any)[parent] = { ...(updated as any)[parent], [child]: value };
+        const parentObj = prev[parent as keyof GeneratedPersona] as Record<string, unknown>;
+        (updated as unknown as Record<string, unknown>)[parent] = { ...parentObj, [child]: value };
       } else {
-        (updated as any)[field] = value;
+        (updated as unknown as Record<string, unknown>)[field] = value;
       }
       return updated;
     });
@@ -225,16 +227,20 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
   const updateArrayField = (field: string, value: string) => {
     setEditingPersona((prev) => {
       if (!prev) return null;
-      const current = (prev as any)[field] as string[];
-      return { ...prev, [field]: [...current, value] };
+      const current = prev[field as keyof GeneratedPersona] as string[];
+      const updated = { ...prev } as GeneratedPersona;
+      (updated as unknown as Record<string, unknown>)[field] = [...current, value];
+      return updated;
     });
   };
 
   const removeArrayItem = (field: string, index: number) => {
     setEditingPersona((prev) => {
       if (!prev) return null;
-      const current = (prev as any)[field] as string[];
-      return { ...prev, [field]: current.filter((_: any, i: number) => i !== index) };
+      const current = prev[field as keyof GeneratedPersona] as string[];
+      const updated = { ...prev } as GeneratedPersona;
+      (updated as unknown as Record<string, unknown>)[field] = current.filter((_, i) => i !== index);
+      return updated;
     });
   };
 
@@ -503,13 +509,13 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
                             </select>
                           ) : (
                             <Input
-                              value={(editingPersona?.demographics as any)?.[field] || ""}
+                              value={(editingPersona?.demographics as Record<string, string>)?.[field] || ""}
                               onChange={(e) => updateField(`demographics.${field}`, e.target.value)}
                               className="flex-1 h-8 text-sm"
                             />
                           )
                         ) : (
-                          <span className="text-sm">{(currentPersona.demographics as any)[field]}</span>
+                          <span className="text-sm">{(currentPersona.demographics as Record<string, string>)[field]}</span>
                         )}
                       </div>
                     ))}

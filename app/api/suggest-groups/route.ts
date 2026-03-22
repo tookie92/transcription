@@ -155,32 +155,46 @@ Respond with valid JSON only:
           content: prompt
         }
       ],
-      model: "openai/gpt-oss-20b",
+      model: "llama-3.1-8b-instant",
       temperature: 0.2,
-      max_tokens: 2000,
-      response_format: { type: "json_object" }
+      max_tokens: 2000
     });
 
     const content = completion.choices[0]?.message?.content;
+    
+    console.log('📨 AI raw response:', content);
     
     if (!content) {
       throw new Error('No response from AI service');
     }
 
+    // Try to extract JSON from the response
     let parsedResponse: { suggestions?: GroupSuggestionResponse[] };
     try {
+      // Try direct parse first
       parsedResponse = JSON.parse(content);
-    } catch (parseError) {
-      console.error('❌ Failed to parse AI response:', content);
-      return NextResponse.json({ 
-        suggestions: [] 
-      });
-      
+    } catch {
+      // Try to extract JSON from response text
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          parsedResponse = JSON.parse(jsonMatch[0]);
+        } catch (e) {
+          console.error('❌ Failed to parse extracted JSON:', content);
+          // Don't throw - use fallback instead
+          throw new Error('Invalid JSON - using fallback');
+        }
+      } else {
+        console.error('❌ No JSON found in response:', content);
+        // Don't throw - use fallback instead
+        throw new Error('No JSON in response - using fallback');
+      }
     }
 
     if (!parsedResponse.suggestions || !Array.isArray(parsedResponse.suggestions)) {
       console.error('❌ Invalid suggestions structure:', parsedResponse);
-      throw new Error('Invalid suggestions format');
+      // Don't throw - use fallback instead
+      throw new Error('Invalid suggestions format - using fallback');
     }
 
     console.log('🤖 AI response received:', {
@@ -193,20 +207,29 @@ Respond with valid JSON only:
   } catch (error) {
     console.error('💥 Groq API error:', error);
     
-    // 🎯 MAINTENANT projectContext EST ACCESSIBLE
-// Dans le catch de l'API - UTILISER LES VRAIS IDs
-const fallbackResponse = {
-  suggestions: [
-    {
-      action: "create_new" as const,
-      confidence: 0.8,
-      reason: generateFallbackReason(projectContext, insights),
-      insightIds: insights.slice(0, Math.min(3, insights.length)).map(i => i.id), // 🎯 VRAIS IDs
-      newGroupTitle: generateFallbackTitle(projectContext),
-      newGroupDescription: "User insights relevant to project goals"
+    // Use fallback with real insight IDs
+    const fallbackResponse = {
+      suggestions: insights.slice(0, Math.min(5, insights.length)).map(insight => ({
+        action: "create_new" as const,
+        confidence: 0.7,
+        reason: `Related to: ${insight.text.substring(0, 50)}...`,
+        insightIds: [insight.id],
+        newGroupTitle: generateFallbackTitle(projectContext),
+        newGroupDescription: "User insights relevant to project goals"
+      }))
+    };
+    
+    // If no insights, create one default suggestion
+    if (fallbackResponse.suggestions.length === 0) {
+      fallbackResponse.suggestions.push({
+        action: "create_new",
+        confidence: 0.6,
+        reason: generateFallbackReason(projectContext, insights),
+        insightIds: insights.slice(0, Math.min(3, insights.length)).map(i => i.id),
+        newGroupTitle: generateFallbackTitle(projectContext),
+        newGroupDescription: "User insights relevant to project goals"
+      });
     }
-  ]
-};
 
     console.log('🔄 Using fallback suggestions:', fallbackResponse);
     

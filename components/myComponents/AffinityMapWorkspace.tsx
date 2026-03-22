@@ -20,6 +20,7 @@ import { useAffinityMapHandlers } from "@/hooks/useAffinityMapHandlers";
 // Activity
 import { useActivity } from "@/hooks/useActivity";
 import { ActivityPanel } from "./ActivityPanel";
+import { CommentPanel } from "./CommentPanel";
 
 // Side panels for features (AI suggestions, analytics, etc.)
 import { CanvasSidePanels } from "./canvas/CanvasSidePanels";
@@ -50,6 +51,8 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const [userVotes, setUserVotes] = useState<string[]>([]);
   const [themeAnalysis, setThemeAnalysis] = useState<ThemeAnalysis | null>(null);
   const [isThemesAnalyzing, setIsThemesAnalyzing] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [commentPanel, setCommentPanel] = useState<{groupId: string; rect: DOMRect} | null>(null);
 
   // ==================== AUTO-CREATE MAP ====================
   const createAffinityMap = useMutation(api.affinityMaps.create);
@@ -305,7 +308,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
 
   // ==================== RENDER ====================
   return (
-    <div className="h-full relative bg-[#f5f5f0]">
+    <div className="h-full relative bg-background">
       {/* Main Canvas with FigJam Style */}
       <FigJamCanvas
         groups={groups}
@@ -330,6 +333,8 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         onInsightRemove={handlers.handleInsightRemoveFromGroup}
         onGroupDelete={handlers.handleGroupDelete}
         onGroupTitleUpdate={handlers.handleGroupTitleUpdate}
+        onGroupSelect={setSelectedGroupId}
+        onOpenComments={(groupId, rect) => setCommentPanel({ groupId, rect })}
         onStickyCreate={(position, color) => {
           handlers.handleManualInsightCreate(`New note`, "custom", position);
         }}
@@ -359,6 +364,20 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         isThemesAnalyzing={isThemesAnalyzing}
         onAnalyzeThemes={handleAnalyzeThemes}
         onClearThemes={handleClearThemes}
+        onCreateGroup={async (insightIds, title) => {
+          const position = { x: 400 + Math.random() * 200, y: 400 + Math.random() * 200 };
+          const groupId = await handlers.handleGroupCreate(position, title);
+          insightIds.forEach(insightId => {
+            if (groupId) {
+              handlers.handleInsightDrop(insightId, groupId);
+            }
+          });
+        }}
+        onAddToGroup={(insightIds, groupId) => {
+          insightIds.forEach(insightId => {
+            handlers.handleInsightDrop(insightId, groupId);
+          });
+        }}
       />
 
       {/* Activity Panel */}
@@ -367,6 +386,23 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           mapId={affinityMap._id}
           isOpen={showActivityPanel}
           onClose={() => setShowActivityPanel(false)}
+        />
+      )}
+
+      {/* Comment Panel for Clusters */}
+      {commentPanel && affinityMap && (
+        <CommentPanel
+          mapId={affinityMap._id as unknown as string}
+          groupId={commentPanel.groupId}
+          screenRect={commentPanel.rect}
+          presenceUsers={otherUsers?.map((u) => ({
+            id: u.userId,
+            name: u.user?.name || "User",
+          })) || []}
+          groupTitle={groups.find(g => g.id === commentPanel.groupId)?.title || ""}
+          projectId={projectId}
+          projectMembers={project?.members || []}
+          onClose={() => setCommentPanel(null)}
         />
       )}
 
@@ -404,15 +440,15 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
       {/* Side Panels Toggle */}
       <div className="fixed top-16 left-4 z-40 flex flex-col gap-2">
         <button
-          onClick={() => setActivePanel(activePanel === "themeDiscovery" ? null : "themeDiscovery")}
+          onClick={() => setActivePanel(activePanel === "aiAssistant" ? null : "aiAssistant")}
           className={`p-2 rounded-lg transition-all ${
-            activePanel === "themeDiscovery"
+            activePanel === "aiAssistant"
               ? "bg-[#9747FF] text-white"
               : "bg-white border border-[#e8e8e8] hover:bg-[#f5f5f5]"
           }`}
-          title="AI Suggestions"
+          title="AI Assistant"
         >
-          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 2L2 7l10 5 10-5-10-5z" />
             <path d="M2 17l10 5 10-5" />
             <path d="M2 12l10 5 10-5" />

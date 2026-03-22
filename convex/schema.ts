@@ -146,6 +146,10 @@ export default defineSchema({
         y: v.number(),
       }),
       insightIds: v.array(v.string()),
+      size: v.optional(v.object({
+        width: v.number(),
+        height: v.number(),
+      })),
     })),
     stickyPositions: v.optional(v.record(v.string(), v.object({
       x: v.number(),

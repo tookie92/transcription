@@ -15,7 +15,7 @@ export function CreateProjectDialog() {
   const [open, setOpen] = useState(false);
   
   const createProject = useMutation(api.projects.createProject);
-  const projects = useQuery(api.projects.getUserProjects);
+  const projects = useQuery(api.projects.getUserProjects, {});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

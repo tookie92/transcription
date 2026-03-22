@@ -101,7 +101,18 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
   };
 
   // Get notable segments based on insights (segments closest to insight timestamps)
-  const getNotableSegments = (interview: any): any[] => {
+  interface Segment {
+    start: number;
+    end: number;
+    text: string;
+    speaker?: string;
+  }
+  interface Insight {
+    timestamp: number;
+    text: string;
+  }
+
+  const getNotableSegments = (interview: { transcriptExcerpts?: Segment[]; insights?: Insight[] }): Segment[] => {
     if (!interview?.transcriptExcerpts || !interview?.insights) {
       return interview?.transcriptExcerpts?.slice(0, 5) || [];
     }
@@ -115,8 +126,8 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
     }
 
     // Find segments closest to insight timestamps
-    const segmentsNearInsights: any[] = insights
-      .map((insight: any) => {
+    const segmentsNearInsights: Segment[] = insights
+      .map((insight) => {
         const insightTime = insight.timestamp || 0;
         let closest = segments[0];
         let minDiff = Math.abs(segments[0]?.start - insightTime);
@@ -130,11 +141,11 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
         }
         return closest;
       })
-      .filter(Boolean);
+      .filter((s): s is Segment => Boolean(s));
 
     // Remove duplicates and limit to 5
     const uniqueStarts: number[] = [...new Set(segmentsNearInsights.map((s) => s.start))];
-    return uniqueStarts.slice(0, 5).map((start) => segments.find((s) => s.start === start)).filter(Boolean);
+    return uniqueStarts.slice(0, 5).map((start) => segments.find((s) => s.start === start)).filter((s): s is Segment => Boolean(s));
   };
 
   // Generate slides when data changes
@@ -549,6 +560,7 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
     </div>
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function renderSlide(slide: Slide, interview: any) {
     switch (slide.type) {
       case "cross-themes":
@@ -640,6 +652,7 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
               )}
             </h2>
             <div className="grid md:grid-cols-2 gap-4">
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {items.map((insight: any) => {
                 const config = insightTypeConfig[insight.type as keyof typeof insightTypeConfig] || insightTypeConfig.custom;
                 const Icon = config.icon;
@@ -679,6 +692,7 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
               </span>
             </h2>
             <div className="space-y-3">
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {items.map((segment: any, i: number) => (
                 <Card key={i} className="p-4 bg-muted/30 border-l-4 border-l-primary">
                   <div className="flex items-center gap-2 mb-2">

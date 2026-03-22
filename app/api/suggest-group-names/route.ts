@@ -16,13 +16,18 @@ interface NameSuggestionRequest {
 }
 
 export async function POST(request: NextRequest) {
+  let insights: NameSuggestionRequest['insights'] = [];
+  let currentTitle = '';
+
   try {
     if (!process.env.GROQ_API_KEY) {
       throw new Error('AI service not configured');
     }
 
     const body: NameSuggestionRequest = await request.json();
-    const { insights, currentTitle, projectContext } = body;
+    insights = body.insights;
+    currentTitle = body.currentTitle;
+    const { projectContext } = body;
 
     if (!insights || insights.length === 0) {
       return NextResponse.json({ error: 'No insights provided' }, { status: 400 });
@@ -69,27 +74,71 @@ Respond with valid JSON:
       messages: [
         {
           role: "system",
-          content: "You are a UX research expert. Create compelling, actionable group names in valid JSON format. Use ONLY the specified category values."
+          content: "You are a UX research expert. Create compelling, actionable group names in JSON format."
         },
         {
           role: "user",
           content: prompt
         }
       ],
-      model: "openai/gpt-oss-20b", // 🎯 NOUVEAU MODÈLE
+      model: "llama-3.1-8b-instant",
       temperature: 0.3,
-      max_tokens: 1500,
-      response_format: { type: "json_object" }
+      max_tokens: 1500
     });
 
     const content = completion.choices[0]?.message?.content;
     if (!content) throw new Error('No response from AI');
 
-    const parsedResponse = JSON.parse(content);
+    // Try to extract JSON
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(content);
+    } catch {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsedResponse = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('Invalid JSON response');
+      }
+    }
+
     return NextResponse.json(parsedResponse);
 
   } catch (error) {
     console.error('Name suggestion error:', error);
-    return NextResponse.json({ suggestions: [] });
+    
+    // Generate fallback suggestions based on insight types
+    const insightTypes = insights.map(i => i.type);
+    const hasPainPoints = insightTypes.includes('pain-point');
+    const hasQuotes = insightTypes.includes('quote');
+    
+    const fallbackSuggestions = [
+      {
+        title: currentTitle || "User Insights",
+        reason: "Based on the insights in this group",
+        confidence: 0.7,
+        category: "descriptive"
+      }
+    ];
+    
+    if (hasPainPoints) {
+      fallbackSuggestions.push({
+        title: "Key Pain Points",
+        reason: "Several pain points detected in insights",
+        confidence: 0.6,
+        category: "problem-focused"
+      });
+    }
+    
+    if (hasQuotes) {
+      fallbackSuggestions.push({
+        title: "User Quotes",
+        reason: "Direct quotes from users captured",
+        confidence: 0.6,
+        category: "descriptive"
+      });
+    }
+    
+    return NextResponse.json({ suggestions: fallbackSuggestions });
   }
 }

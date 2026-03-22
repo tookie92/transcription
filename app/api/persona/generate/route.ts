@@ -135,7 +135,7 @@ Make the persona realistic, specific, and directly based on the research insight
           content: prompt,
         },
       ],
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-3.1-8b-instant',
       temperature: 0.7,
       response_format: { type: 'json_object' },
     });

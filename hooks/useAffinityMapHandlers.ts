@@ -79,28 +79,34 @@ export function useAffinityMapHandlers({
   projectId,
 }: UseAffinityMapHandlersProps) {
   const handleGroupCreate = useCallback(
-    async (position: { x: number; y: number }) => {
-      if (!affinityMap || !userId) return;
+    async (position: { x: number; y: number }, title?: string) => {
+      if (!affinityMap || !userId) return "";
+
+      const groupTitle = title || "New Theme";
+      const groupColor = "#F59E0B";
 
       try {
         const groupId = await addGroup({
           mapId: affinityMap._id,
-          title: "New Theme",
-          color: "#F59E0B",
+          title: groupTitle,
+          color: groupColor,
           position,
         });
 
-        activity.logGroupCreated(affinityMap._id, groupId, "New Theme");
+        activity.logGroupCreated(affinityMap._id, groupId, groupTitle);
 
         await broadcastGroupCreated({
           mapId: affinityMap._id,
           groupId,
-          groupTitle: "New Theme",
+          groupTitle: groupTitle,
           createdByUserId: userId,
           createdByUserName: userName,
         });
+
+        return groupId;
       } catch (error) {
         console.error("Failed to create group:", error);
+        return "";
       }
     },
     [affinityMap, userId, userName, addGroup, activity, broadcastGroupCreated]

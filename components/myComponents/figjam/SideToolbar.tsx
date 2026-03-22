@@ -72,9 +72,9 @@ export const SideToolbar = memo(function SideToolbar({
     <div
       className={cn(
         "absolute left-4 top-1/2 -translate-y-1/2",
-        "bg-white rounded-2xl",
+        "bg-card rounded-2xl",
         "shadow-[0_4px_20px_rgba(0,0,0,0.12),0_1px_4px_rgba(0,0,0,0.06)]",
-        "border border-[#e8e8e8]",
+        "border border-border dark:shadow-none",
         "p-2",
         "flex flex-col gap-1",
         "z-[100]",
@@ -94,8 +94,8 @@ export const SideToolbar = memo(function SideToolbar({
             "flex items-center justify-center",
             "transition-all duration-150",
             activeTool === tool.id
-              ? "bg-[#1d1d1d] text-white"
-              : "text-[#555] hover:bg-[#f0f0f0] hover:text-[#1d1d1d]"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-accent hover:text-foreground"
           )}
           title={tool.label}
         >
