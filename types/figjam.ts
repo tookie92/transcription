@@ -47,6 +47,8 @@ export interface StickyNoteData extends BaseElement {
   votedBy: string[]; // user IDs who voted
   /** ID of the section this sticky is attached to. null = free-floating. */
   parentSectionId: string | null;
+  /** Size of the sticky note - allows user to resize */
+  size: Size;
 }
 
 export interface SectionData extends BaseElement {
@@ -127,4 +129,7 @@ export interface UseFigJamBoardReturn {
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  // Multi-selection actions
+  groupSelectedIntoSection: (title?: string) => string | null;
+  autoArrange: (sectionId?: string) => void;
 }

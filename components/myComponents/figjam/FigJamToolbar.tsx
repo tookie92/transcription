@@ -12,6 +12,7 @@ interface FigJamToolbarProps {
   isVotingMode: boolean;
   votesUsed: number;
   maxVotes: number;
+  selectedCount: number;
   onToolChange: (tool: ToolType) => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -21,6 +22,7 @@ interface FigJamToolbarProps {
   onToggleVoting: () => void;
   onResetVotes: () => void;
   onShowLeaderboard: () => void;
+  onGroupSelected: () => void;
 }
 
 // ─── Tool definitions ────────────────────────────────────────────────────────
@@ -101,6 +103,7 @@ export function FigJamToolbar({
   isVotingMode,
   votesUsed,
   maxVotes,
+  selectedCount,
   onToolChange,
   onZoomIn,
   onZoomOut,
@@ -110,6 +113,7 @@ export function FigJamToolbar({
   onToggleVoting,
   onResetVotes,
   onShowLeaderboard,
+  onGroupSelected,
 }: FigJamToolbarProps) {
   const [showStickyPicker, setShowStickyPicker] = React.useState(false);
 
@@ -170,77 +174,7 @@ export function FigJamToolbar({
           )}
         </div>
 
-        {/* Section button */}
-        <ToolButton
-          active={false}
-          label="Section"
-          shortcut="S"
-          onClick={onAddSection}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M8 3H5a2 2 0 0 0-2 2v3m0 8v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3M21 8V5a2 2 0 0 0-2-2h-3"/>
-          </svg>
-        </ToolButton>
-
         <Divider />
-
-        {/* Other tools */}
-        <ToolGroup>
-          {TOOLS.slice(2).map((tool) => (
-            <ToolButton
-              key={tool.id}
-              active={activeTool === tool.id}
-              label={tool.label}
-              shortcut={tool.shortcut}
-              onClick={() => onToolChange(tool.id)}
-            >
-              {tool.icon}
-            </ToolButton>
-          ))}
-        </ToolGroup>
-
-        <Divider />
-
-        {/* Dot voting */}
-        <ToolButton
-          active={isVotingMode}
-          label="Dot voting"
-          shortcut=""
-          onClick={onToggleVoting}
-          accent="violet"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/>
-            <circle cx="12" cy="12" r="4" fill="currentColor"/>
-          </svg>
-        </ToolButton>
-
-        {isVotingMode && (
-          <>
-            {/* Dots remaining indicator */}
-            <div className="flex gap-1 px-2">
-              {Array.from({ length: maxVotes }).map((_, i) => (
-                <div
-                  key={i}
-                  className={`w-2 h-2 rounded-full transition-all ${
-                    i < maxVotes - votesUsed ? "bg-violet-500" : "bg-gray-200"
-                  }`}
-                />
-              ))}
-            </div>
-
-            <ToolButton
-              active={false}
-              label="Results"
-              shortcut=""
-              onClick={onShowLeaderboard}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
-              </svg>
-            </ToolButton>
-          </>
-        )}
       </div>
 
       {/* ── Zoom controls (bottom right) ── */}

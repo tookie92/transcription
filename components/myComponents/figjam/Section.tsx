@@ -31,6 +31,8 @@ interface SectionProps {
   onMoveWithChildren: (sectionId: string, dx: number, dy: number) => void;
   onUpdate: (id: string, patch: Partial<SectionData>) => void;
   onDelete: (id: string) => void;
+  /** Arrange stickies within this section in a grid */
+  onArrangeSection: (sectionId: string) => void;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -44,6 +46,7 @@ export function Section({
   onMoveWithChildren,
   onUpdate,
   onDelete,
+  onArrangeSection,
 }: SectionProps) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -232,6 +235,21 @@ export function Section({
               {section.title}
             </span>
           )}
+
+          {/* Auto-arrange toggle */}
+          <button
+            className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors shrink-0"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onArrangeSection(section.id);
+            }}
+            title="Arrange: Automatically arrange sticky notes in a grid"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>
+            </svg>
+          </button>
 
           {/* Auto-resize toggle */}
           <button

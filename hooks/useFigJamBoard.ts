@@ -85,7 +85,20 @@ function reducer(state: BoardState, action: Action): BoardState {
     }
 
     case "SELECT": {
+      // Prevent selecting sections if there are already stickies selected (and vice versa)
+      const clickedElement = state.elements[action.id];
+      const isSectionClick = clickedElement?.type === "section";
+      
       if (action.multi) {
+        // When adding to selection, only allow mix if same type
+        const hasSections = state.selectedIds.some(id => state.elements[id]?.type === "section");
+        const hasStickies = state.selectedIds.some(id => state.elements[id]?.type === "sticky");
+        
+        // If trying to add a section but stickies are selected, ignore
+        if (isSectionClick && hasStickies) return state;
+        // If trying to add a sticky but sections are selected, ignore
+        if (!isSectionClick && hasSections) return state;
+        
         const already = state.selectedIds.includes(action.id);
         return {
           ...state,
@@ -94,6 +107,8 @@ function reducer(state: BoardState, action: Action): BoardState {
             : [...state.selectedIds, action.id],
         };
       }
+      
+      // Single select - clear all and select only this one
       return { ...state, selectedIds: [action.id] };
     }
 
@@ -161,43 +176,21 @@ function reducer(state: BoardState, action: Action): BoardState {
 
       const elements = { ...state.elements };
 
-      // Find which section (if any) this sticky is now inside
-      const sections = Object.values(elements).filter(
-        (el): el is SectionData => el.type === "section"
-      );
+      let newParentSectionId: string | null = sticky.parentSectionId;
 
-      let newParentSectionId: string | null = null;
-
-      // If sticky was attached, check if it's now fully outside (with threshold)
+      // If sticky is attached to a section, check if it's now fully outside
       if (sticky.parentSectionId) {
         const originalSection = elements[sticky.parentSectionId] as SectionData | undefined;
         if (originalSection && originalSection.type === "section") {
           const tempSticky = { ...sticky, position: action.position };
-          // Still inside or partially overlapping? Keep attachment
-          if (isInsideSection(tempSticky, originalSection)) {
-            newParentSectionId = sticky.parentSectionId;
-          }
           // Check if fully outside (with threshold) - detach
-          else if (isOutsideSection(tempSticky, originalSection)) {
+          if (isOutsideSection(tempSticky, originalSection)) {
             newParentSectionId = null;
           }
-          // In the gray zone - keep attached (so it can slide back in)
-          else {
-            newParentSectionId = sticky.parentSectionId;
-          }
         }
       }
-
-      // If not attached to original, check if entering a new section
-      if (newParentSectionId === null) {
-        for (const section of sections) {
-          const tempSticky = { ...sticky, position: action.position };
-          if (isInsideSection(tempSticky, section)) {
-            newParentSectionId = section.id;
-            break;
-          }
-        }
-      }
+      // If sticky is NOT attached to any section, it stays free
+      // (no auto-attach to random sections when dragged over)
 
       // Update sticky with new position and attachment status
       elements[action.stickyId] = {
@@ -349,7 +342,7 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
   // ── Element creation ──────────────────────────────────────────────────────
 
   const addStickyNote = useCallback(
-    (pos: Position, color: StickyColor = "yellow"): string => {
+    (pos: Position, color: StickyColor = "yellow", size: Size = { width: 200, height: 200 }): string => {
       const id = uid();
       const element: FigJamElement = {
         id,
@@ -360,7 +353,8 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
         author: DEFAULT_USER_ID,
         votes: 0,
         votedBy: [],
-        parentSectionId: null, // free-floating by default
+        parentSectionId: null,
+        size,
         zIndex: maxZIndex(state.elements) + 1,
         createdAt: now(),
         updatedAt: now(),
@@ -498,6 +492,137 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     dispatch({ type: "LOAD_ELEMENTS", elements });
   }, []);
 
+  // ── Group selected stickies into section ──────────────────────────────────
+
+  const groupSelectedIntoSection = useCallback(
+    (title = "New Group") => {
+      if (state.selectedIds.length === 0) return null;
+
+      const selectedStickies = state.selectedIds
+        .map((id) => state.elements[id])
+        .filter((el): el is StickyNoteData => el?.type === "sticky");
+
+      if (selectedStickies.length === 0) return null;
+
+      // Arrange stickies in a grid inside the section
+      const spacing = 20;
+      const STICKY_W = 200;
+      const STICKY_H = 200;
+      const SECTION_PADDING = 30;
+      const TITLE_BAR_H = 40;
+      const COLS = Math.max(1, Math.min(selectedStickies.length, 4));
+
+      // Calculate section size based on grid
+      const rows = Math.ceil(selectedStickies.length / COLS);
+      const sectionWidth = SECTION_PADDING * 2 + COLS * STICKY_W + (COLS - 1) * spacing;
+      const sectionHeight = TITLE_BAR_H + SECTION_PADDING * 2 + rows * STICKY_H + (rows - 1) * spacing;
+
+      // Starting position for section (center the stickies)
+      let minX = Infinity, minY = Infinity;
+      for (const sticky of selectedStickies) {
+        minX = Math.min(minX, sticky.position.x);
+        minY = Math.min(minY, sticky.position.y);
+      }
+      const sectionPos = {
+        x: minX - SECTION_PADDING,
+        y: minY - SECTION_PADDING - TITLE_BAR_H,
+      };
+
+      // Create section with auto-resize ON
+      const sectionId = uid();
+      const section: FigJamElement = {
+        id: sectionId,
+        type: "section",
+        position: sectionPos,
+        size: { width: sectionWidth, height: sectionHeight },
+        title,
+        color: "#e8f4fd",
+        autoResize: true, // Enable auto-resize by default
+        zIndex: 0,
+        createdAt: now(),
+        updatedAt: now(),
+      };
+
+      // Update stickies: attach to section AND arrange in grid
+      const patches: { id: string; patch: Partial<FigJamElement> }[] = selectedStickies.map((sticky, i) => {
+        const row = Math.floor(i / COLS);
+        const col = i % COLS;
+        return {
+          id: sticky.id,
+          patch: {
+            parentSectionId: sectionId,
+            position: {
+              x: sectionPos.x + SECTION_PADDING + col * (STICKY_W + spacing),
+              y: sectionPos.y + TITLE_BAR_H + SECTION_PADDING + row * (STICKY_H + spacing),
+            },
+          },
+        };
+      });
+
+      // Dispatch all updates
+      dispatch({ type: "ADD_ELEMENT", element: section });
+      dispatch({ type: "UPDATE_MANY", patches });
+      dispatch({ type: "CLEAR_SELECTION" });
+      dispatch({ type: "SELECT", id: sectionId, multi: false });
+
+      return sectionId;
+    },
+    [state.selectedIds, state.elements]
+  );
+
+  // ── Auto-arrange stickies ───────────────────────────────────────────────
+
+  const autoArrange = useCallback(
+    (sectionId?: string) => {
+      let targetStickies = Object.values(state.elements).filter(
+        (el): el is StickyNoteData => el.type === "sticky"
+      );
+
+      // If sectionId provided, only arrange stickies in that section
+      if (sectionId) {
+        targetStickies = targetStickies.filter((s) => s.parentSectionId === sectionId);
+      }
+
+      if (targetStickies.length === 0) return;
+
+      const spacing = 30;
+      const STICKY_W = 200;
+      const STICKY_H = 200;
+      const PADDING = 20;
+      const COLS = Math.max(1, Math.floor((window.innerWidth * 0.8) / (STICKY_W + spacing)));
+
+      const patches: { id: string; patch: Partial<FigJamElement> }[] = targetStickies.map((sticky, i) => {
+        const row = Math.floor(i / COLS);
+        const col = i % COLS;
+        
+        let baseX = 100;
+        let baseY = 100;
+        
+        // If in a section, arrange relative to section position
+        if (sectionId) {
+          const section = state.elements[sectionId] as SectionData | undefined;
+          if (section && section.type === "section") {
+            baseX = section.position.x + PADDING;
+            baseY = section.position.y + 60; // Below title bar
+          }
+        }
+
+        return {
+          id: sticky.id,
+          patch: {
+            position: {
+              x: baseX + col * (STICKY_W + spacing),
+              y: baseY + row * (STICKY_H + spacing),
+            },
+          },
+        };
+      });
+
+      dispatch({ type: "UPDATE_MANY", patches });
+    },
+    [state.elements]
+  );
+
   return {
     state,
     addStickyNote,
@@ -523,5 +648,7 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     redo,
     canUndo,
     canRedo,
+    groupSelectedIntoSection,
+    autoArrange,
   };
 }

@@ -119,8 +119,8 @@ export function useContainment({
       // Only auto-resize sections that have autoResize enabled (default: false for backwards compat)
       if (!section.autoResize) continue;
 
-      // Find all stickies inside this section (for auto-resize)
-      const inside = stickies.filter((s) => isInsideSection(s, section));
+      // Only consider stickies that BELONG to this section (via parentSectionId)
+      const inside = stickies.filter((s) => s.parentSectionId === section.id);
       const fitSize = computeFitSize(section.position, inside);
 
       if (!fitSize) continue;

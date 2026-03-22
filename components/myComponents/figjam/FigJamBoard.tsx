@@ -60,6 +60,11 @@ export function FigJamBoard({
   // Which sticky is currently being dragged (for section hover highlight)
   const [draggingStickyId, setDraggingStickyId] = useState<string | null>(null);
 
+  // Lasso selection state
+  const [lassoStart, setLassoStart] = useState<Position | null>(null);
+  const [lassoEnd, setLassoEnd] = useState<Position | null>(null);
+  const isLassoing = lassoStart !== null;
+
   // ── Load from localStorage on mount ────────────────────────────────────
   useEffect(() => {
     // Priority: 1. initialElements prop, 2. localStorage
@@ -84,6 +89,11 @@ export function FigJamBoard({
     if (!isLoaded) return;
     localStorage.setItem(storageKey, JSON.stringify(state.elements));
   }, [state.elements, storageKey, isLoaded]);
+
+  // ── Derived state (for keyboard shortcuts) ───────────────────────────
+  const allStickies = Object.values(state.elements).filter(
+    (el): el is StickyNoteData => el.type === "sticky"
+  );
 
   // ── Containment: auto-grow sections when stickies overflow ─────────────
   // NOTE: Stickies are always free-floating. Sections are visual containers only.
@@ -155,6 +165,15 @@ export function FigJamBoard({
         return;
       }
 
+      // Start lasso selection on canvas click (not on sticky)
+      const target = e.target as HTMLElement;
+      if (target === canvasRef.current || target.closest(".lasso-area")) {
+        const pos = screenToCanvas(e.clientX, e.clientY);
+        setLassoStart(pos);
+        setLassoEnd(pos);
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }
+
       board.clearSelection();
 
       if (state.activeTool === "sticky") {
@@ -173,18 +192,55 @@ export function FigJamBoard({
 
   const handleCanvasPointerMove = useCallback(
     (e: React.PointerEvent) => {
+      if (isLassoing) {
+        const pos = screenToCanvas(e.clientX, e.clientY);
+        setLassoEnd(pos);
+        return;
+      }
+      
       if (!isPanning.current) return;
       board.setPan({
         x: panOrigin.current.x + (e.clientX - panStart.current.x),
         y: panOrigin.current.y + (e.clientY - panStart.current.y),
       });
     },
-    [board]
+    [board, isLassoing, screenToCanvas]
   );
 
-  const handleCanvasPointerUp = useCallback(() => {
-    isPanning.current = false;
-  }, []);
+  const handleCanvasPointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (isLassoing && lassoStart && lassoEnd) {
+        // Calculate lasso bounding box
+        const minX = Math.min(lassoStart.x, lassoEnd.x);
+        const maxX = Math.max(lassoStart.x, lassoEnd.x);
+        const minY = Math.min(lassoStart.y, lassoEnd.y);
+        const maxY = Math.max(lassoStart.y, lassoEnd.y);
+        
+        // Select all stickies that intersect with lasso
+        const stickyW = 200;
+        const stickyH = 200;
+        
+        allStickies.forEach((sticky) => {
+          const sLeft = sticky.position.x;
+          const sRight = sticky.position.x + stickyW;
+          const sTop = sticky.position.y;
+          const sBottom = sticky.position.y + stickyH;
+          
+          // Check if sticky intersects with lasso
+          const intersects = !(sRight < minX || sLeft > maxX || sBottom < minY || sTop > maxY);
+          
+          if (intersects) {
+            board.selectElement(sticky.id, true); // multi-select
+          }
+        });
+      }
+      
+      setLassoStart(null);
+      setLassoEnd(null);
+      isPanning.current = false;
+    },
+    [isLassoing, lassoStart, lassoEnd, allStickies, board]
+  );
 
   // ── Voting ───────────────────────────────────────────────────────────────
 
@@ -211,6 +267,21 @@ export function FigJamBoard({
         return;
       }
 
+      // Group selected (Ctrl+G)
+      if ((e.ctrlKey || e.metaKey) && e.key === "g") {
+        e.preventDefault();
+        board.groupSelectedIntoSection();
+        return;
+      }
+
+      // Select all (Ctrl+A)
+      if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+        e.preventDefault();
+        const allStickyIds = allStickies.map((s) => s.id);
+        allStickyIds.forEach((id, i) => board.selectElement(id, i > 0));
+        return;
+      }
+
       switch (e.key) {
         case "v": case "V": board.setTool("select"); break;
         case "h": case "H": board.setTool("hand");   break;
@@ -231,7 +302,7 @@ export function FigJamBoard({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [board, state.selectedIds, state.zoom]);
+  }, [board, state.selectedIds, state.zoom, allStickies]);
 
   useEffect(() => { onChange?.(state.elements); }, [state.elements, onChange]);
 
@@ -243,11 +314,12 @@ export function FigJamBoard({
   const stickies = others.filter((el): el is StickyNoteData => el.type === "sticky");
 
   // Which section is the dragging sticky hovering over?
+  // Only highlight sections if the sticky is attached to a section
   const hoveredSectionId = draggingStickyId
     ? (() => {
         const sticky = state.elements[draggingStickyId] as StickyNoteData | undefined;
-        if (!sticky) return null;
-        return sections.find((s) => isInsideSection(sticky, s))?.id ?? null;
+        if (!sticky || !sticky.parentSectionId) return null;
+        return sections.find((s) => s.id === sticky.parentSectionId)?.id ?? null;
       })()
     : null;
 
@@ -314,9 +386,22 @@ export function FigJamBoard({
         <CanvasGrid zoom={state.zoom} pan={state.pan} />
 
         <div
-          className="absolute origin-top-left"
+          className="absolute origin-top-left lasso-area"
           style={{ transform: `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.zoom})` }}
         >
+          {/* ── Lasso selection visual ── */}
+          {lassoStart && lassoEnd && (
+            <div
+              className="absolute pointer-events-none border-2 border-blue-500 bg-blue-500/10 rounded-md"
+              style={{
+                left: Math.min(lassoStart.x, lassoEnd.x),
+                top: Math.min(lassoStart.y, lassoEnd.y),
+                width: Math.abs(lassoEnd.x - lassoStart.x),
+                height: Math.abs(lassoEnd.y - lassoStart.y),
+              }}
+            />
+          )}
+
           {/* ── Sections (behind everything) ── */}
           {sections.map((el) => (
             <Section
@@ -329,6 +414,7 @@ export function FigJamBoard({
               onMoveWithChildren={board.moveSectionWithChildren}
               onUpdate={(id, patch) => board.updateElement(id, patch as any)}
               onDelete={board.deleteElement}
+              onArrangeSection={(sectionId) => board.autoArrange(sectionId)}
             />
           ))}
 
@@ -351,6 +437,7 @@ export function FigJamBoard({
               onBringToFront={board.bringToFront}
               onCastVote={board.castVote}
               onRemoveVote={board.removeVote}
+              onResize={(id, size) => board.updateElement(id, { size } as any)}
               onDragStart={(id) => setDraggingStickyId(id)}
               onDragEnd={() => setDraggingStickyId(null)}
               dragBounds={getStickyDragBounds(el)}
@@ -379,6 +466,8 @@ export function FigJamBoard({
         onToggleVoting={handleToggleVoting}
         onResetVotes={board.resetVotes}
         onShowLeaderboard={() => setShowLeaderboard((v) => !v)}
+        onGroupSelected={() => board.groupSelectedIntoSection()}
+        selectedCount={state.selectedIds.length}
       />
 
       {isVotingMode && (
