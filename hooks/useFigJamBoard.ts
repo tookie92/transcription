@@ -163,20 +163,30 @@ function reducer(state: BoardState, action: Action): BoardState {
       const elements = { ...state.elements };
 
       let newParentSectionId: string | null = sticky.parentSectionId;
+      const tempSticky = { ...sticky, position: action.position };
 
       // If sticky is attached to a section, check if it's now fully outside
       if (sticky.parentSectionId) {
         const originalSection = elements[sticky.parentSectionId] as SectionData | undefined;
         if (originalSection && originalSection.type === "section") {
-          const tempSticky = { ...sticky, position: action.position };
-          // Check if fully outside (with threshold) - detach
           if (isOutsideSection(tempSticky, originalSection)) {
             newParentSectionId = null;
           }
         }
       }
-      // If sticky is NOT attached to any section, it stays free
-      // (no auto-attach to random sections when dragged over)
+
+      // If sticky is NOT attached, check if it's now inside a section → auto-attach
+      if (!newParentSectionId) {
+        const sections = Object.values(elements).filter(
+          (el): el is SectionData => el.type === "section"
+        );
+        for (const section of sections) {
+          if (isInsideSection(tempSticky, section)) {
+            newParentSectionId = section.id;
+            break;
+          }
+        }
+      }
 
       // Update sticky with new position and attachment status
       elements[action.stickyId] = {
@@ -191,6 +201,9 @@ function reducer(state: BoardState, action: Action): BoardState {
 
     case "MOVE_SELECTED": {
       const elements = { ...state.elements };
+      const sections = Object.values(elements).filter(
+        (el): el is SectionData => el.type === "section"
+      );
       
       for (const id of action.ids) {
         const el = elements[id];
@@ -208,12 +221,38 @@ function reducer(state: BoardState, action: Action): BoardState {
           };
         } else if (el.type === "sticky") {
           const sticky = el as StickyNoteData;
+          const newPos = {
+            x: sticky.position.x + action.dx,
+            y: sticky.position.y + action.dy,
+          };
+          const tempSticky = { ...sticky, position: newPos };
+
+          let newParentSectionId: string | null = sticky.parentSectionId;
+
+          // If attached, check if still inside
+          if (sticky.parentSectionId) {
+            const parentSection = elements[sticky.parentSectionId] as SectionData | undefined;
+            if (parentSection && parentSection.type === "section") {
+              if (isOutsideSection(tempSticky, parentSection)) {
+                newParentSectionId = null;
+              }
+            }
+          }
+
+          // If not attached, check if now inside a section
+          if (!newParentSectionId) {
+            for (const section of sections) {
+              if (isInsideSection(tempSticky, section)) {
+                newParentSectionId = section.id;
+                break;
+              }
+            }
+          }
+
           elements[id] = {
             ...sticky,
-            position: {
-              x: sticky.position.x + action.dx,
-              y: sticky.position.y + action.dy,
-            },
+            position: newPos,
+            parentSectionId: newParentSectionId,
             updatedAt: now(),
           };
         }
