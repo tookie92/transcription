@@ -1,4 +1,3 @@
-// app/invite/[projectId]/page.tsx - REDESIGNED
 "use client";
 
 import { useRouter, useParams, useSearchParams } from "next/navigation";

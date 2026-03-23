@@ -386,7 +386,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         />
       )}
 
-      {/* Voting Mode Toggle Button */}
+      {/* Voting Mode Toggle Button
       <button
         onClick={handleToggleVotingMode}
         aria-label={isVotingMode ? `Voting mode on - ${userVotes.length} votes cast` : "Start voting mode"}
@@ -404,7 +404,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         ) : (
           "Start Voting"
         )}
-      </button>
+      </button> */}
 
       {/* Activity Toggle Button */}
       <button

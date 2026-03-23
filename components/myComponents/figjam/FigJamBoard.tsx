@@ -6,7 +6,8 @@ import { useContainment, isInsideSection } from "@/hooks/useContainment";
 import { StickyNote } from "./StickyNote";
 import { Section } from "./Section";
 import { FigJamToolbar } from "./FigJamToolbar";
-import { DotVotingControls, VotingLeaderboard, VotingModeBanner } from "./DotVoting";
+import { DotVotingDock } from "./DotVoting";
+import { VotingToggle } from "./DotVotingUI";
 import type { FigJamElement, Position, StickyColor, StickyNoteData, SectionData } from "@/types/figjam";
 
 // ─── Canvas dot grid ──────────────────────────────────────────────────────────
@@ -54,8 +55,8 @@ export function FigJamBoard({
   const { state } = board;
 
   const [isVotingMode, setIsVotingMode] = useState(false);
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
 
   // Which sticky is currently being dragged (for section hover highlight)
   const [draggingStickyId, setDraggingStickyId] = useState<string | null>(null);
@@ -67,6 +68,9 @@ export function FigJamBoard({
 
   // Section rename trigger (F2)
   const [renameSectionId, setRenameSectionId] = useState<string | null>(null);
+
+  // User dots state for voting
+  const [userDots, setUserDots] = useState<Map<string, number>>(new Map()); // sectionId -> count
 
   // ── Load from localStorage on mount ────────────────────────────────────
   useEffect(() => {
@@ -132,6 +136,32 @@ export function FigJamBoard({
     },
   });
 
+  // ── Space key for pan ────────────────────────────────────────────────────
+  
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !e.repeat && !isVotingMode) {
+        e.preventDefault();
+        setIsSpacePressed(true);
+      }
+    };
+    
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        setIsSpacePressed(false);
+        isPanning.current = false;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [isVotingMode]);
+
   // ── Canvas pan / zoom ────────────────────────────────────────────────────
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -183,12 +213,19 @@ export function FigJamBoard({
     (e: React.PointerEvent) => {
       const isMiddle   = e.button === 1;
       const isHandTool = state.activeTool === "hand";
+      const isSpacePan = isSpacePressed && !isVotingMode;
 
-      if (isMiddle || isHandTool) {
+      // Pan with space + click or middle mouse or hand tool
+      if (isMiddle || isHandTool || isSpacePan) {
         isPanning.current = true;
         panStart.current  = { x: e.clientX, y: e.clientY };
         panOrigin.current = { ...state.pan };
         e.currentTarget.setPointerCapture(e.pointerId);
+        
+        // Change cursor during space pan
+        if (isSpacePan) {
+          document.body.style.cursor = "grabbing";
+        }
         return;
       }
 
@@ -218,7 +255,7 @@ export function FigJamBoard({
         board.setTool("select");
       }
     },
-    [state.activeTool, state.pan, board, screenToCanvas]
+    [state.activeTool, state.pan, board, screenToCanvas, isSpacePressed, isVotingMode]
   );
 
   const handleCanvasPointerMove = useCallback(
@@ -290,8 +327,44 @@ export function FigJamBoard({
 
   const handleToggleVoting = useCallback(() => {
     setIsVotingMode((v) => !v);
-    setShowLeaderboard(false);
   }, []);
+
+  const maxVotes = 10;
+
+  const handleAddUserDot = useCallback((sectionId: string) => {
+    const currentCount = userDots.get(sectionId) || 0;
+    const totalDots = Array.from(userDots.values()).reduce((sum, count) => sum + count, 0);
+    
+    if (totalDots >= maxVotes) return;
+    
+    setUserDots(prev => {
+      const next = new Map(prev);
+      next.set(sectionId, currentCount + 1);
+      return next;
+    });
+    board.castVote(sectionId);
+  }, [userDots, board]);
+
+  const handleRemoveUserDot = useCallback((sectionId: string) => {
+    const currentCount = userDots.get(sectionId) || 0;
+    if (currentCount <= 0) return;
+    
+    setUserDots(prev => {
+      const next = new Map(prev);
+      if (currentCount <= 1) {
+        next.delete(sectionId);
+      } else {
+        next.set(sectionId, currentCount - 1);
+      }
+      return next;
+    });
+    board.removeVote(sectionId);
+  }, [userDots, board]);
+
+  const handleResetDots = useCallback(() => {
+    setUserDots(new Map());
+    board.resetVotes();
+  }, [board]);
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────
 
@@ -476,6 +549,7 @@ export function FigJamBoard({
     state.activeTool === "hand"    ? "cursor-grab"
     : state.activeTool === "sticky"  ? "cursor-crosshair"
     : state.activeTool === "section" ? "cursor-crosshair"
+    : isSpacePressed ? "cursor-grab"
     : "cursor-default";
 
   return (
@@ -498,7 +572,7 @@ export function FigJamBoard({
             {Object.keys(state.elements).length} element{Object.keys(state.elements).length !== 1 ? "s" : ""}
           </span>
         </div>
-        <DotVotingControls
+        <VotingToggle
           isActive={isVotingMode}
           votesUsed={state.votesUsed}
           maxVotes={maxVotesPerUser}
@@ -546,6 +620,7 @@ export function FigJamBoard({
               currentUserId={state.currentUserId}
               votesUsed={state.votesUsed}
               maxVotes={maxVotesPerUser}
+              userDotsCount={el.votedBy?.filter(id => id === state.currentUserId).length || 0}
               onSelect={board.selectElement}
               onMoveWithChildren={board.moveSectionWithChildren}
               onMoveSelected={board.moveSelected}
@@ -556,6 +631,9 @@ export function FigJamBoard({
               renameTrigger={renameSectionId}
               onCastVote={board.castVote}
               onRemoveVote={board.removeVote}
+              userDotsOnSection={userDots.get(el.id) || 0}
+              onAddDot={handleAddUserDot}
+              onRemoveUserDot={handleRemoveUserDot}
             />
           ))}
 
@@ -611,17 +689,17 @@ export function FigJamBoard({
         }
         onToggleVoting={handleToggleVoting}
         onResetVotes={board.resetVotes}
-        onShowLeaderboard={() => setShowLeaderboard((v) => !v)}
         onGroupSelected={() => board.groupSelectedIntoSection()}
         selectedCount={state.selectedIds.length}
       />
 
-      {isVotingMode && (
-        <VotingModeBanner votesUsed={state.votesUsed} maxVotes={maxVotesPerUser} />
-      )}
-      {showLeaderboard && (
-        <VotingLeaderboard stickies={stickies} onClose={() => setShowLeaderboard(false)} />
-      )}
+      {/* Dot voting dock (outside canvas) */}
+      <DotVotingDock
+        isActive={isVotingMode}
+        maxDots={maxVotes}
+        placedCount={Array.from(userDots.values()).reduce((sum, count) => sum + count, 0)}
+        onReset={handleResetDots}
+      />
 
       {Object.keys(state.elements).length === 0 && (
         <div className="absolute inset-0 top-12 flex items-center justify-center pointer-events-none">

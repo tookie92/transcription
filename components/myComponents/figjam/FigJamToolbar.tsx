@@ -21,7 +21,6 @@ interface FigJamToolbarProps {
   onAddSection: () => void;
   onToggleVoting: () => void;
   onResetVotes: () => void;
-  onShowLeaderboard: () => void;
   onGroupSelected: () => void;
 }
 
@@ -112,7 +111,6 @@ export function FigJamToolbar({
   onAddSection,
   onToggleVoting,
   onResetVotes,
-  onShowLeaderboard,
   onGroupSelected,
 }: FigJamToolbarProps) {
   const [showStickyPicker, setShowStickyPicker] = React.useState(false);

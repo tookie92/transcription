@@ -30,29 +30,28 @@ interface SectionProps {
   section: SectionData;
   zoom: number;
   isSelected: boolean;
-  /** True when a sticky being dragged hovers over this section */
   isHovered?: boolean;
   isVotingMode: boolean;
   currentUserId: string;
   votesUsed: number;
   maxVotes: number;
+  userDotsCount: number;
   onSelect: (id: string, multi: boolean) => void;
-  /**
-   * Move the section AND all its children by (dx, dy) canvas units.
-   * Called on every pointer-move frame during drag.
-   */
   onMoveWithChildren: (sectionId: string, dx: number, dy: number) => void;
   onMoveSelected?: (ids: string[], dx: number, dy: number) => void;
   onUpdate: (id: string, patch: Partial<SectionData>) => void;
   onDelete: (id: string) => void;
-  /** Arrange stickies within this section in a grid */
   onArrangeSection: (sectionId: string) => void;
-  /** Trigger rename when this matches section.id */
   renameTrigger?: string | null;
   selectedIds?: string[];
-  /** Vote actions */
   onCastVote: (id: string) => void;
   onRemoveVote: (id: string) => void;
+  /** Number of dots placed by current user on this section */
+  userDotsOnSection?: number;
+  /** Callback when user clicks to add a dot to this section */
+  onAddDot?: (sectionId: string) => void;
+  /** Callback when user clicks to remove their dot from this section */
+  onRemoveUserDot?: (sectionId: string) => void;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -66,6 +65,7 @@ export function Section({
   currentUserId,
   votesUsed,
   maxVotes,
+  userDotsCount,
   onSelect,
   onMoveWithChildren,
   onMoveSelected,
@@ -76,6 +76,9 @@ export function Section({
   selectedIds = [],
   onCastVote,
   onRemoveVote,
+  userDotsOnSection = 0,
+  onAddDot,
+  onRemoveUserDot,
 }: SectionProps) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -236,13 +239,19 @@ export function Section({
             style={{
               background: colorConfig.bg,
               border,
-              cursor: isDragging ? "grabbing" : "grab",
+              cursor: isDragging ? "grabbing" : isVotingMode ? "pointer" : "grab",
               boxShadow: isHovered
                 ? `0 0 0 3px ${colorConfig.border}88`
                 : "none",
               transition: "box-shadow 0.15s ease, border 0.15s ease",
             }}
             onPointerDown={handlePointerDown}
+            onClick={(e) => {
+              if (isVotingMode && onAddDot) {
+                e.stopPropagation();
+                onAddDot(section.id);
+              }
+            }}
           >
         {/* ── Title bar ── */}
         <div
@@ -330,52 +339,28 @@ export function Section({
             </svg>
           </button>
 
-          {/* Auto-resize toggle */}
-          <button
-            className={`w-6 h-6 flex items-center justify-center rounded-md text-xs shrink-0 transition-all ${
-              autoResize
-                ? "bg-green-500 text-white hover:bg-green-600 shadow-sm"
-                : "text-gray-400 hover:text-gray-600 hover:bg-gray-100 border border-dashed border-gray-300"
-            }`}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onUpdate(section.id, { autoResize: !autoResize });
-            }}
-            title={autoResize ? "Auto-fit: Section automatically adjusts to fit content. Click to disable." : "Click to enable auto-fit: Section will grow to fit sticky notes inside."}
-          >
-            {autoResize ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-              </svg>
-            )}
-          </button>
-
-          {/* Vote button */}
-          {(isVotingMode || section.votes > 0) && (
-            <button
-              className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold shrink-0 transition-all ${
-                hasVoted
-                  ? "bg-green-500 text-white shadow-sm"
-                  : canVote
-                  ? "bg-white text-gray-600 hover:bg-green-100 shadow-sm border border-gray-200"
-                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
-              }`}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (hasVoted) onRemoveVote(section.id);
-                else if (canVote) onCastVote(section.id);
-              }}
-              title={hasVoted ? "Remove vote" : canVote ? "Vote for this cluster" : "No votes remaining"}
-              disabled={!canVote && !hasVoted}
-            >
-              {section.votes}
-            </button>
+          {/* User dots - rendered when user has placed dots on this section */}
+          {isVotingMode && userDotsOnSection > 0 && (
+            <div className="flex items-center gap-1 ml-1">
+              {Array.from({ length: userDotsOnSection }).map((_, i) => (
+                <button
+                  key={i}
+                  className="w-6 h-6 rounded-full bg-green-500 border-2 border-white shadow group relative"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveUserDot?.(section.id);
+                  }}
+                  title="Click to remove your vote"
+                >
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="w-full h-full bg-black/30 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs font-bold">×</span>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
           )}
 
           {/* Delete button */}

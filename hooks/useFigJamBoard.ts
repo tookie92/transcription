@@ -20,7 +20,7 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 const now = () => Date.now();
 
 const DEFAULT_USER_ID = "local-user";
-const MAX_VOTES = 5;
+const MAX_VOTES = 10;
 const MAX_HISTORY = 50;
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
@@ -40,6 +40,9 @@ type Action =
   | { type: "CAST_VOTE"; id: string; userId: string }
   | { type: "REMOVE_VOTE"; id: string; userId: string }
   | { type: "RESET_VOTES" }
+  | { type: "SET_VOTING_MODE"; active: boolean }
+  | { type: "REVEAL_VOTES" }
+  | { type: "SET_VOTES_REVEALED"; revealed: boolean }
   | { type: "MOVE_SECTION_WITH_CHILDREN"; sectionId: string; dx: number; dy: number }
   | { type: "MOVE_STICKY"; stickyId: string; position: Position }
   | { type: "MOVE_SELECTED"; ids: string[]; dx: number; dy: number }
@@ -341,8 +344,17 @@ function reducer(state: BoardState, action: Action): BoardState {
           elements[key] = { ...el, votes: 0, votedBy: [], updatedAt: now() };
         }
       }
-      return { ...state, elements, votesUsed: 0 };
+      return { ...state, elements, votesUsed: 0, votingModeActive: false, votesRevealed: false };
     }
+
+    case "SET_VOTING_MODE":
+      return { ...state, votingModeActive: action.active, votesRevealed: action.active ? state.votesRevealed : false };
+
+    case "REVEAL_VOTES":
+      return { ...state, votesRevealed: true };
+
+    case "SET_VOTES_REVEALED":
+      return { ...state, votesRevealed: action.revealed };
 
     case "LOAD_ELEMENTS":
       return { ...state, elements: action.elements };
@@ -368,6 +380,8 @@ function initialState(): BoardState {
     currentUserId: DEFAULT_USER_ID,
     maxVotesPerUser: MAX_VOTES,
     votesUsed: 0,
+    votingModeActive: false,
+    votesRevealed: false,
   };
 }
 
@@ -547,6 +561,10 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     dispatch({ type: "RESET_VOTES" });
   }, []);
 
+  const revealVotes = useCallback(() => {
+    dispatch({ type: "REVEAL_VOTES" });
+  }, []);
+
   // ── Canvas ────────────────────────────────────────────────────────────────
 
   const setZoom = useCallback((zoom: number) => {
@@ -720,6 +738,7 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     castVote,
     removeVote,
     resetVotes,
+    revealVotes,
     loadElements,
     setZoom,
     setPan,

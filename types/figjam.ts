@@ -83,6 +83,8 @@ export interface BoardState {
   currentUserId: string;
   maxVotesPerUser: number;
   votesUsed: number;
+  votingModeActive: boolean;
+  votesRevealed: boolean;
 }
 
 export interface DragState {
@@ -115,6 +117,7 @@ export interface UseFigJamBoardReturn {
   castVote: (elementId: string) => void;
   removeVote: (elementId: string) => void;
   resetVotes: () => void;
+  revealVotes: () => void;
   // Canvas
   setZoom: (zoom: number) => void;
   setPan: (pan: Position) => void;
