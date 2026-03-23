@@ -1,6 +1,15 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuCheckboxItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+  ContextMenuLabel,
+} from "@/components/ui/context-menu";
 import type { SectionData } from "@/types/figjam";
 
 // ─── Section color palette ───────────────────────────────────────────────────
@@ -23,6 +32,10 @@ interface SectionProps {
   isSelected: boolean;
   /** True when a sticky being dragged hovers over this section */
   isHovered?: boolean;
+  isVotingMode: boolean;
+  currentUserId: string;
+  votesUsed: number;
+  maxVotes: number;
   onSelect: (id: string, multi: boolean) => void;
   /**
    * Move the section AND all its children by (dx, dy) canvas units.
@@ -34,7 +47,12 @@ interface SectionProps {
   onDelete: (id: string) => void;
   /** Arrange stickies within this section in a grid */
   onArrangeSection: (sectionId: string) => void;
+  /** Trigger rename when this matches section.id */
+  renameTrigger?: string | null;
   selectedIds?: string[];
+  /** Vote actions */
+  onCastVote: (id: string) => void;
+  onRemoveVote: (id: string) => void;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -44,19 +62,41 @@ export function Section({
   zoom,
   isSelected,
   isHovered = false,
+  isVotingMode,
+  currentUserId,
+  votesUsed,
+  maxVotes,
   onSelect,
   onMoveWithChildren,
   onMoveSelected,
   onUpdate,
   onDelete,
   onArrangeSection,
+  renameTrigger,
   selectedIds = [],
+  onCastVote,
+  onRemoveVote,
 }: SectionProps) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [isHoveringTitleBar, setIsHoveringTitleBar] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
+  const lastRenameTrigger = useRef<string | null>(null);
+
+  const hasVoted = section.votedBy?.includes(currentUserId) ?? false;
+  const canVote = !hasVoted && votesUsed < maxVotes;
+
+  // Trigger rename when renameTrigger prop changes
+  if (renameTrigger !== lastRenameTrigger.current) {
+    lastRenameTrigger.current = renameTrigger ?? null;
+    if (renameTrigger === section.id && !isEditingTitle) {
+      setIsEditingTitle(true);
+      setTimeout(() => {
+        titleRef.current?.focus();
+        titleRef.current?.select();
+      }, 0);
+    }
+  }
 
   const colorConfig =
     SECTION_COLORS.find((c) => c.bg === section.color) ?? SECTION_COLORS[0];
@@ -176,34 +216,34 @@ export function Section({
     : `2px solid ${colorConfig.border}`;
 
   return (
-    <div
-      className="absolute"
-      style={{
-        left:   section.position.x,
-        top:    section.position.y,
-        width:  section.size.width,
-        height: section.size.height,
-        zIndex: section.zIndex,
-        // Subtle lift during drag
-        filter: isDragging ? "drop-shadow(0 8px 24px rgba(0,0,0,0.12))" : "none",
-        transition: isDragging ? "none" : "filter 0.2s ease",
-      }}
-    >
-      {/* ── Section body ── */}
-      <div
-        className="w-full h-full rounded-xl flex flex-col"
-        style={{
-          background: colorConfig.bg,
-          border,
-          cursor: isDragging ? "grabbing" : (isHoveringTitleBar ? "default" : "grab"),
-          // Highlight ring when a sticky hovers over this section
-          boxShadow: isHovered
-            ? `0 0 0 3px ${colorConfig.border}88`
-            : "none",
-          transition: "box-shadow 0.15s ease, border 0.15s ease",
-        }}
-        onPointerDown={handlePointerDown}
-      >
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          className="absolute"
+          style={{
+            left:   section.position.x,
+            top:    section.position.y,
+            width:  section.size.width,
+            height: section.size.height,
+            zIndex: section.zIndex,
+            filter: isDragging ? "drop-shadow(0 8px 24px rgba(0,0,0,0.12))" : "none",
+            transition: isDragging ? "none" : "filter 0.2s ease",
+          }}
+        >
+          {/* ── Section body ── */}
+          <div
+            className="w-full h-full rounded-xl flex flex-col"
+            style={{
+              background: colorConfig.bg,
+              border,
+              cursor: isDragging ? "grabbing" : "grab",
+              boxShadow: isHovered
+                ? `0 0 0 3px ${colorConfig.border}88`
+                : "none",
+              transition: "box-shadow 0.15s ease, border 0.15s ease",
+            }}
+            onPointerDown={handlePointerDown}
+          >
         {/* ── Title bar ── */}
         <div
           className="flex items-center gap-2 px-3 py-2 rounded-t-xl shrink-0"
@@ -211,10 +251,7 @@ export function Section({
             background:   colorConfig.border + "44",
             borderBottom: `1px solid ${colorConfig.border}`,
             height: 40,
-            cursor: isDragging ? "grabbing" : "default", // Title bar has default cursor, not grab
           }}
-          onPointerEnter={() => setIsHoveringTitleBar(true)}
-          onPointerLeave={() => setIsHoveringTitleBar(false)}
         >
           {/* Color dot / picker */}
           <div className="relative shrink-0">
@@ -318,6 +355,29 @@ export function Section({
             )}
           </button>
 
+          {/* Vote button */}
+          {(isVotingMode || section.votes > 0) && (
+            <button
+              className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold shrink-0 transition-all ${
+                hasVoted
+                  ? "bg-green-500 text-white shadow-sm"
+                  : canVote
+                  ? "bg-white text-gray-600 hover:bg-green-100 shadow-sm border border-gray-200"
+                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (hasVoted) onRemoveVote(section.id);
+                else if (canVote) onCastVote(section.id);
+              }}
+              title={hasVoted ? "Remove vote" : canVote ? "Vote for this cluster" : "No votes remaining"}
+              disabled={!canVote && !hasVoted}
+            >
+              {section.votes}
+            </button>
+          )}
+
           {/* Delete button */}
           <button
             className="w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors text-xs shrink-0"
@@ -350,6 +410,54 @@ export function Section({
           <path d="M2 8 L8 8 L8 2" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
       </div>
-    </div>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("renameSection", { detail: section.id }));
+          }
+        }}>
+          Rename
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => onArrangeSection(section.id)}>
+          Arrange stickies
+        </ContextMenuItem>
+        <ContextMenuCheckboxItem
+          checked={autoResize}
+          onCheckedChange={(checked) => onUpdate(section.id, { autoResize: checked })}
+        >
+          Auto-resize
+        </ContextMenuCheckboxItem>
+        <ContextMenuSeparator />
+        <ContextMenuLabel className="px-2 py-1.5 text-xs text-muted-foreground">
+          Change color
+        </ContextMenuLabel>
+        <div className="flex gap-1 px-2 py-1.5">
+          {SECTION_COLORS.map((c) => (
+            <button
+              key={c.bg}
+              className="w-5 h-5 rounded-full border-2 border-white shadow hover:scale-110 transition-transform"
+              style={{ background: c.border }}
+              onClick={() => onUpdate(section.id, { color: c.bg })}
+            />
+          ))}
+        </div>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("duplicateSection", { detail: section.id }));
+          }
+        }}>
+          Duplicate
+        </ContextMenuItem>
+        <ContextMenuItem
+          variant="destructive"
+          onSelect={() => onDelete(section.id)}
+        >
+          Delete
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

@@ -58,6 +58,10 @@ export interface SectionData extends BaseElement {
   color: string; // hex or tailwind bg class
   /** Auto-resize to fit content when enabled */
   autoResize: boolean;
+  /** Number of votes on this section/cluster */
+  votes: number;
+  /** User IDs who voted */
+  votedBy: string[];
 }
 
 export interface TextData extends BaseElement {

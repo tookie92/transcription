@@ -33,10 +33,6 @@ interface StickyNoteProps {
   note: StickyNoteData;
   zoom: number;
   isSelected: boolean;
-  isVotingMode: boolean;
-  currentUserId: string;
-  votesUsed: number;
-  maxVotes: number;
   onSelect: (id: string, multi: boolean) => void;
   onMove: (id: string, pos: { x: number; y: number }) => void;
   onMoveSelected?: (ids: string[], dx: number, dy: number) => void;
@@ -45,8 +41,6 @@ interface StickyNoteProps {
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
   onBringToFront: (id: string) => void;
-  onCastVote: (id: string) => void;
-  onRemoveVote: (id: string) => void;
   onDragStart?: (id: string) => void;
   onDragEnd?: (id: string) => void;
   dragBounds?: { minX: number; minY: number; maxX: number; maxY: number };
@@ -87,10 +81,6 @@ export function StickyNote({
   note,
   zoom,
   isSelected,
-  isVotingMode,
-  currentUserId,
-  votesUsed,
-  maxVotes,
   onSelect,
   onMove,
   onMoveSelected,
@@ -99,8 +89,6 @@ export function StickyNote({
   onDelete,
   onDuplicate,
   onBringToFront,
-  onCastVote,
-  onRemoveVote,
   onDragStart,
   onDragEnd,
   dragBounds,
@@ -114,8 +102,6 @@ export function StickyNote({
   const textRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const hasVoted = note.votedBy.includes(currentUserId);
-  const canVote = !hasVoted && votesUsed < maxVotes;
 
   // Calculate text area dimensions
   const textAreaHeight = stickySize.height - HEADER_HEIGHT - FOOTER_HEIGHT - PADDING * 2;
@@ -139,7 +125,7 @@ export function StickyNote({
     onDragEnd: (id) => {
       onDragEnd?.(id);
     },
-    disabled: isEditing || isVotingMode || isResizing,
+    disabled: isEditing || isResizing,
     bounds: dragBounds,
     stickyWidth: stickySize.width,
     stickyHeight: stickySize.height,
@@ -147,31 +133,16 @@ export function StickyNote({
   });
 
   const handleDoubleClick = useCallback(() => {
-    if (isVotingMode) return;
     setIsEditing(true);
     setTimeout(() => textareaRef.current?.focus(), 0);
-  }, [isVotingMode]);
+  }, []);
 
   const handleBlur = useCallback(() => {
     setIsEditing(false);
   }, []);
 
-  const handleVoteClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (hasVoted) onRemoveVote(note.id);
-      else if (canVote) onCastVote(note.id);
-    },
-    [hasVoted, canVote, note.id, onCastVote, onRemoveVote]
-  );
-
   const handlePointerDownWrapper = useCallback(
     (e: React.PointerEvent) => {
-      if (isVotingMode) {
-        e.stopPropagation();
-        return;
-      }
-
       const multi = e.shiftKey || e.ctrlKey || e.metaKey;
 
       // For multi-select (Ctrl+click), select but don't start dragging
@@ -185,7 +156,7 @@ export function StickyNote({
       onSelect(note.id, false);
       handlePointerDown(e);
     },
-    [isVotingMode, note.id, onSelect, handlePointerDown]
+    [note.id, onSelect, handlePointerDown]
   );
 
   // ── Resize handle ────────────────────────────────────────────────────────
@@ -226,8 +197,6 @@ export function StickyNote({
     ? "text"
     : isDragging
     ? "grabbing"
-    : isVotingMode
-    ? "pointer"
     : isResizing
     ? "se-resize"
     : "grab";
@@ -251,12 +220,6 @@ export function StickyNote({
       }}
       onPointerDown={handlePointerDownWrapper}
       onDoubleClick={handleDoubleClick}
-      onClick={(e) => {
-        if (isVotingMode) {
-          e.stopPropagation();
-          handleVoteClick(e as any);
-        }
-      }}
     >
       {/* Card body */}
       <div
@@ -266,7 +229,7 @@ export function StickyNote({
           height: stickySize.height,
           background: colors.bg,
           borderRadius: 4,
-          outline: isSelected && !isVotingMode ? "2px solid #0d99ff" : "1px solid rgba(0,0,0,0.08)",
+          outline: isSelected ? "2px solid #0d99ff" : "1px solid rgba(0,0,0,0.08)",
           outlineOffset: 2,
         }}
       >
@@ -359,16 +322,6 @@ export function StickyNote({
               {note.author}
             </span>
           )}
-          {(isVotingMode || note.votes > 0) && (
-            <VoteDot
-              count={note.votes}
-              hasVoted={hasVoted}
-              canVote={canVote}
-              isVotingMode={isVotingMode}
-              onClick={handleVoteClick}
-              dotColor={colors.accent}
-            />
-          )}
         </div>
 
         {/* Resize handle (bottom-right corner) */}
@@ -395,44 +348,6 @@ export function StickyNote({
         />
       )}
     </div>
-  );
-}
-
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
-function VoteDot({
-  count,
-  hasVoted,
-  canVote,
-  isVotingMode,
-  onClick,
-  dotColor,
-}: {
-  count: number;
-  hasVoted: boolean;
-  canVote: boolean;
-  isVotingMode: boolean;
-  onClick: (e: React.MouseEvent) => void;
-  dotColor: string;
-}) {
-  return (
-    <button
-      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white text-xs font-semibold transition-all"
-      style={{
-        background: hasVoted ? dotColor : count > 0 ? dotColor + "cc" : "#ccc",
-        boxShadow: hasVoted ? `0 2px 8px ${dotColor}60` : "none",
-        transform: hasVoted ? "scale(1.05)" : "scale(1)",
-        opacity: isVotingMode && !canVote && !hasVoted ? 0.5 : 1,
-        cursor: isVotingMode ? (canVote || hasVoted ? "pointer" : "not-allowed") : "default",
-      }}
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={onClick}
-    >
-      <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-        <circle cx="8" cy="8" r="8"/>
-      </svg>
-      <span>{count}</span>
-    </button>
   );
 }
 

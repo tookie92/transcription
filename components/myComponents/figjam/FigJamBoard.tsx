@@ -65,6 +65,9 @@ export function FigJamBoard({
   const [lassoEnd, setLassoEnd] = useState<Position | null>(null);
   const isLassoing = lassoStart !== null;
 
+  // Section rename trigger (F2)
+  const [renameSectionId, setRenameSectionId] = useState<string | null>(null);
+
   // ── Load from localStorage on mount ────────────────────────────────────
   useEffect(() => {
     // Priority: 1. initialElements prop, 2. localStorage
@@ -89,6 +92,27 @@ export function FigJamBoard({
     if (!isLoaded) return;
     localStorage.setItem(storageKey, JSON.stringify(state.elements));
   }, [state.elements, storageKey, isLoaded]);
+
+  // ── Context menu event handlers ─────────────────────────────────────
+  useEffect(() => {
+    const handleRenameSection = (e: Event) => {
+      const sectionId = (e as CustomEvent).detail;
+      setRenameSectionId(sectionId);
+    };
+
+    const handleDuplicateSection = (e: Event) => {
+      const sectionId = (e as CustomEvent).detail;
+      board.duplicateElement(sectionId);
+    };
+
+    window.addEventListener("renameSection", handleRenameSection);
+    window.addEventListener("duplicateSection", handleDuplicateSection);
+
+    return () => {
+      window.removeEventListener("renameSection", handleRenameSection);
+      window.removeEventListener("duplicateSection", handleDuplicateSection);
+    };
+  }, [board]);
 
   // ── Derived state (for keyboard shortcuts) ───────────────────────────
   const allStickies = Object.values(state.elements).filter(
@@ -352,6 +376,16 @@ export function FigJamBoard({
         case "t": case "T": board.setTool("text");   break;
         case "s": case "S": board.setTool("sticky"); break;
         case "f": case "F": board.setTool("section"); break;
+        case "F2":
+          // Rename selected section
+          if (state.selectedIds.length === 1) {
+            const selectedEl = state.elements[state.selectedIds[0]];
+            if (selectedEl?.type === "section") {
+              e.preventDefault();
+              setRenameSectionId(state.selectedIds[0]);
+            }
+          }
+          break;
         case "Escape":
           board.setTool("select");
           board.clearSelection();
@@ -508,6 +542,10 @@ export function FigJamBoard({
               zoom={state.zoom}
               isSelected={state.selectedIds.includes(el.id)}
               isHovered={attachedSectionId === el.id}
+              isVotingMode={isVotingMode}
+              currentUserId={state.currentUserId}
+              votesUsed={state.votesUsed}
+              maxVotes={maxVotesPerUser}
               onSelect={board.selectElement}
               onMoveWithChildren={board.moveSectionWithChildren}
               onMoveSelected={board.moveSelected}
@@ -515,6 +553,9 @@ export function FigJamBoard({
               onUpdate={(id, patch) => board.updateElement(id, patch as any)}
               onDelete={board.deleteElement}
               onArrangeSection={(sectionId) => board.autoArrange(sectionId)}
+              renameTrigger={renameSectionId}
+              onCastVote={board.castVote}
+              onRemoveVote={board.removeVote}
             />
           ))}
 
@@ -525,10 +566,6 @@ export function FigJamBoard({
               note={el}
               zoom={state.zoom}
               isSelected={state.selectedIds.includes(el.id)}
-              isVotingMode={isVotingMode}
-              currentUserId={state.currentUserId}
-              votesUsed={state.votesUsed}
-              maxVotes={maxVotesPerUser}
               onSelect={board.selectElement}
               onMove={(id, pos) => board.moveSticky(id, pos)}
               onMoveSelected={board.moveSelected}
@@ -537,8 +574,6 @@ export function FigJamBoard({
               onDelete={board.deleteElement}
               onDuplicate={board.duplicateElement}
               onBringToFront={board.bringToFront}
-              onCastVote={board.castVote}
-              onRemoveVote={board.removeVote}
               onResize={(id, size) => board.updateElement(id, { size } as any)}
               onDragStart={(id) => setDraggingStickyId(id)}
               onDragEnd={(id) => {

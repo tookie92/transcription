@@ -77,6 +77,20 @@ function reducer(state: BoardState, action: Action): BoardState {
 
     case "DELETE_ELEMENT": {
       const elements = { ...state.elements };
+      const deletedElement = elements[action.id];
+      
+      // If deleting a section, detach all stickies attached to it
+      if (deletedElement?.type === "section") {
+        const stickies = Object.values(elements).filter(
+          (el): el is StickyNoteData => el.type === "sticky"
+        );
+        for (const sticky of stickies) {
+          if (sticky.parentSectionId === action.id) {
+            elements[sticky.id] = { ...sticky, parentSectionId: null };
+          }
+        }
+      }
+      
       delete elements[action.id];
       return {
         ...state,
@@ -282,13 +296,15 @@ function reducer(state: BoardState, action: Action): BoardState {
 
     case "CAST_VOTE": {
       const el = state.elements[action.id] as any;
-      if (!el || el.type !== "sticky") return state;
-      if (el.votedBy.includes(action.userId)) return state;
+      // Vote on sections only (not stickies)
+      if (!el || el.type !== "section") return state;
+      const votedBy = el.votedBy ?? [];
+      if (votedBy.includes(action.userId)) return state;
       if (state.votesUsed >= state.maxVotesPerUser) return state;
       const updated = {
         ...el,
-        votes: el.votes + 1,
-        votedBy: [...el.votedBy, action.userId],
+        votes: (el.votes ?? 0) + 1,
+        votedBy: [...votedBy, action.userId],
         updatedAt: now(),
       };
       return {
@@ -300,12 +316,14 @@ function reducer(state: BoardState, action: Action): BoardState {
 
     case "REMOVE_VOTE": {
       const el = state.elements[action.id] as any;
-      if (!el || el.type !== "sticky") return state;
-      if (!el.votedBy.includes(action.userId)) return state;
+      // Vote on sections only (not stickies)
+      if (!el || el.type !== "section") return state;
+      const votedBy = el.votedBy ?? [];
+      if (!votedBy.includes(action.userId)) return state;
       const updated = {
         ...el,
-        votes: Math.max(0, el.votes - 1),
-        votedBy: el.votedBy.filter((uid: string) => uid !== action.userId),
+        votes: Math.max(0, (el.votes ?? 0) - 1),
+        votedBy: votedBy.filter((uid: string) => uid !== action.userId),
         updatedAt: now(),
       };
       return {
@@ -319,7 +337,7 @@ function reducer(state: BoardState, action: Action): BoardState {
       const elements = { ...state.elements };
       for (const key of Object.keys(elements)) {
         const el = elements[key] as any;
-        if (el.type === "sticky") {
+        if (el.type === "section") {
           elements[key] = { ...el, votes: 0, votedBy: [], updatedAt: now() };
         }
       }
@@ -434,6 +452,8 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
         title: "Section",
         color: "#e8f4fd",
         autoResize: false,
+        votes: 0,
+        votedBy: [],
         zIndex: 0, // sections live behind
         createdAt: now(),
         updatedAt: now(),
@@ -600,6 +620,8 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
         title,
         color: "#e8f4fd",
         autoResize: true, // Enable auto-resize by default
+        votes: 0,
+        votedBy: [],
         zIndex: 0,
         createdAt: now(),
         updatedAt: now(),
