@@ -55,6 +55,7 @@ export function Section({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isHoveringTitleBar, setIsHoveringTitleBar] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
 
   const colorConfig =
@@ -73,14 +74,15 @@ export function Section({
       if (isEditingTitle) return;
       if (e.button !== 0) return;
 
-      // Check for double-click (300ms threshold)
+      // Check for double-click (if clicking on title span)
+      const target = e.target as HTMLElement;
+      const isOnTitle = target.closest('span');
       const now = Date.now();
-      const isDoubleClick = now - lastClickTime.current < 300;
+      const isDoubleClick = isOnTitle && (now - lastClickTime.current < 300);
       lastClickTime.current = now;
 
-      if (isDoubleClick) {
-        return; // Let double-click event handle this
-      }
+      // If double-clicking on title, don't drag
+      if (isDoubleClick) return;
 
       e.stopPropagation();
 
@@ -193,7 +195,7 @@ export function Section({
         style={{
           background: colorConfig.bg,
           border,
-          cursor: isDragging ? "grabbing" : "grab",
+          cursor: isDragging ? "grabbing" : (isHoveringTitleBar ? "default" : "grab"),
           // Highlight ring when a sticky hovers over this section
           boxShadow: isHovered
             ? `0 0 0 3px ${colorConfig.border}88`
@@ -209,7 +211,10 @@ export function Section({
             background:   colorConfig.border + "44",
             borderBottom: `1px solid ${colorConfig.border}`,
             height: 40,
+            cursor: isDragging ? "grabbing" : "default", // Title bar has default cursor, not grab
           }}
+          onPointerEnter={() => setIsHoveringTitleBar(true)}
+          onPointerLeave={() => setIsHoveringTitleBar(false)}
         >
           {/* Color dot / picker */}
           <div className="relative shrink-0">

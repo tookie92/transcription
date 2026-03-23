@@ -174,14 +174,14 @@ export function StickyNote({
 
       const multi = e.shiftKey || e.ctrlKey || e.metaKey;
 
-      // For multi-select (Ctrl+click), stop propagation and don't start dragging
+      // For multi-select (Ctrl+click), select but don't start dragging
       if (multi) {
         e.stopPropagation();
         onSelect(note.id, true);
         return;
       }
 
-      // Normal click - select and allow dragging
+      // Normal click - select and start dragging
       onSelect(note.id, false);
       handlePointerDown(e);
     },

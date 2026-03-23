@@ -61,11 +61,6 @@ export function useDraggable({
       if (disabled) return;
       if (e.button !== 0 && e.pointerType === "mouse") return;
 
-      // Don't start dragging if Ctrl/Cmd is pressed - let click handler manage selection
-      if (e.ctrlKey || e.metaKey) {
-        return;
-      }
-
       e.stopPropagation();
       e.currentTarget.setPointerCapture(e.pointerId);
 

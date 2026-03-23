@@ -380,8 +380,40 @@ export function FigJamBoard({
   const stickies = others.filter((el): el is StickyNoteData => el.type === "sticky");
 
   // Which section is the dragging sticky hovering over?
-  // Only highlight sections if the sticky is attached to a section
+  // Calculate using collision detection (for drop)
   const hoveredSectionId = draggingStickyId
+    ? (() => {
+        const sticky = state.elements[draggingStickyId] as StickyNoteData | undefined;
+        if (!sticky) return null;
+
+        const stickySize = sticky.size ?? { width: 200, height: 200 };
+        const stickyRight = sticky.position.x + stickySize.width;
+        const stickyBottom = sticky.position.y + stickySize.height;
+
+        for (const section of sections) {
+          const sectionRight = section.position.x + section.size.width;
+          const sectionBottom = section.position.y + section.size.height;
+
+          // Check if sticky center is inside section (below title bar)
+          const stickyCenterX = sticky.position.x + stickySize.width / 2;
+          const stickyCenterY = sticky.position.y + stickySize.height / 2;
+
+          const isInside =
+            stickyCenterX > section.position.x &&
+            stickyCenterX < sectionRight &&
+            stickyCenterY > section.position.y + 40 && // Below title bar
+            stickyCenterY < sectionBottom;
+
+          if (isInside) {
+            return section.id;
+          }
+        }
+        return null;
+      })()
+    : null;
+
+  // Which section is already attached to (for highlight)?
+  const attachedSectionId = draggingStickyId
     ? (() => {
         const sticky = state.elements[draggingStickyId] as StickyNoteData | undefined;
         if (!sticky || !sticky.parentSectionId) return null;
@@ -475,7 +507,7 @@ export function FigJamBoard({
               section={el}
               zoom={state.zoom}
               isSelected={state.selectedIds.includes(el.id)}
-              isHovered={hoveredSectionId === el.id}
+              isHovered={attachedSectionId === el.id}
               onSelect={board.selectElement}
               onMoveWithChildren={board.moveSectionWithChildren}
               onMoveSelected={board.moveSelected}
@@ -509,7 +541,16 @@ export function FigJamBoard({
               onRemoveVote={board.removeVote}
               onResize={(id, size) => board.updateElement(id, { size } as any)}
               onDragStart={(id) => setDraggingStickyId(id)}
-              onDragEnd={() => setDraggingStickyId(null)}
+              onDragEnd={(id) => {
+                // Attach sticky to section if dropped over one
+                if (hoveredSectionId) {
+                  const sticky = state.elements[id] as StickyNoteData | undefined;
+                  if (sticky) {
+                    board.updateElement(id, { parentSectionId: hoveredSectionId } as any);
+                  }
+                }
+                setDraggingStickyId(null);
+              }}
               dragBounds={getStickyDragBounds(el)}
             />
           ))}
