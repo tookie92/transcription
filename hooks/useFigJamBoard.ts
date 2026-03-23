@@ -42,6 +42,7 @@ type Action =
   | { type: "RESET_VOTES" }
   | { type: "MOVE_SECTION_WITH_CHILDREN"; sectionId: string; dx: number; dy: number }
   | { type: "MOVE_STICKY"; stickyId: string; position: Position }
+  | { type: "MOVE_SELECTED"; ids: string[]; dx: number; dy: number }
   | { type: "LOAD_ELEMENTS"; elements: Record<string, FigJamElement> }
   | { type: "UNDO" }
   | { type: "REDO" };
@@ -85,20 +86,7 @@ function reducer(state: BoardState, action: Action): BoardState {
     }
 
     case "SELECT": {
-      // Prevent selecting sections if there are already stickies selected (and vice versa)
-      const clickedElement = state.elements[action.id];
-      const isSectionClick = clickedElement?.type === "section";
-      
       if (action.multi) {
-        // When adding to selection, only allow mix if same type
-        const hasSections = state.selectedIds.some(id => state.elements[id]?.type === "section");
-        const hasStickies = state.selectedIds.some(id => state.elements[id]?.type === "sticky");
-        
-        // If trying to add a section but stickies are selected, ignore
-        if (isSectionClick && hasStickies) return state;
-        // If trying to add a sticky but sections are selected, ignore
-        if (!isSectionClick && hasSections) return state;
-        
         const already = state.selectedIds.includes(action.id);
         return {
           ...state,
@@ -107,8 +95,6 @@ function reducer(state: BoardState, action: Action): BoardState {
             : [...state.selectedIds, action.id],
         };
       }
-      
-      // Single select - clear all and select only this one
       return { ...state, selectedIds: [action.id] };
     }
 
@@ -200,6 +186,39 @@ function reducer(state: BoardState, action: Action): BoardState {
         updatedAt: now(),
       };
 
+      return { ...state, elements };
+    }
+
+    case "MOVE_SELECTED": {
+      const elements = { ...state.elements };
+      
+      for (const id of action.ids) {
+        const el = elements[id];
+        if (!el) continue;
+        
+        if (el.type === "section") {
+          const section = el as SectionData;
+          elements[id] = {
+            ...section,
+            position: {
+              x: section.position.x + action.dx,
+              y: section.position.y + action.dy,
+            },
+            updatedAt: now(),
+          };
+        } else if (el.type === "sticky") {
+          const sticky = el as StickyNoteData;
+          elements[id] = {
+            ...sticky,
+            position: {
+              x: sticky.position.x + action.dx,
+              y: sticky.position.y + action.dy,
+            },
+            updatedAt: now(),
+          };
+        }
+      }
+      
       return { ...state, elements };
     }
 
@@ -435,6 +454,10 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     dispatch({ type: "MOVE_STICKY", stickyId, position });
   }, []);
 
+  const moveSelected = useCallback((ids: string[], dx: number, dy: number) => {
+    dispatch({ type: "MOVE_SELECTED", ids, dx, dy });
+  }, []);
+
   // ── Selection ─────────────────────────────────────────────────────────────
 
   const selectElement = useCallback((id: string, multi = false) => {
@@ -644,6 +667,7 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     sendToBack,
     moveSectionWithChildren,
     moveSticky,
+    moveSelected,
     undo,
     redo,
     canUndo,

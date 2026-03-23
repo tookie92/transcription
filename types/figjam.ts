@@ -122,6 +122,8 @@ export interface UseFigJamBoardReturn {
   moveSectionWithChildren: (sectionId: string, dx: number, dy: number) => void;
   /** Move a sticky and auto-attach/detach from sections based on position */
   moveSticky: (stickyId: string, position: Position) => void;
+  /** Move multiple selected elements together */
+  moveSelected: (ids: string[], dx: number, dy: number) => void;
   // Persistence
   loadElements: (elements: Record<string, FigJamElement>) => void;
   // Undo/Redo

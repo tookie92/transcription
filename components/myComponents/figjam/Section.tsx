@@ -29,10 +29,12 @@ interface SectionProps {
    * Called on every pointer-move frame during drag.
    */
   onMoveWithChildren: (sectionId: string, dx: number, dy: number) => void;
+  onMoveSelected?: (ids: string[], dx: number, dy: number) => void;
   onUpdate: (id: string, patch: Partial<SectionData>) => void;
   onDelete: (id: string) => void;
   /** Arrange stickies within this section in a grid */
   onArrangeSection: (sectionId: string) => void;
+  selectedIds?: string[];
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -44,9 +46,11 @@ export function Section({
   isHovered = false,
   onSelect,
   onMoveWithChildren,
+  onMoveSelected,
   onUpdate,
   onDelete,
   onArrangeSection,
+  selectedIds = [],
 }: SectionProps) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -61,35 +65,68 @@ export function Section({
 
   // ── Drag — moves section + all child stickies atomically ─────────────────
 
+  const lastClickTime = useRef(0);
+  const isDraggingRef = useRef(false);
+
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (isEditingTitle) return;
       if (e.button !== 0) return;
 
+      // Check for double-click (300ms threshold)
+      const now = Date.now();
+      const isDoubleClick = now - lastClickTime.current < 300;
+      lastClickTime.current = now;
+
+      if (isDoubleClick) {
+        return; // Let double-click event handle this
+      }
+
       e.stopPropagation();
+
+      const multi = e.shiftKey || e.ctrlKey || e.metaKey;
+
+      if (multi) {
+        onSelect(section.id, true);
+        return;
+      }
+
       e.currentTarget.setPointerCapture(e.pointerId);
-      onSelect(section.id, e.shiftKey || e.metaKey);
+      onSelect(section.id, false);
 
       const startClientX = e.clientX;
       const startClientY = e.clientY;
       let lastDx = 0;
       let lastDy = 0;
 
-      setIsDragging(true);
+      const isMultiSelect = selectedIds.length > 1 && selectedIds.includes(section.id);
 
       const onMovePtr = (mv: PointerEvent) => {
-        // Total delta from drag start (in canvas units)
+        if (!isDraggingRef.current) {
+          const totalDx = (mv.clientX - startClientX) / zoom;
+          const totalDy = (mv.clientY - startClientY) / zoom;
+          const totalMoved = Math.sqrt(totalDx * totalDx + totalDy * totalDy);
+          if (totalMoved < 3) return;
+          isDraggingRef.current = true;
+          setIsDragging(true);
+        }
+
         const totalDx = (mv.clientX - startClientX) / zoom;
         const totalDy = (mv.clientY - startClientY) / zoom;
-        // Frame delta = total - what we already applied
         const frameDx = totalDx - lastDx;
         const frameDy = totalDy - lastDy;
         lastDx = totalDx;
         lastDy = totalDy;
-        onMoveWithChildren(section.id, frameDx, frameDy);
+
+        if (isMultiSelect && onMoveSelected) {
+          onMoveSelected(selectedIds, frameDx, frameDy);
+        } else {
+          onMoveWithChildren(section.id, frameDx, frameDy);
+        }
       };
 
       const onUp = () => {
+        isDraggingRef.current = false;
         setIsDragging(false);
         window.removeEventListener("pointermove", onMovePtr);
         window.removeEventListener("pointerup", onUp);
@@ -98,7 +135,7 @@ export function Section({
       window.addEventListener("pointermove", onMovePtr);
       window.addEventListener("pointerup", onUp);
     },
-    [isEditingTitle, section.id, zoom, onSelect, onMoveWithChildren]
+    [isEditingTitle, section.id, zoom, onSelect, onMoveWithChildren, onMoveSelected, selectedIds]
   );
 
   // ── Resize — SE corner handle ─────────────────────────────────────────────

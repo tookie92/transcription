@@ -94,6 +94,9 @@ export function FigJamBoard({
   const allStickies = Object.values(state.elements).filter(
     (el): el is StickyNoteData => el.type === "sticky"
   );
+  const allSections = Object.values(state.elements).filter(
+    (el): el is SectionData => el.type === "section"
+  );
 
   // ── Containment: auto-grow sections when stickies overflow ─────────────
   // NOTE: Stickies are always free-floating. Sections are visual containers only.
@@ -172,9 +175,13 @@ export function FigJamBoard({
         setLassoStart(pos);
         setLassoEnd(pos);
         e.currentTarget.setPointerCapture(e.pointerId);
+        // Only clear selection if not holding Ctrl/Cmd (for adding to selection)
+        if (!e.ctrlKey && !e.metaKey) {
+          board.clearSelection();
+        }
       }
-
-      board.clearSelection();
+      // NOTE: When clicking on an element, let the element's own handler manage selection
+      // (don't clear selection from here - it breaks Ctrl+click multi-select)
 
       if (state.activeTool === "sticky") {
         const pos = screenToCanvas(e.clientX, e.clientY);
@@ -216,7 +223,7 @@ export function FigJamBoard({
         const minY = Math.min(lassoStart.y, lassoEnd.y);
         const maxY = Math.max(lassoStart.y, lassoEnd.y);
         
-        // Select all stickies that intersect with lasso
+        // Select all elements that intersect with lasso
         const stickyW = 200;
         const stickyH = 200;
         
@@ -226,11 +233,24 @@ export function FigJamBoard({
           const sTop = sticky.position.y;
           const sBottom = sticky.position.y + stickyH;
           
-          // Check if sticky intersects with lasso
           const intersects = !(sRight < minX || sLeft > maxX || sBottom < minY || sTop > maxY);
           
           if (intersects) {
-            board.selectElement(sticky.id, true); // multi-select
+            board.selectElement(sticky.id, true);
+          }
+        });
+
+        // Select all sections that intersect with lasso
+        allSections.forEach((section) => {
+          const sLeft = section.position.x;
+          const sRight = section.position.x + section.size.width;
+          const sTop = section.position.y;
+          const sBottom = section.position.y + section.size.height;
+          
+          const intersects = !(sRight < minX || sLeft > maxX || sBottom < minY || sTop > maxY);
+          
+          if (intersects) {
+            board.selectElement(section.id, true);
           }
         });
       }
@@ -239,7 +259,7 @@ export function FigJamBoard({
       setLassoEnd(null);
       isPanning.current = false;
     },
-    [isLassoing, lassoStart, lassoEnd, allStickies, board]
+    [isLassoing, lassoStart, lassoEnd, allStickies, allSections, board]
   );
 
   // ── Voting ───────────────────────────────────────────────────────────────
@@ -282,10 +302,56 @@ export function FigJamBoard({
         return;
       }
 
+      // Arrow keys for moving selected elements
+      const arrowKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+      if (arrowKeys.includes(e.key) && state.selectedIds.length > 0) {
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 1; // Shift = 10px, normal = 1px
+        let dx = 0, dy = 0;
+        switch (e.key) {
+          case "ArrowUp": dy = -step; break;
+          case "ArrowDown": dy = step; break;
+          case "ArrowLeft": dx = -step; break;
+          case "ArrowRight": dx = step; break;
+        }
+        
+        // Move all selected stickies
+        const selectedStickies = state.selectedIds
+          .map((id) => state.elements[id])
+          .filter((el): el is StickyNoteData => el?.type === "sticky");
+        
+        const patches = selectedStickies.map((sticky) => ({
+          id: sticky.id,
+          patch: {
+            position: {
+              x: sticky.position.x + dx,
+              y: sticky.position.y + dy,
+            },
+          },
+        }));
+        
+        if (patches.length > 0) {
+          board.updateMany(patches as any);
+        }
+
+        // Move all selected sections
+        const selectedSections = state.selectedIds
+          .map((id) => state.elements[id])
+          .filter((el): el is SectionData => el?.type === "section");
+
+        selectedSections.forEach((section) => {
+          board.moveSectionWithChildren(section.id, dx, dy);
+        });
+
+        return;
+      }
+
       switch (e.key) {
         case "v": case "V": board.setTool("select"); break;
         case "h": case "H": board.setTool("hand");   break;
         case "t": case "T": board.setTool("text");   break;
+        case "s": case "S": board.setTool("sticky"); break;
+        case "f": case "F": board.setTool("section"); break;
         case "Escape":
           board.setTool("select");
           board.clearSelection();
@@ -412,6 +478,8 @@ export function FigJamBoard({
               isHovered={hoveredSectionId === el.id}
               onSelect={board.selectElement}
               onMoveWithChildren={board.moveSectionWithChildren}
+              onMoveSelected={board.moveSelected}
+              selectedIds={state.selectedIds}
               onUpdate={(id, patch) => board.updateElement(id, patch as any)}
               onDelete={board.deleteElement}
               onArrangeSection={(sectionId) => board.autoArrange(sectionId)}
@@ -431,6 +499,8 @@ export function FigJamBoard({
               maxVotes={maxVotesPerUser}
               onSelect={board.selectElement}
               onMove={(id, pos) => board.moveSticky(id, pos)}
+              onMoveSelected={board.moveSelected}
+              selectedIds={state.selectedIds}
               onUpdate={(id, patch) => board.updateElement(id, patch as any)}
               onDelete={board.deleteElement}
               onDuplicate={board.duplicateElement}

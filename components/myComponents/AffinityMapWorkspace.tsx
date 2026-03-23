@@ -389,10 +389,11 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
       {/* Voting Mode Toggle Button */}
       <button
         onClick={handleToggleVotingMode}
-        className={`fixed top-16 right-4 z-40 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+        aria-label={isVotingMode ? `Voting mode on - ${userVotes.length} votes cast` : "Start voting mode"}
+        className={`fixed top-16 right-4 z-20 px-4 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 ${
           isVotingMode
-            ? "bg-[#9747FF] text-white"
-            : "bg-white border border-[#e8e8e8] text-[#1d1d1d] hover:bg-[#f5f5f5]"
+            ? "bg-violet-600 text-white shadow-lg"
+            : "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50 shadow-sm"
         }`}
       >
         {isVotingMode ? (
@@ -408,27 +409,30 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
       {/* Activity Toggle Button */}
       <button
         onClick={() => setShowActivityPanel(!showActivityPanel)}
-        className={`fixed bottom-4 left-4 z-40 px-3 py-2 rounded-lg text-sm transition-all ${
+        aria-label="Toggle activity panel"
+        aria-pressed={showActivityPanel}
+        className={`fixed bottom-6 left-4 z-20 px-4 py-2.5 rounded-lg text-sm transition-all duration-200 ${
           showActivityPanel
-            ? "bg-[#1d1d1d] text-white"
-            : "bg-white border border-[#e8e8e8] text-[#1d1d1d] hover:bg-[#f5f5f5]"
+            ? "bg-gray-900 text-white shadow-lg"
+            : "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50 shadow-sm"
         }`}
       >
         Activity
       </button>
 
       {/* Side Panels Toggle */}
-      <div className="fixed top-16 left-4 z-40 flex flex-col gap-2">
+      <div className="fixed top-16 left-4 z-20 flex flex-col gap-2">
         <button
           onClick={() => setActivePanel(activePanel === "aiAssistant" ? null : "aiAssistant")}
-          className={`p-2 rounded-lg transition-all ${
+          aria-label="AI Assistant panel"
+          aria-pressed={activePanel === "aiAssistant"}
+          className={`p-3 rounded-lg transition-all duration-200 shadow-sm ${
             activePanel === "aiAssistant"
-              ? "bg-[#9747FF] text-white"
-              : "bg-white border border-[#e8e8e8] hover:bg-[#f5f5f5]"
+              ? "bg-violet-600 text-white"
+              : "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
           }`}
-          title="AI Assistant"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <path d="M12 2L2 7l10 5 10-5-10-5z" />
             <path d="M2 17l10 5 10-5" />
             <path d="M2 12l10 5 10-5" />
@@ -437,28 +441,30 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         
         <button
           onClick={() => setActivePanel(activePanel === "analytics" ? null : "analytics")}
-          className={`p-2 rounded-lg transition-all ${
+          aria-label="Analytics panel"
+          aria-pressed={activePanel === "analytics"}
+          className={`p-3 rounded-lg transition-all duration-200 shadow-sm ${
             activePanel === "analytics"
-              ? "bg-[#9747FF] text-white"
-              : "bg-white border border-[#e8e8e8] hover:bg-[#f5f5f5]"
+              ? "bg-violet-600 text-white"
+              : "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
           }`}
-          title="Analytics"
         >
-          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M18 20V10M12 20V4M6 20v-6" />
           </svg>
         </button>
         
         <button
           onClick={() => setActivePanel(activePanel === "persona" ? null : "persona")}
-          className={`p-2 rounded-lg transition-all ${
+          aria-label="Personas panel"
+          aria-pressed={activePanel === "persona"}
+          className={`p-3 rounded-lg transition-all duration-200 shadow-sm ${
             activePanel === "persona"
-              ? "bg-[#9747FF] text-white"
-              : "bg-white border border-[#e8e8e8] hover:bg-[#f5f5f5]"
+              ? "bg-violet-600 text-white"
+              : "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
           }`}
-          title="Personas"
         >
-          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
           </svg>

@@ -39,6 +39,7 @@ interface StickyNoteProps {
   maxVotes: number;
   onSelect: (id: string, multi: boolean) => void;
   onMove: (id: string, pos: { x: number; y: number }) => void;
+  onMoveSelected?: (ids: string[], dx: number, dy: number) => void;
   onUpdate: (id: string, patch: Partial<StickyNoteData>) => void;
   onResize: (id: string, size: Size) => void;
   onDelete: (id: string) => void;
@@ -49,6 +50,7 @@ interface StickyNoteProps {
   onDragStart?: (id: string) => void;
   onDragEnd?: (id: string) => void;
   dragBounds?: { minX: number; minY: number; maxX: number; maxY: number };
+  selectedIds?: string[];
 }
 
 // ─── Auto-sizing text hook (simplified) ─────────────────────────────────────
@@ -91,6 +93,7 @@ export function StickyNote({
   maxVotes,
   onSelect,
   onMove,
+  onMoveSelected,
   onUpdate,
   onResize,
   onDelete,
@@ -101,6 +104,7 @@ export function StickyNote({
   onDragStart,
   onDragEnd,
   dragBounds,
+  selectedIds = [],
 }: StickyNoteProps) {
   const colors = STICKY_COLORS[note.color];
   const stickySize = note.size ?? { width: 200, height: 200 };
@@ -125,6 +129,7 @@ export function StickyNote({
     position: note.position,
     zoom,
     onMove,
+    onMoveSelected,
     onDragStart: (id) => {
       onSelect(id, false);
       onBringToFront(id);
@@ -138,6 +143,7 @@ export function StickyNote({
     bounds: dragBounds,
     stickyWidth: stickySize.width,
     stickyHeight: stickySize.height,
+    selectedIds,
   });
 
   const handleDoubleClick = useCallback(() => {
@@ -165,9 +171,17 @@ export function StickyNote({
         e.stopPropagation();
         return;
       }
-      
-      // Ctrl/Cmd is handled in onClick to avoid double-toggling
-      // Normal click - select and prepare for drag
+
+      const multi = e.shiftKey || e.ctrlKey || e.metaKey;
+
+      // For multi-select (Ctrl+click), stop propagation and don't start dragging
+      if (multi) {
+        e.stopPropagation();
+        onSelect(note.id, true);
+        return;
+      }
+
+      // Normal click - select and allow dragging
       onSelect(note.id, false);
       handlePointerDown(e);
     },
@@ -241,9 +255,6 @@ export function StickyNote({
         if (isVotingMode) {
           e.stopPropagation();
           handleVoteClick(e as any);
-        } else if (e.ctrlKey || e.metaKey) {
-          e.stopPropagation();
-          onSelect(note.id, true);
         }
       }}
     >
@@ -335,11 +346,19 @@ export function StickyNote({
           )}
         </div>
 
-        {/* Footer: vote badge */}
+        {/* Footer: author + vote badge */}
         <div
-          className="absolute bottom-0 left-0 right-0 flex items-center justify-end px-3"
+          className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-3"
           style={{ height: FOOTER_HEIGHT }}
         >
+          {note.author && (
+            <span 
+              className="text-[10px] font-medium truncate max-w-[120px] opacity-60"
+              style={{ color: colors.text }}
+            >
+              {note.author}
+            </span>
+          )}
           {(isVotingMode || note.votes > 0) && (
             <VoteDot
               count={note.votes}
