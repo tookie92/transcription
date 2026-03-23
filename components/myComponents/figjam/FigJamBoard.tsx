@@ -2,12 +2,10 @@
 
 import React, { useCallback, useRef, useState, useEffect } from "react";
 import { useFigJamBoard } from "@/hooks/useFigJamBoard";
-import { useContainment, isInsideSection } from "@/hooks/useContainment";
+import { useContainment } from "@/hooks/useContainment";
 import { StickyNote } from "./StickyNote";
 import { Section } from "./Section";
 import { FigJamToolbar } from "./FigJamToolbar";
-import { DotVotingDock } from "./DotVoting";
-import { VotingToggle } from "./DotVotingUI";
 import type { FigJamElement, Position, StickyColor, StickyNoteData, SectionData } from "@/types/figjam";
 
 // ─── Canvas dot grid ──────────────────────────────────────────────────────────
@@ -38,15 +36,13 @@ function CanvasGrid({ zoom, pan }: { zoom: number; pan: Position }) {
 
 interface FigJamBoardProps {
   projectName?: string;
-  maxVotesPerUser?: number;
-  storageKey?: string; // localStorage key, e.g. "figjam-board-{projectId}"
+  storageKey?: string;
   onChange?: (elements: Record<string, FigJamElement>) => void;
-  initialElements?: Record<string, FigJamElement>; // Optional external initial data
+  initialElements?: Record<string, FigJamElement>;
 }
 
 export function FigJamBoard({
   projectName,
-  maxVotesPerUser = 5,
   storageKey = "figjam-default",
   onChange,
   initialElements,
@@ -54,27 +50,19 @@ export function FigJamBoard({
   const board = useFigJamBoard();
   const { state } = board;
 
-  const [isVotingMode, setIsVotingMode] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
 
-  // Which sticky is currently being dragged (for section hover highlight)
   const [draggingStickyId, setDraggingStickyId] = useState<string | null>(null);
 
-  // Lasso selection state
   const [lassoStart, setLassoStart] = useState<Position | null>(null);
   const [lassoEnd, setLassoEnd] = useState<Position | null>(null);
   const isLassoing = lassoStart !== null;
 
-  // Section rename trigger (F2)
   const [renameSectionId, setRenameSectionId] = useState<string | null>(null);
-
-  // User dots state for voting
-  const [userDots, setUserDots] = useState<Map<string, number>>(new Map()); // sectionId -> count
 
   // ── Load from localStorage on mount ────────────────────────────────────
   useEffect(() => {
-    // Priority: 1. initialElements prop, 2. localStorage
     if (initialElements && Object.keys(initialElements).length > 0) {
       board.loadElements(initialElements);
     } else {
@@ -89,7 +77,7 @@ export function FigJamBoard({
       }
     }
     setIsLoaded(true);
-  }, [storageKey, initialElements]);
+  }, [storageKey, initialElements, board]);
 
   // ── Save to localStorage on every change ────────────────────────────────
   useEffect(() => {
@@ -118,7 +106,7 @@ export function FigJamBoard({
     };
   }, [board]);
 
-  // ── Derived state (for keyboard shortcuts) ───────────────────────────
+  // ── Derived state ───────────────────────────────────────────────────
   const allStickies = Object.values(state.elements).filter(
     (el): el is StickyNoteData => el.type === "sticky"
   );
@@ -126,9 +114,7 @@ export function FigJamBoard({
     (el): el is SectionData => el.type === "section"
   );
 
-  // ── Containment: auto-grow sections when stickies overflow ─────────────
-  // NOTE: Stickies are always free-floating. Sections are visual containers only.
-
+  // ── Containment ─────────────────────────────────────────────────────
   useContainment({
     elements: state.elements,
     onResizeSection: (sectionId, size) => {
@@ -140,7 +126,7 @@ export function FigJamBoard({
   
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !e.repeat && !isVotingMode) {
+      if (e.code === "Space" && !e.repeat) {
         e.preventDefault();
         setIsSpacePressed(true);
       }
@@ -160,7 +146,7 @@ export function FigJamBoard({
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [isVotingMode]);
+  }, []);
 
   // ── Canvas pan / zoom ────────────────────────────────────────────────────
 
@@ -213,7 +199,7 @@ export function FigJamBoard({
     (e: React.PointerEvent) => {
       const isMiddle   = e.button === 1;
       const isHandTool = state.activeTool === "hand";
-      const isSpacePan = isSpacePressed && !isVotingMode;
+      const isSpacePan = isSpacePressed;
 
       // Pan with space + click or middle mouse or hand tool
       if (isMiddle || isHandTool || isSpacePan) {
@@ -222,27 +208,23 @@ export function FigJamBoard({
         panOrigin.current = { ...state.pan };
         e.currentTarget.setPointerCapture(e.pointerId);
         
-        // Change cursor during space pan
         if (isSpacePan) {
           document.body.style.cursor = "grabbing";
         }
         return;
       }
 
-      // Start lasso selection on canvas click (not on sticky)
+      // Start lasso selection on canvas click
       const target = e.target as HTMLElement;
       if (target === canvasRef.current || target.closest(".lasso-area")) {
         const pos = screenToCanvas(e.clientX, e.clientY);
         setLassoStart(pos);
         setLassoEnd(pos);
         e.currentTarget.setPointerCapture(e.pointerId);
-        // Only clear selection if not holding Ctrl/Cmd (for adding to selection)
         if (!e.ctrlKey && !e.metaKey) {
           board.clearSelection();
         }
       }
-      // NOTE: When clicking on an element, let the element's own handler manage selection
-      // (don't clear selection from here - it breaks Ctrl+click multi-select)
 
       if (state.activeTool === "sticky") {
         const pos = screenToCanvas(e.clientX, e.clientY);
@@ -255,7 +237,7 @@ export function FigJamBoard({
         board.setTool("select");
       }
     },
-    [state.activeTool, state.pan, board, screenToCanvas, isSpacePressed, isVotingMode]
+    [state.activeTool, state.pan, board, screenToCanvas, isSpacePressed]
   );
 
   const handleCanvasPointerMove = useCallback(
@@ -278,37 +260,27 @@ export function FigJamBoard({
   const handleCanvasPointerUp = useCallback(
     (e: React.PointerEvent) => {
       if (isLassoing && lassoStart && lassoEnd) {
-        // Calculate lasso bounding box
         const minX = Math.min(lassoStart.x, lassoEnd.x);
         const maxX = Math.max(lassoStart.x, lassoEnd.x);
         const minY = Math.min(lassoStart.y, lassoEnd.y);
         const maxY = Math.max(lassoStart.y, lassoEnd.y);
         
-        // Select all elements that intersect with lasso
-        const stickyW = 200;
-        const stickyH = 200;
-        
         allStickies.forEach((sticky) => {
-          const sLeft = sticky.position.x;
-          const sRight = sticky.position.x + stickyW;
-          const sTop = sticky.position.y;
-          const sBottom = sticky.position.y + stickyH;
+          const sRight = sticky.position.x + 200;
+          const sBottom = sticky.position.y + 200;
           
-          const intersects = !(sRight < minX || sLeft > maxX || sBottom < minY || sTop > maxY);
+          const intersects = !(sRight < minX || sticky.position.x > maxX || sBottom < minY || sticky.position.y > maxY);
           
           if (intersects) {
             board.selectElement(sticky.id, true);
           }
         });
 
-        // Select all sections that intersect with lasso
         allSections.forEach((section) => {
-          const sLeft = section.position.x;
           const sRight = section.position.x + section.size.width;
-          const sTop = section.position.y;
           const sBottom = section.position.y + section.size.height;
           
-          const intersects = !(sRight < minX || sLeft > maxX || sBottom < minY || sTop > maxY);
+          const intersects = !(sRight < minX || section.position.x > maxX || sBottom < minY || section.position.y > maxY);
           
           if (intersects) {
             board.selectElement(section.id, true);
@@ -322,49 +294,6 @@ export function FigJamBoard({
     },
     [isLassoing, lassoStart, lassoEnd, allStickies, allSections, board]
   );
-
-  // ── Voting ───────────────────────────────────────────────────────────────
-
-  const handleToggleVoting = useCallback(() => {
-    setIsVotingMode((v) => !v);
-  }, []);
-
-  const maxVotes = 10;
-
-  const handleAddUserDot = useCallback((sectionId: string) => {
-    const currentCount = userDots.get(sectionId) || 0;
-    const totalDots = Array.from(userDots.values()).reduce((sum, count) => sum + count, 0);
-    
-    if (totalDots >= maxVotes) return;
-    
-    setUserDots(prev => {
-      const next = new Map(prev);
-      next.set(sectionId, currentCount + 1);
-      return next;
-    });
-    board.castVote(sectionId);
-  }, [userDots, board]);
-
-  const handleRemoveUserDot = useCallback((sectionId: string) => {
-    const currentCount = userDots.get(sectionId) || 0;
-    if (currentCount <= 0) return;
-    
-    setUserDots(prev => {
-      const next = new Map(prev);
-      if (currentCount <= 1) {
-        next.delete(sectionId);
-      } else {
-        next.set(sectionId, currentCount - 1);
-      }
-      return next;
-    });
-    board.removeVote(sectionId);
-  }, [userDots, board]);
-
-  const handleResetDots = useCallback(() => {
-    setUserDots(new Map());
-    board.resetVotes();
-  }, [board]);
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────
 
@@ -403,7 +332,7 @@ export function FigJamBoard({
       const arrowKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
       if (arrowKeys.includes(e.key) && state.selectedIds.length > 0) {
         e.preventDefault();
-        const step = e.shiftKey ? 10 : 1; // Shift = 10px, normal = 1px
+        const step = e.shiftKey ? 10 : 1;
         let dx = 0, dy = 0;
         switch (e.key) {
           case "ArrowUp": dy = -step; break;
@@ -412,7 +341,6 @@ export function FigJamBoard({
           case "ArrowRight": dx = step; break;
         }
         
-        // Move all selected stickies
         const selectedStickies = state.selectedIds
           .map((id) => state.elements[id])
           .filter((el): el is StickyNoteData => el?.type === "sticky");
@@ -431,7 +359,6 @@ export function FigJamBoard({
           board.updateMany(patches as any);
         }
 
-        // Move all selected sections
         const selectedSections = state.selectedIds
           .map((id) => state.elements[id])
           .filter((el): el is SectionData => el?.type === "section");
@@ -450,7 +377,6 @@ export function FigJamBoard({
         case "s": case "S": board.setTool("sticky"); break;
         case "f": case "F": board.setTool("section"); break;
         case "F2":
-          // Rename selected section
           if (state.selectedIds.length === 1) {
             const selectedEl = state.elements[state.selectedIds[0]];
             if (selectedEl?.type === "section") {
@@ -462,7 +388,6 @@ export function FigJamBoard({
         case "Escape":
           board.setTool("select");
           board.clearSelection();
-          setIsVotingMode(false);
           break;
         case "Backspace":
         case "Delete":
@@ -475,7 +400,7 @@ export function FigJamBoard({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [board, state.selectedIds, state.zoom, allStickies]);
+  }, [board, state.selectedIds, state.zoom, state.elements, allStickies]);
 
   useEffect(() => { onChange?.(state.elements); }, [state.elements, onChange]);
 
@@ -487,28 +412,24 @@ export function FigJamBoard({
   const stickies = others.filter((el): el is StickyNoteData => el.type === "sticky");
 
   // Which section is the dragging sticky hovering over?
-  // Calculate using collision detection (for drop)
   const hoveredSectionId = draggingStickyId
     ? (() => {
         const sticky = state.elements[draggingStickyId] as StickyNoteData | undefined;
         if (!sticky) return null;
 
         const stickySize = sticky.size ?? { width: 200, height: 200 };
-        const stickyRight = sticky.position.x + stickySize.width;
-        const stickyBottom = sticky.position.y + stickySize.height;
 
         for (const section of sections) {
           const sectionRight = section.position.x + section.size.width;
           const sectionBottom = section.position.y + section.size.height;
 
-          // Check if sticky center is inside section (below title bar)
           const stickyCenterX = sticky.position.x + stickySize.width / 2;
           const stickyCenterY = sticky.position.y + stickySize.height / 2;
 
           const isInside =
             stickyCenterX > section.position.x &&
             stickyCenterX < sectionRight &&
-            stickyCenterY > section.position.y + 40 && // Below title bar
+            stickyCenterY > section.position.y + 40 &&
             stickyCenterY < sectionBottom;
 
           if (isInside) {
@@ -519,7 +440,6 @@ export function FigJamBoard({
       })()
     : null;
 
-  // Which section is already attached to (for highlight)?
   const attachedSectionId = draggingStickyId
     ? (() => {
         const sticky = state.elements[draggingStickyId] as StickyNoteData | undefined;
@@ -533,9 +453,7 @@ export function FigJamBoard({
     if (!sticky.parentSectionId) return undefined;
     const parentSection = state.elements[sticky.parentSectionId] as SectionData | undefined;
     if (!parentSection || parentSection.type !== "section") return undefined;
-    // Only constrain if auto-resize is enabled
     if (!parentSection.autoResize) return undefined;
-    // Bounds = section area (title bar excluded)
     const TITLE_BAR_H = 40;
     return {
       minX: parentSection.position.x,
@@ -572,13 +490,6 @@ export function FigJamBoard({
             {Object.keys(state.elements).length} element{Object.keys(state.elements).length !== 1 ? "s" : ""}
           </span>
         </div>
-        <VotingToggle
-          isActive={isVotingMode}
-          votesUsed={state.votesUsed}
-          maxVotes={maxVotesPerUser}
-          onToggle={handleToggleVoting}
-          onReset={board.resetVotes}
-        />
       </div>
 
       {/* ── Canvas ── */}
@@ -608,7 +519,7 @@ export function FigJamBoard({
             />
           )}
 
-          {/* ── Sections (behind everything) ── */}
+          {/* ── Sections ── */}
           {sections.map((el) => (
             <Section
               key={el.id}
@@ -616,11 +527,6 @@ export function FigJamBoard({
               zoom={state.zoom}
               isSelected={state.selectedIds.includes(el.id)}
               isHovered={attachedSectionId === el.id}
-              isVotingMode={isVotingMode}
-              currentUserId={state.currentUserId}
-              votesUsed={state.votesUsed}
-              maxVotes={maxVotesPerUser}
-              userDotsCount={el.votedBy?.filter(id => id === state.currentUserId).length || 0}
               onSelect={board.selectElement}
               onMoveWithChildren={board.moveSectionWithChildren}
               onMoveSelected={board.moveSelected}
@@ -629,15 +535,10 @@ export function FigJamBoard({
               onDelete={board.deleteElement}
               onArrangeSection={(sectionId) => board.autoArrange(sectionId)}
               renameTrigger={renameSectionId}
-              onCastVote={board.castVote}
-              onRemoveVote={board.removeVote}
-              userDotsOnSection={userDots.get(el.id) || 0}
-              onAddDot={handleAddUserDot}
-              onRemoveUserDot={handleRemoveUserDot}
             />
           ))}
 
-          {/* ── Sticky notes (above sections) ── */}
+          {/* ── Sticky notes ── */}
           {stickies.map((el) => (
             <StickyNote
               key={el.id}
@@ -655,7 +556,6 @@ export function FigJamBoard({
               onResize={(id, size) => board.updateElement(id, { size } as any)}
               onDragStart={(id) => setDraggingStickyId(id)}
               onDragEnd={(id) => {
-                // Attach sticky to section if dropped over one
                 if (hoveredSectionId) {
                   const sticky = state.elements[id] as StickyNoteData | undefined;
                   if (sticky) {
@@ -674,9 +574,6 @@ export function FigJamBoard({
       <FigJamToolbar
         activeTool={state.activeTool}
         zoom={state.zoom}
-        isVotingMode={isVotingMode}
-        votesUsed={state.votesUsed}
-        maxVotes={maxVotesPerUser}
         onToolChange={board.setTool}
         onZoomIn={() => board.setZoom(state.zoom * 1.2)}
         onZoomOut={() => board.setZoom(state.zoom / 1.2)}
@@ -687,18 +584,8 @@ export function FigJamBoard({
         onAddSection={() =>
           board.addSection({ x: 100 / state.zoom, y: 100 / state.zoom })
         }
-        onToggleVoting={handleToggleVoting}
-        onResetVotes={board.resetVotes}
         onGroupSelected={() => board.groupSelectedIntoSection()}
         selectedCount={state.selectedIds.length}
-      />
-
-      {/* Dot voting dock (outside canvas) */}
-      <DotVotingDock
-        isActive={isVotingMode}
-        maxDots={maxVotes}
-        placedCount={Array.from(userDots.values()).reduce((sum, count) => sum + count, 0)}
-        onReset={handleResetDots}
       />
 
       {Object.keys(state.elements).length === 0 && (

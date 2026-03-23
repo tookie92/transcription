@@ -9,9 +9,6 @@ import { STICKY_COLORS } from "./StickyNote";
 interface FigJamToolbarProps {
   activeTool: ToolType;
   zoom: number;
-  isVotingMode: boolean;
-  votesUsed: number;
-  maxVotes: number;
   selectedCount: number;
   onToolChange: (tool: ToolType) => void;
   onZoomIn: () => void;
@@ -19,8 +16,6 @@ interface FigJamToolbarProps {
   onZoomReset: () => void;
   onAddSticky: (color?: StickyColor) => void;
   onAddSection: () => void;
-  onToggleVoting: () => void;
-  onResetVotes: () => void;
   onGroupSelected: () => void;
 }
 
@@ -99,9 +94,6 @@ const STICKY_PALETTE: StickyColor[] = ["yellow", "pink", "green", "blue", "purpl
 export function FigJamToolbar({
   activeTool,
   zoom,
-  isVotingMode,
-  votesUsed,
-  maxVotes,
   selectedCount,
   onToolChange,
   onZoomIn,
@@ -109,8 +101,6 @@ export function FigJamToolbar({
   onZoomReset,
   onAddSticky,
   onAddSection,
-  onToggleVoting,
-  onResetVotes,
   onGroupSelected,
 }: FigJamToolbarProps) {
   const [showStickyPicker, setShowStickyPicker] = React.useState(false);
