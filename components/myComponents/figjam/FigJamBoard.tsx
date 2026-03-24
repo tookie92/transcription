@@ -643,8 +643,13 @@ export function FigJamBoard({
           if (userHasVotedOn[sectionId]) return;
           const section = state.elements[sectionId] as SectionData;
           if (section) {
-            const dotX = section.position.x + section.size.width - 60;
-            const dotY = section.position.y + 50;
+            const TITLE_BAR_H = 40;
+            const PADDING = 20;
+            const dotSize = 28;
+            const maxX = section.size.width - PADDING - dotSize;
+            const maxY = section.size.height - TITLE_BAR_H - PADDING - dotSize;
+            const dotX = section.position.x + PADDING + Math.random() * maxX;
+            const dotY = section.position.y + TITLE_BAR_H + PADDING + Math.random() * maxY;
             board.addDot({ x: dotX, y: dotY }, sectionId, "#22c55e");
             setUsedDots(u => u + 1);
           }

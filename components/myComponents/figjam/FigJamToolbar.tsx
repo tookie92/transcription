@@ -26,6 +26,7 @@ interface FigJamToolbarProps {
   votingConfig?: VotingConfig;
   onVotingConfigChange?: (config: VotingConfig) => void;
   isVotingActive?: boolean;
+  timerSeconds?: number;
   onStartVoting?: () => void;
   onEndVoting?: () => void;
 }
@@ -116,6 +117,7 @@ export function FigJamToolbar({
   votingConfig,
   onVotingConfigChange,
   isVotingActive,
+  timerSeconds,
   onStartVoting,
   onEndVoting,
 }: FigJamToolbarProps) {
@@ -130,6 +132,7 @@ export function FigJamToolbar({
             config={votingConfig}
             onConfigChange={onVotingConfigChange}
             isVotingActive={isVotingActive}
+            timerSeconds={timerSeconds}
             onStartVoting={onStartVoting}
             onEndVoting={onEndVoting}
           />

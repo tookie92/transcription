@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Minus, Plus, Clock } from "lucide-react";
-import { VotingTimer } from "./VotingTimer";
 
 interface VotingConfig {
   dotsPerUser: number;
@@ -15,6 +14,7 @@ interface VotingSettingsProps {
   config: VotingConfig;
   onConfigChange: (config: VotingConfig) => void;
   isVotingActive?: boolean;
+  timerSeconds?: number;
   onStartVoting?: () => void;
   onEndVoting?: () => void;
 }
@@ -23,6 +23,7 @@ export function VotingSettings({
   config, 
   onConfigChange,
   isVotingActive,
+  timerSeconds = 0,
   onStartVoting,
   onEndVoting,
 }: VotingSettingsProps) {
@@ -30,12 +31,27 @@ export function VotingSettings({
   const [dots, setDots] = useState(config.dotsPerUser);
   const [duration, setDuration] = useState(config.durationMinutes ?? 3);
   const [hasDuration, setHasDuration] = useState(config.durationMinutes !== null);
+  const [localTimerSeconds, setLocalTimerSeconds] = useState(0);
 
   useEffect(() => {
     setDots(config.dotsPerUser);
     setDuration(config.durationMinutes ?? 3);
     setHasDuration(config.durationMinutes !== null);
   }, [config]);
+
+  useEffect(() => {
+    if (isVotingActive && config.durationMinutes) {
+      setLocalTimerSeconds(config.durationMinutes * 60);
+    }
+  }, [isVotingActive, config.durationMinutes]);
+
+  useEffect(() => {
+    if (!isVotingActive || !config.durationMinutes) return;
+    const interval = setInterval(() => {
+      setLocalTimerSeconds(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isVotingActive, config.durationMinutes]);
 
   const handleStartVoting = () => {
     onConfigChange({
@@ -63,11 +79,20 @@ export function VotingSettings({
             size="sm" 
             className="gap-2 bg-green-600 hover:bg-green-700"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="6" fill="currentColor" fillOpacity="0.3"/>
-              <circle cx="12" cy="12" r="3" fill="currentColor"/>
-            </svg>
-            Voting Active
+            {config.durationMinutes ? (
+              <>
+                <Clock className="w-4 h-4" />
+                {Math.floor(localTimerSeconds / 60)}:{(localTimerSeconds % 60).toString().padStart(2, "0")}
+              </>
+            ) : (
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="6" fill="currentColor" fillOpacity="0.3"/>
+                  <circle cx="12" cy="12" r="3" fill="currentColor"/>
+                </svg>
+                Voting Active
+              </>
+            )}
           </Button>
         ) : (
           <Button variant="default" size="sm" className="gap-2">
@@ -92,10 +117,11 @@ export function VotingSettings({
             </div>
             
             {config.durationMinutes && (
-              <VotingTimer 
-                initialMinutes={config.durationMinutes} 
-                onComplete={onEndVoting}
-              />
+              <div className="px-4 py-3 rounded-xl bg-slate-100 text-center font-mono">
+                <span className="text-3xl font-bold text-slate-800">
+                  {Math.floor(localTimerSeconds / 60)}:{(localTimerSeconds % 60).toString().padStart(2, "0")}
+                </span>
+              </div>
             )}
             
             <Button 

@@ -7,9 +7,10 @@ import { Play, Pause, RotateCcw } from "lucide-react";
 interface VotingTimerProps {
   initialMinutes: number;
   onComplete?: () => void;
+  onTick?: (seconds: number) => void;
 }
 
-export function VotingTimer({ initialMinutes, onComplete }: VotingTimerProps) {
+export function VotingTimer({ initialMinutes, onComplete, onTick }: VotingTimerProps) {
   const totalSeconds = initialMinutes * 60;
   const [remainingSeconds, setRemainingSeconds] = useState(totalSeconds);
   const [isRunning, setIsRunning] = useState(true);
@@ -29,6 +30,7 @@ export function VotingTimer({ initialMinutes, onComplete }: VotingTimerProps) {
             onComplete?.();
             return 0;
           }
+          onTick?.(prev - 1);
           return prev - 1;
         });
       }, 1000);
@@ -36,7 +38,7 @@ export function VotingTimer({ initialMinutes, onComplete }: VotingTimerProps) {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [isRunning, remainingSeconds, onComplete]);
+  }, [isRunning, remainingSeconds, onComplete, onTick]);
 
   const formatNum = (n: number) => n.toString().padStart(2, "0");
 

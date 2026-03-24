@@ -40,6 +40,7 @@ interface SectionProps {
   renameTrigger?: string | null;
   selectedIds?: string[];
   onRemoveDot?: (dotId: string) => void;
+  onHoverChange?: (isHovered: boolean) => void;
 }
 
 export function Section({
@@ -60,7 +61,9 @@ export function Section({
   renameTrigger,
   selectedIds = [],
   onRemoveDot,
+  onHoverChange,
 }: SectionProps) {
+  const [isHoveredLocal, setIsHoveredLocal] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -203,6 +206,14 @@ export function Section({
             filter: isDragging ? "drop-shadow(0 8px 24px rgba(0,0,0,0.12))" : "none",
             transition: isDragging ? "none" : "filter 0.2s ease",
           }}
+          onMouseEnter={() => {
+            setIsHoveredLocal(true);
+            onHoverChange?.(true);
+          }}
+          onMouseLeave={() => {
+            setIsHoveredLocal(false);
+            onHoverChange?.(false);
+          }}
         >
           <div
             className="w-full h-full rounded-xl flex flex-col"
@@ -315,8 +326,8 @@ export function Section({
               )}
             </div>
 
-            {/* Vote count badge - only after voting ends */}
-            {!isVotingMode && voteCount > 0 && (
+            {/* Vote count badge - show on hover after voting ends */}
+            {!isVotingMode && voteCount > 0 && isHoveredLocal && (
               <div className="absolute -top-3 left-4 z-20">
                 <div className="px-2 py-1 rounded-full bg-green-500 text-white text-xs font-bold shadow-lg flex items-center gap-1">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
@@ -327,23 +338,29 @@ export function Section({
               </div>
             )}
 
-            {/* During voting - dots visible, removable */}
-            {isVotingMode && dots.length > 0 && (
-              <div className="absolute top-10 right-2 flex flex-wrap gap-1 max-w-[100px] justify-end">
-                {dots.map((dot) => (
-                  <div
-                    key={dot.id}
-                    className="w-7 h-7 rounded-full border-2 border-white shadow-md cursor-pointer hover:scale-110 hover:brightness-110 transition-all"
-                    style={{ backgroundColor: dot.color }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveDot?.(dot.id);
-                    }}
-                  />
-                ))}
-              </div>
-            )}
+            {/* Dots - positioned randomly within section */}
+            {dots.map((dot) => (
+              <div
+                key={dot.id}
+                className={`absolute rounded-full border-2 border-white shadow-md transition-all ${
+                  isVotingMode 
+                    ? "w-7 h-7 cursor-pointer hover:scale-110 hover:brightness-110" 
+                    : "w-6 h-6"
+                }`}
+                style={{
+                  backgroundColor: dot.color,
+                  left: dot.position.x - section.position.x,
+                  top: dot.position.y - section.position.y,
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isVotingMode) {
+                    onRemoveDot?.(dot.id);
+                  }
+                }}
+              />
+            ))}
 
             <div
               className="absolute bottom-2 left-3 text-[10px] text-gray-300 select-none pointer-events-none"
