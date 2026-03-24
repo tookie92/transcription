@@ -420,14 +420,18 @@ export function FigJamBoard({
   const stickies = others.filter((el): el is StickyNoteData => el.type === "sticky");
   const dots = sorted.filter((el): el is DotData => el.type === "dot");
 
-  // Group dots by section
+  // Group dots by section and check if user already voted
   const dotsBySection: Record<string, DotData[]> = {};
+  const userHasVotedOn: Record<string, boolean> = {};
   for (const dot of dots) {
     if (dot.parentSectionId) {
       if (!dotsBySection[dot.parentSectionId]) {
         dotsBySection[dot.parentSectionId] = [];
       }
       dotsBySection[dot.parentSectionId].push(dot);
+      if (dot.ownerId === state.currentUserId) {
+        userHasVotedOn[dot.parentSectionId] = true;
+      }
     }
   }
 
@@ -545,6 +549,8 @@ export function FigJamBoard({
               key={el.id}
               section={el}
               dots={dotsBySection[el.id] || []}
+              voteCount={(dotsBySection[el.id] || []).length}
+              hasUserVoted={userHasVotedOn[el.id] ?? false}
               zoom={state.zoom}
               isSelected={state.selectedIds.includes(el.id)}
               isHovered={attachedSectionId === el.id}
@@ -575,6 +581,7 @@ export function FigJamBoard({
               onMove={(id, pos) => board.moveSticky(id, pos)}
               onMoveSelected={board.moveSelected}
               selectedIds={state.selectedIds}
+              isVotingMode={isVotingActive}
               onUpdate={(id, patch) => board.updateElement(id, patch as any)}
               onDelete={board.deleteElement}
               onDuplicate={board.duplicateElement}
@@ -615,7 +622,12 @@ export function FigJamBoard({
         votingConfig={votingConfig}
         onVotingConfigChange={setVotingConfig}
         isVotingActive={isVotingActive}
-        onStartVoting={() => setIsVotingActive(true)}
+        onStartVoting={() => {
+          // Clear previous vote dots before starting new vote
+          dots.forEach((dot) => board.deleteElement(dot.id));
+          setUsedDots(0);
+          setIsVotingActive(true);
+        }}
         onEndVoting={() => setIsVotingActive(false)}
       />
 
@@ -625,11 +637,12 @@ export function FigJamBoard({
         dotsPerUser={votingConfig.dotsPerUser}
         usedDots={usedDots}
         userColor="#22c55e"
+        disabledSections={userHasVotedOn}
         onReset={() => setUsedDots(0)}
         onDropDot={(sectionId) => {
+          if (userHasVotedOn[sectionId]) return;
           const section = state.elements[sectionId] as SectionData;
           if (section) {
-            // Place dot at center-top of section (inside)
             const dotX = section.position.x + section.size.width - 60;
             const dotY = section.position.y + 50;
             board.addDot({ x: dotX, y: dotY }, sectionId, "#22c55e");
@@ -637,8 +650,7 @@ export function FigJamBoard({
           }
         }}
         onRemoveDot={(sectionId) => {
-          // Remove one dot from this section
-          const sectionDots = dots.filter(d => d.parentSectionId === sectionId);
+          const sectionDots = dots.filter(d => d.parentSectionId === sectionId && d.ownerId === state.currentUserId);
           if (sectionDots.length > 0) {
             board.deleteElement(sectionDots[0].id);
             setUsedDots(u => Math.max(0, u - 1));

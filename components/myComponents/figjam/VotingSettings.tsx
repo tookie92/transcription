@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Minus, Plus, Clock } from "lucide-react";
@@ -30,6 +30,12 @@ export function VotingSettings({
   const [dots, setDots] = useState(config.dotsPerUser);
   const [duration, setDuration] = useState(config.durationMinutes ?? 3);
   const [hasDuration, setHasDuration] = useState(config.durationMinutes !== null);
+
+  useEffect(() => {
+    setDots(config.dotsPerUser);
+    setDuration(config.durationMinutes ?? 3);
+    setHasDuration(config.durationMinutes !== null);
+  }, [config]);
 
   const handleStartVoting = () => {
     onConfigChange({

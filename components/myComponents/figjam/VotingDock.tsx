@@ -9,6 +9,7 @@ interface VotingDockProps {
   dotsPerUser: number;
   usedDots: number;
   userColor: string;
+  disabledSections?: Record<string, boolean>;
   onDropDot: (sectionId: string) => void;
   onRemoveDot: (sectionId: string) => void;
   onReset: () => void;
@@ -19,6 +20,7 @@ export function VotingDock({
   dotsPerUser, 
   usedDots, 
   userColor, 
+  disabledSections = {},
   onDropDot,
   onRemoveDot,
   onReset 
@@ -44,13 +46,12 @@ export function VotingDock({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
 
-      // Check if dropped on a section
       const target = document.elementFromPoint(upEvent.clientX, upEvent.clientY);
       if (target) {
         const section = target.closest("[data-section-id]");
         if (section) {
           const sectionId = section.getAttribute("data-section-id");
-          if (sectionId) {
+          if (sectionId && !disabledSections[sectionId]) {
             onDropDot(sectionId);
           }
         }

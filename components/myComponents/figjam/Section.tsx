@@ -25,6 +25,8 @@ export const SECTION_COLORS = [
 interface SectionProps {
   section: SectionData;
   dots?: DotData[];
+  voteCount?: number;
+  hasUserVoted?: boolean;
   zoom: number;
   isSelected: boolean;
   isHovered?: boolean;
@@ -43,6 +45,8 @@ interface SectionProps {
 export function Section({
   section,
   dots = [],
+  voteCount = 0,
+  hasUserVoted = false,
   zoom,
   isSelected,
   isHovered = false,
@@ -178,6 +182,8 @@ export function Section({
 
   const border = isSelected
     ? "2px solid #0d99ff"
+    : isVotingMode && hasUserVoted
+    ? "2px dashed #86efac"
     : isHovered
     ? `2px dashed ${colorConfig.border}`
     : `2px solid ${colorConfig.border}`;
@@ -309,13 +315,25 @@ export function Section({
               )}
             </div>
 
-            {/* Dots in this section */}
-            {dots.length > 0 && (
-              <div className="absolute top-2 right-2 flex flex-wrap gap-1 max-w-[100px] justify-end pointer-events-none">
+            {/* Vote count badge - only after voting ends */}
+            {!isVotingMode && voteCount > 0 && (
+              <div className="absolute -top-3 left-4 z-20">
+                <div className="px-2 py-1 rounded-full bg-green-500 text-white text-xs font-bold shadow-lg flex items-center gap-1">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="12" r="8"/>
+                  </svg>
+                  {voteCount} vote{voteCount > 1 ? "s" : ""}
+                </div>
+              </div>
+            )}
+
+            {/* During voting - dots visible, removable */}
+            {isVotingMode && dots.length > 0 && (
+              <div className="absolute top-10 right-2 flex flex-wrap gap-1 max-w-[100px] justify-end">
                 {dots.map((dot) => (
                   <div
                     key={dot.id}
-                    className="w-7 h-7 rounded-full border-2 border-white shadow-md pointer-events-auto cursor-pointer hover:scale-110 transition-transform"
+                    className="w-7 h-7 rounded-full border-2 border-white shadow-md cursor-pointer hover:scale-110 hover:brightness-110 transition-all"
                     style={{ backgroundColor: dot.color }}
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => {

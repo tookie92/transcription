@@ -33,6 +33,7 @@ interface StickyNoteProps {
   note: StickyNoteData;
   zoom: number;
   isSelected: boolean;
+  isVotingMode?: boolean;
   onSelect: (id: string, multi: boolean) => void;
   onMove: (id: string, pos: { x: number; y: number }) => void;
   onMoveSelected?: (ids: string[], dx: number, dy: number) => void;
@@ -81,6 +82,7 @@ export function StickyNote({
   note,
   zoom,
   isSelected,
+  isVotingMode = false,
   onSelect,
   onMove,
   onMoveSelected,
@@ -209,17 +211,19 @@ export function StickyNote({
         left: note.position.x,
         top: note.position.y,
         zIndex: note.zIndex,
-        cursor: cursorStyle,
+        cursor: isVotingMode ? "default" : cursorStyle,
+        opacity: isVotingMode ? 0.6 : 1,
+        pointerEvents: isVotingMode ? "none" : "auto",
         filter: isDragging
           ? "drop-shadow(4px 8px 16px rgba(0,0,0,0.25))"
           : isSelected
           ? "drop-shadow(0 4px 12px rgba(0,0,0,0.15))"
           : "drop-shadow(0 2px 8px rgba(0,0,0,0.1))",
         transform: isDragging ? "rotate(-2deg) scale(1.02)" : "rotate(0deg)",
-        transition: isDragging ? "none" : "transform 0.15s ease, filter 0.15s ease",
+        transition: isDragging ? "none" : "transform 0.15s ease, filter 0.15s ease, opacity 0.15s ease",
       }}
-      onPointerDown={handlePointerDownWrapper}
-      onDoubleClick={handleDoubleClick}
+      onPointerDown={isVotingMode ? undefined : handlePointerDownWrapper}
+      onDoubleClick={isVotingMode ? undefined : handleDoubleClick}
     >
       {/* Card body */}
       <div
