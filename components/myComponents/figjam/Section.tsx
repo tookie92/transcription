@@ -10,9 +10,7 @@ import {
   ContextMenuTrigger,
   ContextMenuLabel,
 } from "@/components/ui/context-menu";
-import type { SectionData } from "@/types/figjam";
-
-// ─── Section color palette ───────────────────────────────────────────────────
+import type { SectionData, DotData } from "@/types/figjam";
 
 export const SECTION_COLORS = [
   { bg: "#e8f4fd", border: "#90CAF9", label: "Blue"   },
@@ -24,13 +22,13 @@ export const SECTION_COLORS = [
   { bg: "#f5f5f5", border: "#E0E0E0", label: "Gray"   },
 ];
 
-// ─── Props ───────────────────────────────────────────────────────────────────
-
 interface SectionProps {
   section: SectionData;
+  dots?: DotData[];
   zoom: number;
   isSelected: boolean;
   isHovered?: boolean;
+  isVotingMode?: boolean;
   onSelect: (id: string, multi: boolean) => void;
   onMoveWithChildren: (sectionId: string, dx: number, dy: number) => void;
   onMoveSelected?: (ids: string[], dx: number, dy: number) => void;
@@ -39,15 +37,16 @@ interface SectionProps {
   onArrangeSection: (sectionId: string) => void;
   renameTrigger?: string | null;
   selectedIds?: string[];
+  onRemoveDot?: (dotId: string) => void;
 }
-
-// ─── Component ───────────────────────────────────────────────────────────────
 
 export function Section({
   section,
+  dots = [],
   zoom,
   isSelected,
   isHovered = false,
+  isVotingMode = false,
   onSelect,
   onMoveWithChildren,
   onMoveSelected,
@@ -56,6 +55,7 @@ export function Section({
   onArrangeSection,
   renameTrigger,
   selectedIds = [],
+  onRemoveDot,
 }: SectionProps) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -63,7 +63,6 @@ export function Section({
   const titleRef = useRef<HTMLInputElement>(null);
   const lastRenameTrigger = useRef<string | null>(null);
 
-  // Trigger rename when renameTrigger prop changes
   if (renameTrigger !== lastRenameTrigger.current) {
     lastRenameTrigger.current = renameTrigger ?? null;
     if (renameTrigger === section.id && !isEditingTitle) {
@@ -79,8 +78,6 @@ export function Section({
     SECTION_COLORS.find((c) => c.bg === section.color) ?? SECTION_COLORS[0];
 
   const autoResize = section.autoResize ?? false;
-
-  // ── Drag — moves section + all child stickies atomically ─────────────────
 
   const lastClickTime = useRef(0);
   const isDraggingRef = useRef(false);
@@ -154,8 +151,6 @@ export function Section({
     [isEditingTitle, section.id, zoom, onSelect, onMoveWithChildren, onMoveSelected, selectedIds]
   );
 
-  // ── Resize — SE corner handle ─────────────────────────────────────────────
-
   const handleResizePointerDown = useCallback(
     (e: React.PointerEvent) => {
       e.stopPropagation();
@@ -181,8 +176,6 @@ export function Section({
     [section.id, section.size, zoom, onUpdate]
   );
 
-  // ── Border style ───────────────────────────────────────────────────────────
-
   const border = isSelected
     ? "2px solid #0d99ff"
     : isHovered
@@ -194,6 +187,7 @@ export function Section({
       <ContextMenuTrigger asChild>
         <div
           className="absolute"
+          data-section-id={section.id}
           style={{
             left:   section.position.x,
             top:    section.position.y,
@@ -204,21 +198,17 @@ export function Section({
             transition: isDragging ? "none" : "filter 0.2s ease",
           }}
         >
-          {/* ── Section body ── */}
           <div
             className="w-full h-full rounded-xl flex flex-col"
             style={{
               background: colorConfig.bg,
               border,
               cursor: isDragging ? "grabbing" : "grab",
-              boxShadow: isHovered
-                ? `0 0 0 3px ${colorConfig.border}88`
-                : "none",
+              boxShadow: isHovered ? `0 0 0 3px ${colorConfig.border}88` : "none",
               transition: "box-shadow 0.15s ease, border 0.15s ease",
             }}
             onPointerDown={handlePointerDown}
           >
-            {/* ── Title bar ── */}
             <div
               className="flex items-center gap-2 px-3 py-2 rounded-t-xl shrink-0"
               style={{
@@ -227,42 +217,42 @@ export function Section({
                 height: 40,
               }}
             >
-              {/* Color dot / picker */}
-              <div className="relative shrink-0">
-                <button
-                  className="w-4 h-4 rounded-full border border-white/60 shadow-sm hover:scale-110 transition-transform"
-                  style={{ background: colorConfig.border }}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowColorPicker((v) => !v);
-                  }}
-                />
-                {showColorPicker && (
-                  <>
-                    <div className="fixed inset-0 z-40" onPointerDown={() => setShowColorPicker(false)} />
-                    <div
-                      className="absolute left-0 top-6 z-50 bg-white rounded-xl shadow-xl border border-gray-100 p-2 flex gap-1.5"
-                      onPointerDown={(e) => e.stopPropagation()}
-                    >
-                      {SECTION_COLORS.map((c) => (
-                        <button
-                          key={c.bg}
-                          title={c.label}
-                          className="w-5 h-5 rounded-full border-2 border-white shadow hover:scale-110 transition-transform"
-                          style={{ background: c.border }}
-                          onClick={() => {
-                            onUpdate(section.id, { color: c.bg });
-                            setShowColorPicker(false);
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              {!isVotingMode && (
+                <div className="relative shrink-0">
+                  <button
+                    className="w-4 h-4 rounded-full border border-white/60 shadow-sm hover:scale-110 transition-transform"
+                    style={{ background: colorConfig.border }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowColorPicker((v) => !v);
+                    }}
+                  />
+                  {showColorPicker && (
+                    <>
+                      <div className="fixed inset-0 z-40" onPointerDown={() => setShowColorPicker(false)} />
+                      <div
+                        className="absolute left-0 top-6 z-50 bg-white rounded-xl shadow-xl border border-gray-100 p-2 flex gap-1.5"
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        {SECTION_COLORS.map((c) => (
+                          <button
+                            key={c.bg}
+                            title={c.label}
+                            className="w-5 h-5 rounded-full border-2 border-white shadow hover:scale-110 transition-transform"
+                            style={{ background: c.border }}
+                            onClick={() => {
+                              onUpdate(section.id, { color: c.bg });
+                              setShowColorPicker(false);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
-              {/* Title — double-click to edit */}
               {isEditingTitle ? (
                 <input
                   ref={titleRef}
@@ -289,35 +279,54 @@ export function Section({
                 </span>
               )}
 
-              {/* Auto-arrange toggle */}
-              <button
-                className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors shrink-0"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onArrangeSection(section.id);
-                }}
-                title="Arrange: Automatically arrange sticky notes in a grid"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>
-                </svg>
-              </button>
+              {!isVotingMode && (
+                <>
+                  <button
+                    className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors shrink-0"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onArrangeSection(section.id);
+                    }}
+                    title="Arrange"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>
+                    </svg>
+                  </button>
 
-              {/* Delete button */}
-              <button
-                className="w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors text-xs shrink-0"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(section.id);
-                }}
-              >
-                ✕
-              </button>
+                  <button
+                    className="w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors text-xs shrink-0"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(section.id);
+                    }}
+                  >
+                    ✕
+                  </button>
+                </>
+              )}
             </div>
 
-            {/* ── Size badge (bottom-left) ── */}
+            {/* Dots in this section */}
+            {dots.length > 0 && (
+              <div className="absolute top-2 right-2 flex flex-wrap gap-1 max-w-[100px] justify-end pointer-events-none">
+                {dots.map((dot) => (
+                  <div
+                    key={dot.id}
+                    className="w-7 h-7 rounded-full border-2 border-white shadow-md pointer-events-auto cursor-pointer hover:scale-110 transition-transform"
+                    style={{ backgroundColor: dot.color }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveDot?.(dot.id);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
             <div
               className="absolute bottom-2 left-3 text-[10px] text-gray-300 select-none pointer-events-none"
               style={{ fontFamily: "monospace" }}
@@ -326,7 +335,6 @@ export function Section({
             </div>
           </div>
 
-          {/* ── Resize handle (SE corner) ── */}
           <div
             className="absolute bottom-0 right-0 w-6 h-6 flex items-center justify-center cursor-se-resize z-10 rounded-br-xl"
             style={{ transform: "translate(20%, 20%)" }}

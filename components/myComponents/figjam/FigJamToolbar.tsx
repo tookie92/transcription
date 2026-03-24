@@ -3,8 +3,14 @@
 import React from "react";
 import type { ToolType, StickyColor } from "@/types/figjam";
 import { STICKY_COLORS } from "./StickyNote";
+import { VotingSettings } from "./VotingSettings";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+interface VotingConfig {
+  dotsPerUser: number;
+  durationMinutes: number | null;
+}
 
 interface FigJamToolbarProps {
   activeTool: ToolType;
@@ -17,6 +23,11 @@ interface FigJamToolbarProps {
   onAddSticky: (color?: StickyColor) => void;
   onAddSection: () => void;
   onGroupSelected: () => void;
+  votingConfig?: VotingConfig;
+  onVotingConfigChange?: (config: VotingConfig) => void;
+  isVotingActive?: boolean;
+  onStartVoting?: () => void;
+  onEndVoting?: () => void;
 }
 
 // ─── Tool definitions ────────────────────────────────────────────────────────
@@ -102,11 +113,29 @@ export function FigJamToolbar({
   onAddSticky,
   onAddSection,
   onGroupSelected,
+  votingConfig,
+  onVotingConfigChange,
+  isVotingActive,
+  onStartVoting,
+  onEndVoting,
 }: FigJamToolbarProps) {
   const [showStickyPicker, setShowStickyPicker] = React.useState(false);
 
   return (
     <>
+      {/* ── Header Voting Button ── */}
+      {onVotingConfigChange && votingConfig && (
+        <div className="absolute top-3 right-4 z-30">
+          <VotingSettings
+            config={votingConfig}
+            onConfigChange={onVotingConfigChange}
+            isVotingActive={isVotingActive}
+            onStartVoting={onStartVoting}
+            onEndVoting={onEndVoting}
+          />
+        </div>
+      )}
+
       {/* ── Main toolbar ── */}
       <div className="absolute left-1/2 bottom-6 -translate-x-1/2 z-30 flex items-center gap-1 bg-white rounded-2xl shadow-2xl border border-gray-100 px-3 py-2">
 

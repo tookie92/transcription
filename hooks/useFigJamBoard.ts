@@ -11,6 +11,7 @@ import type {
   StickyColor,
   ToolType,
   UseFigJamBoardReturn,
+  DotData,
 } from "../types/figjam";
 import { isInsideSection, isOutsideSection } from "./useContainment";
 
@@ -153,7 +154,7 @@ function reducer(state: BoardState, action: Action): BoardState {
         updatedAt: now(),
       };
 
-      // Move only stickies that are ATTACHED to this section (by parentSectionId)
+      // Move stickies attached to this section
       const stickies = Object.values(elements).filter(
         (el): el is StickyNoteData => el.type === "sticky"
       );
@@ -164,6 +165,23 @@ function reducer(state: BoardState, action: Action): BoardState {
             position: {
               x: sticky.position.x + action.dx,
               y: sticky.position.y + action.dy,
+            },
+            updatedAt: now(),
+          };
+        }
+      }
+
+      // Move dots attached to this section
+      const dots = Object.values(elements).filter(
+        (el): el is DotData => el.type === "dot"
+      );
+      for (const dot of dots) {
+        if (dot.parentSectionId === action.sectionId) {
+          elements[dot.id] = {
+            ...dot,
+            position: {
+              x: dot.position.x + action.dx,
+              y: dot.position.y + action.dy,
             },
             updatedAt: now(),
           };
@@ -392,14 +410,14 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
   const historyRef = useRef<HistoryEntry[]>([]);
   const isUndoingRedoing = useRef(false);
 
-  const pushToHistory = useCallback(() => {
+  const pushToHistory = () => {
     historyRef.current = [
       ...historyRef.current.slice(-MAX_HISTORY + 1),
       { elements: cloneElements(state.elements), votesUsed: state.votesUsed },
     ];
-  }, [state.elements, state.votesUsed]);
+  };
 
-  const dispatch = useCallback((action: Action) => {
+  const dispatch = (action: Action) => {
     const modifiableActions = [
       "ADD_ELEMENT", "UPDATE_ELEMENT", "UPDATE_MANY", "DELETE_ELEMENT",
       "MOVE_SECTION_WITH_CHILDREN", "MOVE_STICKY", "RESET_VOTES"
@@ -410,7 +428,7 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     }
 
     baseDispatch(action);
-  }, [pushToHistory]);
+  };
 
   const undo = useCallback(() => {
     if (historyRef.current.length === 0) return;
@@ -469,6 +487,26 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
         votes: 0,
         votedBy: [],
         zIndex: 0, // sections live behind
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      dispatch({ type: "ADD_ELEMENT", element });
+      return id;
+    },
+    [state.elements]
+  );
+
+  const addDot = useCallback(
+    (pos: Position, parentSectionId: string | null, color: string): string => {
+      const id = uid();
+      const element: FigJamElement = {
+        id,
+        type: "dot",
+        position: pos,
+        parentSectionId,
+        ownerId: DEFAULT_USER_ID,
+        color,
+        zIndex: 1000,
         createdAt: now(),
         updatedAt: now(),
       };
@@ -754,5 +792,6 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     canRedo,
     groupSelectedIntoSection,
     autoArrange,
+    addDot,
   };
 }

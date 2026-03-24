@@ -6,7 +6,8 @@ import { useContainment } from "@/hooks/useContainment";
 import { StickyNote } from "./StickyNote";
 import { Section } from "./Section";
 import { FigJamToolbar } from "./FigJamToolbar";
-import type { FigJamElement, Position, StickyColor, StickyNoteData, SectionData } from "@/types/figjam";
+import { VotingDock } from "./VotingDock";
+import type { FigJamElement, Position, StickyColor, StickyNoteData, SectionData, DotData } from "@/types/figjam";
 
 // ─── Canvas dot grid ──────────────────────────────────────────────────────────
 
@@ -60,6 +61,12 @@ export function FigJamBoard({
   const isLassoing = lassoStart !== null;
 
   const [renameSectionId, setRenameSectionId] = useState<string | null>(null);
+  const [votingConfig, setVotingConfig] = useState({
+    dotsPerUser: 5,
+    durationMinutes: null as number | null,
+  });
+  const [isVotingActive, setIsVotingActive] = useState(false);
+  const [usedDots, setUsedDots] = useState(0);
 
   // ── Load from localStorage on mount ────────────────────────────────────
   useEffect(() => {
@@ -77,7 +84,8 @@ export function FigJamBoard({
       }
     }
     setIsLoaded(true);
-  }, [storageKey, initialElements, board]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey, initialElements]);
 
   // ── Save to localStorage on every change ────────────────────────────────
   useEffect(() => {
@@ -410,6 +418,18 @@ export function FigJamBoard({
   const sections = sorted.filter((el): el is SectionData    => el.type === "section");
   const others   = sorted.filter((el) => el.type !== "section");
   const stickies = others.filter((el): el is StickyNoteData => el.type === "sticky");
+  const dots = sorted.filter((el): el is DotData => el.type === "dot");
+
+  // Group dots by section
+  const dotsBySection: Record<string, DotData[]> = {};
+  for (const dot of dots) {
+    if (dot.parentSectionId) {
+      if (!dotsBySection[dot.parentSectionId]) {
+        dotsBySection[dot.parentSectionId] = [];
+      }
+      dotsBySection[dot.parentSectionId].push(dot);
+    }
+  }
 
   // Which section is the dragging sticky hovering over?
   const hoveredSectionId = draggingStickyId
@@ -524,9 +544,11 @@ export function FigJamBoard({
             <Section
               key={el.id}
               section={el}
+              dots={dotsBySection[el.id] || []}
               zoom={state.zoom}
               isSelected={state.selectedIds.includes(el.id)}
               isHovered={attachedSectionId === el.id}
+              isVotingMode={isVotingActive}
               onSelect={board.selectElement}
               onMoveWithChildren={board.moveSectionWithChildren}
               onMoveSelected={board.moveSelected}
@@ -535,6 +557,10 @@ export function FigJamBoard({
               onDelete={board.deleteElement}
               onArrangeSection={(sectionId) => board.autoArrange(sectionId)}
               renameTrigger={renameSectionId}
+              onRemoveDot={(dotId) => {
+                board.deleteElement(dotId);
+                setUsedDots(u => Math.max(0, u - 1));
+              }}
             />
           ))}
 
@@ -586,6 +612,38 @@ export function FigJamBoard({
         }
         onGroupSelected={() => board.groupSelectedIntoSection()}
         selectedCount={state.selectedIds.length}
+        votingConfig={votingConfig}
+        onVotingConfigChange={setVotingConfig}
+        isVotingActive={isVotingActive}
+        onStartVoting={() => setIsVotingActive(true)}
+        onEndVoting={() => setIsVotingActive(false)}
+      />
+
+      {/* Voting Dock */}
+      <VotingDock
+        isActive={isVotingActive}
+        dotsPerUser={votingConfig.dotsPerUser}
+        usedDots={usedDots}
+        userColor="#22c55e"
+        onReset={() => setUsedDots(0)}
+        onDropDot={(sectionId) => {
+          const section = state.elements[sectionId] as SectionData;
+          if (section) {
+            // Place dot at center-top of section (inside)
+            const dotX = section.position.x + section.size.width - 60;
+            const dotY = section.position.y + 50;
+            board.addDot({ x: dotX, y: dotY }, sectionId, "#22c55e");
+            setUsedDots(u => u + 1);
+          }
+        }}
+        onRemoveDot={(sectionId) => {
+          // Remove one dot from this section
+          const sectionDots = dots.filter(d => d.parentSectionId === sectionId);
+          if (sectionDots.length > 0) {
+            board.deleteElement(sectionDots[0].id);
+            setUsedDots(u => Math.max(0, u - 1));
+          }
+        }}
       />
 
       {Object.keys(state.elements).length === 0 && (

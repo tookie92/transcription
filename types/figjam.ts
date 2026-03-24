@@ -72,7 +72,14 @@ export interface TextData extends BaseElement {
   color: string;
 }
 
-export type FigJamElement = StickyNoteData | SectionData | TextData;
+export interface DotData extends BaseElement {
+  type: "dot";
+  parentSectionId: string | null;
+  ownerId: string;
+  color: string;
+}
+
+export type FigJamElement = StickyNoteData | SectionData | TextData | DotData;
 
 export interface BoardState {
   elements: Record<string, FigJamElement>;
@@ -106,6 +113,7 @@ export interface UseFigJamBoardReturn {
   // Element actions
   addStickyNote: (pos: Position, color?: StickyColor) => string;
   addSection: (pos: Position, size?: Size) => string;
+  addDot: (pos: Position, parentSectionId: string | null, color: string) => string;
   updateElement: (id: string, patch: Partial<FigJamElement>) => void;
   updateMany: (patches: { id: string; patch: Partial<FigJamElement> }[]) => void;
   deleteElement: (id: string) => void;
