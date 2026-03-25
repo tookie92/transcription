@@ -31,6 +31,8 @@ interface SectionProps {
   isSelected: boolean;
   isHovered?: boolean;
   isVotingMode?: boolean;
+  isLocked?: boolean;
+  lockedByName?: string;
   onSelect: (id: string, multi: boolean) => void;
   onMoveWithChildren: (sectionId: string, dx: number, dy: number) => void;
   onMoveSelected?: (ids: string[], dx: number, dy: number) => void;
@@ -52,6 +54,8 @@ export function Section({
   isSelected,
   isHovered = false,
   isVotingMode = false,
+  isLocked = false,
+  lockedByName,
   onSelect,
   onMoveWithChildren,
   onMoveSelected,
@@ -91,7 +95,7 @@ export function Section({
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (isEditingTitle) return;
+      if (isLocked || isEditingTitle) return;
       if (e.button !== 0) return;
 
       const target = e.target as HTMLElement;

@@ -34,6 +34,8 @@ interface StickyNoteProps {
   zoom: number;
   isSelected: boolean;
   isVotingMode?: boolean;
+  isLocked?: boolean;
+  lockedByName?: string;
   onSelect: (id: string, multi: boolean) => void;
   onMove: (id: string, pos: { x: number; y: number }) => void;
   onMoveSelected?: (ids: string[], dx: number, dy: number) => void;
@@ -78,6 +80,8 @@ export function StickyNote({
   onDragEnd,
   dragBounds,
   selectedIds = [],
+  isLocked = false,
+  lockedByName,
 }: StickyNoteProps) {
   const colors = STICKY_COLORS[note.color];
   const stickySize = note.size ?? { width: 200, height: 200 };
@@ -102,6 +106,7 @@ export function StickyNote({
     onMove,
     onMoveSelected,
     onDragStart: (id) => {
+      if (isLocked) return;
       onSelect(id, false);
       onBringToFront(id);
       setShowMenu(false);
@@ -110,7 +115,7 @@ export function StickyNote({
     onDragEnd: (id) => {
       onDragEnd?.(id);
     },
-    disabled: isEditing || isResizing,
+    disabled: isEditing || isResizing || isLocked,
     bounds: dragBounds,
     stickyWidth: stickySize.width,
     stickyHeight: stickySize.height,
@@ -118,6 +123,7 @@ export function StickyNote({
   });
 
   const handleDoubleClick = useCallback(() => {
+    if (isLocked) return;
     setIsEditing(true);
     setTimeout(() => textareaRef.current?.focus(), 0);
   }, []);
@@ -128,6 +134,8 @@ export function StickyNote({
 
   const handlePointerDownWrapper = useCallback(
     (e: React.PointerEvent) => {
+      if (isLocked) return;
+      
       const multi = e.shiftKey || e.ctrlKey || e.metaKey;
 
       // For multi-select (Ctrl+click), select but don't start dragging
@@ -240,6 +248,19 @@ export function StickyNote({
             </svg>
           </button>
         </div>
+
+        {/* Lock indicator */}
+        {isLocked && lockedByName && (
+          <div 
+            className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 bg-amber-100 rounded text-xs text-amber-800 z-10"
+            title={`Locked by ${lockedByName}`}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+            </svg>
+            <span className="font-medium">{lockedByName}</span>
+          </div>
+        )}
 
         {/* Chain indicator (subtle) */}
         {note.parentSectionId && (

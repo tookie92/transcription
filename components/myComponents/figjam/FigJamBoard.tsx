@@ -67,6 +67,8 @@ export function FigJamBoard({
   
   // Track last saved elements to prevent save loops
   const lastSavedElementsRef = useRef<string>("");
+  // Track last processed movement timestamp to avoid duplicates
+  const lastProcessedTimestampRef = useRef<number>(0);
 
   const [draggingStickyId, setDraggingStickyId] = useState<string | null>(null);
 
@@ -127,11 +129,21 @@ export function FigJamBoard({
     hasMapId ? { mapId: mapId as Id<"affinityMaps"> } : "skip"
   );
 
+  // Query: Get element locks
+  const elementLocks = useQuery(
+    api.affinityMaps.getElementLocks,
+    hasMapId ? { mapId: mapId as Id<"affinityMaps"> } : "skip"
+  );
+
   // Mutation: Save FigJam elements to Convex (debounced)
   const saveToConvex = useMutation(api.affinityMaps.saveFigJamElements);
   
   // Mutation: Broadcast real-time movement
   const broadcastMovement = useMutation(api.affinityMaps.broadcastMovement);
+  
+  // Mutation: Lock/unlock elements
+  const lockElement = useMutation(api.affinityMaps.lockElement);
+  const unlockElement = useMutation(api.affinityMaps.unlockElement);
   
   // Throttled save - only saves every 2 seconds to avoid too many writes to Convex
   const throttledSave = useThrottle((elements: Record<string, FigJamElement>) => {
@@ -165,6 +177,58 @@ export function FigJamBoard({
       });
     }
   }, 200);
+
+  // Helper to get lock info for an element
+  const getLockInfo = (elementId: string) => {
+    const lock = elementLocks?.find(l => l.elementId === elementId);
+    if (!lock) return { isLocked: false, lockedByName: undefined };
+    
+    // Find user name from presence
+    const user = otherUsers?.find(u => u.userId === lock.userId);
+    const isLockedByMe = lock.userId === userId;
+    
+    return {
+      isLocked: !isLockedByMe,
+      lockedByName: user?.user?.name || (isLockedByMe ? "You" : "Someone"),
+    };
+  };
+
+  // ============================================
+  // Selection with locking
+  // ============================================
+  const handleSelectWithLock = useCallback(async (id: string, multi: boolean = false) => {
+    if (!hasMapId || !userId) return;
+    
+    // Check if already locked by someone else
+    const lock = elementLocks?.find(l => l.elementId === id);
+    if (lock && lock.userId !== userId) {
+      // Element is locked by another user - can't select
+      console.log("[FigJamBoard] Element locked by another user:", lock.userId);
+      return;
+    }
+    
+    // Lock the element
+    const result = await lockElement({
+      mapId: mapId as Id<"affinityMaps">,
+      elementId: id,
+      userId,
+    });
+    
+    if (result.success) {
+      board.selectElement(id, multi);
+    }
+  }, [hasMapId, userId, elementLocks, lockElement, board]);
+
+  const handleDeselectAndUnlock = useCallback(async (id: string) => {
+    if (!hasMapId || !userId) return;
+    
+    // Unlock the element
+    await unlockElement({
+      mapId: mapId as Id<"affinityMaps">,
+      elementId: id,
+      userId,
+    });
+  }, [hasMapId, userId, unlockElement]);
 
   // ============================================
   // LOAD: Priority Convex > initialElements > localStorage
@@ -232,11 +296,16 @@ export function FigJamBoard({
   useEffect(() => {
     if (!recentMovements || recentMovements.length === 0) return;
     
-    // Apply movements from other users
+    // Apply movements from other users (skip if older than what we have)
     for (const movement of recentMovements) {
       // Skip our own movements
       if (movement.userId === userId) continue;
       
+      // Skip old movements
+      if (movement.timestamp <= lastProcessedTimestampRef.current) continue;
+      lastProcessedTimestampRef.current = movement.timestamp;
+      
+      // Skip if element was deleted locally
       const element = state.elements[movement.elementId];
       if (!element) continue;
       
@@ -254,6 +323,28 @@ export function FigJamBoard({
       }
     }
   }, [recentMovements, userId]);
+
+  // ============================================
+  // Unlock elements when deselecting
+  // ============================================
+  useEffect(() => {
+    if (!hasMapId || !userId || !elementLocks) return;
+    
+    // Find locks we hold that are no longer in selection
+    const selectedIds = state.selectedIds;
+    const ourLocks = elementLocks.filter(l => l.userId === userId);
+    
+    for (const lock of ourLocks) {
+      if (!selectedIds.includes(lock.elementId)) {
+        // We held a lock but no longer have this element selected - unlock it
+        unlockElement({
+          mapId: mapId as Id<"affinityMaps">,
+          elementId: lock.elementId,
+          userId,
+        });
+      }
+    }
+  }, [state.selectedIds, elementLocks, hasMapId, userId]);
 
   // ── Context menu event handlers ─────────────────────────────────────
   useEffect(() => {
@@ -768,7 +859,9 @@ export function FigJamBoard({
               isSelected={state.selectedIds.includes(el.id)}
               isHovered={attachedSectionId === el.id}
               isVotingMode={isVotingActive}
-              onSelect={board.selectElement}
+              isLocked={getLockInfo(el.id).isLocked}
+              lockedByName={getLockInfo(el.id).lockedByName}
+              onSelect={handleSelectWithLock}
               onMoveWithChildren={(sectionId, dx, dy) => {
                 board.moveSectionWithChildren(sectionId, dx, dy);
                 const section = state.elements[sectionId] as any;
@@ -783,7 +876,9 @@ export function FigJamBoard({
               selectedIds={state.selectedIds}
               onUpdate={(id, patch) => {
                 board.updateElement(id, patch as any);
-                throttledBroadcast(id, "section", "update", patch.position, patch.size, patch);
+                if (state.elements[id]) {
+                  throttledBroadcast(id, "section", "update", patch.position, patch.size, patch);
+                }
               }}
               onDelete={board.deleteElement}
               onArrangeSection={(sectionId) => board.autoArrange(sectionId)}
@@ -802,24 +897,34 @@ export function FigJamBoard({
               note={el}
               zoom={state.zoom}
               isSelected={state.selectedIds.includes(el.id)}
-              onSelect={board.selectElement}
+              isLocked={getLockInfo(el.id).isLocked}
+              lockedByName={getLockInfo(el.id).lockedByName}
+              onSelect={handleSelectWithLock}
               onMove={(id, pos) => {
                 board.moveSticky(id, pos);
-                throttledBroadcast(id, "sticky", "move", pos);
+                // Only broadcast if element still exists
+                if (state.elements[id]) {
+                  throttledBroadcast(id, "sticky", "move", pos);
+                }
               }}
               onMoveSelected={board.moveSelected}
               selectedIds={state.selectedIds}
               isVotingMode={isVotingActive}
               onUpdate={(id, patch) => {
                 board.updateElement(id, patch as any);
-                throttledBroadcast(id, "sticky", "update", patch.position, patch.size, patch);
+                // Only broadcast if element still exists
+                if (state.elements[id]) {
+                  throttledBroadcast(id, "sticky", "update", patch.position, patch.size, patch);
+                }
               }}
               onDelete={board.deleteElement}
               onDuplicate={board.duplicateElement}
               onBringToFront={board.bringToFront}
               onResize={(id, size) => {
                 board.updateElement(id, { size } as any);
-                throttledBroadcast(id, "sticky", "resize", undefined, size);
+                if (state.elements[id]) {
+                  throttledBroadcast(id, "sticky", "resize", undefined, size);
+                }
               }}
               onDragStart={(id) => setDraggingStickyId(id)}
               onDragEnd={(id) => {

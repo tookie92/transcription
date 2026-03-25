@@ -229,6 +229,16 @@ elementMovements: defineTable({
 .index("by_map", ["mapId"])
 .index("by_timestamp", ["timestamp"]),
 
+// 🆕 Element locks (prevent concurrent editing)
+elementLocks: defineTable({
+  mapId: v.id("affinityMaps"),
+  elementId: v.string(),
+  userId: v.string(),
+  lockedAt: v.number(),
+})
+.index("by_map", ["mapId"])
+.index("by_element", ["elementId"]),
+
 // 🆕 Historique des modifications
 // convex/schema.ts
 // 🎯 TABLE ACTIVITY LOG (existe déjà mais à compléter)

@@ -632,3 +632,82 @@ export const getRecentMovements = query({
     return movements.filter(m => m.timestamp >= since);
   },
 });
+
+// ============================================
+// Element locking (prevent concurrent editing)
+// ============================================
+
+/**
+ * Lock an element (when user selects it for editing)
+ */
+export const lockElement = mutation({
+  args: {
+    mapId: v.id("affinityMaps"),
+    elementId: v.string(),
+    userId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Check if already locked by someone else
+    const existing = await ctx.db
+      .query("elementLocks")
+      .withIndex("by_element", q => q.eq("elementId", args.elementId))
+      .first();
+    
+    if (existing && existing.userId !== args.userId) {
+      // Already locked by another user - return false
+      return { success: false, lockedBy: existing.userId };
+    }
+    
+    if (existing) {
+      // Already locked by same user - refresh lock
+      await ctx.db.patch(existing._id, { lockedAt: Date.now() });
+      return { success: true, lockedBy: null };
+    }
+    
+    // Create new lock
+    await ctx.db.insert("elementLocks", {
+      mapId: args.mapId,
+      elementId: args.elementId,
+      userId: args.userId,
+      lockedAt: Date.now(),
+    });
+    
+    return { success: true, lockedBy: null };
+  },
+});
+
+/**
+ * Unlock an element (when user deselects or finishes editing)
+ */
+export const unlockElement = mutation({
+  args: {
+    mapId: v.id("affinityMaps"),
+    elementId: v.string(),
+    userId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("elementLocks")
+      .withIndex("by_element", q => q.eq("elementId", args.elementId))
+      .first();
+    
+    if (existing && existing.userId === args.userId) {
+      await ctx.db.delete(existing._id);
+    }
+  },
+});
+
+/**
+ * Get all locks for a map
+ */
+export const getElementLocks = query({
+  args: {
+    mapId: v.id("affinityMaps"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("elementLocks")
+      .withIndex("by_map", q => q.eq("mapId", args.mapId))
+      .collect();
+  },
+});
