@@ -563,3 +563,72 @@ export const getFigJamElements = query({
     return map.figJamElements;
   },
 });
+
+// ============================================
+// PHASE 3: Real-time element movements
+// ============================================
+
+/**
+ * Broadcast a real-time element movement
+ * Called during drag/resize for live sync
+ */
+export const broadcastMovement = mutation({
+  args: {
+    mapId: v.id("affinityMaps"),
+    elementId: v.string(),
+    elementType: v.union(v.literal("sticky"), v.literal("section"), v.literal("dot")),
+    action: v.union(v.literal("move"), v.literal("resize"), v.literal("update")),
+    position: v.optional(v.object({ x: v.number(), y: v.number() })),
+    size: v.optional(v.object({ width: v.number(), height: v.number() })),
+    patch: v.optional(v.any()),
+    userId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Insert movement record (will be cleaned up by a scheduled job or on read)
+    await ctx.db.insert("elementMovements", {
+      mapId: args.mapId,
+      elementId: args.elementId,
+      elementType: args.elementType,
+      action: args.action,
+      position: args.position,
+      size: args.size,
+      patch: args.patch,
+      userId: args.userId,
+      timestamp: Date.now(),
+    });
+
+    // Clean up old movements (keep only last 5 minutes) - simplified
+    const cutoff = Date.now() - 5 * 60 * 1000;
+    const allMovements = await ctx.db
+      .query("elementMovements")
+      .withIndex("by_map", q => q.eq("mapId", args.mapId))
+      .collect();
+    
+    for (const movement of allMovements) {
+      if (movement.timestamp < cutoff) {
+        await ctx.db.delete(movement._id);
+      }
+    }
+  },
+});
+
+/**
+ * Get recent movements for real-time sync
+ */
+export const getRecentMovements = query({
+  args: {
+    mapId: v.id("affinityMaps"),
+    since: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const since = args.since || (Date.now() - 5000); // Default: last 5 seconds
+    
+    const movements = await ctx.db
+      .query("elementMovements")
+      .withIndex("by_map", q => q.eq("mapId", args.mapId))
+      .collect();
+    
+    // Filter by timestamp in JavaScript (Convex filter limitations)
+    return movements.filter(m => m.timestamp >= since);
+  },
+});

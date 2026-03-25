@@ -121,10 +121,17 @@ export function FigJamBoard({
     hasMapId ? { mapId: mapId as Id<"affinityMaps"> } : "skip"
   );
   
-
+  // Query: Get recent movements for real-time sync
+  const recentMovements = useQuery(
+    api.affinityMaps.getRecentMovements,
+    hasMapId ? { mapId: mapId as Id<"affinityMaps"> } : "skip"
+  );
 
   // Mutation: Save FigJam elements to Convex (debounced)
   const saveToConvex = useMutation(api.affinityMaps.saveFigJamElements);
+  
+  // Mutation: Broadcast real-time movement
+  const broadcastMovement = useMutation(api.affinityMaps.broadcastMovement);
   
   // Throttled save - only saves every 2 seconds to avoid too many writes to Convex
   const throttledSave = useThrottle((elements: Record<string, FigJamElement>) => {
@@ -135,6 +142,29 @@ export function FigJamBoard({
       });
     }
   }, 2000);
+  
+  // Throttled broadcast - sends movement updates every 200ms for real-time sync
+  const throttledBroadcast = useThrottle((
+    elementId: string,
+    elementType: "sticky" | "section" | "dot",
+    action: "move" | "resize" | "update",
+    position?: { x: number; y: number },
+    size?: { width: number; height: number },
+    patch?: any
+  ) => {
+    if (hasMapId && userId) {
+      broadcastMovement({
+        mapId: mapId as Id<"affinityMaps">,
+        elementId,
+        elementType,
+        action,
+        position,
+        size,
+        patch,
+        userId,
+      });
+    }
+  }, 200);
 
   // ============================================
   // LOAD: Priority Convex > initialElements > localStorage
@@ -195,6 +225,35 @@ export function FigJamBoard({
     // Notify parent component
     onChange?.(state.elements);
   }, [state.elements, storageKey, isLoaded, throttledSave]);
+
+  // ============================================
+  // PHASE 3: Real-time movements from other users
+  // ============================================
+  useEffect(() => {
+    if (!recentMovements || recentMovements.length === 0) return;
+    
+    // Apply movements from other users
+    for (const movement of recentMovements) {
+      // Skip our own movements
+      if (movement.userId === userId) continue;
+      
+      const element = state.elements[movement.elementId];
+      if (!element) continue;
+      
+      // Apply the movement update
+      if (movement.action === "move" && movement.position) {
+        board.updateElement(movement.elementId, {
+          position: movement.position,
+        } as any);
+      } else if (movement.action === "resize" && movement.size) {
+        board.updateElement(movement.elementId, {
+          size: movement.size,
+        } as any);
+      } else if (movement.action === "update" && movement.patch) {
+        board.updateElement(movement.elementId, movement.patch as any);
+      }
+    }
+  }, [recentMovements, userId]);
 
   // ── Context menu event handlers ─────────────────────────────────────
   useEffect(() => {
@@ -710,10 +769,22 @@ export function FigJamBoard({
               isHovered={attachedSectionId === el.id}
               isVotingMode={isVotingActive}
               onSelect={board.selectElement}
-              onMoveWithChildren={board.moveSectionWithChildren}
+              onMoveWithChildren={(sectionId, dx, dy) => {
+                board.moveSectionWithChildren(sectionId, dx, dy);
+                const section = state.elements[sectionId] as any;
+                if (section?.position) {
+                  throttledBroadcast(sectionId, "section", "move", {
+                    x: section.position.x + dx,
+                    y: section.position.y + dy,
+                  });
+                }
+              }}
               onMoveSelected={board.moveSelected}
               selectedIds={state.selectedIds}
-              onUpdate={(id, patch) => board.updateElement(id, patch as any)}
+              onUpdate={(id, patch) => {
+                board.updateElement(id, patch as any);
+                throttledBroadcast(id, "section", "update", patch.position, patch.size, patch);
+              }}
               onDelete={board.deleteElement}
               onArrangeSection={(sectionId) => board.autoArrange(sectionId)}
               renameTrigger={renameSectionId}
@@ -732,15 +803,24 @@ export function FigJamBoard({
               zoom={state.zoom}
               isSelected={state.selectedIds.includes(el.id)}
               onSelect={board.selectElement}
-              onMove={(id, pos) => board.moveSticky(id, pos)}
+              onMove={(id, pos) => {
+                board.moveSticky(id, pos);
+                throttledBroadcast(id, "sticky", "move", pos);
+              }}
               onMoveSelected={board.moveSelected}
               selectedIds={state.selectedIds}
               isVotingMode={isVotingActive}
-              onUpdate={(id, patch) => board.updateElement(id, patch as any)}
+              onUpdate={(id, patch) => {
+                board.updateElement(id, patch as any);
+                throttledBroadcast(id, "sticky", "update", patch.position, patch.size, patch);
+              }}
               onDelete={board.deleteElement}
               onDuplicate={board.duplicateElement}
               onBringToFront={board.bringToFront}
-              onResize={(id, size) => board.updateElement(id, { size } as any)}
+              onResize={(id, size) => {
+                board.updateElement(id, { size } as any);
+                throttledBroadcast(id, "sticky", "resize", undefined, size);
+              }}
               onDragStart={(id) => setDraggingStickyId(id)}
               onDragEnd={(id) => {
                 if (hoveredSectionId) {

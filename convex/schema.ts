@@ -214,6 +214,21 @@ presence: defineTable({
 .index("by_map", ["mapId"])
 .index("by_user_map", ["userId", "mapId"]),
 
+// 🆕 Real-time element movements (for live sync without waiting for save)
+elementMovements: defineTable({
+  mapId: v.id("affinityMaps"),
+  elementId: v.string(),
+  elementType: v.union(v.literal("sticky"), v.literal("section"), v.literal("dot")),
+  action: v.union(v.literal("move"), v.literal("resize"), v.literal("update")),
+  position: v.optional(v.object({ x: v.number(), y: v.number() })),
+  size: v.optional(v.object({ width: v.number(), height: v.number() })),
+  patch: v.optional(v.any()),
+  userId: v.string(),
+  timestamp: v.number(),
+})
+.index("by_map", ["mapId"])
+.index("by_timestamp", ["timestamp"]),
+
 // 🆕 Historique des modifications
 // convex/schema.ts
 // 🎯 TABLE ACTIVITY LOG (existe déjà mais à compléter)
