@@ -87,6 +87,7 @@ export default defineSchema({
   insights: defineTable({
     interviewId: v.optional(v.id("interviews")),
     projectId: v.id("projects"),
+    groupId: v.optional(v.string()), // ID du groupe si l'insight est dans un cluster
     type: v.union(
       v.literal("pain-point"),
       v.literal("quote"),
@@ -146,6 +147,10 @@ export default defineSchema({
         y: v.number(),
       }),
       insightIds: v.array(v.string()),
+      insightPositions: v.optional(v.record(v.string(), v.object({
+        x: v.number(),
+        y: v.number(),
+      }))), // position de chaque insight dans le cluster
       size: v.optional(v.object({
         width: v.number(),
         height: v.number(),
