@@ -8,6 +8,12 @@ import { Section } from "./Section";
 import { FigJamToolbar } from "./FigJamToolbar";
 import { VotingDock } from "./VotingDock";
 import type { FigJamElement, Position, StickyColor, StickyNoteData, SectionData, DotData } from "@/types/figjam";
+import { useAuth } from "@clerk/nextjs";
+import { usePresence } from "@/hooks/usePresence";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+import { motion } from "framer-motion";
 
 // ─── Canvas dot grid ──────────────────────────────────────────────────────────
 
@@ -40,6 +46,8 @@ interface FigJamBoardProps {
   storageKey?: string;
   onChange?: (elements: Record<string, FigJamElement>) => void;
   initialElements?: Record<string, FigJamElement>;
+  mapId?: string;
+  maxVotesPerUser?: number;
 }
 
 export function FigJamBoard({
@@ -47,6 +55,8 @@ export function FigJamBoard({
   storageKey = "figjam-default",
   onChange,
   initialElements,
+  mapId,
+  maxVotesPerUser = 10,
 }: FigJamBoardProps) {
   const board = useFigJamBoard();
   const { state } = board;
@@ -67,6 +77,36 @@ export function FigJamBoard({
   });
   const [isVotingActive, setIsVotingActive] = useState(false);
   const [usedDots, setUsedDots] = useState(0);
+
+  // ── Presence (cursors) ───────────────────────────────────────────────────
+  const { userId } = useAuth();
+  const hasMapId = !!mapId;
+  
+  const CURSOR_COLORS = [
+    "#ef4444", "#f97316", "#eab308", "#22c55e",
+    "#14b8a6", "#3b82f6", "#8b5cf6", "#ec4899",
+  ];
+  const OFFLINE_THRESHOLD_MS = 30000;
+  const INACTIVE_THRESHOLD_MS = 5000;
+
+  function getUserColor(userId: string): string {
+    // Generate consistent color based on userId
+    let hash = 0;
+    for (let i = 0; i < userId.length; i++) {
+      hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return CURSOR_COLORS[Math.abs(hash) % CURSOR_COLORS.length];
+  }
+
+  console.log("[FigJamBoard] mapId:", mapId, "hasMapId:", hasMapId, "userId:", userId);
+  
+  const updatePresence = usePresence(hasMapId ? (mapId as Id<"affinityMaps">) : "");
+  const otherUsers = useQuery(
+    api.presence.getByMap,
+    hasMapId ? { mapId: mapId as Id<"affinityMaps"> } : "skip"
+  );
+  
+  console.log("[FigJamBoard] otherUsers:", otherUsers?.map(u => ({ userId: u.userId, name: u.user?.name, color: getUserColor(u.userId) })));
 
   // ── Load from localStorage on mount ────────────────────────────────────
   useEffect(() => {
@@ -256,13 +296,22 @@ export function FigJamBoard({
         return;
       }
       
-      if (!isPanning.current) return;
+      if (!isPanning.current) {
+        // Update presence cursor
+        if (hasMapId && updatePresence) {
+          const pos = screenToCanvas(e.clientX, e.clientY);
+          console.log("[FigJamBoard] Updating presence:", pos.x, pos.y);
+          updatePresence(pos.x, pos.y, state.selectedIds);
+        }
+        return;
+      }
+      
       board.setPan({
         x: panOrigin.current.x + (e.clientX - panStart.current.x),
         y: panOrigin.current.y + (e.clientY - panStart.current.y),
       });
     },
-    [board, isLassoing, screenToCanvas]
+    [board, isLassoing, screenToCanvas, hasMapId, updatePresence, state.selectedIds]
   );
 
   const handleCanvasPointerUp = useCallback(
@@ -530,6 +579,41 @@ export function FigJamBoard({
           className="absolute origin-top-left lasso-area"
           style={{ transform: `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.zoom})` }}
         >
+          {/* ── Remote cursors (inside transformed layer) ── */}
+          {otherUsers
+            ?.filter((u: any) => Date.now() - u.lastSeen < OFFLINE_THRESHOLD_MS)
+            .map((userData: any) => (
+              <motion.div
+                key={userData.userId}
+                className="absolute pointer-events-none z-50"
+                style={{
+                  left: userData.cursor.x,
+                  top: userData.cursor.y,
+                  opacity: Date.now() - userData.lastSeen > INACTIVE_THRESHOLD_MS ? 0.5 : 1,
+                  transition: "opacity 0.3s ease",
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <svg 
+                    width="24" 
+                    height="24" 
+                    viewBox="0 0 24 24" 
+                    style={{ filter: `drop-shadow(0 0 3px ${userData.cursorColor || getUserColor(userData.userId)})` }}
+                  >
+                    <path 
+                      d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87c.48 0 .72-.58.38-.92L5.85 2.85a.5.5 0 0 0-.35-.15.5.5 0 0 0-.5.51z" 
+                      fill={userData.cursorColor || getUserColor(userData.userId)}
+                    />
+                  </svg>
+                  <span
+                    className="text-xs text-white px-2 py-1 rounded shadow whitespace-nowrap"
+                    style={{ backgroundColor: userData.cursorColor || getUserColor(userData.userId) }}
+                  >
+                    {userData.user?.name || "User"}
+                  </span>
+                </div>
+              </motion.div>
+            ))}
           {/* ── Lasso selection visual ── */}
           {lassoStart && lassoEnd && (
             <div

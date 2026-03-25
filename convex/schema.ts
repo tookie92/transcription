@@ -206,6 +206,7 @@ presence: defineTable({
     name: v.string(),
     avatar: v.optional(v.string()),
   }),
+  cursorColor: v.optional(v.string()),
   lastSeen: v.number(),
 })
 .index("by_map", ["mapId"])

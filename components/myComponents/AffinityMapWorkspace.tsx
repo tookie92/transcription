@@ -313,16 +313,30 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   }
 
   // ==================== RENDER ====================
+  const isLoading = !affinityMap;
+
   return (
     <div className="h-full relative bg-background">
+      {/* Loading state */}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background z-50">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Loading workspace...</p>
+          </div>
+        </div>
+      )}
+      
       {/* Main Canvas with FigJam Board */}
-      <FigJamBoard
-        projectName={project.name}
-        maxVotesPerUser={5}
-        onChange={(elements) => {
-          console.log("Board changed:", Object.keys(elements).length, "elements");
-        }}
-      />
+      {!isLoading && (
+        <FigJamBoard
+          projectName={project.name}
+          mapId={affinityMap._id}
+          onChange={(elements) => {
+            console.log("Board changed:", Object.keys(elements).length, "elements");
+          }}
+        />
+      )}
 
       {/* Side Panels (Theme Discovery, Analytics, Persona, Export) - slide in from right as overlay */}
       <CanvasSidePanels
