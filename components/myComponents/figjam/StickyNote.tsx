@@ -24,8 +24,8 @@ const MAX_STICKY_SIZE = { width: 600, height: 600 };
 const HEADER_HEIGHT = 32;
 const FOOTER_HEIGHT = 36;
 const PADDING = 12;
-const MIN_FONT_SIZE = 10;
-const MAX_FONT_SIZE = 24;
+const MIN_FONT_SIZE = 14;
+const MAX_FONT_SIZE = 20;
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -52,25 +52,8 @@ interface StickyNoteProps {
 
 function useAutoFontSize(text: string, containerWidth: number, containerHeight: number): number {
   const fontSize = useMemo(() => {
-    if (!text.trim()) return MAX_FONT_SIZE;
-    
-    // Simple heuristic based on content length and container size
-    const charCount = text.length;
-    const area = containerWidth * containerHeight;
-    
-    // More characters = smaller font
-    let calculatedSize = MAX_FONT_SIZE;
-    if (charCount > 200) calculatedSize = 12;
-    else if (charCount > 100) calculatedSize = 14;
-    else if (charCount > 50) calculatedSize = 16;
-    else if (charCount > 20) calculatedSize = 18;
-    
-    // Adjust based on container size
-    const minDim = Math.min(containerWidth, containerHeight);
-    if (minDim < 150) calculatedSize = Math.min(calculatedSize, 12);
-    else if (minDim < 200) calculatedSize = Math.min(calculatedSize, 14);
-    
-    return calculatedSize;
+    // Fixed font size - more readable
+    return 16;
   }, [text, containerWidth, containerHeight]);
 
   return fontSize;
@@ -283,17 +266,24 @@ export function StickyNote({
           {isEditing ? (
             <textarea
               ref={textareaRef}
-              className="w-full h-full resize-none outline-none bg-transparent text-sm"
+              className="w-full h-full resize-none outline-none bg-transparent"
               style={{
                 color: colors.text,
                 fontFamily: "'DM Sans', system-ui, sans-serif",
-                fontSize: Math.max(MIN_FONT_SIZE, fontSize),
-                lineHeight: 1.5,
+                fontSize: 16,
+                lineHeight: 1.6,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
               }}
               value={note.content}
-              onChange={(e) => onUpdate(note.id, { content: e.target.value })}
-              onBlur={handleBlur}
+              onChange={(e) => {
+                onUpdate(note.id, { content: e.target.value });
+              }}
+              onBlur={() => {
+                setIsEditing(false);
+              }}
               onPointerDown={(e) => e.stopPropagation()}
+              placeholder="Type your insight here..."
             />
           ) : (
             <div
@@ -303,7 +293,7 @@ export function StickyNote({
                 color: note.content ? colors.text : "#aaa",
                 fontFamily: "'DM Sans', system-ui, sans-serif",
                 fontSize: Math.max(MIN_FONT_SIZE, fontSize),
-                lineHeight: 1.5,
+                lineHeight: 1.6,
               }}
             >
               {note.content || (
@@ -313,19 +303,30 @@ export function StickyNote({
           )}
         </div>
 
-        {/* Footer: author + vote badge */}
+        {/* Footer: author + source + vote badge */}
         <div
           className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-3"
           style={{ height: FOOTER_HEIGHT }}
         >
-          {note.author && (
-            <span 
-              className="text-[10px] font-medium truncate max-w-[120px] opacity-60"
-              style={{ color: colors.text }}
-            >
-              {note.author}
-            </span>
-          )}
+          <div className="flex items-center gap-2 min-w-0">
+            {note.authorName && (
+              <span 
+                className="text-[10px] font-medium truncate opacity-70"
+                style={{ color: colors.text }}
+                title={note.authorName}
+              >
+                {note.authorName}
+              </span>
+            )}
+            {note.source && (
+              <span 
+                className="text-[9px] px-1.5 py-0.5 rounded bg-black/5 truncate"
+                style={{ color: colors.text, opacity: 0.5 }}
+              >
+                {note.source}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Resize handle (bottom-right corner) */}

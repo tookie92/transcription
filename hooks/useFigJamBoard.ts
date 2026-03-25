@@ -450,7 +450,7 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
   // ── Element creation ──────────────────────────────────────────────────────
 
   const addStickyNote = useCallback(
-    (pos: Position, color: StickyColor = "yellow", size: Size = { width: 200, height: 200 }): string => {
+    (pos: Position, color: StickyColor = "yellow", size: Size = { width: 200, height: 200 }, authorName?: string): string => {
       const id = uid();
       const element: FigJamElement = {
         id,
@@ -459,6 +459,8 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
         color,
         content: "",
         author: DEFAULT_USER_ID,
+        authorName: authorName || "Anonymous",
+        source: "manual",
         votes: 0,
         votedBy: [],
         parentSectionId: null,

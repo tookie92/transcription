@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef, useState, useEffect } from "react";
+import React, { useCallback, useRef, useState, useEffect, useMemo } from "react";
 import { useFigJamBoard } from "@/hooks/useFigJamBoard";
 import { useContainment } from "@/hooks/useContainment";
 import { StickyNote } from "./StickyNote";
@@ -8,12 +8,13 @@ import { Section } from "./Section";
 import { FigJamToolbar } from "./FigJamToolbar";
 import { VotingDock } from "./VotingDock";
 import type { FigJamElement, Position, StickyColor, StickyNoteData, SectionData, DotData } from "@/types/figjam";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { usePresence } from "@/hooks/usePresence";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { motion } from "framer-motion";
+import { useThrottle } from "@/hooks/useThrottle";
 
 // ─── Canvas dot grid ──────────────────────────────────────────────────────────
 
@@ -63,6 +64,9 @@ export function FigJamBoard({
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
+  
+  // Track last saved elements to prevent save loops
+  const lastSavedElementsRef = useRef<string>("");
 
   const [draggingStickyId, setDraggingStickyId] = useState<string | null>(null);
 
@@ -80,7 +84,9 @@ export function FigJamBoard({
 
   // ── Presence (cursors) ───────────────────────────────────────────────────
   const { userId } = useAuth();
+  const { user } = useUser();
   const hasMapId = !!mapId;
+  const currentUserName = user?.fullName || user?.firstName || "Anonymous";
   
   const CURSOR_COLORS = [
     "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -98,40 +104,97 @@ export function FigJamBoard({
     return CURSOR_COLORS[Math.abs(hash) % CURSOR_COLORS.length];
   }
 
-  console.log("[FigJamBoard] mapId:", mapId, "hasMapId:", hasMapId, "userId:", userId);
-  
+  // ============================================
+  // CONvex - Load/Save FigJam Elements
+  // ============================================
   const updatePresence = usePresence(hasMapId ? (mapId as Id<"affinityMaps">) : "");
+  
+  // Query: Get other users' presence (cursors, selections)
   const otherUsers = useQuery(
     api.presence.getByMap,
     hasMapId ? { mapId: mapId as Id<"affinityMaps"> } : "skip"
   );
-  
-  console.log("[FigJamBoard] otherUsers:", otherUsers?.map(u => ({ userId: u.userId, name: u.user?.name, color: getUserColor(u.userId) })));
 
-  // ── Load from localStorage on mount ────────────────────────────────────
+  // Query: Load FigJam elements from Convex
+  const savedElements = useQuery(
+    api.affinityMaps.getFigJamElements,
+    hasMapId ? { mapId: mapId as Id<"affinityMaps"> } : "skip"
+  );
+  
+
+
+  // Mutation: Save FigJam elements to Convex (debounced)
+  const saveToConvex = useMutation(api.affinityMaps.saveFigJamElements);
+  
+  // Throttled save - only saves every 2 seconds to avoid too many writes to Convex
+  const throttledSave = useThrottle((elements: Record<string, FigJamElement>) => {
+    if (hasMapId) {
+      saveToConvex({
+        mapId: mapId as Id<"affinityMaps">,
+        elements,
+      });
+    }
+  }, 2000);
+
+  // ============================================
+  // LOAD: Priority Convex > initialElements > localStorage
+  // ============================================
   useEffect(() => {
+    // Priority 1: Convex (shared state from other users)
+    if (savedElements && Object.keys(savedElements).length > 0) {
+      board.loadElements(savedElements);
+      setIsLoaded(true);
+      return;
+    }
+
+    // Priority 2: Initial elements prop
     if (initialElements && Object.keys(initialElements).length > 0) {
       board.loadElements(initialElements);
-    } else {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved) as Record<string, FigJamElement>;
-          board.loadElements(parsed);
-        } catch (e) {
-          console.error("Failed to load board from localStorage:", e);
-        }
+      setIsLoaded(true);
+      return;
+    }
+
+    // Priority 3: localStorage (fallback for offline)
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as Record<string, FigJamElement>;
+        board.loadElements(parsed);
+      } catch (e) {
+        console.error("Failed to load board from localStorage:", e);
       }
     }
+    
+    // Mark as loaded even if nothing was loaded
     setIsLoaded(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey, initialElements]);
+  }, [savedElements, initialElements, storageKey]);
 
-  // ── Save to localStorage on every change ────────────────────────────────
+  // ============================================
+  // Save: On every change → Convex + localStorage
+  // ============================================
   useEffect(() => {
     if (!isLoaded) return;
+    
+    // Serialize current elements to compare
+    const currentElementsStr = JSON.stringify(state.elements);
+    
+    // Skip if elements haven't changed since last save
+    if (currentElementsStr === lastSavedElementsRef.current) {
+      return;
+    }
+    
+    // Always save to localStorage (instant)
     localStorage.setItem(storageKey, JSON.stringify(state.elements));
-  }, [state.elements, storageKey, isLoaded]);
+    
+    // Save to Convex (throttled) - only if there are elements
+    if (Object.keys(state.elements).length > 0) {
+      lastSavedElementsRef.current = currentElementsStr;
+      throttledSave(state.elements);
+    }
+    
+    // Notify parent component
+    onChange?.(state.elements);
+  }, [state.elements, storageKey, isLoaded, throttledSave]);
 
   // ── Context menu event handlers ─────────────────────────────────────
   useEffect(() => {
@@ -174,14 +237,22 @@ export function FigJamBoard({
   
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !e.repeat) {
+      // Don't intercept space if typing in an input/textarea
+      const target = e.target as HTMLElement;
+      const isTyping = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+      
+      if (e.code === "Space" && !e.repeat && !isTyping) {
         e.preventDefault();
         setIsSpacePressed(true);
       }
     };
     
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "Space") {
+      // Don't intercept space if typing in an input/textarea
+      const target = e.target as HTMLElement;
+      const isTyping = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+      
+      if (e.code === "Space" && !isTyping) {
         setIsSpacePressed(false);
         isPanning.current = false;
       }
@@ -276,7 +347,7 @@ export function FigJamBoard({
 
       if (state.activeTool === "sticky") {
         const pos = screenToCanvas(e.clientX, e.clientY);
-        board.addStickyNote({ x: pos.x - 100, y: pos.y - 80 });
+        board.addStickyNote({ x: pos.x - 100, y: pos.y - 80 }, "yellow", { width: 200, height: 200 }, currentUserName);
         board.setTool("select");
       }
       if (state.activeTool === "section") {
@@ -297,10 +368,9 @@ export function FigJamBoard({
       }
       
       if (!isPanning.current) {
-        // Update presence cursor
+        // Update presence cursor with current position
         if (hasMapId && updatePresence) {
           const pos = screenToCanvas(e.clientX, e.clientY);
-          console.log("[FigJamBoard] Updating presence:", pos.x, pos.y);
           updatePresence(pos.x, pos.y, state.selectedIds);
         }
         return;
@@ -696,7 +766,7 @@ export function FigJamBoard({
         onZoomOut={() => board.setZoom(state.zoom / 1.2)}
         onZoomReset={() => { board.setZoom(1); board.setPan({ x: 0, y: 0 }); }}
         onAddSticky={(color?: StickyColor) =>
-          board.addStickyNote({ x: 200 / state.zoom, y: 200 / state.zoom }, color)
+          board.addStickyNote({ x: 200 / state.zoom, y: 200 / state.zoom }, color, { width: 200, height: 200 }, currentUserName)
         }
         onAddSection={() =>
           board.addSection({ x: 100 / state.zoom, y: 100 / state.zoom })

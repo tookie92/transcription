@@ -20,9 +20,6 @@ export const upsert = mutation({
       return;
     }
 
-    const CURSOR_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#8b5cf6", "#ec4899"];
-    const randomColor = CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)];
-
     const existing = await ctx.db
       .query("presence")
       .withIndex("by_user_map", q => q.eq("userId", args.userId).eq("mapId", args.mapId))
@@ -35,6 +32,9 @@ export const upsert = mutation({
         lastSeen: Date.now(),
       });
     } else {
+      const CURSOR_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#8b5cf6", "#ec4899"];
+      const randomColor = CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)];
+      
       await ctx.db.insert("presence", {
         mapId: args.mapId,
         userId: args.userId,
@@ -69,7 +69,6 @@ export const getByMap = query({
   args: { mapId: v.id("affinityMaps") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    console.log("[getByMap] identity:", identity?.subject, "mapId:", args.mapId);
     if (!identity) return [];
 
     const presence = await ctx.db
@@ -77,7 +76,6 @@ export const getByMap = query({
       .withIndex("by_map", q => q.eq("mapId", args.mapId))
       .collect();
 
-    console.log("[getByMap] raw presence:", presence.length, presence.map(p => p.userId));
     return presence.filter(p => p.userId !== identity.subject);
   },
 });

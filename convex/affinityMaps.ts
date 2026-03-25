@@ -524,3 +524,42 @@ export const replaceAllGroups = mutation({
     });
   },
 });
+
+// ============================================
+// FIGJAM BOARD SYNC - Phase 2
+// ============================================
+
+/**
+ * Save FigJam board elements to Convex
+ * Called when the board changes (debounced)
+ */
+export const saveFigJamElements = mutation({
+  args: {
+    mapId: v.id("affinityMaps"),
+    elements: v.any(), // Record<string, FigJamElement>
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    await ctx.db.patch(args.mapId, {
+      figJamElements: args.elements,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * Load FigJam board elements from Convex
+ * Called when the board mounts
+ */
+export const getFigJamElements = query({
+  args: {
+    mapId: v.id("affinityMaps"),
+  },
+  handler: async (ctx, args) => {
+    const map = await ctx.db.get(args.mapId);
+    if (!map) return null;
+    return map.figJamElements;
+  },
+});

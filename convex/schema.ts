@@ -160,6 +160,8 @@ export default defineSchema({
       x: v.number(),
       y: v.number(),
     }))),
+    // FigJam board elements (sections, stickies, dots, etc.)
+    figJamElements: v.optional(v.any()),
     createdBy: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),

@@ -43,6 +43,8 @@ export interface StickyNoteData extends BaseElement {
   content: string;
   color: StickyColor;
   author?: string;
+  authorName?: string;
+  source?: string;
   votes: number;
   votedBy: string[]; // user IDs who voted
   /** ID of the section this sticky is attached to. null = free-floating. */
@@ -111,7 +113,7 @@ export interface CanvasTransform {
 export interface UseFigJamBoardReturn {
   state: BoardState;
   // Element actions
-  addStickyNote: (pos: Position, color?: StickyColor) => string;
+  addStickyNote: (pos: Position, color?: StickyColor, size?: Size, authorName?: string) => string;
   addSection: (pos: Position, size?: Size) => string;
   addDot: (pos: Position, parentSectionId: string | null, color: string) => string;
   updateElement: (id: string, patch: Partial<FigJamElement>) => void;
