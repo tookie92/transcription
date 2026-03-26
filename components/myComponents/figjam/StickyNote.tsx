@@ -17,7 +17,38 @@ export const STICKY_COLORS: Record<
   purple:  { bg: "#E1BEE7", header: "#CE93D8", text: "#4A148C", accent: "#8E24AA" },
   orange:  { bg: "#FFE0B2", header: "#FFCC80", text: "#E65100", accent: "#FB8C00" },
   white:   { bg: "#FAFAFA", header: "#EEEEEE", text: "#424242", accent: "#757575" },
+  // Insight type colors
+  "pain-point":  { bg: "#FFCDD2", header: "#EF9A9A", text: "#B71C1C", accent: "#E53935" },
+  "quote":        { bg: "#E1BEE7", header: "#CE93D8", text: "#4A148C", accent: "#8E24AA" },
+  "insight":     { bg: "#C8E6C9", header: "#A5D6A7", text: "#1B5E20", accent: "#43A047" },
+  "follow-up":   { bg: "#BBDEFB", header: "#90CAF9", text: "#0D47A1", accent: "#1976D2" },
 };
+
+const INSIGHT_TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  "pain-point": { label: "Pain Point", color: "#E53935" },
+  "quote": { label: "Quote", color: "#8E24AA" },
+  "insight": { label: "Insight", color: "#43A047" },
+  "follow-up": { label: "Follow-up", color: "#1976D2" },
+};
+
+function InsightTypeBadge({ type, colors }: { type: string; colors: { text: string } }) {
+  const info = INSIGHT_TYPE_LABELS[type];
+  if (!info) return null;
+  
+  return (
+    <span 
+      className="text-[9px] px-1.5 py-0.5 rounded font-medium truncate"
+      style={{ 
+        color: info.color,
+        backgroundColor: `${info.color}15`,
+        border: `1px solid ${info.color}30`,
+      }}
+      title={info.label}
+    >
+      {info.label}
+    </span>
+  );
+}
 
 const MIN_STICKY_SIZE = { width: 120, height: 100 };
 const MAX_STICKY_SIZE = { width: 600, height: 600 };
@@ -339,13 +370,8 @@ export function StickyNote({
                 {note.authorName}
               </span>
             )}
-            {note.source && (
-              <span 
-                className="text-[9px] px-1.5 py-0.5 rounded bg-black/5 truncate"
-                style={{ color: colors.text, opacity: 0.5 }}
-              >
-                {note.source}
-              </span>
+            {note.source && (note.source === "pain-point" || note.source === "quote" || note.source === "insight" || note.source === "follow-up") && (
+              <InsightTypeBadge type={note.source} colors={colors} />
             )}
           </div>
         </div>
@@ -371,6 +397,7 @@ export function StickyNote({
           onDelete={() => { onDelete(note.id); setShowMenu(false); }}
           onBringFront={() => { onBringToFront(note.id); setShowMenu(false); }}
           onClose={() => setShowMenu(false)}
+          isLocked={isLocked}
         />
       )}
     </div>
@@ -384,6 +411,7 @@ function ContextMenu({
   onDelete,
   onBringFront,
   onClose,
+  isLocked,
 }: {
   onColorChange: (color: StickyColor) => void;
   currentColor: StickyColor;
@@ -391,7 +419,10 @@ function ContextMenu({
   onDelete: () => void;
   onBringFront: () => void;
   onClose: () => void;
+  isLocked?: boolean;
 }) {
+  const insightTypes: StickyColor[] = ["pain-point", "quote", "insight", "follow-up"];
+
   return (
     <>
       <div className="fixed inset-0 z-40" onPointerDown={onClose} />
@@ -399,23 +430,36 @@ function ContextMenu({
         className="absolute right-0 top-10 z-50 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 min-w-[180px] overflow-hidden"
         onPointerDown={(e) => e.stopPropagation()}
       >
-        {/* Color picker section */}
+        {/* Insight type picker section */}
         <div className="px-3 pb-2 mb-1 border-b border-gray-100">
-          <p className="text-xs text-gray-400 mb-2 font-medium">Color</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-gray-400 font-medium">Insight Type</p>
+            {isLocked && (
+              <span className="text-[10px] text-amber-600 flex items-center gap-1">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+                </svg>
+                Locked
+              </span>
+            )}
+          </div>
           <div className="flex gap-1.5">
-            {(Object.keys(STICKY_COLORS) as StickyColor[]).map((c) => (
+            {insightTypes.map((c) => (
               <button
                 key={c}
-                className="w-6 h-6 rounded-md transition-transform hover:scale-110"
+                disabled={isLocked}
+                className={`w-6 h-6 rounded-md transition-transform hover:scale-110 ${isLocked ? "opacity-50 cursor-not-allowed" : ""}`}
                 style={{
                   background: STICKY_COLORS[c].bg,
                   border: currentColor === c ? "2px solid #0d99ff" : "1px solid rgba(0,0,0,0.1)",
                   boxShadow: currentColor === c ? "0 0 0 2px rgba(13, 153, 255, 0.3)" : "none",
                 }}
                 onClick={() => {
+                  if (isLocked) return;
                   onColorChange(c);
                   onClose();
                 }}
+                title={c.charAt(0).toUpperCase() + c.slice(1).replace("-", " ")}
               />
             ))}
           </div>
@@ -429,11 +473,12 @@ function ContextMenu({
         ].map((item) => (
           <button
             key={item.label}
+            disabled={isLocked && item.label !== "Delete"}
             className={`w-full flex items-center justify-between gap-4 px-4 py-2 text-sm text-left transition-colors ${
               item.danger
                 ? "text-red-600 hover:bg-red-50"
                 : "text-gray-700 hover:bg-gray-50"
-            }`}
+            } ${isLocked && item.label !== "Delete" ? "opacity-50 cursor-not-allowed" : ""}`}
             onClick={item.action}
           >
             <span>{item.label}</span>

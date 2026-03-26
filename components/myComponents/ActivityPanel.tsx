@@ -7,7 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Activity, Users, Move, Edit, MessageSquare, Plus, Trash2, Lightbulb, AtSign } from "lucide-react";
+import { Activity, Users, Move, Edit, MessageSquare, Plus, Trash2, Lightbulb, AtSign, StickyNote, Folder, Copy, Maximize2 } from "lucide-react";
 import { ActivityLog, ActivityAction } from "@/types";
 
 interface ActivityPanelProps {
@@ -40,6 +40,28 @@ export function ActivityPanel({ mapId, isOpen, onClose }: ActivityPanelProps) {
         return <MessageSquare size={16} className="text-indigo-500" />;
       case "user_mentioned": 
         return <AtSign size={16} className="text-pink-500" />;
+      // FigJam board actions
+      case "sticky_created":
+      case "sticky_updated":
+        return <StickyNote size={16} className="text-yellow-500" />;
+      case "sticky_moved":
+      case "sticky_resized":
+        return <Move size={16} className="text-blue-500" />;
+      case "sticky_deleted": 
+        return <Trash2 size={16} className="text-red-500" />;
+      case "sticky_duplicated": 
+        return <Copy size={16} className="text-cyan-500" />;
+      case "section_created":
+        return <Folder size={16} className="text-teal-500" />;
+      case "section_moved":
+      case "section_resized":
+        return <Move size={16} className="text-blue-500" />;
+      case "section_renamed":
+        return <Edit size={16} className="text-orange-500" />;
+      case "section_deleted":
+        return <Trash2 size={16} className="text-red-500" />;
+      case "elements_grouped":
+        return <Maximize2 size={16} className="text-indigo-500" />;
       default: 
         return <Activity size={16} className="text-gray-500" />;
     }
@@ -67,6 +89,31 @@ export function ActivityPanel({ mapId, isOpen, onClose }: ActivityPanelProps) {
         return `${userName} commented on "${activity.targetName}"`;
       case "user_mentioned":
         return `${userName} mentioned someone in "${activity.targetName}"`;
+      // FigJam board actions
+      case "sticky_created":
+        return `${userName} added a new sticky note (${activity.targetName})`;
+      case "sticky_moved":
+        return `${userName} moved a sticky note`;
+      case "sticky_resized":
+        return `${userName} resized a sticky note`;
+      case "sticky_updated":
+        return `${userName} edited a sticky note`;
+      case "sticky_deleted":
+        return `${userName} deleted a sticky note`;
+      case "sticky_duplicated":
+        return `${userName} duplicated a sticky note`;
+      case "section_created":
+        return `${userName} created a new section`;
+      case "section_moved":
+        return `${userName} moved a section`;
+      case "section_resized":
+        return `${userName} resized a section`;
+      case "section_renamed":
+        return `${userName} renamed a section to "${activity.targetName}"`;
+      case "section_deleted":
+        return `${userName} deleted a section`;
+      case "elements_grouped":
+        return `${userName} grouped elements into a section`;
       default:
         return `${userName} performed an action`;
     }
@@ -75,7 +122,7 @@ export function ActivityPanel({ mapId, isOpen, onClose }: ActivityPanelProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="w-80 bg-card border-l border-border flex flex-col h-full">
+    <div className="fixed right-0 top-14 bottom-0 w-80 bg-card border-l border-border flex flex-col z-40 shadow-lg">
       {/* Header */}
       <div className="p-4 border-b border-border">
         <div className="flex items-center justify-between">

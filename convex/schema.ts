@@ -247,6 +247,7 @@ activityLog: defineTable({
   userId: v.string(),
   userName: v.string(), // 🆕 Ajouter le nom d'utilisateur
   action: v.union(
+    // Legacy affinity map actions
     v.literal("group_created"),
     v.literal("group_moved"), 
     v.literal("group_renamed"),
@@ -255,7 +256,20 @@ activityLog: defineTable({
     v.literal("insight_removed"),
     v.literal("insight_moved"),
     v.literal("comment_added"),
-    v.literal("user_mentioned")
+    v.literal("user_mentioned"),
+    // FigJam board actions
+    v.literal("sticky_created"),
+    v.literal("sticky_moved"),
+    v.literal("sticky_resized"),
+    v.literal("sticky_updated"),
+    v.literal("sticky_deleted"),
+    v.literal("sticky_duplicated"),
+    v.literal("section_created"),
+    v.literal("section_moved"),
+    v.literal("section_resized"),
+    v.literal("section_renamed"),
+    v.literal("section_deleted"),
+    v.literal("elements_grouped"),
   ),
   targetId: v.string(), // ID du groupe/insight concerné
   targetName: v.optional(v.string()), // Nom/titre pour affichage

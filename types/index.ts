@@ -320,6 +320,7 @@ export interface Comment {
 
 // 🎯 TYPES POUR L'HISTORIQUE D'ACTIVITÉ
 export type ActivityAction = 
+  // Legacy affinity map actions
   | "group_created"
   | "group_moved" 
   | "group_renamed"
@@ -328,7 +329,20 @@ export type ActivityAction =
   | "insight_removed"
   | "insight_moved"
   | "comment_added"
-  | "user_mentioned";
+  | "user_mentioned"
+  // FigJam board actions
+  | "sticky_created"
+  | "sticky_moved"
+  | "sticky_resized"
+  | "sticky_updated"
+  | "sticky_deleted"
+  | "sticky_duplicated"
+  | "section_created"
+  | "section_moved"
+  | "section_resized"
+  | "section_renamed"
+  | "section_deleted"
+  | "elements_grouped";
 
 export interface ActivityDetails {
   // 🎯 DÉTAILS SPÉCIFIQUES POUR CHAQUE ACTION
@@ -336,6 +350,9 @@ export interface ActivityDetails {
   to?: { x: number; y: number } | string;   // Position ou nouveau titre
   insightId?: string;
   mentionedUserId?: string;
+  color?: string;
+  content?: string;
+  elementIds?: string[];
 }
 
 export interface ActivityLog {

@@ -317,6 +317,27 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
 
   return (
     <div className="h-full relative bg-background">
+      {/* Header */}
+      <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-2 bg-card border-b">
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-semibold text-foreground">{project.name}</h1>
+          <span className="text-sm text-muted-foreground">Affinity Map</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowActivityPanel(!showActivityPanel)}
+            className={`px-3 py-1.5 rounded-lg border flex items-center gap-2 text-sm ${
+              showActivityPanel
+                ? "bg-primary/20 border-primary text-primary"
+                : "bg-muted border-border text-foreground hover:bg-accent"
+            }`}
+          >
+            <span>📋</span>
+            Activity
+          </button>
+        </div>
+      </div>
+
       {/* Loading state */}
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background z-50">
@@ -332,6 +353,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         <FigJamBoard
           projectName={project.name}
           mapId={affinityMap._id}
+          style={{ paddingTop: '56px' }}
           onChange={(elements) => {
             console.log("Board changed:", Object.keys(elements).length, "elements");
           }}
@@ -419,20 +441,6 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           "Start Voting"
         )}
       </button> */}
-
-      {/* Activity Toggle Button */}
-      <button
-        onClick={() => setShowActivityPanel(!showActivityPanel)}
-        aria-label="Toggle activity panel"
-        aria-pressed={showActivityPanel}
-        className={`fixed bottom-6 left-4 z-20 px-4 py-2.5 rounded-lg text-sm transition-all duration-200 ${
-          showActivityPanel
-            ? "bg-gray-900 text-white shadow-lg"
-            : "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50 shadow-sm"
-        }`}
-      >
-        Activity
-      </button>
 
       {/* Side Panels Toggle */}
       <div className="fixed top-16 left-4 z-20 flex flex-col gap-2">

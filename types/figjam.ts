@@ -18,7 +18,11 @@ export type StickyColor =
   | "blue"
   | "purple"
   | "orange"
-  | "white";
+  | "white"
+  | "pain-point"
+  | "quote"
+  | "insight"
+  | "follow-up";
 
 export interface Position {
   x: number;

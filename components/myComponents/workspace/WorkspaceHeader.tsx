@@ -66,9 +66,9 @@ export function WorkspaceHeader({
 
         {/* Activity Button */}
         <button
-          onClick={() => setActivePanel(activePanel === 'activity' ? null : 'activity')}
+          onClick={() => setShowActivityPanel(!showActivityPanel)}
           className={`px-3 py-2 rounded-lg border flex items-center gap-2 ${
-            activePanel === 'activity'
+            showActivityPanel
               ? "bg-primary/20 border-primary text-primary"
               : "bg-muted border-border text-foreground hover:bg-accent"
           }`}

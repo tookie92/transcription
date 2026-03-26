@@ -4,6 +4,9 @@ import React from "react";
 import type { ToolType, StickyColor } from "@/types/figjam";
 import { STICKY_COLORS } from "./StickyNote";
 import { VotingSettings } from "./VotingSettings";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -20,6 +23,8 @@ interface FigJamToolbarProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onZoomReset: () => void;
+  showStickyPicker?: boolean;
+  onToggleStickyPicker?: () => void;
   onAddSticky: (color?: StickyColor) => void;
   onAddSection: () => void;
   onGroupSelected: () => void;
@@ -99,7 +104,15 @@ const TOOLS: { id: ToolType; label: string; shortcut: string; icon: React.ReactN
   },
 ];
 
-const STICKY_PALETTE: StickyColor[] = ["yellow", "pink", "green", "blue", "purple", "orange", "white"];
+// Only 4 insight types for sticky notes
+const STICKY_PALETTE: StickyColor[] = ["pain-point", "quote", "insight", "follow-up"];
+
+const STICKY_PALETTE_INFO: Record<string, { label: string; description: string }> = {
+  "pain-point": { label: "Pain Point", description: "User frustrations & problems" },
+  "quote": { label: "Quote", description: "Notable user quotes" },
+  "insight": { label: "Insight", description: "Key observations" },
+  "follow-up": { label: "Follow-up", description: "Questions to explore" },
+};
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -111,6 +124,8 @@ export function FigJamToolbar({
   onZoomIn,
   onZoomOut,
   onZoomReset,
+  showStickyPicker,
+  onToggleStickyPicker,
   onAddSticky,
   onAddSection,
   onGroupSelected,
@@ -121,24 +136,9 @@ export function FigJamToolbar({
   onStartVoting,
   onEndVoting,
 }: FigJamToolbarProps) {
-  const [showStickyPicker, setShowStickyPicker] = React.useState(false);
 
   return (
     <>
-      {/* ── Header Voting Button ── */}
-      {onVotingConfigChange && votingConfig && (
-        <div className="absolute top-3 right-4 z-30">
-          <VotingSettings
-            config={votingConfig}
-            onConfigChange={onVotingConfigChange}
-            isVotingActive={isVotingActive}
-            timerSeconds={timerSeconds}
-            onStartVoting={onStartVoting}
-            onEndVoting={onEndVoting}
-          />
-        </div>
-      )}
-
       {/* ── Main toolbar ── */}
       <div className="absolute left-1/2 bottom-6 -translate-x-1/2 z-30 flex items-center gap-1 bg-white rounded-2xl shadow-2xl border border-gray-100 px-3 py-2">
 
@@ -160,39 +160,44 @@ export function FigJamToolbar({
         <Divider />
 
         {/* Sticky note button with color picker */}
-        <div className="relative">
-          <ToolButton
-            active={showStickyPicker}
-            label="Sticky note"
-            shortcut="S"
-            onClick={() => setShowStickyPicker((v) => !v)}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"/>
-              <path d="M15 3v6h6"/>
-            </svg>
-          </ToolButton>
-
-          {showStickyPicker && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowStickyPicker(false)}/>
-              <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-2xl border border-gray-100 p-2 flex gap-1.5 z-50">
-                {STICKY_PALETTE.map((color) => (
-                  <button
-                    key={color}
-                    title={color}
-                    className="w-7 h-7 rounded-lg border-2 border-white shadow hover:scale-110 transition-transform"
-                    style={{ background: STICKY_COLORS[color].bg, borderColor: STICKY_COLORS[color].header }}
-                    onClick={() => {
-                      onAddSticky(color);
-                      setShowStickyPicker(false);
-                    }}
+        <Popover open={showStickyPicker} onOpenChange={onToggleStickyPicker}>
+          <PopoverTrigger asChild>
+            <ToolButton
+              active={!!showStickyPicker}
+              label="Sticky note"
+              shortcut="S"
+              onClick={() => {}}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"/>
+                <path d="M15 3v6h6"/>
+              </svg>
+            </ToolButton>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-2" side="top" sideOffset={8}>
+            <div className="flex flex-row gap-1">
+              {STICKY_PALETTE.map((color) => (
+                <Button
+                  key={color}
+                  variant="ghost"
+                  size="sm"
+                  className="flex flex-col gap-1 px-3 py-2 h-auto min-w-[80px]"
+                  title={`${STICKY_PALETTE_INFO[color].label}: ${STICKY_PALETTE_INFO[color].description}`}
+                  onClick={() => {
+                    onAddSticky(color);
+                    onToggleStickyPicker?.();
+                  }}
+                >
+                  <div 
+                    className="w-5 h-5 rounded shrink-0" 
+                    style={{ background: STICKY_COLORS[color].bg, border: `2px solid ${STICKY_COLORS[color].header}` }}
                   />
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+                  <span className="text-[10px] font-medium text-gray-700">{STICKY_PALETTE_INFO[color].label}</span>
+                </Button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
 
         {/* Section / Frame button */}
         <ToolButton

@@ -408,6 +408,7 @@ function initialState(): BoardState {
 export function useFigJamBoard(): UseFigJamBoardReturn {
   const [state, baseDispatch] = useReducer(reducer, undefined, initialState);
   const historyRef = useRef<HistoryEntry[]>([]);
+  const futureRef = useRef<HistoryEntry[]>([]);
   const isUndoingRedoing = useRef(false);
 
   const pushToHistory = () => {
@@ -415,6 +416,8 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
       ...historyRef.current.slice(-MAX_HISTORY + 1),
       { elements: cloneElements(state.elements), votesUsed: state.votesUsed },
     ];
+    // Clear future when new action is performed
+    futureRef.current = [];
   };
 
   const dispatch = (action: Action) => {
@@ -432,20 +435,40 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
 
   const undo = useCallback(() => {
     if (historyRef.current.length === 0) return;
+    
+    // Save current state to future for redo
+    futureRef.current = [
+      ...futureRef.current,
+      { elements: cloneElements(state.elements), votesUsed: state.votesUsed },
+    ];
+    
     const previous = historyRef.current[historyRef.current.length - 1];
     historyRef.current = historyRef.current.slice(0, -1);
 
     isUndoingRedoing.current = true;
     baseDispatch({ type: "LOAD_ELEMENTS", elements: previous.elements });
     isUndoingRedoing.current = false;
-  }, []);
+  }, [state.elements, state.votesUsed]);
 
   const redo = useCallback(() => {
-    // Redo not implemented - would need a separate "future" stack
-  }, []);
+    if (futureRef.current.length === 0) return;
+    
+    // Save current state to history
+    historyRef.current = [
+      ...historyRef.current,
+      { elements: cloneElements(state.elements), votesUsed: state.votesUsed },
+    ];
+    
+    const next = futureRef.current[futureRef.current.length - 1];
+    futureRef.current = futureRef.current.slice(0, -1);
+
+    isUndoingRedoing.current = true;
+    baseDispatch({ type: "LOAD_ELEMENTS", elements: next.elements });
+    isUndoingRedoing.current = false;
+  }, [state.elements, state.votesUsed]);
 
   const canUndo = historyRef.current.length > 0;
-  const canRedo = false;
+  const canRedo = futureRef.current.length > 0;
 
   // ── Element creation ──────────────────────────────────────────────────────
 
@@ -460,7 +483,7 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
         content: "",
         author: DEFAULT_USER_ID,
         authorName: authorName || "Anonymous",
-        source: "manual",
+        source: color, // Use color as insight type (pain-point, quote, insight, follow-up)
         votes: 0,
         votedBy: [],
         parentSectionId: null,

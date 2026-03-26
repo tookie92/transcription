@@ -16,6 +16,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { motion } from "framer-motion";
 import { useThrottle } from "@/hooks/useThrottle";
 
+
 // ─── Canvas dot grid ──────────────────────────────────────────────────────────
 
 function CanvasGrid({ zoom, pan }: { zoom: number; pan: Position }) {
@@ -49,6 +50,9 @@ interface FigJamBoardProps {
   initialElements?: Record<string, FigJamElement>;
   mapId?: string;
   maxVotesPerUser?: number;
+  onToggleActivityPanel?: () => void;
+  isActivityPanelOpen?: boolean;
+  style?: React.CSSProperties;
 }
 
 export function FigJamBoard({
@@ -58,6 +62,7 @@ export function FigJamBoard({
   initialElements,
   mapId,
   maxVotesPerUser = 10,
+  style,
 }: FigJamBoardProps) {
   const board = useFigJamBoard();
   const { state } = board;
@@ -83,6 +88,7 @@ export function FigJamBoard({
   });
   const [isVotingActive, setIsVotingActive] = useState(false);
   const [usedDots, setUsedDots] = useState(0);
+  const [showStickyPicker, setShowStickyPicker] = useState(false);
 
   // ── Presence (cursors) ───────────────────────────────────────────────────
   const { userId } = useAuth();
@@ -144,6 +150,9 @@ export function FigJamBoard({
   // Mutation: Lock/unlock elements
   const lockElement = useMutation(api.affinityMaps.lockElement);
   const unlockElement = useMutation(api.affinityMaps.unlockElement);
+  
+  // Mutation: Log activity
+  const logActivity = useMutation(api.activityLog.logActivity);
   
   // Throttled save - only saves every 2 seconds to avoid too many writes to Convex
   const throttledSave = useThrottle((elements: Record<string, FigJamElement>) => {
@@ -495,14 +504,21 @@ export function FigJamBoard({
         }
       }
 
-      if (state.activeTool === "sticky") {
-        const pos = screenToCanvas(e.clientX, e.clientY);
-        board.addStickyNote({ x: pos.x - 100, y: pos.y - 80 }, "yellow", { width: 200, height: 200 }, currentUserName);
-        board.setTool("select");
-      }
       if (state.activeTool === "section") {
         const pos = screenToCanvas(e.clientX, e.clientY);
-        board.addSection({ x: pos.x - 240, y: pos.y - 160 });
+        const sectionId = board.addSection({ x: pos.x - 240, y: pos.y - 160 });
+        if (hasMapId && mapId) {
+          try {
+            logActivity({
+              mapId: mapId as Id<"affinityMaps">,
+              action: "section_created",
+              targetId: sectionId,
+              targetName: "Section",
+            });
+          } catch (err) {
+            console.error("Failed to log activity:", err);
+          }
+        }
         board.setTool("select");
       }
     },
@@ -579,12 +595,12 @@ export function FigJamBoard({
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
       // Undo/Redo
-      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
         board.undo();
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === "y") {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
         e.preventDefault();
         board.redo();
         return;
@@ -651,7 +667,10 @@ export function FigJamBoard({
         case "v": case "V": board.setTool("select"); break;
         case "h": case "H": board.setTool("hand");   break;
         case "t": case "T": board.setTool("text");   break;
-        case "s": case "S": board.setTool("sticky"); break;
+        case "s": case "S": 
+          e.preventDefault();
+          setShowStickyPicker((v) => !v);
+          break;
         case "f": case "F": board.setTool("section"); break;
         case "F2":
           if (state.selectedIds.length === 1) {
@@ -665,10 +684,37 @@ export function FigJamBoard({
         case "Escape":
           board.setTool("select");
           board.clearSelection();
+          setShowStickyPicker(false);
           break;
         case "Backspace":
         case "Delete":
-          state.selectedIds.forEach((id) => board.deleteElement(id));
+          state.selectedIds.forEach((id) => {
+            const element = state.elements[id];
+            if (element) {
+              if (hasMapId && mapId) {
+                try {
+                  if (element.type === "sticky") {
+                    logActivity({
+                      mapId: mapId as Id<"affinityMaps">,
+                      action: "sticky_deleted",
+                      targetId: id,
+                      targetName: (element as StickyNoteData).source || "sticky",
+                    });
+                  } else if (element.type === "section") {
+                    logActivity({
+                      mapId: mapId as Id<"affinityMaps">,
+                      action: "section_deleted",
+                      targetId: id,
+                      targetName: (element as SectionData).title || "section",
+                    });
+                  }
+                } catch (err) {
+                  console.error("Failed to log activity:", err);
+                }
+              }
+              board.deleteElement(id);
+            }
+          });
           break;
         case "+": board.setZoom(state.zoom * 1.15); break;
         case "-": board.setZoom(state.zoom / 1.15); break;
@@ -766,29 +812,12 @@ export function FigJamBoard({
   return (
     <div
       className="relative w-full h-full overflow-hidden bg-[#f5f5f0] select-none"
-      style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}
+      style={{ fontFamily: "'DM Sans', system-ui, sans-serif", ...style }}
     >
-      {/* ── Top bar ── */}
-      <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-2 bg-white/80 backdrop-blur-sm border-b border-gray-100">
-        <div className="flex items-center gap-3">
-          <svg width="20" height="20" viewBox="0 0 38 57" fill="none" className="shrink-0">
-            <path d="M19 28.5a9.5 9.5 0 1 1 19 0 9.5 9.5 0 0 1-19 0z" fill="#1ABCFE"/>
-            <path d="M0 47.5A9.5 9.5 0 0 1 9.5 38H19v9.5a9.5 9.5 0 0 1-19 0z" fill="#0ACF83"/>
-            <path d="M19 0v19h9.5a9.5 9.5 0 0 0 0-19H19z" fill="#FF7262"/>
-            <path d="M0 9.5A9.5 9.5 0 0 0 9.5 19H19V0H9.5A9.5 9.5 0 0 0 0 9.5z" fill="#F24E1E"/>
-            <path d="M0 28.5A9.5 9.5 0 0 0 9.5 38H19V19H9.5A9.5 9.5 0 0 0 0 28.5z" fill="#FF7262"/>
-          </svg>
-          <span className="font-semibold text-sm text-gray-800">{projectName || "FigJam Board"}</span>
-          <span className="text-xs text-gray-400">
-            {Object.keys(state.elements).length} element{Object.keys(state.elements).length !== 1 ? "s" : ""}
-          </span>
-        </div>
-      </div>
-
       {/* ── Canvas ── */}
       <div
         ref={canvasRef}
-        className={`absolute inset-0 top-12 ${cursorStyle}`}
+        className={`absolute inset-0 ${cursorStyle}`}
         onPointerDown={handleCanvasPointerDown}
         onPointerMove={handleCanvasPointerMove}
         onPointerUp={handleCanvasPointerUp}
@@ -950,12 +979,40 @@ export function FigJamBoard({
         onZoomIn={() => board.setZoom(state.zoom * 1.2)}
         onZoomOut={() => board.setZoom(state.zoom / 1.2)}
         onZoomReset={() => { board.setZoom(1); board.setPan({ x: 0, y: 0 }); }}
-        onAddSticky={(color?: StickyColor) =>
-          board.addStickyNote({ x: 200 / state.zoom, y: 200 / state.zoom }, color, { width: 200, height: 200 }, currentUserName)
-        }
-        onAddSection={() =>
-          board.addSection({ x: 100 / state.zoom, y: 100 / state.zoom })
-        }
+        showStickyPicker={showStickyPicker}
+        onToggleStickyPicker={() => setShowStickyPicker((v) => !v)}
+        onAddSticky={(color?: StickyColor) => {
+          const stickyId = board.addStickyNote({ x: 200 / state.zoom, y: 200 / state.zoom }, color || "insight", { width: 200, height: 200 }, currentUserName);
+          if (hasMapId && mapId) {
+            try {
+              logActivity({
+                mapId: mapId as Id<"affinityMaps">,
+                action: "sticky_created",
+                targetId: stickyId,
+                targetName: color || "insight",
+                details: { color },
+              });
+            } catch (err) {
+              console.error("Failed to log activity:", err);
+            }
+          }
+          setShowStickyPicker(false);
+        }}
+        onAddSection={() => {
+          const sectionId = board.addSection({ x: 100 / state.zoom, y: 100 / state.zoom });
+          if (hasMapId && mapId) {
+            try {
+              logActivity({
+                mapId: mapId as Id<"affinityMaps">,
+                action: "section_created",
+                targetId: sectionId,
+                targetName: "Section",
+              });
+            } catch (err) {
+              console.error("Failed to log activity:", err);
+            }
+          }
+        }}
         onGroupSelected={() => board.groupSelectedIntoSection()}
         selectedCount={state.selectedIds.length}
         votingConfig={votingConfig}
