@@ -19,10 +19,13 @@ export const createSession = mutation({
     name: v.string(),
     maxDotsPerUser: v.number(),
     isSilentMode: v.boolean(),
+    durationMinutes: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<Id<"dotVotingSessions">> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+
+    console.log('🎯 Creating session with:', args);
 
     const sessionId = await ctx.db.insert("dotVotingSessions", {
       projectId: args.projectId,
@@ -32,11 +35,14 @@ export const createSession = mutation({
       isActive: true,
       votingPhase: "voting",
       isSilentMode: args.isSilentMode,
+      durationMinutes: args.durationMinutes,
+      startTime: args.durationMinutes ? Date.now() : undefined,
       createdBy: identity.subject,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
 
+    console.log('✅ Created session:', sessionId);
     return sessionId;
   },
 });
@@ -245,6 +251,32 @@ export const revealVotes = mutation({
   },
 });
 
+// 🎯 STOP & REVEAL (combines stop and reveal in one action)
+export const stopAndReveal = mutation({
+  args: {
+    sessionId: v.id("dotVotingSessions"),
+  },
+  handler: async (ctx, args): Promise<{ success: boolean }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Session not found");
+
+    if (session.createdBy !== identity.subject) {
+      throw new Error("Only session creator can stop and reveal");
+    }
+
+    // Keep isActive true so session is still returned by getActiveSessions
+    await ctx.db.patch(args.sessionId, {
+      votingPhase: "revealed",
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
 // 🎯 TERMINER LA SESSION
 
 export const endSession = mutation({
@@ -422,13 +454,16 @@ export const getActiveSessions = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
 
+    // Get all sessions for this map (not just active ones)
+    // This includes revealed sessions so users can still see results
     const sessions = await ctx.db
       .query("dotVotingSessions")
       .withIndex("by_map", q => q.eq("mapId", args.mapId))
-      .filter(q => q.eq(q.field("isActive"), true))
       .collect();
 
-    return sessions as DotVotingSession[];
+    // Sort by createdAt descending and return most recent
+    const sorted = sessions.sort((a, b) => b.createdAt - a.createdAt);
+    return sorted as DotVotingSession[];
   },
 });
 

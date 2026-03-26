@@ -352,6 +352,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
       {!isLoading && (
         <FigJamBoard
           projectName={project.name}
+          projectId={projectId}
           mapId={affinityMap._id}
           style={{ paddingTop: '56px' }}
           onChange={(elements) => {

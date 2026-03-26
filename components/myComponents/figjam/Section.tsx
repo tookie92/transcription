@@ -11,6 +11,9 @@ import {
   ContextMenuLabel,
 } from "@/components/ui/context-menu";
 import type { SectionData, DotData } from "@/types/figjam";
+import type { DotVote } from "@/types";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Trophy } from "lucide-react";
 
 export const SECTION_COLORS = [
   { bg: "#e8f4fd", border: "#90CAF9", label: "Blue"   },
@@ -24,13 +27,14 @@ export const SECTION_COLORS = [
 
 interface SectionProps {
   section: SectionData;
-  dots?: DotData[];
+  dots?: (DotData | DotVote)[];
   voteCount?: number;
   hasUserVoted?: boolean;
   zoom: number;
   isSelected: boolean;
   isHovered?: boolean;
   isVotingMode?: boolean;
+  isRevealed?: boolean;
   isLocked?: boolean;
   lockedByName?: string;
   onSelect: (id: string, multi: boolean) => void;
@@ -54,6 +58,7 @@ export function Section({
   isSelected,
   isHovered = false,
   isVotingMode = false,
+  isRevealed = false,
   isLocked = false,
   lockedByName,
   onSelect,
@@ -274,6 +279,42 @@ export function Section({
                 </div>
               )}
 
+              {/* Vote count badge - shown when revealed */}
+              {(isRevealed || voteCount > 0) && isVotingMode && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/80 hover:bg-white shadow-sm transition-colors"
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <Trophy className="w-3 h-3 text-yellow-500" />
+                      <span className="text-xs font-bold text-gray-700">{voteCount}</span>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56 p-3" side="top" align="start">
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-gray-500 uppercase">Vote Details</p>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                        <span className="text-sm font-medium">{voteCount} votes</span>
+                      </div>
+                      {dots.length > 0 && (
+                        <div className="flex gap-1 mt-2 flex-wrap">
+                          {dots.map((dot, i) => (
+                            <div
+                              key={i}
+                              className="w-4 h-4 rounded-full border border-white shadow-sm"
+                              style={{ backgroundColor: dot.color }}
+                              title={`Vote from user`}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+
               {isEditingTitle ? (
                 <input
                   ref={titleRef}
@@ -343,28 +384,31 @@ export function Section({
             )}
 
             {/* Dots - positioned randomly within section */}
-            {dots.map((dot) => (
-              <div
-                key={dot.id}
-                className={`absolute rounded-full border-2 border-white shadow-md transition-all ${
-                  isVotingMode 
-                    ? "w-7 h-7 cursor-pointer hover:scale-110 hover:brightness-110" 
-                    : "w-6 h-6"
-                }`}
-                style={{
-                  backgroundColor: dot.color,
-                  left: dot.position.x - section.position.x,
-                  top: dot.position.y - section.position.y,
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (isVotingMode) {
-                    onRemoveDot?.(dot.id);
-                  }
-                }}
-              />
-            ))}
+            {dots.map((dot) => {
+              const dotId = "id" in dot ? dot.id : dot._id;
+              return (
+                <div
+                  key={dotId}
+                  className={`absolute rounded-full border-2 border-white shadow-md transition-all ${
+                    isVotingMode 
+                      ? "w-7 h-7 cursor-pointer hover:scale-110 hover:brightness-110" 
+                      : "w-6 h-6"
+                  }`}
+                  style={{
+                    backgroundColor: dot.color,
+                    left: dot.position.x - section.position.x,
+                    top: dot.position.y - section.position.y,
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isVotingMode) {
+                      onRemoveDot?.(dotId);
+                    }
+                  }}
+                />
+              );
+            })}
 
             <div
               className="absolute bottom-2 left-3 text-[10px] text-gray-300 select-none pointer-events-none"

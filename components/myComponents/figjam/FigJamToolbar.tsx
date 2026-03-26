@@ -6,6 +6,7 @@ import { STICKY_COLORS } from "./StickyNote";
 import { VotingSettings } from "./VotingSettings";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { Trophy, BarChart3 } from "lucide-react";
 
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -13,6 +14,13 @@ import { Button } from "@/components/ui/button";
 interface VotingConfig {
   dotsPerUser: number;
   durationMinutes: number | null;
+}
+
+interface SectionVoteResult {
+  sectionId: string;
+  title: string;
+  voteCount: number;
+  colors: string[];
 }
 
 interface FigJamToolbarProps {
@@ -31,9 +39,13 @@ interface FigJamToolbarProps {
   votingConfig?: VotingConfig;
   onVotingConfigChange?: (config: VotingConfig) => void;
   isVotingActive?: boolean;
-  timerSeconds?: number;
-  onStartVoting?: () => void;
-  onEndVoting?: () => void;
+  votingPhase?: "setup" | "voting" | "revealed" | "completed";
+  isCreator?: boolean;
+  remainingTime?: number | null;
+  voteResults?: SectionVoteResult[];
+  onStartVoting?: (durationMinutes?: number | null) => void;
+  onStopAndReveal?: () => void;
+  onStartNewVote?: () => void;
 }
 
 // ─── Tool definitions ────────────────────────────────────────────────────────
@@ -132,10 +144,25 @@ export function FigJamToolbar({
   votingConfig,
   onVotingConfigChange,
   isVotingActive,
-  timerSeconds,
+  votingPhase,
+  isCreator,
+  remainingTime,
+  voteResults,
   onStartVoting,
-  onEndVoting,
+  onStopAndReveal,
+  onStartNewVote,
 }: FigJamToolbarProps) {
+
+  // Format remaining time
+  const formatTime = (ms: number) => {
+    const seconds = Math.floor(ms / 1000);
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  // Sort results by vote count (descending)
+  const sortedResults = [...(voteResults || [])].sort((a, b) => b.voteCount - a.voteCount);
 
   return (
     <>
@@ -212,6 +239,54 @@ export function FigJamToolbar({
         </ToolButton>
 
         <Divider />
+
+        {/* Voting Controls */}
+        <VotingSettings
+          config={votingConfig || { dotsPerUser: 5, durationMinutes: null }}
+          onConfigChange={onVotingConfigChange || (() => {})}
+          isVotingActive={isVotingActive}
+          votingPhase={votingPhase}
+          isCreator={isCreator}
+          remainingTime={remainingTime}
+          onStartVoting={onStartVoting}
+          onStopAndReveal={onStopAndReveal}
+          onStartNewVote={onStartNewVote}
+        />
+
+        <Divider />
+
+        {/* Ranking popover - shown when votes are revealed */}
+        {voteResults && voteResults.length > 0 && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <BarChart3 className="w-4 h-4" />
+                Ranking
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-3" align="end">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase">Vote Results</p>
+                {sortedResults.map((result, index) => (
+                  <div key={result.sectionId} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50">
+                    <span className={`text-xs font-bold w-5 ${index === 0 ? "text-yellow-500" : "text-gray-400"}`}>
+                      #{index + 1}
+                    </span>
+                    <div className="flex gap-1 flex-1">
+                      {result.colors.slice(0, 5).map((color, i) => (
+                        <div key={i} className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+                      ))}
+                      {result.colors.length > 5 && (
+                        <span className="text-xs text-gray-400">+{result.colors.length - 5}</span>
+                      )}
+                    </div>
+                    <span className="text-sm font-medium">{result.voteCount} vote{result.voteCount !== 1 ? "s" : ""}</span>
+                  </div>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
       </div>
 
       {/* ── Selection indicator (bottom left) ── */}

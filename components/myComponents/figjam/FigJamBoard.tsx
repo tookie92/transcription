@@ -15,6 +15,8 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { motion } from "framer-motion";
 import { useThrottle } from "@/hooks/useThrottle";
+import { useDotVoting } from "@/hooks/useDotVoting";
+import type { DotVote } from "@/types";
 
 
 // ─── Canvas dot grid ──────────────────────────────────────────────────────────
@@ -45,6 +47,7 @@ function CanvasGrid({ zoom, pan }: { zoom: number; pan: Position }) {
 
 interface FigJamBoardProps {
   projectName?: string;
+  projectId?: string;
   storageKey?: string;
   onChange?: (elements: Record<string, FigJamElement>) => void;
   initialElements?: Record<string, FigJamElement>;
@@ -57,6 +60,7 @@ interface FigJamBoardProps {
 
 export function FigJamBoard({
   projectName,
+  projectId,
   storageKey = "figjam-default",
   onChange,
   initialElements,
@@ -67,8 +71,35 @@ export function FigJamBoard({
   const board = useFigJamBoard();
   const { state } = board;
 
-  const [isLoaded, setIsLoaded] = useState(false);
+  const hasMapId = !!mapId && !!projectId;
+
+  // Local state for UI (before dotVoting)
+  const [votingConfig, setVotingConfig] = useState({
+    dotsPerUser: 5,
+    durationMinutes: null as number | null,
+  });
+
+  // ============================================
+  // Dot Voting - Convex
+  // ============================================
+  const dotVoting = useDotVoting({
+    mapId: mapId || "",
+    projectId: projectId || "",
+  });
+
+  // Derived state from Convex
+  const votingPhase = dotVoting.session?.votingPhase || "setup";
+  const isVotingActive = dotVoting.session?.isActive ?? false;
+  const isSilentMode = dotVoting.session?.isSilentMode ?? false;
+  const myDots = dotVoting.myDots;
+  const allDots = dotVoting.allDots;
+  const maxDotsPerUser = dotVoting.session?.maxDotsPerUser ?? votingConfig.dotsPerUser;
+  const isCreator = dotVoting.isCreator;
+  const remainingTime = dotVoting.remainingTime;
+
+  // Local state for UI
   const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   
   // Track last saved elements to prevent save loops
   const lastSavedElementsRef = useRef<string>("");
@@ -82,24 +113,28 @@ export function FigJamBoard({
   const isLassoing = lassoStart !== null;
 
   const [renameSectionId, setRenameSectionId] = useState<string | null>(null);
-  const [votingConfig, setVotingConfig] = useState({
-    dotsPerUser: 5,
-    durationMinutes: null as number | null,
-  });
-  const [isVotingActive, setIsVotingActive] = useState(false);
-  const [usedDots, setUsedDots] = useState(0);
   const [showStickyPicker, setShowStickyPicker] = useState(false);
 
   // ── Presence (cursors) ───────────────────────────────────────────────────
   const { userId } = useAuth();
   const { user } = useUser();
-  const hasMapId = !!mapId;
   const currentUserName = user?.fullName || user?.firstName || "Anonymous";
   
   const CURSOR_COLORS = [
     "#ef4444", "#f97316", "#eab308", "#22c55e",
     "#14b8a6", "#3b82f6", "#8b5cf6", "#ec4899",
   ];
+  
+  // User color for voting dots - consistent based on userId
+  const userColor = useMemo(() => {
+    const VOTING_COLORS = [
+      "#EF4444", "#F59E0B", "#10B981", "#3B82F6",
+      "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16"
+    ];
+    if (!userId) return "#22c55e";
+    const hash = userId.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+    return VOTING_COLORS[hash % VOTING_COLORS.length];
+  }, [userId]);
   const OFFLINE_THRESHOLD_MS = 30000;
   const INACTIVE_THRESHOLD_MS = 5000;
 
@@ -493,8 +528,11 @@ export function FigJamBoard({
       }
 
       // Start lasso selection on canvas click
+      // Block in silent mode during voting
       const target = e.target as HTMLElement;
-      if (target === canvasRef.current || target.closest(".lasso-area")) {
+      const isSilentVoting = isSilentMode && votingPhase === "voting";
+      
+      if (!isSilentVoting && (target === canvasRef.current || target.closest(".lasso-area"))) {
         const pos = screenToCanvas(e.clientX, e.clientY);
         setLassoStart(pos);
         setLassoEnd(pos);
@@ -504,7 +542,7 @@ export function FigJamBoard({
         }
       }
 
-      if (state.activeTool === "section") {
+      if (state.activeTool === "section" && !isSilentVoting) {
         const pos = screenToCanvas(e.clientX, e.clientY);
         const sectionId = board.addSection({ x: pos.x - 240, y: pos.y - 160 });
         if (hasMapId && mapId) {
@@ -733,22 +771,44 @@ export function FigJamBoard({
   const sections = sorted.filter((el): el is SectionData    => el.type === "section");
   const others   = sorted.filter((el) => el.type !== "section");
   const stickies = others.filter((el): el is StickyNoteData => el.type === "sticky");
-  const dots = sorted.filter((el): el is DotData => el.type === "dot");
 
-  // Group dots by section and check if user already voted
-  const dotsBySection: Record<string, DotData[]> = {};
+  // Convex-based dots logic - SIMPLE VERSION
+  // In voting phase with silent mode: only show my dots
+  // In revealed phase: show all dots
+  const displayedDots = useMemo(() => {
+    if (!isVotingActive) return [];
+    if (votingPhase === "revealed") return allDots;
+    if (isSilentMode) return myDots;
+    return allDots;
+  }, [isVotingActive, votingPhase, isSilentMode, allDots, myDots]);
+
+  // Group dots by section
+  const dotsBySection: Record<string, DotVote[]> = {};
   const userHasVotedOn: Record<string, boolean> = {};
-  for (const dot of dots) {
-    if (dot.parentSectionId) {
-      if (!dotsBySection[dot.parentSectionId]) {
-        dotsBySection[dot.parentSectionId] = [];
-      }
-      dotsBySection[dot.parentSectionId].push(dot);
-      if (dot.ownerId === state.currentUserId) {
-        userHasVotedOn[dot.parentSectionId] = true;
-      }
+  for (const dot of displayedDots) {
+    if (dot.targetId) {
+      if (!dotsBySection[dot.targetId]) dotsBySection[dot.targetId] = [];
+      dotsBySection[dot.targetId].push(dot);
+      if (dot.userId === userId) userHasVotedOn[dot.targetId] = true;
     }
   }
+
+  // Vote results for ranking display
+  const voteResults = useMemo(() => {
+    if (votingPhase !== "revealed") return [];
+    return sections
+      .map(section => {
+        const sectionDots = dotsBySection[section.id] || [];
+        return {
+          sectionId: section.id,
+          title: section.title || "Untitled",
+          voteCount: sectionDots.length,
+          colors: sectionDots.map(d => d.color),
+        };
+      })
+      .filter(r => r.voteCount > 0)
+      .sort((a, b) => b.voteCount - a.voteCount);
+  }, [votingPhase, sections, dotsBySection]);
 
   // Which section is the dragging sticky hovering over?
   const hoveredSectionId = draggingStickyId
@@ -830,7 +890,11 @@ export function FigJamBoard({
         >
           {/* ── Remote cursors (inside transformed layer) ── */}
           {otherUsers
-            ?.filter((u: any) => Date.now() - u.lastSeen < OFFLINE_THRESHOLD_MS)
+            ?.filter((u: any) => {
+              // Hide cursors in silent mode during voting
+              if (isSilentMode && votingPhase === "voting") return false;
+              return Date.now() - u.lastSeen < OFFLINE_THRESHOLD_MS;
+            })
             .map((userData: any) => (
               <motion.div
                 key={userData.userId}
@@ -887,7 +951,8 @@ export function FigJamBoard({
               zoom={state.zoom}
               isSelected={state.selectedIds.includes(el.id)}
               isHovered={attachedSectionId === el.id}
-              isVotingMode={isVotingActive}
+              isVotingMode={isVotingActive && (votingPhase === "voting" || votingPhase === "revealed")}
+              isRevealed={votingPhase === "revealed"}
               isLocked={getLockInfo(el.id).isLocked}
               lockedByName={getLockInfo(el.id).lockedByName}
               onSelect={handleSelectWithLock}
@@ -913,8 +978,11 @@ export function FigJamBoard({
               onArrangeSection={(sectionId) => board.autoArrange(sectionId)}
               renameTrigger={renameSectionId}
               onRemoveDot={(dotId) => {
-                board.deleteElement(dotId);
-                setUsedDots(u => Math.max(0, u - 1));
+                // Convert string ID to Convex ID if needed
+                const dot = displayedDots.find(d => ("id" in d ? d.id : d._id) === dotId);
+                if (dot && "_id" in dot) {
+                  dotVoting.removeDot(dot._id);
+                }
               }}
             />
           ))}
@@ -1018,24 +1086,38 @@ export function FigJamBoard({
         votingConfig={votingConfig}
         onVotingConfigChange={setVotingConfig}
         isVotingActive={isVotingActive}
-        onStartVoting={() => {
-          // Clear previous vote dots before starting new vote
-          dots.forEach((dot) => board.deleteElement(dot.id));
-          setUsedDots(0);
-          setIsVotingActive(true);
+        votingPhase={votingPhase}
+        isCreator={isCreator}
+        remainingTime={remainingTime}
+        voteResults={voteResults}
+        onStartVoting={async (duration) => {
+          console.log('🎯 Starting vote with duration:', duration);
+          console.log('🎯 Current session:', dotVoting.session);
+          console.log('🎯 All dots:', dotVoting.allDots.length);
+          // Reset votes first
+          await dotVoting.resetMyVotes();
+          // Start a new voting session in Convex
+          await dotVoting.createSession(
+            "Voting Session",
+            votingConfig.dotsPerUser,
+            true, // silent mode by default
+            duration ?? undefined
+          );
+          console.log('🎯 Vote started, new session:', dotVoting.session);
         }}
-        onEndVoting={() => setIsVotingActive(false)}
+        onStopAndReveal={() => dotVoting.stopAndReveal()}
+        onStartNewVote={() => dotVoting.startNewVote()}
       />
 
       {/* Voting Dock */}
       <VotingDock
-        isActive={isVotingActive}
-        dotsPerUser={votingConfig.dotsPerUser}
-        usedDots={usedDots}
-        userColor="#22c55e"
+        isActive={isVotingActive && votingPhase === "voting"}
+        dotsPerUser={maxDotsPerUser}
+        usedDots={myDots.length}
+        userColor={userColor}
         disabledSections={userHasVotedOn}
-        onReset={() => setUsedDots(0)}
-        onDropDot={(sectionId) => {
+        onReset={() => dotVoting.resetMyVotes()}
+        onDropDot={async (sectionId) => {
           if (userHasVotedOn[sectionId]) return;
           const section = state.elements[sectionId] as SectionData;
           if (section) {
@@ -1046,15 +1128,13 @@ export function FigJamBoard({
             const maxY = section.size.height - TITLE_BAR_H - PADDING - dotSize;
             const dotX = section.position.x + PADDING + Math.random() * maxX;
             const dotY = section.position.y + TITLE_BAR_H + PADDING + Math.random() * maxY;
-            board.addDot({ x: dotX, y: dotY }, sectionId, "#22c55e");
-            setUsedDots(u => u + 1);
+            await dotVoting.placeDot(sectionId, { x: dotX, y: dotY });
           }
         }}
         onRemoveDot={(sectionId) => {
-          const sectionDots = dots.filter(d => d.parentSectionId === sectionId && d.ownerId === state.currentUserId);
+          const sectionDots = myDots.filter(d => d.targetId === sectionId);
           if (sectionDots.length > 0) {
-            board.deleteElement(sectionDots[0].id);
-            setUsedDots(u => Math.max(0, u - 1));
+            dotVoting.removeDot(sectionDots[0]._id);
           }
         }}
       />

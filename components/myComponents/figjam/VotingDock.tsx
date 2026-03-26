@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, GripVertical } from "lucide-react";
 
 interface VotingDockProps {
   isActive: boolean;
@@ -28,7 +28,6 @@ export function VotingDock({
   const remaining = dotsPerUser - usedDots;
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
-  const dockRef = useRef<HTMLDivElement>(null);
 
   const handleDragStart = useCallback((e: React.PointerEvent, index: number) => {
     if (remaining <= 0) return;
@@ -60,90 +59,75 @@ export function VotingDock({
 
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
-  }, [remaining, onDropDot]);
+  }, [remaining, disabledSections, onDropDot]);
+
+  if (!isActive) return null;
 
   return (
     <>
-      {/* Dragging dot follows cursor */}
       <AnimatePresence>
         {draggingIndex !== null && (
           <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            exit={{ scale: 0 }}
-            className="fixed w-10 h-10 rounded-full border-2 border-white shadow-2xl pointer-events-none z-[100]"
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            className="fixed w-12 h-12 rounded-full border-4 border-white shadow-2xl pointer-events-none z-[200]"
             style={{
-              left: dragPos.x - 20,
-              top: dragPos.y - 20,
+              left: dragPos.x - 24,
+              top: dragPos.y - 24,
               backgroundColor: userColor,
             }}
           />
         )}
       </AnimatePresence>
 
-      {/* Dock */}
-      <AnimatePresence>
-        {isActive && (
-          <motion.div
-            ref={dockRef}
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50"
-          >
-            <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 px-6 py-4">
-              <div className="flex items-center gap-6">
-                {/* Available dots */}
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">
-                    Drag to vote
-                  </span>
-                  <div className="flex gap-2">
-                    {Array.from({ length: remaining }).map((_, i) => (
-                      <motion.div
-                        key={i}
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ delay: i * 0.02 }}
-                        className="w-8 h-8 rounded-full border-2 border-white shadow-md cursor-grab active:cursor-grabbing"
-                        style={{ backgroundColor: userColor }}
-                        onPointerDown={(e) => handleDragStart(e, i)}
-                      />
-                    ))}
-                  </div>
-                </div>
+      <motion.div
+        initial={{ x: -100, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: -100, opacity: 0 }}
+        className="fixed left-4 bottom-4 z-40"
+      >
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-200/50 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <GripVertical className="w-4 h-4" />
+              <span className="font-medium text-xs">Drag to vote</span>
+            </div>
+            
+            <div className="h-5 w-px bg-gray-200" />
+            
+            <div className="flex gap-1.5">
+              {Array.from({ length: Math.max(0, remaining) }).map((_, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ scale: 0, y: 20 }}
+                  animate={{ scale: 1, y: 0 }}
+                  transition={{ delay: i * 0.05, type: "spring", stiffness: 300, damping: 20 }}
+                  className="w-8 h-8 rounded-full border-2 border-white shadow-md cursor-grab active:cursor-grabbing hover:scale-110 transition-transform"
+                  style={{ backgroundColor: userColor }}
+                  onPointerDown={(e) => handleDragStart(e, i)}
+                />
+              ))}
+            </div>
 
-                {/* Used dots */}
-                {usedDots > 0 && (
-                  <div className="flex items-center gap-2 border-l border-gray-200 pl-6">
-                    <span className="text-xs text-gray-400">Used</span>
-                    <div className="flex gap-1">
-                      {Array.from({ length: usedDots }).map((_, i) => (
-                        <div
-                          key={i}
-                          className="w-6 h-6 rounded-full border-2 border-white shadow-sm opacity-50"
-                          style={{ backgroundColor: userColor }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Reset */}
-                {usedDots > 0 && (
+            {usedDots > 0 && (
+              <>
+                <div className="h-5 w-px bg-gray-200" />
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-gray-400 font-medium">{usedDots}/{dotsPerUser}</span>
                   <button
                     onClick={onReset}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-gray-200"
+                    className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                    title="Reset your votes"
                   >
                     <RotateCcw className="w-3 h-3" />
-                    Reset
                   </button>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </motion.div>
     </>
   );
 }

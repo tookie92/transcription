@@ -467,6 +467,8 @@ export interface DotVotingSession {
   isActive: boolean;
   votingPhase: VotingPhase;
   isSilentMode: boolean;
+  durationMinutes?: number;
+  startTime?: number;
   createdBy: string;
   createdAt: number;
   updatedAt: number;

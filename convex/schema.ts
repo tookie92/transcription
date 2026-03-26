@@ -72,7 +72,11 @@ export default defineSchema({
     keyPoints: v.array(v.string()),
     recommendations: v.array(v.string()),
     mainThemes: v.array(v.string()),
-    criticalIssues: v.array(v.string()),
+    criticalIssues: v.array(v.union(v.string(), v.object({
+      issue: v.string(),
+      impact: v.optional(v.string()),
+      urgency: v.optional(v.string()),
+    }))),
     generatedAt: v.number(),
     })),
     // Shareable fields
@@ -167,7 +171,7 @@ export default defineSchema({
     updatedAt: v.number(),
   }),
 
- // pour le dot voting
+  // pour le dot voting
   // 🆕 Table Dot Voting Sessions
 dotVotingSessions: defineTable({
   projectId: v.id("projects"),
@@ -182,6 +186,8 @@ dotVotingSessions: defineTable({
     v.literal("completed")
   ),
   isSilentMode: v.boolean(),
+  durationMinutes: v.optional(v.number()),
+  startTime: v.optional(v.number()),
   createdBy: v.string(),
   createdAt: v.number(),
   updatedAt: v.number(),

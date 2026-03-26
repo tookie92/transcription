@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Minus, Plus, Clock } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Minus, Plus, Clock, EyeOff, Play, Square, RotateCcw } from "lucide-react";
 
 interface VotingConfig {
   dotsPerUser: number;
@@ -14,210 +15,221 @@ interface VotingSettingsProps {
   config: VotingConfig;
   onConfigChange: (config: VotingConfig) => void;
   isVotingActive?: boolean;
-  timerSeconds?: number;
-  onStartVoting?: () => void;
-  onEndVoting?: () => void;
+  votingPhase?: "setup" | "voting" | "revealed" | "completed";
+  isCreator?: boolean;
+  remainingTime?: number | null;
+  onStartVoting?: (durationMinutes?: number | null) => void;
+  onStopAndReveal?: () => void;
+  onStartNewVote?: () => void;
+}
+
+function formatTime(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
 export function VotingSettings({ 
   config, 
   onConfigChange,
   isVotingActive,
-  timerSeconds = 0,
+  votingPhase = "setup",
+  isCreator = false,
+  remainingTime = null,
   onStartVoting,
-  onEndVoting,
+  onStopAndReveal,
+  onStartNewVote,
 }: VotingSettingsProps) {
-  const [open, setOpen] = useState(false);
+  const [showConfigDialog, setShowConfigDialog] = useState(false);
   const [dots, setDots] = useState(config.dotsPerUser);
-  const [duration, setDuration] = useState(config.durationMinutes ?? 3);
-  const [hasDuration, setHasDuration] = useState(config.durationMinutes !== null);
-  const [localTimerSeconds, setLocalTimerSeconds] = useState(0);
+  const [duration, setDuration] = useState(3);
+  const [hasDuration, setHasDuration] = useState(false);
 
   useEffect(() => {
     setDots(config.dotsPerUser);
-    setDuration(config.durationMinutes ?? 3);
-    setHasDuration(config.durationMinutes !== null);
-  }, [config]);
+  }, [config.dotsPerUser]);
 
-  useEffect(() => {
-    if (isVotingActive && config.durationMinutes) {
-      setLocalTimerSeconds(config.durationMinutes * 60);
+  const getButtonContent = () => {
+    if (isVotingActive && votingPhase === "voting") {
+      if (remainingTime !== null && remainingTime > 0) {
+        return (
+          <span className="flex items-center gap-2">
+            <Clock className="w-4 h-4" />
+            <span className="font-mono text-sm">{formatTime(remainingTime)}</span>
+          </span>
+        );
+      }
+      return "Voting...";
     }
-  }, [isVotingActive, config.durationMinutes]);
+    
+    if (isVotingActive && votingPhase === "revealed") {
+      return (
+        <span className="flex items-center gap-2">
+          <RotateCcw className="w-4 h-4" />
+          New Vote
+        </span>
+      );
+    }
+    
+    return (
+      <span className="flex items-center gap-2">
+        <Play className="w-4 h-4" />
+        Start Vote
+      </span>
+    );
+  };
 
-  useEffect(() => {
-    if (!isVotingActive || !config.durationMinutes) return;
-    const interval = setInterval(() => {
-      setLocalTimerSeconds(prev => Math.max(0, prev - 1));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isVotingActive, config.durationMinutes]);
+  const getButtonAction = () => {
+    if (isVotingActive && votingPhase === "voting") {
+      return () => {};
+    }
+    
+    if (isVotingActive && votingPhase === "revealed") {
+      return () => onStartNewVote?.();
+    }
+    
+    return () => setShowConfigDialog(true);
+  };
 
-  const handleStartVoting = () => {
+  const handleStartVote = () => {
+    // Use the selected value from the dialog
+    const selectedDots = dots;
+    const selectedDuration = hasDuration ? duration : null;
+    
+    // Update local config
     onConfigChange({
-      dotsPerUser: dots,
-      durationMinutes: hasDuration ? duration : null,
+      dotsPerUser: selectedDots,
+      durationMinutes: selectedDuration,
     });
-    onStartVoting?.();
-    setOpen(false);
-  };
-
-  const adjustDots = (delta: number) => {
-    setDots(d => Math.max(1, Math.min(20, d + delta)));
-  };
-
-  const adjustDuration = (delta: number) => {
-    setDuration(d => Math.max(1, Math.min(60, d + delta)));
+    
+    // Start voting with selected values
+    onStartVoting?.(selectedDuration);
+    setShowConfigDialog(false);
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        {isVotingActive ? (
-          <Button 
-            variant="default" 
-            size="sm" 
-            className="gap-2 bg-green-600 hover:bg-green-700"
-          >
-            {config.durationMinutes ? (
-              <>
-                <Clock className="w-4 h-4" />
-                {Math.floor(localTimerSeconds / 60)}:{(localTimerSeconds % 60).toString().padStart(2, "0")}
-              </>
-            ) : (
-              <>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="6" fill="currentColor" fillOpacity="0.3"/>
-                  <circle cx="12" cy="12" r="3" fill="currentColor"/>
-                </svg>
-                Voting Active
-              </>
-            )}
-          </Button>
-        ) : (
-          <Button variant="default" size="sm" className="gap-2">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="6" fill="currentColor" fillOpacity="0.3"/>
-              <circle cx="12" cy="12" r="3" fill="currentColor"/>
-            </svg>
-            Start Voting
-          </Button>
-        )}
-      </PopoverTrigger>
-      
-      <PopoverContent className="w-80 p-4" align="end">
-        {isVotingActive ? (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-3 bg-green-50 rounded-xl border border-green-200">
-              <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
-              <div>
-                <p className="font-medium text-sm text-green-800">Voting in Progress</p>
-                <p className="text-xs text-green-600">{config.dotsPerUser} dots per user</p>
-              </div>
-            </div>
-            
-            {config.durationMinutes && (
-              <div className="px-4 py-3 rounded-xl bg-slate-100 text-center font-mono">
-                <span className="text-3xl font-bold text-slate-800">
-                  {Math.floor(localTimerSeconds / 60)}:{(localTimerSeconds % 60).toString().padStart(2, "0")}
-                </span>
-              </div>
-            )}
-            
-            <Button 
-              onClick={onEndVoting} 
-              variant="outline" 
-              className="w-full text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600"
-            >
-              End Voting
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-5">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary">
-                  <circle cx="12" cy="12" r="6" fill="currentColor" fillOpacity="0.3"/>
-                  <circle cx="12" cy="12" r="3" fill="currentColor"/>
-                </svg>
-              </div>
-              <h4 className="font-semibold text-sm">Vote Setup</h4>
-            </div>
+    <>
+      <Button
+        variant={isVotingActive && votingPhase === "voting" ? "default" : "default"}
+        size="sm"
+        className={`gap-2 ${isVotingActive && votingPhase === "voting" ? "bg-green-600 hover:bg-green-700" : ""}`}
+        onClick={getButtonAction()}
+      >
+        {getButtonContent()}
+      </Button>
 
-            {/* Dots */}
+      <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
+        <DialogContent className="w-80">
+          <DialogHeader>
+            <DialogTitle>Start Vote</DialogTitle>
+            <DialogDescription>
+              Configure your voting session
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dots per user</label>
-              <div className="flex items-center justify-center gap-3">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10 shrink-0"
-                  onClick={() => adjustDots(-1)}
-                >
+              <label className="text-sm font-medium">Dots per user</label>
+              <div className="flex items-center gap-3">
+                <Button variant="outline" size="icon" onClick={() => setDots(d => Math.max(1, d - 1))}>
                   <Minus className="h-4 w-4" />
                 </Button>
-                <div className="w-20 h-12 flex items-center justify-center border-2 rounded-xl bg-muted/50 font-bold text-2xl">
-                  {dots}
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10 shrink-0"
-                  onClick={() => adjustDots(1)}
-                >
+                <div className="w-12 text-center font-bold text-xl">{dots}</div>
+                <Button variant="outline" size="icon" onClick={() => setDots(d => Math.min(20, d + 1))}>
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
             </div>
 
-            {/* Duration */}
             <div className="space-y-2">
-              <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                <Clock className="h-3 w-3" />
-                Time limit (optional)
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <Clock className="w-4 h-4" />
+                Timer (optional)
               </label>
               <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={hasDuration}
-                  onChange={(e) => setHasDuration(e.target.checked)}
-                  className="rounded"
-                />
-                <span className="text-sm">Enable timer</span>
-              </div>
-              {hasDuration && (
-                <div className="flex items-center justify-center gap-3 mt-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-10 w-10 shrink-0"
-                    onClick={() => adjustDuration(-1)}
-                  >
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                  <div className="w-24 h-12 flex items-center justify-center border-2 rounded-xl bg-muted/50">
-                    <span className="font-bold text-lg">{duration}</span>
-                    <span className="text-sm text-muted-foreground ml-1">min</span>
+                <input type="checkbox" checked={hasDuration} onChange={(e) => setHasDuration(e.target.checked)} className="rounded" />
+                {hasDuration && (
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="icon" onClick={() => setDuration(d => Math.max(1, d - 1))}>
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <div className="w-8 text-center font-bold">{duration} min</div>
+                    <Button variant="outline" size="icon" onClick={() => setDuration(d => Math.min(60, d + 1))}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-10 w-10 shrink-0"
-                    onClick={() => adjustDuration(1)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
-            {/* Start */}
-            <Button onClick={handleStartVoting} className="w-full h-11 text-base font-medium">
-              Start Voting
-            </Button>
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <EyeOff className="w-4 h-4" />
+              Silent mode - votes hidden during voting
+            </div>
           </div>
-        )}
-      </PopoverContent>
-    </Popover>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfigDialog(false)}>Cancel</Button>
+            <Button onClick={handleStartVote} className="gap-2">
+              <Play className="w-4 h-4" />
+              Start
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {isVotingActive && votingPhase === "voting" && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="sm" className="text-xs text-gray-500">
+              {isCreator ? "You created" : "Participating"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-3" align="start">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-2 bg-green-50 rounded-lg">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-sm font-medium">Voting in progress</span>
+              </div>
+              <div className="text-xs text-gray-500">
+                {config.dotsPerUser} dots per user
+                {config.durationMinutes && ` • ${config.durationMinutes} min`}
+              </div>
+              {isCreator ? (
+                <Button onClick={onStopAndReveal} variant="outline" size="sm" className="w-full gap-2">
+                  <Square className="w-4 h-4" />
+                  End & Reveal
+                </Button>
+              ) : (
+                <div className="text-xs text-center text-gray-400">Waiting for creator...</div>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+      )}
+
+      {isVotingActive && votingPhase === "revealed" && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="sm" className="text-xs text-violet-500">Votes revealed</Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-3" align="start">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-2 bg-violet-50 rounded-lg">
+                <div className="w-2 h-2 rounded-full bg-violet-500" />
+                <span className="text-sm font-medium">Results visible</span>
+              </div>
+              {isCreator && (
+                <Button onClick={onStartNewVote} variant="outline" size="sm" className="w-full gap-2">
+                  <RotateCcw className="w-4 h-4" />
+                  Start New Vote
+                </Button>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+      )}
+    </>
   );
 }
