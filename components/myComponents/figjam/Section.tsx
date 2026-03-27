@@ -151,18 +151,21 @@ export function Section({
     const finalDx = info.offset.x / zoom;
     const finalDy = info.offset.y / zoom;
 
+    // Reset dragging flag - useEffect will reset motionX/motionY after state updates
+    isDraggingRef.current = false;
+
     if (Math.abs(finalDx) < 2 && Math.abs(finalDy) < 2) {
       onDragEnd?.(section.id);
+      // No movement - reset immediately
       motionX.set(0);
       motionY.set(0);
       return;
     }
 
+    // Update state - motionX/motionY will be reset by useEffect when section.position changes
     onMoveSectionWithChildren?.(section.id, finalDx, finalDy);
     onDragEnd?.(section.id);
-    
-    motionX.set(0);
-    motionY.set(0);
+    // DON'T reset motionX/motionY here - wait for React state to update
   }, [section.id, onDragEnd, onMoveSectionWithChildren, zoom, motionX, motionY]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
