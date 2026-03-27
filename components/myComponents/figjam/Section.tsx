@@ -10,10 +10,12 @@ import {
   ContextMenuTrigger,
   ContextMenuLabel,
 } from "@/components/ui/context-menu";
-import type { SectionData, DotData } from "@/types/figjam";
+import type { SectionData, DotData, StickyNoteData } from "@/types/figjam";
 import type { DotVote } from "@/types";
+import { StickyNote } from "./StickyNote";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Trophy } from "lucide-react";
+import { motion, useMotionValue, useTransform, PanInfo } from "framer-motion";
 
 export const SECTION_COLORS = [
   { bg: "#e8f4fd", border: "#90CAF9", label: "Blue"   },
@@ -28,6 +30,7 @@ export const SECTION_COLORS = [
 interface SectionProps {
   section: SectionData;
   dots?: (DotData | DotVote)[];
+  childStickies?: StickyNoteData[];
   voteCount?: number;
   hasUserVoted?: boolean;
   zoom: number;
@@ -40,6 +43,7 @@ interface SectionProps {
   onSelect: (id: string, multi: boolean) => void;
   onDragStart?: (id: string) => void;
   onDragEnd?: (id: string) => void;
+  onDragChange?: (id: string, offset: { x: number; y: number }) => void;
   onMoveWithChildren: (sectionId: string, dx: number, dy: number) => void;
   onMoveSelected?: (ids: string[], dx: number, dy: number) => void;
   onUpdate: (id: string, patch: Partial<SectionData>) => void;
@@ -51,11 +55,19 @@ interface SectionProps {
   onHoverChange?: (isHovered: boolean) => void;
   onVote?: (sectionId: string) => void;
   onUnvote?: (sectionId: string) => void;
+  onStickyUpdate?: (id: string, patch: Partial<StickyNoteData>) => void;
+  onStickyMove?: (id: string, pos: { x: number; y: number }) => void;
+  onStickyDelete?: (id: string) => void;
+  onStickyBringToFront?: (id: string) => void;
+  onStickySelect?: (id: string, multi: boolean) => void;
+  onStickyResize?: (id: string, size: { width: number; height: number }) => void;
+  onMoveSectionWithChildren?: (sectionId: string, dx: number, dy: number) => void;
 }
 
 export function Section({
   section,
   dots = [],
+  childStickies = [],
   voteCount = 0,
   hasUserVoted = false,
   zoom,
@@ -68,6 +80,7 @@ export function Section({
   onSelect,
   onDragStart,
   onDragEnd,
+  onDragChange,
   onMoveWithChildren,
   onMoveSelected,
   onUpdate,
@@ -79,6 +92,13 @@ export function Section({
   onHoverChange,
   onVote,
   onUnvote,
+  onStickyUpdate,
+  onStickyMove,
+  onStickyDelete,
+  onStickyBringToFront,
+  onStickySelect,
+  onStickyResize,
+  onMoveSectionWithChildren,
 }: SectionProps) {
   const [isHoveredLocal, setIsHoveredLocal] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -86,20 +106,17 @@ export function Section({
   const titleRef = useRef<HTMLInputElement>(null);
   const lastRenameTrigger = useRef<string | null>(null);
 
-  const [visualPosition, setVisualPosition] = useState({ x: section.position.x, y: section.position.y });
+  const motionX = useMotionValue(0);
+  const motionY = useMotionValue(0);
   const isDraggingRef = useRef(false);
-  const suppressSyncRef = useRef(false);
-  const lastUpdateTimeRef = useRef<number>(0);
+  const lastFrameRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     if (!isDraggingRef.current) {
-      suppressSyncRef.current = true;
-      setVisualPosition({ x: section.position.x, y: section.position.y });
-      requestAnimationFrame(() => {
-        suppressSyncRef.current = false;
-      });
+      motionX.set(0);
+      motionY.set(0);
     }
-  }, [section.position]);
+  }, [section.position, motionX, motionY]);
 
   if (renameTrigger !== lastRenameTrigger.current) {
     lastRenameTrigger.current = renameTrigger ?? null;
@@ -117,88 +134,59 @@ export function Section({
 
   const autoResize = section.autoResize ?? false;
 
-  const lastClickTime = useRef(0);
-  const lastDxRef = useRef(0);
-  const lastDyRef = useRef(0);
+  const startPosRef = useRef({ x: 0, y: 0 });
 
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      if (isLocked || isEditingTitle) return;
-      if (e.button !== 0) return;
+  const handleDragStart = useCallback(() => {
+    isDraggingRef.current = true;
+    startPosRef.current = { x: section.position.x, y: section.position.y };
+    onDragStart?.(section.id);
+  }, [section.id, onDragStart, section.position]);
 
-      const target = e.target as HTMLElement;
-      const isOnTitle = target.closest('span');
-      const now = Date.now();
-      const isDoubleClick = isOnTitle && (now - lastClickTime.current < 300);
-      lastClickTime.current = now;
+  const handleDrag = useCallback((_: unknown, info: PanInfo) => {
+    // Don't update board state during drag - Framer Motion handles visual
+    // Just track for potential multi-select
+  }, []);
 
-      if (isDoubleClick) return;
+  const handleDragEnd = useCallback((_: unknown, info: PanInfo) => {
+    const finalDx = info.offset.x / zoom;
+    const finalDy = info.offset.y / zoom;
 
-      e.stopPropagation();
+    if (Math.abs(finalDx) < 2 && Math.abs(finalDy) < 2) {
+      onDragEnd?.(section.id);
+      motionX.set(0);
+      motionY.set(0);
+      return;
+    }
 
-      const multi = e.shiftKey || e.ctrlKey || e.metaKey;
+    onMoveSectionWithChildren?.(section.id, finalDx, finalDy);
+    onDragEnd?.(section.id);
+    
+    motionX.set(0);
+    motionY.set(0);
+  }, [section.id, onDragEnd, onMoveSectionWithChildren, zoom, motionX, motionY]);
 
-      if (multi) {
-        onSelect(section.id, true);
-        return;
-      }
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    if (isLocked || isEditingTitle) return;
+    if (e.button !== 0) return;
 
-      e.currentTarget.setPointerCapture(e.pointerId);
+    const target = e.target as HTMLElement;
+    const isOnTitle = target.closest('span');
+    const now = Date.now();
+    const isDoubleClick = isOnTitle && (now - (handlePointerDown as any).lastClickTime < 300);
+    (handlePointerDown as any).lastClickTime = now;
+
+    if (isDoubleClick) return;
+
+    e.stopPropagation();
+
+    const multi = e.shiftKey || e.ctrlKey || e.metaKey;
+
+    if (multi) {
+      onSelect(section.id, true);
+    } else {
       onSelect(section.id, false);
-
-      isDraggingRef.current = true;
-      suppressSyncRef.current = true;
-      onDragStart?.(section.id);
-
-      const startClientX = e.clientX;
-      const startClientY = e.clientY;
-      // Use current visual position as start
-      const startPos = { ...visualPosition };
-
-      const isMultiSelect = selectedIds.length > 1 && selectedIds.includes(section.id);
-
-      const onMovePtr = (mv: PointerEvent) => {
-        if (!isDraggingRef.current) {
-          const totalDx = (mv.clientX - startClientX) / zoom;
-          const totalDy = (mv.clientY - startClientY) / zoom;
-          const totalMoved = Math.sqrt(totalDx * totalDx + totalDy * totalDy);
-          if (totalMoved < 3) return;
-          isDraggingRef.current = true;
-        }
-
-        const totalDx = (mv.clientX - startClientX) / zoom;
-        const totalDy = (mv.clientY - startClientY) / zoom;
-        const frameDx = totalDx - lastDxRef.current;
-        const frameDy = totalDy - lastDyRef.current;
-        lastDxRef.current = totalDx;
-        lastDyRef.current = totalDy;
-
-        const newVisualPos = {
-          x: startPos.x + totalDx,
-          y: startPos.y + totalDy,
-        };
-        setVisualPosition(newVisualPos);
-
-        if (isMultiSelect && onMoveSelected) {
-          onMoveSelected(selectedIds, frameDx, frameDy);
-        } else {
-          onMoveWithChildren(section.id, frameDx, frameDy);
-        }
-      };
-
-      const onUp = () => {
-        isDraggingRef.current = false;
-        suppressSyncRef.current = false;
-        onDragEnd?.(section.id);
-        window.removeEventListener("pointermove", onMovePtr);
-        window.removeEventListener("pointerup", onUp);
-      };
-
-      window.addEventListener("pointermove", onMovePtr);
-      window.addEventListener("pointerup", onUp);
-    },
-    [isEditingTitle, section.id, zoom, onSelect, onDragStart, onDragEnd, onMoveWithChildren, onMoveSelected, selectedIds, visualPosition]
-  );
+    }
+  }, [isLocked, isEditingTitle, onSelect, section.id]);
 
   const handleResizePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -236,17 +224,24 @@ export function Section({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div
+        <motion.div
           className="absolute"
           data-section-id={section.id}
+          drag={!isLocked && !isEditingTitle && !isVotingMode}
+          dragMomentum={false}
+          dragElastic={0}
+          onDragStart={handleDragStart}
+          onDrag={handleDrag}
+          onDragEnd={handleDragEnd}
           style={{
-            left:   visualPosition.x,
-            top:    visualPosition.y,
-            width:  section.size.width,
+            x: motionX,
+            y: motionY,
+            left: section.position.x,
+            top: section.position.y,
+            width: section.size.width,
             height: section.size.height,
             zIndex: section.zIndex,
-            filter: isDraggingRef.current ? "drop-shadow(0 8px 24px rgba(0,0,0,0.12))" : "none",
-            transition: "none",
+            cursor: isVotingMode && !isRevealed ? "pointer" : "grab",
           }}
           onMouseEnter={() => {
             setIsHoveredLocal(true);
@@ -256,25 +251,22 @@ export function Section({
             setIsHoveredLocal(false);
             onHoverChange?.(false);
           }}
+          onPointerDown={handlePointerDown}
+          onClick={() => {
+            if (isVotingMode && !isRevealed && !hasUserVoted && onVote) {
+              onVote(section.id);
+            } else if (isVotingMode && !isRevealed && hasUserVoted && onUnvote) {
+              onUnvote(section.id);
+            }
+          }}
         >
           <div
             className="w-full h-full rounded-xl flex flex-col"
             style={{
               background: colorConfig.bg,
               border,
-              cursor: isDraggingRef.current 
-                ? "grabbing" 
-                : (isVotingMode && !isRevealed ? "pointer" : "grab"),
               boxShadow: isHovered ? `0 0 0 3px ${colorConfig.border}88` : "none",
               transition: "box-shadow 0.15s ease, border 0.15s ease",
-            }}
-            onPointerDown={handlePointerDown}
-            onClick={() => {
-              if (isVotingMode && !isRevealed && !hasUserVoted && onVote) {
-                onVote(section.id);
-              } else if (isVotingMode && !isRevealed && hasUserVoted && onUnvote) {
-                onUnvote(section.id);
-              }
             }}
           >
             <div
@@ -452,6 +444,36 @@ export function Section({
               );
             })}
 
+            {childStickies.map((sticky) => (
+              <StickyNote
+                key={sticky.id}
+                note={{
+                  ...sticky,
+                  position: {
+                    x: sticky.position.x - section.position.x,
+                    y: sticky.position.y - section.position.y,
+                  },
+                }}
+                zoom={zoom}
+                isSelected={selectedIds?.includes(sticky.id) ?? false}
+                isLocked={false}
+                onSelect={(id, multi) => onStickySelect?.(id, multi)}
+                onMove={(id, pos) => {
+                  onStickyMove?.(id, {
+                    x: pos.x + section.position.x,
+                    y: pos.y + section.position.y,
+                  });
+                }}
+                onUpdate={(id, patch) => {
+                  onStickyUpdate?.(id, patch as any);
+                }}
+                onDelete={(id) => onStickyDelete?.(id)}
+                onBringToFront={(id) => onStickyBringToFront?.(id)}
+                onResize={(id, size) => onStickyResize?.(id, size)}
+                onDuplicate={() => {}}
+              />
+            ))}
+
             <div
               className="absolute bottom-2 left-3 text-[10px] text-gray-300 select-none pointer-events-none"
               style={{ fontFamily: "monospace" }}
@@ -469,7 +491,7 @@ export function Section({
               <path d="M2 8 L8 8 L8 2" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
           </div>
-        </div>
+        </motion.div>
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onSelect={() => {

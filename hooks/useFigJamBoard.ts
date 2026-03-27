@@ -239,12 +239,16 @@ function reducer(state: BoardState, action: Action): BoardState {
       const sections = Object.values(elements).filter(
         (el): el is SectionData => el.type === "section"
       );
+
+      const sectionsBeingMoved = new Set<string>();
+      const stickiesBeingMoved = new Set<string>();
       
       for (const id of action.ids) {
         const el = elements[id];
         if (!el) continue;
         
         if (el.type === "section") {
+          sectionsBeingMoved.add(id);
           const section = el as SectionData;
           elements[id] = {
             ...section,
@@ -255,6 +259,7 @@ function reducer(state: BoardState, action: Action): BoardState {
             updatedAt: now(),
           };
         } else if (el.type === "sticky") {
+          stickiesBeingMoved.add(id);
           const sticky = el as StickyNoteData;
           const newPos = {
             x: sticky.position.x + action.dx,
@@ -264,7 +269,6 @@ function reducer(state: BoardState, action: Action): BoardState {
 
           let newParentSectionId: string | null = sticky.parentSectionId;
 
-          // If attached, check if still inside
           if (sticky.parentSectionId) {
             const parentSection = elements[sticky.parentSectionId] as SectionData | undefined;
             if (parentSection && parentSection.type === "section") {
@@ -274,7 +278,6 @@ function reducer(state: BoardState, action: Action): BoardState {
             }
           }
 
-          // If not attached, check if now inside a section
           if (!newParentSectionId) {
             for (const section of sections) {
               if (isInsideSection(tempSticky, section)) {
@@ -292,7 +295,41 @@ function reducer(state: BoardState, action: Action): BoardState {
           };
         }
       }
-      
+
+      sectionsBeingMoved.forEach((sectionId) => {
+        const stickies = Object.values(elements).filter(
+          (el): el is StickyNoteData => el.type === "sticky"
+        );
+        for (const sticky of stickies) {
+          if (sticky.parentSectionId === sectionId && !stickiesBeingMoved.has(sticky.id)) {
+            elements[sticky.id] = {
+              ...sticky,
+              position: {
+                x: sticky.position.x + action.dx,
+                y: sticky.position.y + action.dy,
+              },
+              updatedAt: now(),
+            };
+          }
+        }
+
+        const dots = Object.values(elements).filter(
+          (el): el is DotData => el.type === "dot"
+        );
+        for (const dot of dots) {
+          if (dot.parentSectionId === sectionId) {
+            elements[dot.id] = {
+              ...dot,
+              position: {
+                x: dot.position.x + action.dx,
+                y: dot.position.y + action.dy,
+              },
+              updatedAt: now(),
+            };
+          }
+        }
+      });
+
       return { ...state, elements };
     }
 

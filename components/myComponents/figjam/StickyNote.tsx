@@ -79,6 +79,7 @@ interface StickyNoteProps {
   onDragEnd?: (id: string) => void;
   dragBounds?: { minX: number; minY: number; maxX: number; maxY: number };
   selectedIds?: string[];
+  parentVisualOffset?: { x: number; y: number };
 }
 
 // ─── Auto-sizing text hook (simplified) ─────────────────────────────────────
@@ -113,6 +114,7 @@ export function StickyNote({
   selectedIds = [],
   isLocked = false,
   lockedByName,
+  parentVisualOffset,
 }: StickyNoteProps) {
   const colors = STICKY_COLORS[note.color];
   const stickySize = note.size ?? { width: 200, height: 200 };
@@ -157,6 +159,16 @@ export function StickyNote({
   });
 
   const isDragging = isDraggingRef.current;
+
+  const displayPosition = useMemo(() => {
+    if (parentVisualOffset) {
+      return {
+        x: visualPosition.x + parentVisualOffset.x,
+        y: visualPosition.y + parentVisualOffset.y,
+      };
+    }
+    return visualPosition;
+  }, [visualPosition, parentVisualOffset]);
 
   const handleDoubleClick = useCallback(() => {
     if (isLocked) return;
@@ -235,8 +247,8 @@ export function StickyNote({
       ref={containerRef}
       className="absolute group"
       style={{
-        left: visualPosition.x,
-        top: visualPosition.y,
+        left: displayPosition.x,
+        top: displayPosition.y,
         zIndex: note.zIndex,
         cursor: isVotingMode ? "default" : cursorStyle,
         opacity: isVotingMode ? 0.6 : 1,

@@ -130,6 +130,7 @@ export function FigJamBoard({
   const lastProcessedTimestampRef = useRef<number>(0);
 
   const draggingRef = useRef<Set<string>>(new Set());
+  const sectionDragOffsetsRef = useRef<Record<string, { x: number; y: number } | undefined>>({});
 
   const isDraggingElement = useCallback((id: string) => {
     return draggingRef.current.has(id);
@@ -1023,6 +1024,7 @@ export function FigJamBoard({
               key={el.id}
               section={el}
               dots={dotsBySectionAll[el.id] || []}
+              childStickies={stickies.filter(s => s.parentSectionId === el.id)}
               voteCount={(dotsBySectionAll[el.id] || []).length}
               hasUserVoted={userHasVotedOn[el.id] ?? false}
               zoom={state.zoom}
@@ -1039,6 +1041,7 @@ export function FigJamBoard({
               onDragEnd={(id) => {
                 draggingRef.current.delete(id);
               }}
+              onDragChange={() => {}}
               onMoveWithChildren={(sectionId, dx, dy) => {
                 board.moveSectionWithChildren(sectionId, dx, dy);
                 const section = state.elements[sectionId] as any;
@@ -1059,7 +1062,32 @@ export function FigJamBoard({
               }}
               onDelete={board.deleteElement}
               onArrangeSection={(sectionId) => board.autoArrange(sectionId)}
+              onMoveSectionWithChildren={(sectionId, dx, dy) => {
+                board.moveSectionWithChildren(sectionId, dx, dy);
+                const section = state.elements[sectionId] as any;
+                if (section?.position) {
+                  throttledBroadcast(sectionId, "section", "move", {
+                    x: section.position.x + dx,
+                    y: section.position.y + dy,
+                  });
+                }
+              }}
               renameTrigger={renameSectionId}
+              onStickySelect={handleSelectWithLock}
+              onStickyMove={(id, pos) => {
+                board.moveSticky(id, pos);
+                throttledBroadcast(id, "sticky", "move", pos);
+              }}
+              onStickyUpdate={(id, patch) => {
+                board.updateElement(id, patch as any);
+                throttledBroadcast(id, "sticky", "update", patch.position, patch.size, patch);
+              }}
+              onStickyDelete={board.deleteElement}
+              onStickyBringToFront={board.bringToFront}
+              onStickyResize={(id, size) => {
+                board.updateElement(id, { size } as any);
+                throttledBroadcast(id, "sticky", "resize", undefined, size);
+              }}
               onRemoveDot={(dotId) => {
                 const dot = displayedDots.find(d => ("id" in d ? d.id : d._id) === dotId);
                 if (dot && "_id" in dot) {
@@ -1090,8 +1118,8 @@ export function FigJamBoard({
             />
           ))}
 
-          {/* ── Sticky notes ── */}
-          {stickies.map((el) => (
+          {/* ── Sticky notes (only orphan ones - those in sections are rendered inside Section) ── */}
+          {stickies.filter(s => !s.parentSectionId).map((el) => (
             <StickyNote
               key={el.id}
               note={el}
@@ -1139,6 +1167,11 @@ export function FigJamBoard({
                 setDraggingStickyId(null);
               }}
               dragBounds={getStickyDragBounds(el)}
+              parentVisualOffset={
+                el.parentSectionId && draggingRef.current.has(el.parentSectionId)
+                  ? sectionDragOffsetsRef.current[el.parentSectionId]
+                  : undefined
+              }
             />
           ))}
         </div>
