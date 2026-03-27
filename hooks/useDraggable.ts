@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import type { Position } from "../types/figjam";
 
 interface DragBounds {
@@ -19,24 +19,18 @@ interface UseDraggableOptions {
   onDragStart?: (id: string) => void;
   onDragEnd?: (id: string) => void;
   disabled?: boolean;
-  /** Optional bounds to constrain dragging (useful for stickies in auto-resize sections) */
   bounds?: DragBounds;
-  /** Sticky dimensions for bounds calculation */
   stickyWidth?: number;
   stickyHeight?: number;
-  /** IDs of all currently selected elements (for multi-selection drag) */
   selectedIds?: string[];
+  noMomentum?: boolean;
 }
 
 interface UseDraggableReturn {
-  isDragging: boolean;
+  visualPosition: Position;
   handlePointerDown: (e: React.PointerEvent) => void;
 }
 
-/**
- * Makes a FigJam element draggable on the infinite canvas.
- * Accounts for canvas zoom so 1px drag = 1/zoom canvas units.
- */
 export function useDraggable({
   id,
   position,
@@ -51,10 +45,24 @@ export function useDraggable({
   stickyHeight = 180,
   selectedIds = [],
 }: UseDraggableOptions): UseDraggableReturn {
-  const [isDragging, setIsDragging] = useState(false);
-  const startPointer = useRef<Position>({ x: 0, y: 0 });
-  const lastPointer = useRef<Position>({ x: 0, y: 0 });
-  const startPos = useRef<Position>(position);
+  const [visualPosition, setVisualPosition] = useState<Position>({ ...position });
+
+  const startPointerRef = useRef<Position>({ x: 0, y: 0 });
+  const startPositionRef = useRef<Position>({ x: 0, y: 0 });
+  const lastFramePointerRef = useRef<Position>({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+  const suppressSyncRef = useRef(false);
+  const lastUpdateTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!isDraggingRef.current) {
+      suppressSyncRef.current = true;
+      setVisualPosition({ ...position });
+      requestAnimationFrame(() => {
+        suppressSyncRef.current = false;
+      });
+    }
+  }, [position]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -64,52 +72,81 @@ export function useDraggable({
       e.stopPropagation();
       e.currentTarget.setPointerCapture(e.pointerId);
 
-      startPointer.current = { x: e.clientX, y: e.clientY };
-      lastPointer.current = { x: e.clientX, y: e.clientY };
-      startPos.current = { ...position };
-      setIsDragging(true);
+      isDraggingRef.current = true;
+      suppressSyncRef.current = true;
+
+      const currentPos = visualPosition;
+      startPointerRef.current = { x: e.clientX, y: e.clientY };
+      startPositionRef.current = { ...currentPos };
+      lastFramePointerRef.current = { x: e.clientX, y: e.clientY };
+      lastUpdateTimeRef.current = Date.now();
+
       onDragStart?.(id);
 
       const isMultiSelect = selectedIds.length > 1 && selectedIds.includes(id);
 
-      const onMove_ = (moveEvent: PointerEvent) => {
-        // Frame delta for multi-select (only the increment since last frame)
-        const frameDx = (moveEvent.clientX - lastPointer.current.x) / zoom;
-        const frameDy = (moveEvent.clientY - lastPointer.current.y) / zoom;
-        lastPointer.current = { x: moveEvent.clientX, y: moveEvent.clientY };
+      const MIN_MOVE_THRESHOLD = 2;
+
+      const onPointerMove = (moveEvent: PointerEvent) => {
+        const totalDx = (moveEvent.clientX - startPointerRef.current.x) / zoom;
+        const totalDy = (moveEvent.clientY - startPointerRef.current.y) / zoom;
+
+        if (!isDraggingRef.current) {
+          const moved = Math.abs(totalDx) + Math.abs(totalDy);
+          if (moved > MIN_MOVE_THRESHOLD) {
+            isDraggingRef.current = true;
+          } else {
+            return;
+          }
+        }
 
         if (isMultiSelect && onMoveSelected) {
-          // Move all selected elements together by the frame delta
+          const frameDx = (moveEvent.clientX - lastFramePointerRef.current.x) / zoom;
+          const frameDy = (moveEvent.clientY - lastFramePointerRef.current.y) / zoom;
+          lastFramePointerRef.current = { x: moveEvent.clientX, y: moveEvent.clientY };
+
           onMoveSelected(selectedIds, frameDx, frameDy);
         } else {
-          // Single element move - use total delta from drag start
-          const totalDx = (moveEvent.clientX - startPointer.current.x) / zoom;
-          const totalDy = (moveEvent.clientY - startPointer.current.y) / zoom;
-          let newX = startPos.current.x + totalDx;
-          let newY = startPos.current.y + totalDy;
+          let newX = startPositionRef.current.x + totalDx;
+          let newY = startPositionRef.current.y + totalDy;
 
-          // Apply bounds constraint if provided
           if (bounds) {
             newX = Math.max(bounds.minX, Math.min(bounds.maxX - stickyWidth, newX));
             newY = Math.max(bounds.minY, Math.min(bounds.maxY - stickyHeight, newY));
           }
 
-          onMove(id, { x: newX, y: newY });
+          setVisualPosition({ x: newX, y: newY });
+
+          const now = Date.now();
+          if (now - lastUpdateTimeRef.current > 50) {
+            lastUpdateTimeRef.current = now;
+            onMove(id, { x: newX, y: newY });
+          }
         }
       };
 
-      const onUp = () => {
-        setIsDragging(false);
+      const onPointerUp = () => {
+        isDraggingRef.current = false;
+        suppressSyncRef.current = false;
+
+        if (isDraggingRef.current) {
+          const currentPos = visualPosition;
+          onMove(id, { x: currentPos.x, y: currentPos.y });
+        }
+
         onDragEnd?.(id);
-        window.removeEventListener("pointermove", onMove_);
-        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
       };
 
-      window.addEventListener("pointermove", onMove_);
-      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
     },
-    [disabled, id, position, zoom, onMove, onMoveSelected, onDragStart, onDragEnd, bounds, stickyWidth, stickyHeight, selectedIds]
+    [disabled, id, zoom, onMove, onMoveSelected, onDragStart, onDragEnd, bounds, stickyWidth, stickyHeight, selectedIds, visualPosition]
   );
 
-  return { isDragging, handlePointerDown };
+  return {
+    visualPosition,
+    handlePointerDown
+  };
 }

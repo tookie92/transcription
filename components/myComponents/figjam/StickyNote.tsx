@@ -130,7 +130,8 @@ export function StickyNote({
   // Auto-size font to fit
   const fontSize = useAutoFontSize(note.content, textAreaWidth, textAreaHeight);
 
-  const { isDragging, handlePointerDown } = useDraggable({
+  const isDraggingRef = useRef(false);
+  const { visualPosition, handlePointerDown } = useDraggable({
     id: note.id,
     position: note.position,
     zoom,
@@ -138,12 +139,14 @@ export function StickyNote({
     onMoveSelected,
     onDragStart: (id) => {
       if (isLocked) return;
+      isDraggingRef.current = true;
       onSelect(id, false);
       onBringToFront(id);
       setShowMenu(false);
       onDragStart?.(id);
     },
     onDragEnd: (id) => {
+      isDraggingRef.current = false;
       onDragEnd?.(id);
     },
     disabled: isEditing || isResizing || isLocked,
@@ -152,6 +155,8 @@ export function StickyNote({
     stickyHeight: stickySize.height,
     selectedIds,
   });
+
+  const isDragging = isDraggingRef.current;
 
   const handleDoubleClick = useCallback(() => {
     if (isLocked) return;
@@ -230,8 +235,8 @@ export function StickyNote({
       ref={containerRef}
       className="absolute group"
       style={{
-        left: note.position.x,
-        top: note.position.y,
+        left: visualPosition.x,
+        top: visualPosition.y,
         zIndex: note.zIndex,
         cursor: isVotingMode ? "default" : cursorStyle,
         opacity: isVotingMode ? 0.6 : 1,
@@ -242,7 +247,7 @@ export function StickyNote({
           ? "drop-shadow(0 4px 12px rgba(0,0,0,0.15))"
           : "drop-shadow(0 2px 8px rgba(0,0,0,0.1))",
         transform: isDragging ? "rotate(-2deg) scale(1.02)" : "rotate(0deg)",
-        transition: isDragging ? "none" : "transform 0.15s ease, filter 0.15s ease, opacity 0.15s ease",
+        transition: "none",
       }}
       onPointerDown={isVotingMode ? undefined : handlePointerDownWrapper}
       onDoubleClick={isVotingMode ? undefined : handleDoubleClick}

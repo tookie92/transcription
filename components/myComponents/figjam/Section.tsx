@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useRef, useState, useEffect } from "react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -38,6 +38,8 @@ interface SectionProps {
   isLocked?: boolean;
   lockedByName?: string;
   onSelect: (id: string, multi: boolean) => void;
+  onDragStart?: (id: string) => void;
+  onDragEnd?: (id: string) => void;
   onMoveWithChildren: (sectionId: string, dx: number, dy: number) => void;
   onMoveSelected?: (ids: string[], dx: number, dy: number) => void;
   onUpdate: (id: string, patch: Partial<SectionData>) => void;
@@ -64,6 +66,8 @@ export function Section({
   isLocked = false,
   lockedByName,
   onSelect,
+  onDragStart,
+  onDragEnd,
   onMoveWithChildren,
   onMoveSelected,
   onUpdate,
@@ -79,9 +83,23 @@ export function Section({
   const [isHoveredLocal, setIsHoveredLocal] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
   const lastRenameTrigger = useRef<string | null>(null);
+
+  const [visualPosition, setVisualPosition] = useState({ x: section.position.x, y: section.position.y });
+  const isDraggingRef = useRef(false);
+  const suppressSyncRef = useRef(false);
+  const lastUpdateTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!isDraggingRef.current) {
+      suppressSyncRef.current = true;
+      setVisualPosition({ x: section.position.x, y: section.position.y });
+      requestAnimationFrame(() => {
+        suppressSyncRef.current = false;
+      });
+    }
+  }, [section.position]);
 
   if (renameTrigger !== lastRenameTrigger.current) {
     lastRenameTrigger.current = renameTrigger ?? null;
@@ -100,7 +118,8 @@ export function Section({
   const autoResize = section.autoResize ?? false;
 
   const lastClickTime = useRef(0);
-  const isDraggingRef = useRef(false);
+  const lastDxRef = useRef(0);
+  const lastDyRef = useRef(0);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -127,10 +146,14 @@ export function Section({
       e.currentTarget.setPointerCapture(e.pointerId);
       onSelect(section.id, false);
 
+      isDraggingRef.current = true;
+      suppressSyncRef.current = true;
+      onDragStart?.(section.id);
+
       const startClientX = e.clientX;
       const startClientY = e.clientY;
-      let lastDx = 0;
-      let lastDy = 0;
+      // Use current visual position as start
+      const startPos = { ...visualPosition };
 
       const isMultiSelect = selectedIds.length > 1 && selectedIds.includes(section.id);
 
@@ -141,15 +164,20 @@ export function Section({
           const totalMoved = Math.sqrt(totalDx * totalDx + totalDy * totalDy);
           if (totalMoved < 3) return;
           isDraggingRef.current = true;
-          setIsDragging(true);
         }
 
         const totalDx = (mv.clientX - startClientX) / zoom;
         const totalDy = (mv.clientY - startClientY) / zoom;
-        const frameDx = totalDx - lastDx;
-        const frameDy = totalDy - lastDy;
-        lastDx = totalDx;
-        lastDy = totalDy;
+        const frameDx = totalDx - lastDxRef.current;
+        const frameDy = totalDy - lastDyRef.current;
+        lastDxRef.current = totalDx;
+        lastDyRef.current = totalDy;
+
+        const newVisualPos = {
+          x: startPos.x + totalDx,
+          y: startPos.y + totalDy,
+        };
+        setVisualPosition(newVisualPos);
 
         if (isMultiSelect && onMoveSelected) {
           onMoveSelected(selectedIds, frameDx, frameDy);
@@ -160,7 +188,8 @@ export function Section({
 
       const onUp = () => {
         isDraggingRef.current = false;
-        setIsDragging(false);
+        suppressSyncRef.current = false;
+        onDragEnd?.(section.id);
         window.removeEventListener("pointermove", onMovePtr);
         window.removeEventListener("pointerup", onUp);
       };
@@ -168,7 +197,7 @@ export function Section({
       window.addEventListener("pointermove", onMovePtr);
       window.addEventListener("pointerup", onUp);
     },
-    [isEditingTitle, section.id, zoom, onSelect, onMoveWithChildren, onMoveSelected, selectedIds]
+    [isEditingTitle, section.id, zoom, onSelect, onDragStart, onDragEnd, onMoveWithChildren, onMoveSelected, selectedIds, visualPosition]
   );
 
   const handleResizePointerDown = useCallback(
@@ -211,13 +240,13 @@ export function Section({
           className="absolute"
           data-section-id={section.id}
           style={{
-            left:   section.position.x,
-            top:    section.position.y,
+            left:   visualPosition.x,
+            top:    visualPosition.y,
             width:  section.size.width,
             height: section.size.height,
             zIndex: section.zIndex,
-            filter: isDragging ? "drop-shadow(0 8px 24px rgba(0,0,0,0.12))" : "none",
-            transition: isDragging ? "none" : "filter 0.2s ease",
+            filter: isDraggingRef.current ? "drop-shadow(0 8px 24px rgba(0,0,0,0.12))" : "none",
+            transition: "none",
           }}
           onMouseEnter={() => {
             setIsHoveredLocal(true);
@@ -233,7 +262,7 @@ export function Section({
             style={{
               background: colorConfig.bg,
               border,
-              cursor: isDragging 
+              cursor: isDraggingRef.current 
                 ? "grabbing" 
                 : (isVotingMode && !isRevealed ? "pointer" : "grab"),
               boxShadow: isHovered ? `0 0 0 3px ${colorConfig.border}88` : "none",

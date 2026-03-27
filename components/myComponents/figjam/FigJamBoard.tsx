@@ -129,6 +129,12 @@ export function FigJamBoard({
   // Track last processed movement timestamp to avoid duplicates
   const lastProcessedTimestampRef = useRef<number>(0);
 
+  const draggingRef = useRef<Set<string>>(new Set());
+
+  const isDraggingElement = useCallback((id: string) => {
+    return draggingRef.current.has(id);
+  }, []);
+
   const [draggingStickyId, setDraggingStickyId] = useState<string | null>(null);
 
   const [lassoStart, setLassoStart] = useState<Position | null>(null);
@@ -396,20 +402,16 @@ export function FigJamBoard({
   useEffect(() => {
     if (!recentMovements || recentMovements.length === 0) return;
     
-    // Apply movements from other users (skip if older than what we have)
     for (const movement of recentMovements) {
-      // Skip our own movements
       if (movement.userId === userId) continue;
-      
-      // Skip old movements
       if (movement.timestamp <= lastProcessedTimestampRef.current) continue;
       lastProcessedTimestampRef.current = movement.timestamp;
-      
-      // Skip if element was deleted locally
+
       const element = state.elements[movement.elementId];
       if (!element) continue;
+
+      if (isDraggingElement(movement.elementId)) continue;
       
-      // Apply the movement update
       if (movement.action === "move" && movement.position) {
         board.updateElement(movement.elementId, {
           position: movement.position,
@@ -422,7 +424,7 @@ export function FigJamBoard({
         board.updateElement(movement.elementId, movement.patch as any);
       }
     }
-  }, [recentMovements, userId]);
+  }, [recentMovements, userId, isDraggingElement]);
 
   // ============================================
   // Unlock elements when deselecting
@@ -1031,6 +1033,12 @@ export function FigJamBoard({
               isLocked={getLockInfo(el.id).isLocked}
               lockedByName={getLockInfo(el.id).lockedByName}
               onSelect={handleSelectWithLock}
+              onDragStart={(id) => {
+                draggingRef.current.add(id);
+              }}
+              onDragEnd={(id) => {
+                draggingRef.current.delete(id);
+              }}
               onMoveWithChildren={(sectionId, dx, dy) => {
                 board.moveSectionWithChildren(sectionId, dx, dy);
                 const section = state.elements[sectionId] as any;
@@ -1053,7 +1061,6 @@ export function FigJamBoard({
               onArrangeSection={(sectionId) => board.autoArrange(sectionId)}
               renameTrigger={renameSectionId}
               onRemoveDot={(dotId) => {
-                // Convert string ID to Convex ID if needed
                 const dot = displayedDots.find(d => ("id" in d ? d.id : d._id) === dotId);
                 if (dot && "_id" in dot) {
                   dotVoting.removeDot(dot._id);
@@ -1095,7 +1102,6 @@ export function FigJamBoard({
               onSelect={handleSelectWithLock}
               onMove={(id, pos) => {
                 board.moveSticky(id, pos);
-                // Only broadcast if element still exists
                 if (state.elements[id]) {
                   throttledBroadcast(id, "sticky", "move", pos);
                 }
@@ -1105,7 +1111,6 @@ export function FigJamBoard({
               isVotingMode={isVotingActive}
               onUpdate={(id, patch) => {
                 board.updateElement(id, patch as any);
-                // Only broadcast if element still exists
                 if (state.elements[id]) {
                   throttledBroadcast(id, "sticky", "update", patch.position, patch.size, patch);
                 }
@@ -1119,8 +1124,12 @@ export function FigJamBoard({
                   throttledBroadcast(id, "sticky", "resize", undefined, size);
                 }
               }}
-              onDragStart={(id) => setDraggingStickyId(id)}
+              onDragStart={(id) => {
+                draggingRef.current.add(id);
+                setDraggingStickyId(id);
+              }}
               onDragEnd={(id) => {
+                draggingRef.current.delete(id);
                 if (hoveredSectionId) {
                   const sticky = state.elements[id] as StickyNoteData | undefined;
                   if (sticky) {
