@@ -18,7 +18,7 @@ interface VotingSettingsProps {
   votingPhase?: "setup" | "voting" | "revealed" | "completed";
   isCreator?: boolean;
   remainingTime?: number | null;
-  onStartVoting?: (durationMinutes?: number | null) => void;
+  onStartVoting?: (dotsPerUser: number, durationMinutes: number | null) => void;
   onStopAndReveal?: () => void;
   onStartNewVote?: () => void;
 }
@@ -104,7 +104,7 @@ export function VotingSettings({
     });
     
     // Start voting with selected values
-    onStartVoting?.(selectedDuration);
+    onStartVoting?.(selectedDots, selectedDuration);
     setShowConfigDialog(false);
   };
 

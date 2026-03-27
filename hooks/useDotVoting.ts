@@ -58,17 +58,30 @@ export function useDotVoting({ mapId, projectId }: UseDotVotingOptions): UseDotV
   const createSessionMutation = useMutation(api.dotVoting.createSession);
   const placeDotMutation = useMutation(api.dotVoting.placeDot);
   const removeDotMutation = useMutation(api.dotVoting.removeDot);
+  const clearAllDotsMutation = useMutation(api.dotVoting.clearAllDots);
   const stopAndRevealMutation = useMutation(api.dotVoting.stopAndReveal);
 
   // Calculate remaining time
-  const remainingTime = useMemo(() => {
+  const [localRemainingTime, setLocalRemainingTime] = useState<number | null>(null);
+  
+  useEffect(() => {
     if (!session?.durationMinutes || !session?.startTime || session.votingPhase !== "voting") {
-      return null;
+      setLocalRemainingTime(null);
+      return;
     }
-    const elapsed = Date.now() - session.startTime;
-    const remaining = (session.durationMinutes * 60 * 1000) - elapsed;
-    return Math.max(0, remaining);
-  }, [session?.durationMinutes, session?.startTime, session?.votingPhase]);
+
+    const updateTime = () => {
+      const elapsed = Date.now() - (session.startTime || 0);
+      const remaining = ((session.durationMinutes || 0) * 60 * 1000) - elapsed;
+      setLocalRemainingTime(Math.max(0, remaining));
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, [session?.durationMinutes, session?.startTime, session?.votingPhase, session?._id]);
+
+  const remainingTime = localRemainingTime;
 
   // Auto-reveal when timer expires (creator only)
   const isCreator = session?.createdBy === userId;
@@ -108,14 +121,19 @@ export function useDotVoting({ mapId, projectId }: UseDotVotingOptions): UseDotV
     }
   }, [hasMapId, mapId, projectId, createSessionMutation]);
 
-  // Start a new vote - clear all dots and create new session
+  // Start a new vote - clear MY dots and create new session
   const startNewVote = useCallback(async () => {
     if (!session) return;
     setIsLoading(true);
     try {
-      const dotsToDelete = allDots || [];
-      for (const dot of dotsToDelete) {
-        await removeDotMutation({ dotId: dot._id });
+      // If I'm the creator, clear all dots. Otherwise just clear my own.
+      if (isCreator) {
+        await clearAllDotsMutation({ sessionId: session._id });
+      } else {
+        const myDotsToDelete = myDots || [];
+        for (const dot of myDotsToDelete) {
+          await removeDotMutation({ dotId: dot._id });
+        }
       }
       await createSessionMutation({
         projectId: projectId as Id<"projects">,
@@ -130,7 +148,7 @@ export function useDotVoting({ mapId, projectId }: UseDotVotingOptions): UseDotV
     } finally {
       setIsLoading(false);
     }
-  }, [session, allDots, projectId, mapId, createSessionMutation, removeDotMutation]);
+  }, [session, myDots, projectId, mapId, createSessionMutation, removeDotMutation, clearAllDotsMutation, isCreator]);
 
   // Place a dot on a section
   const placeDot = useCallback(async (sectionId: string, position: { x: number; y: number }): Promise<boolean> => {

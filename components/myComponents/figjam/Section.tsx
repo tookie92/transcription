@@ -47,6 +47,8 @@ interface SectionProps {
   selectedIds?: string[];
   onRemoveDot?: (dotId: string) => void;
   onHoverChange?: (isHovered: boolean) => void;
+  onVote?: (sectionId: string) => void;
+  onUnvote?: (sectionId: string) => void;
 }
 
 export function Section({
@@ -71,6 +73,8 @@ export function Section({
   selectedIds = [],
   onRemoveDot,
   onHoverChange,
+  onVote,
+  onUnvote,
 }: SectionProps) {
   const [isHoveredLocal, setIsHoveredLocal] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -229,11 +233,20 @@ export function Section({
             style={{
               background: colorConfig.bg,
               border,
-              cursor: isDragging ? "grabbing" : "grab",
+              cursor: isDragging 
+                ? "grabbing" 
+                : (isVotingMode && !isRevealed ? "pointer" : "grab"),
               boxShadow: isHovered ? `0 0 0 3px ${colorConfig.border}88` : "none",
               transition: "box-shadow 0.15s ease, border 0.15s ease",
             }}
             onPointerDown={handlePointerDown}
+            onClick={() => {
+              if (isVotingMode && !isRevealed && !hasUserVoted && onVote) {
+                onVote(section.id);
+              } else if (isVotingMode && !isRevealed && hasUserVoted && onUnvote) {
+                onUnvote(section.id);
+              }
+            }}
           >
             <div
               className="flex items-center gap-2 px-3 py-2 rounded-t-xl shrink-0"

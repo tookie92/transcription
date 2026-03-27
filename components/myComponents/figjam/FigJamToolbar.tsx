@@ -6,10 +6,9 @@ import { STICKY_COLORS } from "./StickyNote";
 import { VotingSettings } from "./VotingSettings";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Trophy, BarChart3 } from "lucide-react";
-
-
-// ─── Types ───────────────────────────────────────────────────────────────────
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { BarChart3, Plus, Minus, MousePointer2, Hand, StickyNote, Frame } from "lucide-react";
 
 interface VotingConfig {
   dotsPerUser: number;
@@ -35,7 +34,7 @@ interface FigJamToolbarProps {
   onToggleStickyPicker?: () => void;
   onAddSticky: (color?: StickyColor) => void;
   onAddSection: () => void;
-  onGroupSelected: () => void;
+  onGroupSelected?: () => void;
   votingConfig?: VotingConfig;
   onVotingConfigChange?: (config: VotingConfig) => void;
   isVotingActive?: boolean;
@@ -43,90 +42,19 @@ interface FigJamToolbarProps {
   isCreator?: boolean;
   remainingTime?: number | null;
   voteResults?: SectionVoteResult[];
-  onStartVoting?: (durationMinutes?: number | null) => void;
+  onStartVoting?: (dotsPerUser: number, durationMinutes: number | null) => void;
   onStopAndReveal?: () => void;
   onStartNewVote?: () => void;
+  isManualVotingMode?: boolean;
+  onToggleManualVotingMode?: () => void;
 }
 
-// ─── Tool definitions ────────────────────────────────────────────────────────
-
-const TOOLS: { id: ToolType; label: string; shortcut: string; icon: React.ReactNode }[] = [
-  {
-    id: "select",
-    label: "Select",
-    shortcut: "V",
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M4 0l16 12-7 2-4 8L4 0z"/>
-      </svg>
-    ),
-  },
-  {
-    id: "hand",
-    label: "Hand",
-    shortcut: "H",
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/>
-        <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
-      </svg>
-    ),
-  },
-  {
-    id: "text",
-    label: "Text",
-    shortcut: "T",
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M4 6V4h16v2h-7v14h-2V6H4z"/>
-      </svg>
-    ),
-  },
-  {
-    id: "connector",
-    label: "Connector",
-    shortcut: "X",
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M18 6L6 18M6 6l3 3M15 18l3-3"/>
-        <circle cx="18" cy="6" r="2" fill="currentColor"/>
-        <circle cx="6" cy="18" r="2" fill="currentColor"/>
-      </svg>
-    ),
-  },
-  {
-    id: "shape",
-    label: "Shape",
-    shortcut: "S",
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <rect x="3" y="3" width="18" height="18" rx="2"/>
-      </svg>
-    ),
-  },
-  {
-    id: "stamp",
-    label: "Stamp",
-    shortcut: "E",
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M14 9V5a3 3 0 0 0-3-3l-4 9h11a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h2.5"/>
-      </svg>
-    ),
-  },
-];
-
-// Only 4 insight types for sticky notes
-const STICKY_PALETTE: StickyColor[] = ["pain-point", "quote", "insight", "follow-up"];
-
-const STICKY_PALETTE_INFO: Record<string, { label: string; description: string }> = {
-  "pain-point": { label: "Pain Point", description: "User frustrations & problems" },
-  "quote": { label: "Quote", description: "Notable user quotes" },
-  "insight": { label: "Insight", description: "Key observations" },
-  "follow-up": { label: "Follow-up", description: "Questions to explore" },
-};
-
-// ─── Component ───────────────────────────────────────────────────────────────
+function formatTime(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
 
 export function FigJamToolbar({
   activeTool,
@@ -140,7 +68,6 @@ export function FigJamToolbar({
   onToggleStickyPicker,
   onAddSticky,
   onAddSection,
-  onGroupSelected,
   votingConfig,
   onVotingConfigChange,
   isVotingActive,
@@ -151,210 +78,226 @@ export function FigJamToolbar({
   onStartVoting,
   onStopAndReveal,
   onStartNewVote,
+  isManualVotingMode,
+  onToggleManualVotingMode,
 }: FigJamToolbarProps) {
 
-  // Format remaining time
-  const formatTime = (ms: number) => {
-    const seconds = Math.floor(ms / 1000);
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  // Sort results by vote count (descending)
   const sortedResults = [...(voteResults || [])].sort((a, b) => b.voteCount - a.voteCount);
 
   return (
-    <>
-      {/* ── Main toolbar ── */}
-      <div className="absolute left-1/2 bottom-6 -translate-x-1/2 z-30 flex items-center gap-1 bg-white rounded-2xl shadow-2xl border border-gray-100 px-3 py-2">
+    <TooltipProvider delayDuration={300}>
+      <>
+        {/* ── Canvas Tools (Bottom Center) ── */}
+        <div className="absolute left-1/2 bottom-6 -translate-x-1/2 z-30">
+          <div className="flex items-center gap-1 bg-card/95 backdrop-blur-sm rounded-2xl shadow-xl border border-border px-2 py-1.5">
+            <ToggleGroup type="single" value={activeTool} onValueChange={(v) => {
+              if (v && v !== activeTool) onToolChange(v as ToolType);
+            }} className="gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem value="select" aria-label="Select tool" className="w-9 h-9 rounded-xl data-[state=on]:bg-primary/10 data-[state=on]:text-primary">
+                    <MousePointer2 className="w-4 h-4" />
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent side="top">Select (V)</TooltipContent>
+              </Tooltip>
 
-        {/* Navigation tools */}
-        <ToolGroup>
-          {TOOLS.slice(0, 2).map((tool) => (
-            <ToolButton
-              key={tool.id}
-              active={activeTool === tool.id}
-              label={tool.label}
-              shortcut={tool.shortcut}
-              onClick={() => onToolChange(tool.id)}
-            >
-              {tool.icon}
-            </ToolButton>
-          ))}
-        </ToolGroup>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem value="hand" aria-label="Hand tool" className="w-9 h-9 rounded-xl data-[state=on]:bg-primary/10 data-[state=on]:text-primary">
+                    <Hand className="w-4 h-4" />
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent side="top">Hand (H)</TooltipContent>
+              </Tooltip>
+            </ToggleGroup>
 
-        <Divider />
+            <div className="w-px h-6 bg-border mx-1" />
 
-        {/* Sticky note button with color picker */}
-        <Popover open={showStickyPicker} onOpenChange={onToggleStickyPicker}>
-          <PopoverTrigger asChild>
-            <ToolButton
-              active={!!showStickyPicker}
-              label="Sticky note"
-              shortcut="S"
-              onClick={() => {}}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"/>
-                <path d="M15 3v6h6"/>
-              </svg>
-            </ToolButton>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-2" side="top" sideOffset={8}>
-            <div className="flex flex-row gap-1">
-              {STICKY_PALETTE.map((color) => (
+            {/* Sticky Note */}
+            <Popover open={showStickyPicker} onOpenChange={onToggleStickyPicker}>
+              <PopoverTrigger asChild>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`w-9 h-9 rounded-xl ${showStickyPicker ? "bg-primary/10 text-primary" : ""}`}
+                    >
+                      <StickyNote className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Sticky Note (S)</TooltipContent>
+                </Tooltip>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-2" side="top" sideOffset={8}>
+                <div className="flex flex-row gap-1">
+                  {(["pain-point", "quote", "insight", "follow-up"] as StickyColor[]).map((color) => (
+                    <Button
+                      key={color}
+                      variant="ghost"
+                      size="sm"
+                      className="flex flex-col gap-1 px-3 py-2 h-auto min-w-[80px]"
+                      onClick={() => {
+                        onAddSticky(color);
+                        onToggleStickyPicker?.();
+                      }}
+                    >
+                      <div 
+                        className="w-5 h-5 rounded shrink-0" 
+                        style={{ background: STICKY_COLORS[color].bg, border: `2px solid ${STICKY_COLORS[color].header}` }}
+                      />
+                      <span className="text-[10px] font-medium">{color}</span>
+                    </Button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <Button
-                  key={color}
                   variant="ghost"
-                  size="sm"
-                  className="flex flex-col gap-1 px-3 py-2 h-auto min-w-[80px]"
-                  title={`${STICKY_PALETTE_INFO[color].label}: ${STICKY_PALETTE_INFO[color].description}`}
-                  onClick={() => {
-                    onAddSticky(color);
-                    onToggleStickyPicker?.();
-                  }}
+                  size="icon"
+                  className={`w-9 h-9 rounded-xl ${activeTool === "section" ? "bg-primary/10 text-primary" : ""}`}
+                  onClick={onAddSection}
                 >
-                  <div 
-                    className="w-5 h-5 rounded shrink-0" 
-                    style={{ background: STICKY_COLORS[color].bg, border: `2px solid ${STICKY_COLORS[color].header}` }}
-                  />
-                  <span className="text-[10px] font-medium text-gray-700">{STICKY_PALETTE_INFO[color].label}</span>
+                  <Frame className="w-4 h-4" />
                 </Button>
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
+              </TooltipTrigger>
+              <TooltipContent side="top">Frame (F)</TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
 
-        {/* Section / Frame button */}
-        <ToolButton
-          active={activeTool === "section"}
-          label="Frame"
-          shortcut="F"
-          onClick={onAddSection}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="3" y="3" width="18" height="18" rx="2"/>
-          </svg>
-        </ToolButton>
+        {/* ── Mode & Voting Panel (Top Right) ── */}
+        <div className="absolute right-4 top-20 z-30 space-y-2">
 
-        <Divider />
-
-        {/* Voting Controls */}
-        <VotingSettings
-          config={votingConfig || { dotsPerUser: 5, durationMinutes: null }}
-          onConfigChange={onVotingConfigChange || (() => {})}
-          isVotingActive={isVotingActive}
-          votingPhase={votingPhase}
-          isCreator={isCreator}
-          remainingTime={remainingTime}
-          onStartVoting={onStartVoting}
-          onStopAndReveal={onStopAndReveal}
-          onStartNewVote={onStartNewVote}
-        />
-
-        <Divider />
-
-        {/* Ranking popover - shown when votes are revealed */}
-        {voteResults && voteResults.length > 0 && (
+          {/* Voting Session Button */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
-                <BarChart3 className="w-4 h-4" />
-                Ranking
+              <Button
+                className={`w-full justify-start gap-2 px-4 py-2.5 rounded-xl shadow-lg ${
+                  isVotingActive
+                    ? "bg-green-600 hover:bg-green-700 text-black"
+                    : "bg-card hover:bg-accent border border-border"
+                }`}
+              >
+                {isVotingActive && votingPhase === "voting" ? (
+                  <>
+                    <div className="w-2 h-2 rounded-full text-black bg-white animate-pulse" />
+                    <span>Voting</span>
+                    {remainingTime !== null && remainingTime !== undefined && remainingTime > 0 && (
+                      <span className="font-mono text-sm font-bold ml-auto">{formatTime(remainingTime)}</span>
+                    )}
+                  </>
+                ) : isVotingActive && votingPhase === "revealed" ? (
+                  <>
+                    <BarChart3 className="w-4 h-4 " />
+                    <span>Results</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 text-black" />
+                    <span className="text-black">Start Vote</span>
+                  </>
+                )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-64 p-3" align="end">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase">Vote Results</p>
-                {sortedResults.map((result, index) => (
-                  <div key={result.sectionId} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50">
-                    <span className={`text-xs font-bold w-5 ${index === 0 ? "text-yellow-500" : "text-gray-400"}`}>
-                      #{index + 1}
-                    </span>
-                    <div className="flex gap-1 flex-1">
-                      {result.colors.slice(0, 5).map((color, i) => (
-                        <div key={i} className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-                      ))}
-                      {result.colors.length > 5 && (
-                        <span className="text-xs text-gray-400">+{result.colors.length - 5}</span>
-                      )}
-                    </div>
-                    <span className="text-sm font-medium">{result.voteCount} vote{result.voteCount !== 1 ? "s" : ""}</span>
+            <PopoverContent className="w-72 p-3" align="end" side="bottom">
+              <div className="space-y-3">
+                {isVotingActive && (
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${
+                    votingPhase === "voting" 
+                      ? "bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300" 
+                      : "bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300"
+                  }`}>
+                    {votingPhase === "voting" ? (
+                      <>
+                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                        <span>Voting in progress</span>
+                      </>
+                    ) : (
+                      <>
+                        <BarChart3 className="w-4 h-4" />
+                        <span>Votes revealed</span>
+                      </>
+                    )}
                   </div>
-                ))}
+                )}
+
+                <VotingSettings
+                  config={votingConfig || { dotsPerUser: 5, durationMinutes: null }}
+                  onConfigChange={onVotingConfigChange || (() => {})}
+                  isVotingActive={isVotingActive}
+                  votingPhase={votingPhase}
+                  isCreator={isCreator}
+                  remainingTime={remainingTime}
+                  onStartVoting={onStartVoting}
+                  onStopAndReveal={onStopAndReveal}
+                  onStartNewVote={onStartNewVote}
+                />
+
+                {voteResults && voteResults.length > 0 && votingPhase === "revealed" && (
+                  <div className="border-t pt-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Results</p>
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {sortedResults.map((result, index) => (
+                        <div key={result.sectionId} className="flex items-center gap-2 p-2 rounded-lg bg-muted">
+                          <span className={`text-xs font-bold w-5 ${index === 0 ? "text-yellow-500" : "text-muted-foreground"}`}>
+                            #{index + 1}
+                          </span>
+                          <div className="flex gap-0.5 flex-1 min-w-0">
+                            {result.colors.slice(0, 4).map((color, i) => (
+                              <div key={i} className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                            ))}
+                            {result.colors.length > 4 && (
+                              <span className="text-xs text-muted-foreground">+{result.colors.length - 4}</span>
+                            )}
+                          </div>
+                          <span className="text-sm font-medium shrink-0">{result.voteCount}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </PopoverContent>
           </Popover>
-        )}
-      </div>
-
-      {/* ── Selection indicator (bottom left) ── */}
-      {selectedCount > 0 && (
-        <div className="absolute left-5 bottom-6 z-30 flex items-center gap-2 bg-blue-500 text-white rounded-xl shadow-lg px-3 py-1.5">
-          <span className="text-sm font-medium">{selectedCount} selected</span>
         </div>
-      )}
 
-      {/* ── Zoom controls (bottom right) ── */}
-      <div className="absolute right-5 bottom-6 z-30 flex items-center gap-1 bg-white rounded-xl shadow-lg border border-gray-100 px-2 py-1.5">
-        <button
-          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600 text-lg leading-none transition-colors"
-          onClick={onZoomOut}
-        >
-          −
-        </button>
-        <button
-          className="px-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg py-1 tabular-nums min-w-[48px] text-center transition-colors"
-          onClick={onZoomReset}
-        >
-          {Math.round(zoom * 100)}%
-        </button>
-        <button
-          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600 text-lg leading-none transition-colors"
-          onClick={onZoomIn}
-        >
-          +
-        </button>
-      </div>
-    </>
-  );
-}
+        {/* ── Selection indicator (bottom left) ── */}
+        {selectedCount > 0 && (
+          <div className="absolute left-5 bottom-6 z-30 flex items-center gap-2 bg-primary text-primary-foreground rounded-xl shadow-lg px-3 py-1.5">
+            <span className="text-sm font-medium">{selectedCount} selected</span>
+          </div>
+        )}
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
-function ToolGroup({ children }: { children: React.ReactNode }) {
-  return <div className="flex items-center gap-0.5">{children}</div>;
-}
-
-function Divider() {
-  return <div className="w-px h-6 bg-gray-200 mx-1" />;
-}
-
-interface ToolButtonProps {
-  active: boolean;
-  label: string;
-  shortcut: string;
-  onClick: () => void;
-  children: React.ReactNode;
-  accent?: "blue" | "violet";
-}
-
-function ToolButton({ active, label, shortcut, onClick, children, accent = "blue" }: ToolButtonProps) {
-  const activeClass =
-    accent === "violet"
-      ? "bg-violet-100 text-violet-700"
-      : "bg-blue-100 text-blue-700";
-
-  return (
-    <button
-      title={shortcut ? `${label} (${shortcut})` : label}
-      className={`relative w-9 h-9 flex items-center justify-center rounded-xl transition-all ${
-        active ? activeClass : "text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-      }`}
-      onClick={onClick}
-    >
-      {children}
-    </button>
+        {/* ── Zoom controls (bottom right) ── */}
+        <div className="absolute right-5 bottom-6 z-30 flex items-center gap-1 bg-card/95 backdrop-blur-sm rounded-xl shadow-lg border border-border px-1.5 py-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="w-7 h-7 rounded-lg" onClick={onZoomOut}>
+                <Minus className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Zoom out</TooltipContent>
+          </Tooltip>
+          
+          <Button variant="ghost" className="px-2 text-xs font-medium rounded py-1 min-w-[48px] text-center" onClick={onZoomReset}>
+            {Math.round(zoom * 100)}%
+          </Button>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="w-7 h-7 rounded-lg" onClick={onZoomIn}>
+                <Plus className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Zoom in</TooltipContent>
+          </Tooltip>
+        </div>
+      </>
+    </TooltipProvider>
   );
 }

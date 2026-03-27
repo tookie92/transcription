@@ -226,6 +226,42 @@ export const removeDot = mutation({
   },
 });
 
+// 🎯 SUPPRIMER TOUS LES DOTS D'UNE SESSION (créateur seulement)
+export const clearAllDots = mutation({
+  args: {
+    sessionId: v.id("dotVotingSessions"),
+  },
+  handler: async (ctx, args): Promise<{ success: boolean }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Session not found");
+
+    // Only the creator can clear all dots
+    if (session.createdBy !== identity.subject) {
+      throw new Error("Only session creator can clear all dots");
+    }
+
+    // Get all dots for this session
+    const allDots = await ctx.db
+      .query("dotVotes")
+      .withIndex("by_session", q => q.eq("sessionId", args.sessionId))
+      .collect();
+
+    // Delete all dots
+    for (const dot of allDots) {
+      await ctx.db.delete(dot._id);
+    }
+
+    await ctx.db.patch(args.sessionId, {
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
 // 🎯 RÉVÉLER LES VOTES
 export const revealVotes = mutation({
   args: {

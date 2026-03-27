@@ -6,8 +6,7 @@ import { useContainment } from "@/hooks/useContainment";
 import { StickyNote } from "./StickyNote";
 import { Section } from "./Section";
 import { FigJamToolbar } from "./FigJamToolbar";
-import { VotingDock } from "./VotingDock";
-import type { FigJamElement, Position, StickyColor, StickyNoteData, SectionData, DotData } from "@/types/figjam";
+import type { FigJamElement, Position, StickyColor, StickyNoteData, SectionData, DotData, ToolType } from "@/types/figjam";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { usePresence } from "@/hooks/usePresence";
 import { useQuery, useMutation } from "convex/react";
@@ -35,7 +34,7 @@ function CanvasGrid({ zoom, pan }: { zoom: number; pan: Position }) {
           width={spacing} height={spacing}
           patternUnits="userSpaceOnUse"
         >
-          <circle cx={spacing / 2} cy={spacing / 2} r={1.5} fill="#d1d5db" />
+          <path d={`M 0 0 L ${spacing} 0 M 0 0 L 0 ${spacing}`} stroke="#e5e7eb" strokeWidth={0.5} fill="none" opacity={0.5} />
         </pattern>
       </defs>
       <rect width="100%" height="100%" fill="url(#figjam-grid)" />
@@ -56,6 +55,8 @@ interface FigJamBoardProps {
   onToggleActivityPanel?: () => void;
   isActivityPanelOpen?: boolean;
   style?: React.CSSProperties;
+  isVotingMode?: boolean;
+  onToggleVotingMode?: () => void;
 }
 
 export function FigJamBoard({
@@ -67,11 +68,33 @@ export function FigJamBoard({
   mapId,
   maxVotesPerUser = 10,
   style,
+  isVotingMode: externalIsVotingMode,
+  onToggleVotingMode: externalOnToggleVotingMode,
 }: FigJamBoardProps) {
   const board = useFigJamBoard();
-  const { state } = board;
+  const { state, setTool } = board;
 
   const hasMapId = !!mapId && !!projectId;
+  
+  // Internal state for voting mode - synced with external prop
+  const [internalVotingMode, setInternalVotingMode] = useState(false);
+  
+  // Keep internal state in sync with external prop
+  useEffect(() => {
+    if (externalIsVotingMode !== undefined) {
+      setInternalVotingMode(externalIsVotingMode);
+    }
+  }, [externalIsVotingMode]);
+  
+  const isManualVotingMode = internalVotingMode;
+  
+  const toggleVotingModeHandler = () => {
+    if (externalOnToggleVotingMode) {
+      externalOnToggleVotingMode();
+    } else {
+      setInternalVotingMode(v => !v);
+    }
+  };
 
   // Local state for UI (before dotVoting)
   const [votingConfig, setVotingConfig] = useState({
@@ -114,6 +137,32 @@ export function FigJamBoard({
 
   const [renameSectionId, setRenameSectionId] = useState<string | null>(null);
   const [showStickyPicker, setShowStickyPicker] = useState(false);
+  
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName)) return;
+      const active = document.activeElement;
+      if (active?.tagName === "INPUT" || active?.tagName === "TEXTAREA" || (active as HTMLElement)?.isContentEditable) return;
+
+      const key = e.key.toLowerCase();
+      
+      // Tool shortcuts
+      if (key === "v") {
+        setTool("select");
+      } else if (key === "h") {
+        setTool("hand");
+      } else if (key === "s") {
+        setTool("sticky");
+      } else if (key === "f") {
+        setTool("section");
+      } else if (key === "x") {
+        toggleVotingModeHandler();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [setTool]);
 
   // ── Presence (cursors) ───────────────────────────────────────────────────
   const { userId } = useAuth();
@@ -145,6 +194,13 @@ export function FigJamBoard({
       hash = userId.charCodeAt(i) + ((hash << 5) - hash);
     }
     return CURSOR_COLORS[Math.abs(hash) % CURSOR_COLORS.length];
+  }
+
+  function formatTime(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   }
 
   // ============================================
@@ -782,7 +838,7 @@ export function FigJamBoard({
     return allDots;
   }, [isVotingActive, votingPhase, isSilentMode, allDots, myDots]);
 
-  // Group dots by section
+  // Group dots by section - always show dots from previous votes
   const dotsBySection: Record<string, DotVote[]> = {};
   const userHasVotedOn: Record<string, boolean> = {};
   for (const dot of displayedDots) {
@@ -793,12 +849,31 @@ export function FigJamBoard({
     }
   }
 
+  // Always show all dots when session is revealed OR in normal mode (past votes)
+  const alwaysShowDots = useMemo(() => {
+    // If voting is active and revealed, show all dots
+    // If no voting active, also show dots (from previous voting sessions)
+    if (!isVotingActive) return allDots;
+    if (votingPhase === "revealed") return allDots;
+    // In voting mode: only show my dots (silent mode)
+    return myDots;
+  }, [isVotingActive, votingPhase, allDots, myDots]);
+
+  // Update dotsBySection to always show dots
+  const dotsBySectionAll: Record<string, DotVote[]> = {};
+  for (const dot of alwaysShowDots) {
+    if (dot.targetId) {
+      if (!dotsBySectionAll[dot.targetId]) dotsBySectionAll[dot.targetId] = [];
+      dotsBySectionAll[dot.targetId].push(dot);
+    }
+  }
+
   // Vote results for ranking display
   const voteResults = useMemo(() => {
     if (votingPhase !== "revealed") return [];
     return sections
       .map(section => {
-        const sectionDots = dotsBySection[section.id] || [];
+        const sectionDots = dotsBySectionAll[section.id] || [];
         return {
           sectionId: section.id,
           title: section.title || "Untitled",
@@ -808,7 +883,7 @@ export function FigJamBoard({
       })
       .filter(r => r.voteCount > 0)
       .sort((a, b) => b.voteCount - a.voteCount);
-  }, [votingPhase, sections, dotsBySection]);
+  }, [votingPhase, sections, dotsBySectionAll]);
 
   // Which section is the dragging sticky hovering over?
   const hoveredSectionId = draggingStickyId
@@ -945,13 +1020,13 @@ export function FigJamBoard({
             <Section
               key={el.id}
               section={el}
-              dots={dotsBySection[el.id] || []}
-              voteCount={(dotsBySection[el.id] || []).length}
+              dots={dotsBySectionAll[el.id] || []}
+              voteCount={(dotsBySectionAll[el.id] || []).length}
               hasUserVoted={userHasVotedOn[el.id] ?? false}
               zoom={state.zoom}
               isSelected={state.selectedIds.includes(el.id)}
               isHovered={attachedSectionId === el.id}
-              isVotingMode={isVotingActive && (votingPhase === "voting" || votingPhase === "revealed")}
+              isVotingMode={isVotingActive && (votingPhase === "voting" || votingPhase === "revealed") || isManualVotingMode}
               isRevealed={votingPhase === "revealed"}
               isLocked={getLockInfo(el.id).isLocked}
               lockedByName={getLockInfo(el.id).lockedByName}
@@ -982,6 +1057,27 @@ export function FigJamBoard({
                 const dot = displayedDots.find(d => ("id" in d ? d.id : d._id) === dotId);
                 if (dot && "_id" in dot) {
                   dotVoting.removeDot(dot._id);
+                }
+              }}
+              onVote={async (sectionId) => {
+                const canVoteInManualMode = isManualVotingMode && dotVoting.session;
+                if (!canVoteInManualMode && !dotVoting.canVote) return;
+                if (userHasVotedOn[sectionId]) return;
+                const section = state.elements[sectionId] as SectionData;
+                if (section) {
+                  const TITLE_BAR_H = 40;
+                  const PADDING = 20;
+                  const dotX = section.position.x + PADDING + Math.random() * (section.size.width - PADDING * 2);
+                  const dotY = section.position.y + TITLE_BAR_H + PADDING + Math.random() * (section.size.height - TITLE_BAR_H - PADDING * 2);
+                  await dotVoting.placeDot(sectionId, { x: dotX, y: dotY });
+                }
+              }}
+              onUnvote={(sectionId) => {
+                const canVoteInManualMode = isManualVotingMode && dotVoting.session;
+                if (!canVoteInManualMode && !dotVoting.canVote) return;
+                const sectionDots = myDots.filter(d => d.targetId === sectionId);
+                if (sectionDots.length > 0) {
+                  dotVoting.removeDot(sectionDots[0]._id);
                 }
               }}
             />
@@ -1090,8 +1186,8 @@ export function FigJamBoard({
         isCreator={isCreator}
         remainingTime={remainingTime}
         voteResults={voteResults}
-        onStartVoting={async (duration) => {
-          console.log('🎯 Starting vote with duration:', duration);
+        onStartVoting={async (dotsPerUser, duration) => {
+          console.log('🎯 Starting vote with dots:', dotsPerUser, 'duration:', duration);
           console.log('🎯 Current session:', dotVoting.session);
           console.log('🎯 All dots:', dotVoting.allDots.length);
           // Reset votes first
@@ -1099,7 +1195,7 @@ export function FigJamBoard({
           // Start a new voting session in Convex
           await dotVoting.createSession(
             "Voting Session",
-            votingConfig.dotsPerUser,
+            dotsPerUser,
             true, // silent mode by default
             duration ?? undefined
           );
@@ -1107,36 +1203,8 @@ export function FigJamBoard({
         }}
         onStopAndReveal={() => dotVoting.stopAndReveal()}
         onStartNewVote={() => dotVoting.startNewVote()}
-      />
-
-      {/* Voting Dock */}
-      <VotingDock
-        isActive={isVotingActive && votingPhase === "voting"}
-        dotsPerUser={maxDotsPerUser}
-        usedDots={myDots.length}
-        userColor={userColor}
-        disabledSections={userHasVotedOn}
-        onReset={() => dotVoting.resetMyVotes()}
-        onDropDot={async (sectionId) => {
-          if (userHasVotedOn[sectionId]) return;
-          const section = state.elements[sectionId] as SectionData;
-          if (section) {
-            const TITLE_BAR_H = 40;
-            const PADDING = 20;
-            const dotSize = 28;
-            const maxX = section.size.width - PADDING - dotSize;
-            const maxY = section.size.height - TITLE_BAR_H - PADDING - dotSize;
-            const dotX = section.position.x + PADDING + Math.random() * maxX;
-            const dotY = section.position.y + TITLE_BAR_H + PADDING + Math.random() * maxY;
-            await dotVoting.placeDot(sectionId, { x: dotX, y: dotY });
-          }
-        }}
-        onRemoveDot={(sectionId) => {
-          const sectionDots = myDots.filter(d => d.targetId === sectionId);
-          if (sectionDots.length > 0) {
-            dotVoting.removeDot(sectionDots[0]._id);
-          }
-        }}
+        isManualVotingMode={isManualVotingMode}
+        onToggleManualVotingMode={toggleVotingModeHandler}
       />
 
       {Object.keys(state.elements).length === 0 && (

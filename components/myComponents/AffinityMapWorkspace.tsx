@@ -4,7 +4,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import { AffinityGroup, Insight, ActivePanel, ThemeAnalysis, ThemeRecommendation } from "@/types";
 import { toast } from "sonner";
@@ -53,6 +53,21 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const [isThemesAnalyzing, setIsThemesAnalyzing] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [commentPanel, setCommentPanel] = useState<{groupId: string; rect: DOMRect} | null>(null);
+
+  // Keyboard shortcut for voting mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName)) return;
+      const active = document.activeElement;
+      if (active?.tagName === "INPUT" || active?.tagName === "TEXTAREA" || (active as HTMLElement)?.isContentEditable) return;
+      
+      if (e.key.toLowerCase() === "x") {
+        setIsVotingMode(v => !v);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // ==================== AUTO-CREATE MAP ====================
   const createAffinityMap = useMutation(api.affinityMaps.create);
@@ -324,6 +339,32 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           <span className="text-sm text-muted-foreground">Affinity Map</span>
         </div>
         <div className="flex items-center gap-2">
+          {/* Vote Mode Toggle in Header */}
+          <button
+            onClick={() => setIsVotingMode(v => !v)}
+            className={`px-3 py-1.5 rounded-lg border flex items-center gap-2 text-sm transition-colors ${
+              isVotingMode
+                ? "bg-green-100 border-green-300 text-green-700 dark:bg-green-900/30 dark:border-green-700 dark:text-green-400"
+                : "bg-muted border-border text-foreground hover:bg-accent"
+            }`}
+          >
+            {isVotingMode ? (
+              <>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 2v20M2 12h20"/>
+                </svg>
+                Vote
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>
+                </svg>
+                Edit
+              </>
+            )}
+          </button>
+
           <button
             onClick={() => setShowActivityPanel(!showActivityPanel)}
             className={`px-3 py-1.5 rounded-lg border flex items-center gap-2 text-sm ${
@@ -355,6 +396,8 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           projectId={projectId}
           mapId={affinityMap._id}
           style={{ paddingTop: '56px' }}
+          isVotingMode={isVotingMode}
+          onToggleVotingMode={() => setIsVotingMode(v => !v)}
           onChange={(elements) => {
             console.log("Board changed:", Object.keys(elements).length, "elements");
           }}
