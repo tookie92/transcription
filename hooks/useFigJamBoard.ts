@@ -12,6 +12,7 @@ import type {
   ToolType,
   UseFigJamBoardReturn,
   DotData,
+  ClusterLabelData,
 } from "../types/figjam";
 import { isInsideSection, isOutsideSection } from "./useContainment";
 
@@ -144,7 +145,7 @@ function reducer(state: BoardState, action: Action): BoardState {
 
       const elements = { ...state.elements };
 
-      // Move section
+      // Move section - sticky positions are relative, so they don't need to be updated
       elements[action.sectionId] = {
         ...section,
         position: {
@@ -154,39 +155,8 @@ function reducer(state: BoardState, action: Action): BoardState {
         updatedAt: now(),
       };
 
-      // Move stickies attached to this section
-      const stickies = Object.values(elements).filter(
-        (el): el is StickyNoteData => el.type === "sticky"
-      );
-      for (const sticky of stickies) {
-        if (sticky.parentSectionId === action.sectionId) {
-          elements[sticky.id] = {
-            ...sticky,
-            position: {
-              x: sticky.position.x + action.dx,
-              y: sticky.position.y + action.dy,
-            },
-            updatedAt: now(),
-          };
-        }
-      }
-
-      // Move dots attached to this section
-      const dots = Object.values(elements).filter(
-        (el): el is DotData => el.type === "dot"
-      );
-      for (const dot of dots) {
-        if (dot.parentSectionId === action.sectionId) {
-          elements[dot.id] = {
-            ...dot,
-            position: {
-              x: dot.position.x + action.dx,
-              y: dot.position.y + action.dy,
-            },
-            updatedAt: now(),
-          };
-        }
-      }
+      // Note: Stickies use relativePosition, so their display position
+      // automatically follows the section. No need to update sticky positions.
 
       return { ...state, elements };
     }
@@ -196,26 +166,27 @@ function reducer(state: BoardState, action: Action): BoardState {
       if (!sticky || sticky.type !== "sticky") return state;
 
       const elements = { ...state.elements };
+      const sections = Object.values(elements).filter(
+        (el): el is SectionData => el.type === "section"
+      );
 
+      // action.position is always absolute
+      const newAbsolutePosition = action.position;
+
+      // Check if sticky is leaving its current section
       let newParentSectionId: string | null = sticky.parentSectionId;
-      const tempSticky = { ...sticky, position: action.position };
-
-      // If sticky is attached to a section, check if it's now fully outside
       if (sticky.parentSectionId) {
-        const originalSection = elements[sticky.parentSectionId] as SectionData | undefined;
-        if (originalSection && originalSection.type === "section") {
-          if (isOutsideSection(tempSticky, originalSection)) {
-            newParentSectionId = null;
-          }
+        const parentSection = elements[sticky.parentSectionId] as SectionData;
+        const tempSticky = { ...sticky, position: newAbsolutePosition };
+        if (isOutsideSection(tempSticky, parentSection)) {
+          newParentSectionId = null;
         }
       }
 
-      // If sticky is NOT attached, check if it's now inside a section → auto-attach
+      // Check if sticky is entering a new section
       if (!newParentSectionId) {
-        const sections = Object.values(elements).filter(
-          (el): el is SectionData => el.type === "section"
-        );
         for (const section of sections) {
+          const tempSticky = { ...sticky, position: newAbsolutePosition };
           if (isInsideSection(tempSticky, section)) {
             newParentSectionId = section.id;
             break;
@@ -223,13 +194,32 @@ function reducer(state: BoardState, action: Action): BoardState {
         }
       }
 
-      // Update sticky with new position and attachment status
-      elements[action.stickyId] = {
-        ...sticky,
-        position: action.position,
-        parentSectionId: newParentSectionId,
-        updatedAt: now(),
-      };
+      // Update sticky based on its new attachment status
+      if (newParentSectionId) {
+        // Sticky is in a section - calculate and store relative position
+        const parentSection = elements[newParentSectionId] as SectionData;
+        const relativePosition = {
+          x: newAbsolutePosition.x - parentSection.position.x,
+          y: newAbsolutePosition.y - parentSection.position.y,
+        };
+
+        elements[action.stickyId] = {
+          ...sticky,
+          position: newAbsolutePosition, // Keep absolute for backwards compat
+          relativePosition,
+          parentSectionId: newParentSectionId,
+          updatedAt: now(),
+        };
+      } else {
+        // Sticky is free-floating - use absolute position
+        elements[action.stickyId] = {
+          ...sticky,
+          position: newAbsolutePosition,
+          relativePosition: undefined,
+          parentSectionId: null,
+          updatedAt: now(),
+        };
+      }
 
       return { ...state, elements };
     }
@@ -548,7 +538,27 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
         autoResize: false,
         votes: 0,
         votedBy: [],
-        zIndex: 0, // sections live behind
+        zIndex: 0,
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      dispatch({ type: "ADD_ELEMENT", element });
+      return id;
+    },
+    [state.elements]
+  );
+
+  const addClusterLabel = useCallback(
+    (pos: Position): string => {
+      const id = uid();
+      const element: ClusterLabelData = {
+        id,
+        type: "label",
+        position: pos,
+        text: "New Cluster",
+        color: "#3b82f6",
+        fontSize: 14,
+        zIndex: 1,
         createdAt: now(),
         updatedAt: now(),
       };
@@ -829,6 +839,7 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     state,
     addStickyNote,
     addSection,
+    addClusterLabel,
     updateElement,
     updateMany,
     deleteElement,

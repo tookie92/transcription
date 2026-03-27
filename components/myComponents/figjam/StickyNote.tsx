@@ -77,9 +77,8 @@ interface StickyNoteProps {
   onBringToFront: (id: string) => void;
   onDragStart?: (id: string) => void;
   onDragEnd?: (id: string) => void;
-  dragBounds?: { minX: number; minY: number; maxX: number; maxY: number };
   selectedIds?: string[];
-  parentVisualOffset?: { x: number; y: number };
+  clusterLabel?: string;
 }
 
 // ─── Auto-sizing text hook (simplified) ─────────────────────────────────────
@@ -110,20 +109,27 @@ export function StickyNote({
   onBringToFront,
   onDragStart,
   onDragEnd,
-  dragBounds,
   selectedIds = [],
   isLocked = false,
   lockedByName,
-  parentVisualOffset,
+  clusterLabel,
 }: StickyNoteProps) {
   const colors = STICKY_COLORS[note.color];
   const stickySize = note.size ?? { width: 200, height: 200 };
   const [isEditing, setIsEditing] = useState(false);
+  const [editingContent, setEditingContent] = useState(note.content);
   const [showMenu, setShowMenu] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const textRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Sync editingContent when note.content changes from outside
+  useEffect(() => {
+    if (!isEditing) {
+      setEditingContent(note.content);
+    }
+  }, [note.content, isEditing]);
 
   // Calculate text area dimensions
   const textAreaHeight = stickySize.height - HEADER_HEIGHT - FOOTER_HEIGHT - PADDING * 2;
@@ -152,23 +158,12 @@ export function StickyNote({
       onDragEnd?.(id);
     },
     disabled: isEditing || isResizing || isLocked,
-    bounds: dragBounds,
     stickyWidth: stickySize.width,
     stickyHeight: stickySize.height,
     selectedIds,
   });
 
   const isDragging = isDraggingRef.current;
-
-  const displayPosition = useMemo(() => {
-    if (parentVisualOffset) {
-      return {
-        x: visualPosition.x + parentVisualOffset.x,
-        y: visualPosition.y + parentVisualOffset.y,
-      };
-    }
-    return visualPosition;
-  }, [visualPosition, parentVisualOffset]);
 
   const handleDoubleClick = useCallback(() => {
     if (isLocked) return;
@@ -183,12 +178,14 @@ export function StickyNote({
   const handlePointerDownWrapper = useCallback(
     (e: React.PointerEvent) => {
       if (isLocked) return;
-      
+
+      // Always stop propagation to prevent parent section from capturing the event
+      e.stopPropagation();
+
       const multi = e.shiftKey || e.ctrlKey || e.metaKey;
 
       // For multi-select (Ctrl+click), select but don't start dragging
       if (multi) {
-        e.stopPropagation();
         onSelect(note.id, true);
         return;
       }
@@ -245,14 +242,14 @@ export function StickyNote({
   return (
     <div
       ref={containerRef}
-      className="absolute group"
+      className="absolute group sticky-note"
+      data-sticky-id={note.id}
+      data-section-id={note.id}
       style={{
-        left: displayPosition.x,
-        top: displayPosition.y,
+        left: visualPosition.x,
+        top: visualPosition.y,
         zIndex: note.zIndex,
         cursor: isVotingMode ? "default" : cursorStyle,
-        opacity: isVotingMode ? 0.6 : 1,
-        pointerEvents: isVotingMode ? "none" : "auto",
         filter: isDragging
           ? "drop-shadow(4px 8px 16px rgba(0,0,0,0.25))"
           : isSelected
@@ -260,9 +257,10 @@ export function StickyNote({
           : "drop-shadow(0 2px 8px rgba(0,0,0,0.1))",
         transform: isDragging ? "rotate(-2deg) scale(1.02)" : "rotate(0deg)",
         transition: "none",
+        opacity: isVotingMode ? 0.85 : 1,
       }}
-      onPointerDown={isVotingMode ? undefined : handlePointerDownWrapper}
-      onDoubleClick={isVotingMode ? undefined : handleDoubleClick}
+      onPointerDown={handlePointerDownWrapper}
+      onDoubleClick={handleDoubleClick}
     >
       {/* Card body */}
       <div
@@ -310,16 +308,22 @@ export function StickyNote({
           </div>
         )}
 
-        {/* Chain indicator (subtle) */}
-        {note.parentSectionId && (
+        {/* Cluster badge - shows which cluster this sticky belongs to */}
+        {clusterLabel && (
           <div 
-            className="absolute top-2 left-2 opacity-40" 
-            title="Attached to section"
+            className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium opacity-60 hover:opacity-100 transition-opacity max-w-[80%] group/cluster"
+            style={{ 
+              backgroundColor: `${colors.accent}20`,
+              color: colors.accent,
+              border: `1px solid ${colors.accent}40`,
+            }}
+            title={`Cluster: ${clusterLabel}`}
           >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={colors.accent} strokeWidth="2.5">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+              <line x1="7" y1="7" x2="7.01" y2="7"/>
             </svg>
+            <span className="truncate">{clusterLabel}</span>
           </div>
         )}
 
@@ -344,11 +348,14 @@ export function StickyNote({
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word",
               }}
-              value={note.content}
+              value={editingContent}
               onChange={(e) => {
-                onUpdate(note.id, { content: e.target.value });
+                setEditingContent(e.target.value);
               }}
               onBlur={() => {
+                if (editingContent !== note.content) {
+                  onUpdate(note.id, { content: editingContent });
+                }
                 setIsEditing(false);
               }}
               onPointerDown={(e) => e.stopPropagation()}
@@ -409,7 +416,7 @@ export function StickyNote({
       {showMenu && (
         <ContextMenu
           currentColor={note.color}
-          onColorChange={(color) => onUpdate(note.id, { color })}
+          onColorChange={(color, type) => onUpdate(note.id, { color, source: type })}
           onDuplicate={() => { onDuplicate(note.id); setShowMenu(false); }}
           onDelete={() => { onDelete(note.id); setShowMenu(false); }}
           onBringFront={() => { onBringToFront(note.id); setShowMenu(false); }}
@@ -430,7 +437,7 @@ function ContextMenu({
   onClose,
   isLocked,
 }: {
-  onColorChange: (color: StickyColor) => void;
+  onColorChange: (color: StickyColor, type: string) => void;
   currentColor: StickyColor;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -473,7 +480,7 @@ function ContextMenu({
                 }}
                 onClick={() => {
                   if (isLocked) return;
-                  onColorChange(c);
+                  onColorChange(c, c);
                   onClose();
                 }}
                 title={c.charAt(0).toUpperCase() + c.slice(1).replace("-", " ")}

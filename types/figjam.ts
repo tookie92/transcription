@@ -5,6 +5,7 @@ export type ToolType =
   | "hand"
   | "sticky"
   | "section"
+  | "label"
   | "text"
   | "connector"
   | "shape"
@@ -53,6 +54,8 @@ export interface StickyNoteData extends BaseElement {
   votedBy: string[]; // user IDs who voted
   /** ID of the section this sticky is attached to. null = free-floating. */
   parentSectionId: string | null;
+  /** Position relative to parent section. Only used if parentSectionId is set. */
+  relativePosition?: Position;
   /** Size of the sticky note - allows user to resize */
   size: Size;
 }
@@ -61,13 +64,17 @@ export interface SectionData extends BaseElement {
   type: "section";
   title: string;
   size: Size;
-  color: string; // hex or tailwind bg class
-  /** Auto-resize to fit content when enabled */
+  color: string;
   autoResize: boolean;
-  /** Number of votes on this section/cluster */
   votes: number;
-  /** User IDs who voted */
   votedBy: string[];
+}
+
+export interface ClusterLabelData extends BaseElement {
+  type: "label";
+  text: string;
+  color: string;
+  fontSize: number;
 }
 
 export interface TextData extends BaseElement {
@@ -85,7 +92,7 @@ export interface DotData extends BaseElement {
   color: string;
 }
 
-export type FigJamElement = StickyNoteData | SectionData | TextData | DotData;
+export type FigJamElement = StickyNoteData | SectionData | TextData | DotData | ClusterLabelData;
 
 export interface BoardState {
   elements: Record<string, FigJamElement>;
@@ -119,6 +126,7 @@ export interface UseFigJamBoardReturn {
   // Element actions
   addStickyNote: (pos: Position, color?: StickyColor, size?: Size, authorName?: string) => string;
   addSection: (pos: Position, size?: Size) => string;
+  addClusterLabel: (pos: Position) => string;
   addDot: (pos: Position, parentSectionId: string | null, color: string) => string;
   updateElement: (id: string, patch: Partial<FigJamElement>) => void;
   updateMany: (patches: { id: string; patch: Partial<FigJamElement> }[]) => void;

@@ -1,10 +1,10 @@
 // ─── FigJam Components — Public API ─────────────────────────────────────────
 // Import everything from one place:
-//   import { FigJamBoard, StickyNote, Section, DotVotingControls } from "@/components/figjam"
+//   import { FigJamBoard, StickyNote, ClusterLabel, DotVotingControls } from "@/components/figjam"
 
 export { FigJamBoard } from "./FigJamBoard";
 export { StickyNote, STICKY_COLORS } from "./StickyNote";
-export { Section, SECTION_COLORS } from "./Section";
+export { ClusterLabel, LABEL_COLORS } from "./ClusterLabel";
 export { FigJamToolbar } from "./FigJamToolbar";
 export {
   DotVotingControls,
@@ -20,6 +20,7 @@ export type {
   StickyNoteData,
   SectionData,
   TextData,
+  ClusterLabelData,
   BoardState,
   ToolType,
   StickyColor,

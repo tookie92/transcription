@@ -10,9 +10,9 @@ const TITLE_BAR_H = 40;
 /** Min section dimensions */
 const MIN_WIDTH = 240;
 const MIN_HEIGHT = 160;
-/** Sticky dimensions */
-const STICKY_W = 200;
-const STICKY_H = 180;
+/** Default sticky dimensions (fallback) */
+const DEFAULT_STICKY_W = 200;
+const DEFAULT_STICKY_H = 200;
 /** Threshold before sticky is considered "outside" section */
 const EXTRACTION_THRESHOLD = 20;
 
@@ -25,9 +25,12 @@ export function isInsideSection(
   sticky: StickyNoteData,
   section: SectionData
 ): boolean {
+  const stickyW = sticky.size?.width ?? DEFAULT_STICKY_W;
+  const stickyH = sticky.size?.height ?? DEFAULT_STICKY_H;
+
   // Check if sticky's bounding box (minus threshold) overlaps section
-  const stickyRight = sticky.position.x + STICKY_W;
-  const stickyBottom = sticky.position.y + STICKY_H;
+  const stickyRight = sticky.position.x + stickyW;
+  const stickyBottom = sticky.position.y + stickyH;
   const sectionRight = section.position.x + section.size.width;
   const sectionBottom = section.position.y + section.size.height;
 
@@ -49,8 +52,11 @@ export function isOutsideSection(
   sticky: StickyNoteData,
   section: SectionData
 ): boolean {
-  const stickyRight = sticky.position.x + STICKY_W;
-  const stickyBottom = sticky.position.y + STICKY_H;
+  const stickyW = sticky.size?.width ?? DEFAULT_STICKY_W;
+  const stickyH = sticky.size?.height ?? DEFAULT_STICKY_H;
+
+  const stickyRight = sticky.position.x + stickyW;
+  const stickyBottom = sticky.position.y + stickyH;
   const sectionRight = section.position.x + section.size.width;
   const sectionBottom = section.position.y + section.size.height;
 
@@ -72,19 +78,31 @@ function computeFitSize(
 ): Size | null {
   if (children.length === 0) return null;
 
+  let minLeft = Infinity;
+  let minTop = Infinity;
   let maxRight = -Infinity;
   let maxBottom = -Infinity;
 
   for (const child of children) {
     const relX = child.position.x - sectionPos.x;
     const relY = child.position.y - sectionPos.y;
-    maxRight = Math.max(maxRight, relX + STICKY_W);
-    maxBottom = Math.max(maxBottom, relY + STICKY_H);
+    const childW = child.size?.width ?? DEFAULT_STICKY_W;
+    const childH = child.size?.height ?? DEFAULT_STICKY_H;
+
+    minLeft = Math.min(minLeft, relX);
+    minTop = Math.min(minTop, relY);
+    maxRight = Math.max(maxRight, relX + childW);
+    maxBottom = Math.max(maxBottom, relY + childH);
   }
 
+  // Calculate size needed to contain all children with padding
+  // Account for children that might be positioned at negative relative coordinates
+  const neededWidth = maxRight - Math.min(0, minLeft) + PADDING;
+  const neededHeight = maxBottom - Math.min(0, minTop) + PADDING;
+
   return {
-    width: Math.max(MIN_WIDTH, maxRight + PADDING),
-    height: Math.max(MIN_HEIGHT, maxBottom + PADDING),
+    width: Math.max(MIN_WIDTH, neededWidth),
+    height: Math.max(MIN_HEIGHT, neededHeight),
   };
 }
 
@@ -116,9 +134,6 @@ export function useContainment({
     );
 
     for (const section of sections) {
-      // Only auto-resize sections that have autoResize enabled (default: false for backwards compat)
-      if (!section.autoResize) continue;
-
       // Only consider stickies that BELONG to this section (via parentSectionId)
       const inside = stickies.filter((s) => s.parentSectionId === section.id);
       const fitSize = computeFitSize(section.position, inside);

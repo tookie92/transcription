@@ -21,6 +21,7 @@ import { useAffinityMapHandlers } from "@/hooks/useAffinityMapHandlers";
 import { useActivity } from "@/hooks/useActivity";
 import { ActivityPanel } from "./ActivityPanel";
 import { CommentPanel } from "./CommentPanel";
+import { ArrowLeft } from "lucide-react";
 
 // Side panels for features (AI suggestions, analytics, etc.)
 import { CanvasSidePanels } from "./canvas/CanvasSidePanels";
@@ -335,32 +336,49 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-2 bg-card border-b">
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.push(`/project/${projectId}`)}
+            className="p-2 rounded-lg hover:bg-accent transition-colors"
+            title="Back to project"
+          >
+            <ArrowLeft className="w-5 h-5 text-foreground" />
+          </button>
           <h1 className="text-lg font-semibold text-foreground">{project.name}</h1>
           <span className="text-sm text-muted-foreground">Affinity Map</span>
         </div>
         <div className="flex items-center gap-2">
-          {/* Vote Mode Toggle in Header */}
+          {/* Vote Button - Start/Stop Voting */}
           <button
-            onClick={() => setIsVotingMode(v => !v)}
-            className={`px-3 py-1.5 rounded-lg border flex items-center gap-2 text-sm transition-colors ${
+            onClick={() => {
+              if (isVotingMode) {
+                // Stop voting
+                setIsVotingMode(false);
+                setUserVotes([]);
+              } else {
+                // Start voting
+                setIsVotingMode(true);
+              }
+            }}
+            className={`px-4 py-1.5 rounded-lg border flex items-center gap-2 text-sm font-medium transition-all ${
               isVotingMode
-                ? "bg-green-100 border-green-300 text-green-700 dark:bg-green-900/30 dark:border-green-700 dark:text-green-400"
-                : "bg-muted border-border text-foreground hover:bg-accent"
+                ? "bg-red-500 border-red-600 text-white hover:bg-red-600 shadow-lg animate-pulse"
+                : "bg-gradient-to-r from-violet-500 to-purple-500 border-violet-600 text-white hover:from-violet-600 hover:to-purple-600 shadow-md"
             }`}
           >
             {isVotingMode ? (
               <>
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2v20M2 12h20"/>
+                  <rect x="6" y="6" width="12" height="12" rx="2"/>
                 </svg>
-                Vote
+                Stop Voting
               </>
             ) : (
               <>
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>
+                  <circle cx="12" cy="12" r="10"/>
+                  <polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/>
                 </svg>
-                Edit
+                Start Voting
               </>
             )}
           </button>
@@ -379,6 +397,39 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         </div>
       </div>
 
+      {/* Voting Status Banner */}
+      {isVotingMode && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 bg-gradient-to-r from-violet-500/10 to-purple-500/10 backdrop-blur-sm rounded-xl shadow-lg border border-violet-200 px-6 py-3 flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-violet-500 rounded-full animate-pulse"/>
+            <span className="text-sm font-medium text-violet-700">Voting in progress</span>
+          </div>
+          <div className="h-6 w-px bg-violet-200"/>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Your votes:</span>
+            <div className="flex gap-1">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-5 h-5 rounded-full border-2 transition-all ${
+                    i < userVotes.length
+                      ? "bg-violet-500 border-violet-500 scale-110"
+                      : "border-gray-300"
+                  }`}
+                />
+              ))}
+            </div>
+            <span className="text-xs text-gray-500">({userVotes.length}/5)</span>
+          </div>
+          <button
+            onClick={() => setUserVotes([])}
+            className="text-xs text-violet-600 hover:text-violet-800 hover:underline"
+          >
+            Reset
+          </button>
+        </div>
+      )}
+
       {/* Loading state */}
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background z-50">
@@ -395,9 +446,9 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           projectName={project.name}
           projectId={projectId}
           mapId={affinityMap._id}
-          style={{ paddingTop: '56px' }}
+          style={{ paddingTop: isVotingMode ? '96px' : '56px' }}
           isVotingMode={isVotingMode}
-          onToggleVotingMode={() => setIsVotingMode(v => !v)}
+          onBack={() => router.push(`/project/${projectId}`)}
           onChange={(elements) => {
             console.log("Board changed:", Object.keys(elements).length, "elements");
           }}

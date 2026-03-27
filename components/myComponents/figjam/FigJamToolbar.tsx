@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { BarChart3, Plus, Minus, MousePointer2, Hand, StickyNote, Frame } from "lucide-react";
+import { BarChart3, Plus, Minus, MousePointer2, Hand, StickyNote, Tag, ArrowLeft } from "lucide-react";
 
 interface VotingConfig {
   dotsPerUser: number;
@@ -33,8 +33,8 @@ interface FigJamToolbarProps {
   showStickyPicker?: boolean;
   onToggleStickyPicker?: () => void;
   onAddSticky: (color?: StickyColor) => void;
-  onAddSection: () => void;
   onGroupSelected?: () => void;
+  onBack?: () => void;
   votingConfig?: VotingConfig;
   onVotingConfigChange?: (config: VotingConfig) => void;
   isVotingActive?: boolean;
@@ -67,7 +67,7 @@ export function FigJamToolbar({
   showStickyPicker,
   onToggleStickyPicker,
   onAddSticky,
-  onAddSection,
+  onBack,
   votingConfig,
   onVotingConfigChange,
   isVotingActive,
@@ -159,13 +159,13 @@ export function FigJamToolbar({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={`w-9 h-9 rounded-xl ${activeTool === "section" ? "bg-primary/10 text-primary" : ""}`}
-                  onClick={onAddSection}
+                  className={`w-9 h-9 rounded-xl ${activeTool === "label" ? "bg-primary/10 text-primary" : ""}`}
+                  onClick={() => onToolChange("label")}
                 >
-                  <Frame className="w-4 h-4" />
+                  <Tag className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top">Frame (F)</TooltipContent>
+              <TooltipContent side="top">Cluster Label (C)</TooltipContent>
             </Tooltip>
           </div>
         </div>

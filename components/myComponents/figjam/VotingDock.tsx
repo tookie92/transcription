@@ -82,51 +82,44 @@ export function VotingDock({
       </AnimatePresence>
 
       <motion.div
-        initial={{ x: -100, opacity: 0 }}
+        initial={{ x: 100, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
-        exit={{ x: -100, opacity: 0 }}
-        className="fixed left-4 bottom-4 z-40"
+        exit={{ x: 100, opacity: 0 }}
+        className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-200/50 p-4"
       >
-        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-200/50 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <GripVertical className="w-4 h-4" />
-              <span className="font-medium text-xs">Drag to vote</span>
-            </div>
-            
-            <div className="h-5 w-px bg-gray-200" />
-            
-            <div className="flex gap-1.5">
-              {Array.from({ length: Math.max(0, remaining) }).map((_, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ scale: 0, y: 20 }}
-                  animate={{ scale: 1, y: 0 }}
-                  transition={{ delay: i * 0.05, type: "spring", stiffness: 300, damping: 20 }}
-                  className="w-8 h-8 rounded-full border-2 border-white shadow-md cursor-grab active:cursor-grabbing hover:scale-110 transition-transform"
-                  style={{ backgroundColor: userColor }}
-                  onPointerDown={(e) => handleDragStart(e, i)}
-                />
-              ))}
-            </div>
-
-            {usedDots > 0 && (
-              <>
-                <div className="h-5 w-px bg-gray-200" />
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-gray-400 font-medium">{usedDots}/{dotsPerUser}</span>
-                  <button
-                    onClick={onReset}
-                    className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
-                    title="Reset your votes"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+        <div className="text-xs text-gray-500 font-medium mb-3 flex items-center gap-2">
+          <GripVertical className="w-4 h-4" />
+          Drag dot onto a sticky to vote
         </div>
+        
+        <div className="flex flex-wrap gap-2 mb-3">
+          {Array.from({ length: Math.max(0, remaining) }).map((_, i) => (
+            <motion.div
+              key={i}
+              initial={{ scale: 0, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              transition={{ delay: i * 0.05, type: "spring", stiffness: 300, damping: 20 }}
+              className="w-10 h-10 rounded-full border-2 border-white shadow-lg cursor-grab active:cursor-grabbing hover:scale-110 hover:rotate-12 transition-all"
+              style={{ backgroundColor: userColor }}
+              onPointerDown={(e) => handleDragStart(e, i)}
+            />
+          ))}
+        </div>
+
+        {usedDots > 0 && (
+          <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+            <span className="text-xs text-gray-400 font-medium">
+              {usedDots}/{dotsPerUser} votes
+            </span>
+            <button
+              onClick={onReset}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:bg-red-50 hover:text-red-500 transition-colors"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Reset
+            </button>
+          </div>
+        )}
       </motion.div>
     </>
   );
