@@ -58,7 +58,12 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const [themeAnalysis, setThemeAnalysis] = useState<ThemeAnalysis | null>(null);
   const [isThemesAnalyzing, setIsThemesAnalyzing] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [commentPanel, setCommentPanel] = useState<{groupId: string; rect: DOMRect} | null>(null);
+  const [commentPanel, setCommentPanel] = useState<{groupId: string; rect: DOMRect; title?: string} | null>(null);
+
+  // ==================== COMMENT HANDLER ====================
+  const handleOpenComment = useCallback((elementId: string, rect: DOMRect, title?: string) => {
+    setCommentPanel({ groupId: elementId, rect, title });
+  }, []);
 
   // ==================== VOTING (Synchronized via Convex) ====================
   const voting = useVotingSync(affinityMap?._id, projectId as Id<"projects">);
@@ -482,6 +487,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           isVotingMode={isVotingMode}
           voting={voting}
           onBack={() => router.push(`/project/${projectId}`)}
+          onOpenComment={handleOpenComment}
           onChange={(elements) => {
             console.log("Board changed:", Object.keys(elements).length, "elements");
           }}
@@ -543,7 +549,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
             id: u.userId,
             name: u.user?.name || "User",
           })) || []}
-          groupTitle={groups.find(g => g.id === commentPanel.groupId)?.title || ""}
+          groupTitle={commentPanel.title || groups.find(g => g.id === commentPanel.groupId)?.title || "Element"}
           projectId={projectId}
           projectMembers={project?.members || []}
           onClose={() => setCommentPanel(null)}

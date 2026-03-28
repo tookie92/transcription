@@ -7,7 +7,7 @@ import { VotingSettings } from "./VotingSettings";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { BarChart3, Plus, Minus, MousePointer2, Hand, StickyNote, Tag, ArrowLeft, Sparkles } from "lucide-react";
+import { BarChart3, Plus, Minus, MousePointer2, Hand, StickyNote, Tag, ArrowLeft, Sparkles, MessageSquare } from "lucide-react";
 
 interface VotingConfig {
   dotsPerUser: number;
@@ -48,6 +48,9 @@ interface FigJamToolbarProps {
   onToggleManualVotingMode?: () => void;
   ungroupedCount?: number;
   onToggleAIGroupingPanel?: () => void;
+  isCommentToolActive?: boolean;
+  onToggleCommentTool?: () => void;
+  bubbleCount?: number;
 }
 
 function formatTime(ms: number): string {
@@ -83,6 +86,9 @@ export function FigJamToolbar({
   onToggleManualVotingMode,
   ungroupedCount = 0,
   onToggleAIGroupingPanel,
+  isCommentToolActive = false,
+  onToggleCommentTool,
+  bubbleCount = 0,
 }: FigJamToolbarProps) {
 
   const sortedResults = [...(voteResults || [])].sort((a, b) => b.voteCount - a.voteCount);
@@ -204,6 +210,30 @@ export function FigJamToolbar({
               </TooltipTrigger>
               <TooltipContent side="top" className="bg-card border-border shadow-lg">
                 {ungroupedCount > 0 ? `AI Grouping (${ungroupedCount} ungrouped)` : "AI Grouping"}
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Comment Tool */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`w-10 h-10 rounded-xl ${isCommentToolActive ? "bg-primary/20 text-primary ring-2 ring-primary/30" : ""}`}
+                  onClick={onToggleCommentTool}
+                >
+                  <div className="relative">
+                    <MessageSquare className="w-5 h-5" />
+                    {bubbleCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-blue-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                        {bubbleCount > 9 ? "9+" : bubbleCount}
+                      </span>
+                    )}
+                  </div>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="bg-card border-border shadow-lg">
+                Comment (M)
               </TooltipContent>
             </Tooltip>
           </div>

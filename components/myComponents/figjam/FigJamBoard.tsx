@@ -6,7 +6,18 @@ import { StickyNote } from "./StickyNote";
 import { ClusterLabel } from "./ClusterLabel";
 import { FigJamToolbar } from "./FigJamToolbar";
 import { AIGroupingPanel } from "./AIGroupingPanel";
+import { StickyColorPicker } from "./StickyColorPicker";
+import { LassoContextMenu } from "./ContextMenu";
+import { CommentBubblesLayer } from "./CommentBubble";
 import type { FigJamElement, Position, Size, StickyColor, StickyNoteData, DotData, ToolType, ClusterLabelData, SectionData, TextData } from "@/types/figjam";
+
+interface CommentBubbleData {
+  id: string;
+  position: Position;
+  targetId?: string;
+  targetType?: "sticky" | "label" | "canvas";
+  resolved: boolean;
+}
 import { useAuth, useUser } from "@clerk/nextjs";
 import { usePresence } from "@/hooks/usePresence";
 import { useQuery, useMutation } from "convex/react";
@@ -16,6 +27,7 @@ import { motion } from "framer-motion";
 import { useThrottle } from "@/hooks/useThrottle";
 import { useVotingSync } from "@/hooks/useVotingSync";
 import { toast } from "sonner";
+import { MessageSquare } from "lucide-react";
 
 interface PresenceUser {
   _id: string;
@@ -72,6 +84,7 @@ interface FigJamBoardProps {
   isVotingMode?: boolean;
   voting?: ReturnType<typeof useVotingSync>;
   onBack?: () => void;
+  onOpenComment?: (elementId: string, elementRect: DOMRect, elementTitle?: string) => void;
 }
 
 export function FigJamBoard({
@@ -86,6 +99,7 @@ export function FigJamBoard({
   isVotingMode,
   voting: votingProp,
   onBack,
+  onOpenComment,
 }: FigJamBoardProps) {
   const board = useFigJamBoard();
   const { state, setTool } = board;
@@ -123,7 +137,18 @@ export function FigJamBoard({
 
   const [renameSectionId, setRenameSectionId] = useState<string | null>(null);
   const [showStickyPicker, setShowStickyPicker] = useState(false);
+  const [pendingStickyPosition, setPendingStickyPosition] = useState<Position | null>(null);
   const [showAIGroupingPanel, setShowAIGroupingPanel] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    position: { x: number; y: number };
+    ids: string[];
+  } | null>(null);
+
+  // Comment bubbles state
+  const [commentBubbles, setCommentBubbles] = useState<CommentBubbleData[]>([]);
+  const [selectedBubbleId, setSelectedBubbleId] = useState<string | null>(null);
+  const [isCommentToolActive, setIsCommentToolActive] = useState(false);
+  const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
   
   // Keyboard shortcuts
   useEffect(() => {
@@ -145,6 +170,8 @@ export function FigJamBoard({
         setTool("section");
       } else if (key === "c") {
         setTool("label");
+      } else if (key === "m") {
+        setIsCommentToolActive(prev => !prev);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -589,26 +616,22 @@ export function FigJamBoard({
 
       if (state.activeTool === "sticky") {
         const pos = screenToCanvas(e.clientX, e.clientY);
-        const stickyId = board.addStickyNote(
-          { x: pos.x - 100, y: pos.y - 100 },
-          "insight",
-          { width: 200, height: 200 },
-          currentUserName
-        );
-        if (hasMapId && mapId) {
-          try {
-            logActivity({
-              mapId: mapId as Id<"affinityMaps">,
-              action: "sticky_created",
-              targetId: stickyId,
-              targetName: "sticky",
-            });
-          } catch (err) {
-            console.error("Failed to log activity:", err);
-          }
-        }
-        board.selectElement(stickyId);
-        board.setTool("select");
+        setPendingStickyPosition({ x: pos.x - 100, y: pos.y - 100 });
+        setShowStickyPicker(true);
+      }
+
+      if (isCommentToolActive) {
+        const pos = screenToCanvas(e.clientX, e.clientY);
+        const newBubbleId = `comment-${Date.now()}`;
+        const newBubble: CommentBubbleData = {
+          id: newBubbleId,
+          position: pos,
+          targetType: "canvas",
+          resolved: false,
+        };
+        setCommentBubbles(prev => [...prev, newBubble]);
+        setSelectedBubbleId(newBubbleId);
+        setIsCommentToolActive(false);
       }
     },
     [state.activeTool, state.pan, board, screenToCanvas, isSpacePressed, currentUserName, hasMapId, mapId, logActivity]
@@ -616,6 +639,11 @@ export function FigJamBoard({
 
   const handleCanvasPointerMove = useCallback(
     (e: React.PointerEvent) => {
+      if (isCommentToolActive) {
+        setCursorPos({ x: e.clientX, y: e.clientY });
+        return;
+      }
+      
       if (isLassoing) {
         const pos = screenToCanvas(e.clientX, e.clientY);
         setLassoEnd(pos);
@@ -636,7 +664,7 @@ export function FigJamBoard({
         y: panOrigin.current.y + (e.clientY - panStart.current.y),
       });
     },
-    [board, isLassoing, screenToCanvas, hasMapId, updatePresence, state.selectedIds]
+    [board, isLassoing, isCommentToolActive, screenToCanvas, hasMapId, updatePresence, state.selectedIds]
   );
 
   const handleCanvasPointerUp = useCallback(
@@ -963,6 +991,7 @@ export function FigJamBoard({
     : state.activeTool === "sticky"  ? "cursor-crosshair"
     : state.activeTool === "section" ? "cursor-crosshair"
     : state.activeTool === "label"  ? "cursor-crosshair"
+    : isCommentToolActive ? "cursor-pointer"
     : isSpacePressed ? "cursor-grab"
     : "cursor-default";
 
@@ -988,6 +1017,15 @@ export function FigJamBoard({
         onPointerDown={handleCanvasPointerDown}
         onPointerMove={handleCanvasPointerMove}
         onPointerUp={handleCanvasPointerUp}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          if (state.selectedIds.length > 0) {
+            setContextMenu({
+              position: { x: e.clientX, y: e.clientY },
+              ids: state.selectedIds,
+            });
+          }
+        }}
       >
         <CanvasGrid zoom={state.zoom} pan={state.pan} />
 
@@ -1198,6 +1236,9 @@ export function FigJamBoard({
         onBack={onBack}
         ungroupedCount={ungroupedStickies.length}
         onToggleAIGroupingPanel={() => setShowAIGroupingPanel((v) => !v)}
+        isCommentToolActive={isCommentToolActive}
+        onToggleCommentTool={() => setIsCommentToolActive((v) => !v)}
+        bubbleCount={commentBubbles.length}
         selectedCount={state.selectedIds.length}
         votingConfig={{ dotsPerUser: voting.session?.maxDotsPerUser ?? 5, durationMinutes: voting.session?.durationMinutes ?? null }}
         onVotingConfigChange={(config) => {}}
@@ -1214,6 +1255,41 @@ export function FigJamBoard({
         isManualVotingMode={false}
       />
 
+      {/* ── Sticky Color Picker ── */}
+      <StickyColorPicker
+        isOpen={showStickyPicker}
+        onClose={() => {
+          setShowStickyPicker(false);
+          setPendingStickyPosition(null);
+        }}
+        onSelectColor={(color) => {
+          if (pendingStickyPosition) {
+            const stickyId = board.addStickyNote(
+              pendingStickyPosition,
+              color,
+              { width: 200, height: 200 },
+              currentUserName
+            );
+            if (hasMapId && mapId) {
+              try {
+                logActivity({
+                  mapId: mapId as Id<"affinityMaps">,
+                  action: "sticky_created",
+                  targetId: stickyId,
+                  targetName: color,
+                });
+              } catch (err) {
+                console.error("Failed to log activity:", err);
+              }
+            }
+            board.selectElement(stickyId);
+            board.setTool("select");
+          }
+          setShowStickyPicker(false);
+          setPendingStickyPosition(null);
+        }}
+      />
+
       {Object.keys(state.elements).length === 0 && (
         <div className="absolute inset-0 top-12 flex items-center justify-center pointer-events-none">
           <div className="text-center">
@@ -1223,6 +1299,115 @@ export function FigJamBoard({
           </div>
         </div>
       )}
+
+      {/* ── Comment Bubbles Layer ── */}
+      <CommentBubblesLayer
+        bubbles={commentBubbles}
+        zoom={state.zoom}
+        pan={state.pan}
+        selectedBubbleId={selectedBubbleId}
+        onBubbleClick={(id) => {
+          setSelectedBubbleId(prev => prev === id ? null : id);
+        }}
+        onBubbleDelete={(id) => {
+          setCommentBubbles(prev => prev.filter(b => b.id !== id));
+          if (selectedBubbleId === id) {
+            setSelectedBubbleId(null);
+          }
+        }}
+        onBubblePositionChange={(id, position) => {
+          setCommentBubbles(prev => prev.map(b => 
+            b.id === id ? { ...b, position } : b
+          ));
+        }}
+        mapId={mapId || ""}
+        projectId={projectId || ""}
+        presenceUsers={otherUsers?.map(u => ({
+          id: u.userId,
+          name: u.user?.name || "User",
+        })) || []}
+      />
+
+      {/* ── Comment Tool Cursor ── */}
+      {isCommentToolActive && cursorPos && (
+        <div
+          className="fixed pointer-events-none z-[60] transition-all duration-75"
+          style={{
+            left: cursorPos.x,
+            top: cursorPos.y,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <motion.div
+            initial={{ scale: 0.5, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="w-10 h-10 rounded-full bg-primary flex items-center justify-center shadow-lg ring-2 ring-primary/30"
+          >
+            <MessageSquare className="w-5 h-5 text-primary-foreground" />
+          </motion.div>
+        </div>
+      )}
+
+      {/* ── Context Menu ── */}
+      <LassoContextMenu
+        selectedIds={contextMenu?.ids || []}
+        position={contextMenu?.position || { x: 0, y: 0 }}
+        isOpen={contextMenu !== null}
+        onClose={() => setContextMenu(null)}
+        onGroup={() => {
+          board.groupSelectedIntoSection();
+          setContextMenu(null);
+        }}
+        onDelete={() => {
+          contextMenu?.ids.forEach(id => board.deleteElement(id));
+          setContextMenu(null);
+        }}
+        onDuplicate={() => {
+          contextMenu?.ids.forEach(id => board.duplicateElement(id));
+          setContextMenu(null);
+        }}
+        onComment={() => {
+          if (contextMenu?.ids.length) {
+            const firstId = contextMenu.ids[0];
+            const element = state.elements[firstId];
+            
+            let targetType: "sticky" | "label" | "canvas" = "canvas";
+            let elementWidth = 200;
+            
+            if (element?.type === "sticky") {
+              targetType = "sticky";
+              elementWidth = (element as StickyNoteData).size?.width || 200;
+            } else if (element?.type === "label") {
+              targetType = "label";
+            }
+            
+            const pos = element 
+              ? { x: element.position.x + elementWidth / 2, y: element.position.y - 30 }
+              : screenToCanvas(contextMenu.position.x, contextMenu.position.y);
+            
+            const newBubbleId = `comment-${Date.now()}`;
+            const newBubble: CommentBubbleData = {
+              id: newBubbleId,
+              position: pos,
+              targetId: firstId,
+              targetType,
+              resolved: false,
+            };
+            setCommentBubbles(prev => [...prev, newBubble]);
+            setSelectedBubbleId(newBubbleId);
+          }
+          setContextMenu(null);
+        }}
+        onLabel={() => {
+          const pos = screenToCanvas(contextMenu?.position.x || 0, contextMenu?.position.y || 0);
+          board.addClusterLabel({ x: pos.x, y: pos.y });
+          setContextMenu(null);
+        }}
+        onMoveToCluster={() => {
+          toast.info("Move to cluster feature coming soon");
+          setContextMenu(null);
+        }}
+      />
 
     </div>
   );
