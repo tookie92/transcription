@@ -2,9 +2,11 @@
 
 import React, { useCallback, useRef, useState, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Sparkles } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { ClusterLabelData } from "@/types/figjam";
+import type { ClusterLabelData, StickyNoteData } from "@/types/figjam";
 import { usePureDrag } from "@/hooks/usePureDrag";
+import { AIRenameModal } from "./AIRenameModal";
 
 export const LABEL_COLORS = [
   { bg: "#dbeafe", border: "#3b82f6", text: "#1e40af", glow: "#3b82f6" },
@@ -34,6 +36,8 @@ interface ClusterLabelProps {
   userVotesRemaining?: number;
   votes?: ClusterVote[];
   userNames?: Map<string, string>;
+  stickiesInCluster?: StickyNoteData[];
+  projectContext?: string;
   onSelect: (id: string, multi: boolean) => void;
   onUpdate: (id: string, patch: Partial<ClusterLabelData>) => void;
   onDelete: (id: string) => void;
@@ -54,6 +58,8 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   userVotesRemaining = 0,
   votes = [],
   userNames = new Map(),
+  stickiesInCluster = [],
+  projectContext,
   onSelect,
   onUpdate,
   onDelete,
@@ -61,6 +67,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   onVote,
 }: ClusterLabelProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [showAIRename, setShowAIRename] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   
   const voteCount = votes.length;
@@ -244,6 +251,30 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
               {label.text || "Cluster"}
             </span>
           )}
+
+          {/* AI Rename Button - shows on hover/selection */}
+          {!isLocked && !isVotingMode && stickiesInCluster.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="w-6 h-6 rounded-full bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-violet-200 dark:hover:bg-violet-800"
+                  style={{ 
+                    opacity: isSelected ? 1 : 0,
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAIRename(true);
+                  }}
+                >
+                  <Sparkles size={12} className="text-violet-600 dark:text-violet-400" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="bg-card text-foreground border border-border shadow-lg">
+                <p className="text-xs">AI Rename</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
           
           {/* Vote count badge - show as dots with animation */}
           {voteCount > 0 && (
@@ -346,6 +377,16 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
           </svg>
         </button>
       )}
+
+      {/* AI Rename Modal */}
+      <AIRenameModal
+        isOpen={showAIRename}
+        onClose={() => setShowAIRename(false)}
+        currentName={label.text}
+        insights={stickiesInCluster.map(s => ({ text: s.content, type: s.color }))}
+        projectContext={projectContext}
+        onApplyName={(newName) => onUpdate(label.id, { text: newName })}
+      />
     </div>
   );
 });

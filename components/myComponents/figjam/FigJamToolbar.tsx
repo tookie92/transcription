@@ -7,7 +7,7 @@ import { VotingSettings } from "./VotingSettings";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { BarChart3, Plus, Minus, MousePointer2, Hand, StickyNote, Tag, ArrowLeft } from "lucide-react";
+import { BarChart3, Plus, Minus, MousePointer2, Hand, StickyNote, Tag, ArrowLeft, Sparkles } from "lucide-react";
 
 interface VotingConfig {
   dotsPerUser: number;
@@ -46,6 +46,8 @@ interface FigJamToolbarProps {
   onStartNewVote?: () => void;
   isManualVotingMode?: boolean;
   onToggleManualVotingMode?: () => void;
+  ungroupedCount?: number;
+  onToggleAIGroupingPanel?: () => void;
 }
 
 function formatTime(ms: number): string {
@@ -79,6 +81,8 @@ export function FigJamToolbar({
   onStartNewVote,
   isManualVotingMode,
   onToggleManualVotingMode,
+  ungroupedCount = 0,
+  onToggleAIGroupingPanel,
 }: FigJamToolbarProps) {
 
   const sortedResults = [...(voteResults || [])].sort((a, b) => b.voteCount - a.voteCount);
@@ -175,6 +179,32 @@ export function FigJamToolbar({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" className="bg-card border-border shadow-lg">Cluster Label (C)</TooltipContent>
+            </Tooltip>
+
+            <div className="w-px h-6 bg-border mx-1" />
+
+            {/* AI Grouping Button */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`w-10 h-10 rounded-xl ${ungroupedCount > 0 ? "text-violet-600 hover:text-violet-700 hover:bg-violet-50" : ""}`}
+                  onClick={onToggleAIGroupingPanel}
+                >
+                  <div className="relative">
+                    <Sparkles className="w-5 h-5" />
+                    {ungroupedCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-violet-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                        {ungroupedCount > 9 ? "9+" : ungroupedCount}
+                      </span>
+                    )}
+                  </div>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="bg-card border-border shadow-lg">
+                {ungroupedCount > 0 ? `AI Grouping (${ungroupedCount} ungrouped)` : "AI Grouping"}
+              </TooltipContent>
             </Tooltip>
           </div>
         </div>

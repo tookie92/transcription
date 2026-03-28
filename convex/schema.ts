@@ -224,7 +224,7 @@ presence: defineTable({
 elementMovements: defineTable({
   mapId: v.id("affinityMaps"),
   elementId: v.string(),
-  elementType: v.union(v.literal("sticky"), v.literal("section"), v.literal("dot")),
+  elementType: v.union(v.literal("sticky"), v.literal("section"), v.literal("dot"), v.literal("label")),
   action: v.union(v.literal("move"), v.literal("resize"), v.literal("update")),
   position: v.optional(v.object({ x: v.number(), y: v.number() })),
   size: v.optional(v.object({ width: v.number(), height: v.number() })),

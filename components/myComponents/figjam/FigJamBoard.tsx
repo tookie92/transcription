@@ -5,6 +5,7 @@ import { useFigJamBoard } from "@/hooks/useFigJamBoard";
 import { StickyNote } from "./StickyNote";
 import { ClusterLabel } from "./ClusterLabel";
 import { FigJamToolbar } from "./FigJamToolbar";
+import { AIGroupingPanel } from "./AIGroupingPanel";
 import type { FigJamElement, Position, Size, StickyColor, StickyNoteData, DotData, ToolType, ClusterLabelData, SectionData, TextData } from "@/types/figjam";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { usePresence } from "@/hooks/usePresence";
@@ -14,6 +15,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { motion } from "framer-motion";
 import { useThrottle } from "@/hooks/useThrottle";
 import { useVotingSync } from "@/hooks/useVotingSync";
+import { toast } from "sonner";
 
 interface PresenceUser {
   _id: string;
@@ -121,6 +123,7 @@ export function FigJamBoard({
 
   const [renameSectionId, setRenameSectionId] = useState<string | null>(null);
   const [showStickyPicker, setShowStickyPicker] = useState(false);
+  const [showAIGroupingPanel, setShowAIGroupingPanel] = useState(false);
   
   // Keyboard shortcuts
   useEffect(() => {
@@ -255,7 +258,7 @@ export function FigJamBoard({
   // Throttled broadcast - sends movement updates every 200ms for real-time sync
   const throttledBroadcast = useThrottle((
     elementId: string,
-    elementType: "sticky" | "section" | "dot",
+    elementType: "sticky" | "section" | "dot" | "label",
     action: "move" | "resize" | "update",
     position?: { x: number; y: number },
     size?: { width: number; height: number },
@@ -644,6 +647,7 @@ export function FigJamBoard({
         const minY = Math.min(lassoStart.y, lassoEnd.y);
         const maxY = Math.max(lassoStart.y, lassoEnd.y);
         
+        // Select all stickies within lasso
         allStickies.forEach((sticky) => {
           const sRight = sticky.position.x + 200;
           const sBottom = sticky.position.y + 200;
@@ -654,13 +658,34 @@ export function FigJamBoard({
             board.selectElement(sticky.id, true);
           }
         });
+        
+        // Select all cluster labels within lasso (compute from state.elements)
+        const allLabels = Object.values(state.elements).filter(
+          (el): el is ClusterLabelData => el.type === "label"
+        );
+        allLabels.forEach((label) => {
+          const labelX = label.position.x;
+          const labelY = label.position.y;
+          
+          // Check if label center is within lasso (expand lasso to include label area)
+          const lassoPadding = 100; // Account for label size
+          const intersects = 
+            labelX >= minX - lassoPadding && 
+            labelX <= maxX + lassoPadding &&
+            labelY >= minY - lassoPadding && 
+            labelY <= maxY + lassoPadding;
+          
+          if (intersects) {
+            board.selectElement(label.id, true);
+          }
+        });
       }
       
       setLassoStart(null);
       setLassoEnd(null);
       isPanning.current = false;
     },
-    [isLassoing, lassoStart, lassoEnd, allStickies, board]
+    [isLassoing, lassoStart, lassoEnd, allStickies, state.elements, board]
   );
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────
@@ -696,7 +721,7 @@ export function FigJamBoard({
         return;
       }
 
-      // Arrow keys for moving selected elements
+      // Arrow keys for moving selected elements (stickies AND clusters)
       const arrowKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
       if (arrowKeys.includes(e.key) && state.selectedIds.length > 0) {
         e.preventDefault();
@@ -709,22 +734,36 @@ export function FigJamBoard({
           case "ArrowRight": dx = step; break;
         }
         
-        const selectedStickies = state.selectedIds
+        // Get all selected elements (stickies and labels/clusters)
+        const selectedElements = state.selectedIds
           .map((id) => state.elements[id])
-          .filter((el): el is StickyNoteData => el?.type === "sticky");
+          .filter((el) => el && (el.type === "sticky" || el.type === "label"));
         
-        const patches: { id: string; patch: ElementPatch }[] = selectedStickies.map((sticky) => ({
-          id: sticky.id,
+        // Move all selected elements
+        const patches: { id: string; patch: ElementPatch }[] = selectedElements.map((el) => ({
+          id: el.id,
           patch: {
             position: {
-              x: sticky.position.x + dx,
-              y: sticky.position.y + dy,
+              x: el.position.x + dx,
+              y: el.position.y + dy,
             },
           },
         }));
         
         if (patches.length > 0) {
           board.updateMany(patches);
+          
+          // Broadcast movements for all moved elements
+          if (hasMapId) {
+            patches.forEach(({ id, patch }) => {
+              const element = state.elements[id];
+              if (element?.type === "sticky") {
+                throttledBroadcast(id, "sticky", "move", patch.position as Position);
+              } else if (element?.type === "label") {
+                throttledBroadcast(id, "label", "move", patch.position as Position);
+              }
+            });
+          }
         }
 
         return;
@@ -823,6 +862,62 @@ export function FigJamBoard({
     return null;
   }, [labels]);
 
+  // Ungrouped stickies - stickies not near any cluster label
+  const ungroupedStickies = useMemo(() => {
+    return stickies.filter((s) => {
+      const clusterId = getStickyCluster(s.position, s.size ?? { width: 200, height: 200 });
+      return clusterId === null;
+    });
+  }, [stickies, getStickyCluster]);
+
+  // Handle creating a cluster from AI grouping suggestions
+  const handleCreateClusterFromAI = useCallback((
+    stickyIds: string[],
+    title: string,
+    position: Position
+  ) => {
+    // Cluster label position is the CENTER of the proximity zone
+    // PROXIMITY_RADIUS = 350px - stickies must be within this distance from cluster label center
+    const clusterId = board.addClusterLabel(position);
+    
+    // Update the cluster title
+    board.updateElement(clusterId, { text: title });
+    
+    // Position stickies within the proximity radius (350px from cluster label)
+    // Sticky center must be within this distance from cluster label
+    const STICKY_SPACING_X = 220; // Horizontal spacing between sticky centers
+    const STICKY_SPACING_Y = 160; // Vertical spacing - kept small to stay within radius
+    const COLUMNS = 3;
+    const FIRST_ROW_OFFSET = 40; // First row starts close to cluster label center
+    
+    stickyIds.forEach((stickyId, index) => {
+      const col = index % COLUMNS;
+      const row = Math.floor(index / COLUMNS);
+      
+      // Calculate offset from cluster label center
+      const offsetX = (col - 1) * STICKY_SPACING_X;
+      const offsetY = FIRST_ROW_OFFSET + row * STICKY_SPACING_Y;
+      
+      // Sticky position: top-left corner = center - half size
+      // Cluster label is at (position.x, position.y) - this is the proximity center
+      const stickyPosition = {
+        x: position.x + offsetX - 100, // -100 centers the 200px wide sticky
+        y: position.y + offsetY, // offset from cluster label center
+      };
+      
+      // Get current sticky to preserve size
+      const sticky = state.elements[stickyId];
+      const size = (sticky && sticky.type === "sticky") 
+        ? (sticky as StickyNoteData).size 
+        : { width: 200, height: 200 };
+      
+      // Update sticky position
+      board.updateElement(stickyId, { position: stickyPosition, size });
+    });
+    
+    toast.success(`Created cluster "${title}" with ${stickyIds.length} stickies`);
+  }, [board, state.elements]);
+
   // Get distance from sticky to nearest cluster (for highlight effect)
   const getDistanceToNearestCluster = useCallback((stickyPos: Position, stickySize: Size): { id: string; distance: number } | null => {
     const stickyCenterX = stickyPos.x + stickySize.width / 2;
@@ -876,6 +971,16 @@ export function FigJamBoard({
       className="relative w-full h-full overflow-hidden bg-[#f5f5f0] select-none"
       style={{ fontFamily: "'DM Sans', system-ui, sans-serif", ...style }}
     >
+      {/* ── AI Grouping Panel ── */}
+      <AIGroupingPanel
+        isOpen={showAIGroupingPanel}
+        onClose={() => setShowAIGroupingPanel(false)}
+        ungroupedStickies={ungroupedStickies}
+        existingClusters={labels}
+        projectContext={projectName ? `PROJECT NAME: ${projectName}` : undefined}
+        onCreateCluster={handleCreateClusterFromAI}
+      />
+
       {/* ── Canvas ── */}
       <div
         ref={canvasRef}
@@ -953,6 +1058,10 @@ export function FigJamBoard({
             const isHighlighted = isDragging && nearestCluster?.id === el.id;
             
             const clusterVotes = voting.getClusterVotes(el.id);
+            const stickiesInThisCluster = stickies.filter(s => {
+              const clusterId = getStickyCluster(s.position, s.size ?? { width: 200, height: 200 });
+              return clusterId === el.id;
+            });
             return (
               <ClusterLabel
                 key={el.id}
@@ -968,12 +1077,20 @@ export function FigJamBoard({
                 userNames={userNamesMap}
                 hasUserVoted={voting.myVotes.has(el.id)}
                 userVotesRemaining={voting.getUserVotesRemaining()}
+                stickiesInCluster={stickiesInThisCluster}
+                projectContext={projectName ? `PROJECT NAME: ${projectName}` : undefined}
                 onSelect={handleSelectWithLock}
                 onMove={(id, pos) => {
                   board.updateElement(id, { position: pos });
+                  if (hasMapId) {
+                    throttledBroadcast(id, "label", "move", pos);
+                  }
                 }}
                 onUpdate={(id, patch) => {
                   board.updateElement(id, patch);
+                  if (hasMapId) {
+                    throttledBroadcast(id, "label", "update", patch.position, undefined, patch);
+                  }
                 }}
                 onDelete={board.deleteElement}
                 onVote={voting.toggleVote}
@@ -1079,6 +1196,8 @@ export function FigJamBoard({
         }}
         onGroupSelected={() => board.groupSelectedIntoSection()}
         onBack={onBack}
+        ungroupedCount={ungroupedStickies.length}
+        onToggleAIGroupingPanel={() => setShowAIGroupingPanel((v) => !v)}
         selectedCount={state.selectedIds.length}
         votingConfig={{ dotsPerUser: voting.session?.maxDotsPerUser ?? 5, durationMinutes: voting.session?.durationMinutes ?? null }}
         onVotingConfigChange={(config) => {}}
