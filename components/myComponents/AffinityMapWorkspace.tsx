@@ -4,7 +4,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import { AffinityGroup, Insight, ActivePanel, ThemeAnalysis, ThemeRecommendation } from "@/types";
 import { toast } from "sonner";
@@ -17,14 +17,20 @@ import { FigJamBoard } from "./figjam/FigJamBoard";
 import { useAffinityMapData } from "@/hooks/useAffinityMapData";
 import { useAffinityMapHandlers } from "@/hooks/useAffinityMapHandlers";
 
+// Voting hook
+import { useVotingSync } from "@/hooks/useVotingSync";
+
 // Activity
 import { useActivity } from "@/hooks/useActivity";
 import { ActivityPanel } from "./ActivityPanel";
 import { CommentPanel } from "./CommentPanel";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Clock, Vote } from "lucide-react";
 
 // Side panels for features (AI suggestions, analytics, etc.)
 import { CanvasSidePanels } from "./canvas/CanvasSidePanels";
+
+// Voting config modal
+import { VotingConfigModal } from "./figjam/VotingConfigModal";
 
 interface AffinityMapWorkspaceProps {
   projectId: Id<"projects">;
@@ -48,12 +54,32 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const activity = useActivity();
   const [showActivityPanel, setShowActivityPanel] = useState(false);
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
-  const [isVotingMode, setIsVotingMode] = useState(false);
-  const [userVotes, setUserVotes] = useState<string[]>([]);
+  const [showVotingConfig, setShowVotingConfig] = useState(false);
   const [themeAnalysis, setThemeAnalysis] = useState<ThemeAnalysis | null>(null);
   const [isThemesAnalyzing, setIsThemesAnalyzing] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [commentPanel, setCommentPanel] = useState<{groupId: string; rect: DOMRect} | null>(null);
+
+  // ==================== VOTING (Synchronized via Convex) ====================
+  const voting = useVotingSync(affinityMap?._id, projectId as Id<"projects">);
+  const isVotingMode = voting.isVoting;
+
+  // Compute vote results for ranking
+  const voteResults = useMemo(() => {
+    if (!voting.session || voting.session.isActive) return [];
+    return groups
+      .map(group => {
+        const clusterVotes = voting.getClusterVotes(group.id);
+        return {
+          sectionId: group.id,
+          title: group.title,
+          voteCount: clusterVotes.length,
+          colors: clusterVotes.map((v: { color: string }) => v.color),
+        };
+      })
+      .filter((r: { voteCount: number }) => r.voteCount > 0)
+      .sort((a: { voteCount: number }, b: { voteCount: number }) => b.voteCount - a.voteCount);
+  }, [groups, voting.session, voting]);
 
   // Keyboard shortcut for voting mode
   useEffect(() => {
@@ -61,10 +87,6 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
       if (["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName)) return;
       const active = document.activeElement;
       if (active?.tagName === "INPUT" || active?.tagName === "TEXTAREA" || (active as HTMLElement)?.isContentEditable) return;
-      
-      if (e.key.toLowerCase() === "x") {
-        setIsVotingMode(v => !v);
-      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -103,28 +125,6 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     broadcastInsightMoved,
     activity,
   });
-
-  // ==================== VOTING HANDLERS ====================
-  const handleVote = useCallback((insightId: string) => {
-    if (userVotes.includes(insightId)) {
-      setUserVotes((prev) => prev.filter((id) => id !== insightId));
-      toast.info("Vote removed");
-    } else {
-      if (userVotes.length >= 5) {
-        toast.error("Maximum 5 votes allowed");
-        return;
-      }
-      setUserVotes((prev) => [...prev, insightId]);
-      toast.success("Vote added!");
-    }
-  }, [userVotes]);
-
-  const handleToggleVotingMode = useCallback(() => {
-    setIsVotingMode((prev) => !prev);
-    if (!isVotingMode) {
-      toast.info("Voting mode enabled - click on stickies to vote");
-    }
-  }, [isVotingMode]);
 
   // ==================== STICKY POSITION HANDLER ====================
   const handleStickyPositionChange = useCallback((insightId: string, position: { x: number; y: number }) => {
@@ -351,18 +351,15 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           <button
             onClick={() => {
               if (isVotingMode) {
-                // Stop voting
-                setIsVotingMode(false);
-                setUserVotes([]);
+                voting.stopVoting();
               } else {
-                // Start voting
-                setIsVotingMode(true);
+                setShowVotingConfig(true);
               }
             }}
             className={`px-4 py-1.5 rounded-lg border flex items-center gap-2 text-sm font-medium transition-all ${
               isVotingMode
                 ? "bg-red-500 border-red-600 text-white hover:bg-red-600 shadow-lg animate-pulse"
-                : "bg-gradient-to-r from-violet-500 to-purple-500 border-violet-600 text-white hover:from-violet-600 hover:to-purple-600 shadow-md"
+                : "bg-primary text-white hover:bg-primary/80 shadow-md"
             }`}
           >
             {isVotingMode ? (
@@ -374,10 +371,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
               </>
             ) : (
               <>
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10"/>
-                  <polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/>
-                </svg>
+                <Vote className="w-4 h-4" />
                 Start Voting
               </>
             )}
@@ -398,35 +392,73 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
       </div>
 
       {/* Voting Status Banner */}
-      {isVotingMode && (
+      {voting.session && voting.session.votingPhase !== "setup" && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 bg-gradient-to-r from-violet-500/10 to-purple-500/10 backdrop-blur-sm rounded-xl shadow-lg border border-violet-200 px-6 py-3 flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-violet-500 rounded-full animate-pulse"/>
-            <span className="text-sm font-medium text-violet-700">Voting in progress</span>
-          </div>
-          <div className="h-6 w-px bg-violet-200"/>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Your votes:</span>
-            <div className="flex gap-1">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div
-                  key={i}
-                  className={`w-5 h-5 rounded-full border-2 transition-all ${
-                    i < userVotes.length
-                      ? "bg-violet-500 border-violet-500 scale-110"
-                      : "border-gray-300"
-                  }`}
-                />
-              ))}
-            </div>
-            <span className="text-xs text-gray-500">({userVotes.length}/5)</span>
-          </div>
-          <button
-            onClick={() => setUserVotes([])}
-            className="text-xs text-violet-600 hover:text-violet-800 hover:underline"
-          >
-            Reset
-          </button>
+          
+          {/* Voting Phase Indicator */}
+          {voting.session.votingPhase === "voting" && (
+            <>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-violet-500 rounded-full animate-pulse"/>
+                <span className="text-sm font-medium text-violet-700">Voting in progress</span>
+              </div>
+              
+              {voting.remainingTime !== null && (
+                <>
+                  <div className="h-6 w-px bg-violet-200"/>
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-violet-500" />
+                    <span className="text-sm font-mono font-medium text-violet-700">
+                      {Math.floor(voting.remainingTime / 60000).toString().padStart(2, '0')}:{Math.floor((voting.remainingTime % 60000) / 1000).toString().padStart(2, '0')}
+                    </span>
+                  </div>
+                </>
+              )}
+              
+              <div className="h-6 w-px bg-violet-200"/>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Your votes:</span>
+                <div className="flex gap-1">
+                  {Array.from({ length: voting.session?.maxDotsPerUser || 0 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={`w-5 h-5 rounded-full border-2 transition-all ${
+                        i < voting.myVotesCount
+                          ? "bg-violet-500 border-violet-500 scale-110"
+                          : "border-gray-300"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span className="text-xs text-gray-500">({voting.myVotesCount}/{voting.session?.maxDotsPerUser})</span>
+              </div>
+            </>
+          )}
+
+          {/* Revealed Phase - Show Ranking */}
+          {voting.session.votingPhase === "revealed" && (
+            <>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-green-500 rounded-full"/>
+                <span className="text-sm font-medium text-green-700">Results Revealed</span>
+              </div>
+              <div className="h-6 w-px bg-violet-200"/>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-violet-700">Top Clusters:</span>
+                <div className="flex items-center gap-2">
+                  {voteResults.slice(0, 3).map((result: { sectionId: string; title: string; voteCount: number }, i: number) => (
+                    <div key={result.sectionId} className="flex items-center gap-1 bg-white/50 px-2 py-1 rounded-lg">
+                      <span className={`text-xs font-bold ${i === 0 ? 'text-yellow-600' : i === 1 ? 'text-gray-500' : i === 2 ? 'text-amber-600' : 'text-gray-400'}`}>
+                        #{i + 1}
+                      </span>
+                      <span className="text-xs text-gray-700 truncate max-w-[100px]">{result.title}</span>
+                      <span className="text-xs font-bold text-violet-600">{result.voteCount}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -448,6 +480,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           mapId={affinityMap._id}
           style={{ paddingTop: isVotingMode ? '96px' : '56px' }}
           isVotingMode={isVotingMode}
+          voting={voting}
           onBack={() => router.push(`/project/${projectId}`)}
           onChange={(elements) => {
             console.log("Board changed:", Object.keys(elements).length, "elements");
@@ -587,6 +620,16 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           </svg>
         </button>
       </div>
+
+      {/* Voting Config Modal */}
+      <VotingConfigModal
+        open={showVotingConfig}
+        onOpenChange={setShowVotingConfig}
+        onStartVoting={(config) => {
+          voting.startVoting(config);
+        }}
+        clusterCount={groups.length || 3}
+      />
     </div>
   );
 }

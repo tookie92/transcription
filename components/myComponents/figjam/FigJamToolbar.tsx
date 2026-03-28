@@ -6,7 +6,6 @@ import { STICKY_COLORS } from "./StickyNote";
 import { VotingSettings } from "./VotingSettings";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { BarChart3, Plus, Minus, MousePointer2, Hand, StickyNote, Tag, ArrowLeft } from "lucide-react";
 
@@ -90,27 +89,36 @@ export function FigJamToolbar({
         {/* ── Canvas Tools (Bottom Center) ── */}
         <div className="absolute left-1/2 bottom-6 -translate-x-1/2 z-30">
           <div className="flex items-center gap-1 bg-card/95 backdrop-blur-sm rounded-2xl shadow-xl border border-border px-2 py-1.5">
-            <ToggleGroup type="single" value={activeTool} onValueChange={(v) => {
-              if (v && v !== activeTool) onToolChange(v as ToolType);
-            }} className="gap-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <ToggleGroupItem value="select" aria-label="Select tool" className="w-9 h-9 rounded-xl data-[state=on]:bg-primary/10 data-[state=on]:text-primary">
-                    <MousePointer2 className="w-4 h-4" />
-                  </ToggleGroupItem>
-                </TooltipTrigger>
-                <TooltipContent side="top">Select (V)</TooltipContent>
-              </Tooltip>
+            
+            {/* Select Tool */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`w-10 h-10 rounded-xl ${activeTool === "select" ? "bg-primary/20 text-primary ring-2 ring-primary/30" : ""}`}
+                  onClick={() => onToolChange("select")}
+                >
+                  <MousePointer2 className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="bg-card border-border shadow-lg">Select (V)</TooltipContent>
+            </Tooltip>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <ToggleGroupItem value="hand" aria-label="Hand tool" className="w-9 h-9 rounded-xl data-[state=on]:bg-primary/10 data-[state=on]:text-primary">
-                    <Hand className="w-4 h-4" />
-                  </ToggleGroupItem>
-                </TooltipTrigger>
-                <TooltipContent side="top">Hand (H)</TooltipContent>
-              </Tooltip>
-            </ToggleGroup>
+            {/* Hand Tool */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`w-10 h-10 rounded-xl ${activeTool === "hand" ? "bg-primary/20 text-primary ring-2 ring-primary/30" : ""}`}
+                  onClick={() => onToolChange("hand")}
+                >
+                  <Hand className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="bg-card border-border shadow-lg">Hand (H)</TooltipContent>
+            </Tooltip>
 
             <div className="w-px h-6 bg-border mx-1" />
 
@@ -122,12 +130,12 @@ export function FigJamToolbar({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className={`w-9 h-9 rounded-xl ${showStickyPicker ? "bg-primary/10 text-primary" : ""}`}
+                      className={`w-10 h-10 rounded-xl ${activeTool === "sticky" || showStickyPicker ? "bg-primary/20 text-primary ring-2 ring-primary/30" : ""}`}
                     >
-                      <StickyNote className="w-4 h-4" />
+                      <StickyNote className="w-5 h-5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">Sticky Note (S)</TooltipContent>
+                  <TooltipContent side="top" className="bg-card border-border shadow-lg">Sticky Note (S)</TooltipContent>
                 </Tooltip>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-2" side="top" sideOffset={8}>
@@ -154,27 +162,28 @@ export function FigJamToolbar({
               </PopoverContent>
             </Popover>
 
+            {/* Cluster Label Tool */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={`w-9 h-9 rounded-xl ${activeTool === "label" ? "bg-primary/10 text-primary" : ""}`}
+                  className={`w-10 h-10 rounded-xl ${activeTool === "label" ? "bg-primary/20 text-primary ring-2 ring-primary/30" : ""}`}
                   onClick={() => onToolChange("label")}
                 >
                   <Tag className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top">Cluster Label (C)</TooltipContent>
+              <TooltipContent side="top" className="bg-card border-border shadow-lg">Cluster Label (C)</TooltipContent>
             </Tooltip>
           </div>
         </div>
 
         {/* ── Mode & Voting Panel (Top Right) ── */}
-        <div className="absolute right-4 top-20 z-30 space-y-2">
+        {/* <div className="absolute right-4 top-20 z-30 space-y-2"> */}
 
           {/* Voting Session Button */}
-          <Popover>
+          {/* <Popover>
             <PopoverTrigger asChild>
               <Button
                 className={`w-full justify-start gap-2 px-4 py-2.5 rounded-xl shadow-lg ${
@@ -263,8 +272,8 @@ export function FigJamToolbar({
                 )}
               </div>
             </PopoverContent>
-          </Popover>
-        </div>
+          </Popover> */}
+        {/* </div> */}
 
         {/* ── Selection indicator (bottom left) ── */}
         {selectedCount > 0 && (

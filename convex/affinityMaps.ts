@@ -711,3 +711,232 @@ export const getElementLocks = query({
       .collect();
   },
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VOTING SESSIONS (Synchronized & Silent)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Get active voting session for a map
+ */
+export const getActiveVotingSession = query({
+  args: {
+    mapId: v.id("affinityMaps"),
+  },
+  handler: async (ctx, args) => {
+    const sessions = await ctx.db
+      .query("dotVotingSessions")
+      .withIndex("by_map", q => q.eq("mapId", args.mapId))
+      .collect();
+    
+    // Return the most recent active session
+    return sessions
+      .filter(s => s.votingPhase !== "completed")
+      .sort((a, b) => b.createdAt - a.createdAt)[0] || null;
+  },
+});
+
+/**
+ * Get all votes for a session
+ */
+export const getSessionVotes = query({
+  args: {
+    sessionId: v.id("dotVotingSessions"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("dotVotes")
+      .withIndex("by_session", q => q.eq("sessionId", args.sessionId))
+      .collect();
+  },
+});
+
+/**
+ * Get votes for a specific user in a session (used to check remaining votes)
+ */
+export const getUserVotes = query({
+  args: {
+    sessionId: v.id("dotVotingSessions"),
+    userId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Get all votes for this session and filter by user
+    const allVotes = await ctx.db
+      .query("dotVotes")
+      .withIndex("by_session", q => q.eq("sessionId", args.sessionId))
+      .collect();
+    
+    return allVotes.filter(v => v.userId === args.userId);
+  },
+});
+
+/**
+ * Start a new voting session
+ */
+export const startVotingSession = mutation({
+  args: {
+    projectId: v.id("projects"),
+    mapId: v.id("affinityMaps"),
+    name: v.string(),
+    maxDotsPerUser: v.number(),
+    isSilentMode: v.boolean(),
+    durationMinutes: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const sessionId = await ctx.db.insert("dotVotingSessions", {
+      projectId: args.projectId,
+      mapId: args.mapId,
+      name: args.name,
+      maxDotsPerUser: args.maxDotsPerUser,
+      isActive: true,
+      votingPhase: "voting",
+      isSilentMode: args.isSilentMode,
+      durationMinutes: args.durationMinutes,
+      startTime: Date.now(),
+      createdBy: identity.subject,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    return sessionId;
+  },
+});
+
+/**
+ * Cast a vote (one vote per cluster per user)
+ */
+export const castVote = mutation({
+  args: {
+    sessionId: v.id("dotVotingSessions"),
+    userId: v.string(),
+    targetId: v.string(),
+    targetType: v.union(v.literal("group"), v.literal("insight")),
+    color: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    // Check session is active
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.votingPhase !== "voting") {
+      throw new Error("Voting is not active");
+    }
+
+    // Check if user already voted for this target - get all votes for this session
+    const allSessionVotes = await ctx.db
+      .query("dotVotes")
+      .withIndex("by_session", q => q.eq("sessionId", args.sessionId))
+      .collect();
+
+    const userVotes = allSessionVotes.filter(v => v.userId === args.userId);
+    const existingVote = userVotes.find(v => v.targetId === args.targetId);
+    
+    if (existingVote) {
+      // Remove vote (toggle off)
+      await ctx.db.delete(existingVote._id);
+      return { action: "removed", voteId: existingVote._id };
+    }
+
+    // Check if user has remaining votes
+    if (userVotes.length >= session.maxDotsPerUser) {
+      throw new Error("No votes remaining");
+    }
+
+    // Create vote with position at cluster center
+    const voteId = await ctx.db.insert("dotVotes", {
+      sessionId: args.sessionId,
+      userId: args.userId,
+      targetId: args.targetId,
+      targetType: args.targetType,
+      color: args.color,
+      position: { x: 0, y: 0 }, // Will be calculated client-side
+      createdAt: Date.now(),
+    });
+
+    return { action: "added", voteId };
+  },
+});
+
+/**
+ * Stop voting and reveal results (creator only)
+ */
+export const stopVoting = mutation({
+  args: {
+    sessionId: v.id("dotVotingSessions"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Session not found");
+
+    await ctx.db.patch(args.sessionId, {
+      isActive: false,
+      votingPhase: "revealed",
+      updatedAt: Date.now(),
+    });
+
+    return true;
+  },
+});
+
+/**
+ * Complete and archive the session
+ */
+export const completeVoting = mutation({
+  args: {
+    sessionId: v.id("dotVotingSessions"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    await ctx.db.patch(args.sessionId, {
+      votingPhase: "completed",
+      updatedAt: Date.now(),
+    });
+
+    return true;
+  },
+});
+
+/**
+ * Start a new voting round (reset votes)
+ */
+export const startNewVoteRound = mutation({
+  args: {
+    sessionId: v.id("dotVotingSessions"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Session not found");
+
+    // Delete all votes for this session
+    const votes = await ctx.db
+      .query("dotVotes")
+      .withIndex("by_session", q => q.eq("sessionId", args.sessionId))
+      .collect();
+
+    for (const vote of votes) {
+      await ctx.db.delete(vote._id);
+    }
+
+    // Reset session
+    await ctx.db.patch(args.sessionId, {
+      isActive: true,
+      votingPhase: "voting",
+      startTime: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    return true;
+  },
+});

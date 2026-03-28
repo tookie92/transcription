@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Minus, Plus, Clock, EyeOff, Play, Square, RotateCcw } from "lucide-react";
 
@@ -148,13 +149,13 @@ export function VotingSettings({
                 Timer (optional)
               </label>
               <div className="flex items-center gap-2">
-                <input type="checkbox" checked={hasDuration} onChange={(e) => setHasDuration(e.target.checked)} className="rounded" />
+                <Switch checked={hasDuration} onCheckedChange={setHasDuration} />
                 {hasDuration && (
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="icon" onClick={() => setDuration(d => Math.max(1, d - 1))}>
                       <Minus className="h-4 w-4" />
                     </Button>
-                    <div className="w-8 text-center font-bold">{duration} min</div>
+                    <div className="w-12 text-center font-bold">{duration} min</div>
                     <Button variant="outline" size="icon" onClick={() => setDuration(d => Math.min(60, d + 1))}>
                       <Plus className="h-4 w-4" />
                     </Button>

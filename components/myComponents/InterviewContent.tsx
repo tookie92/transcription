@@ -878,12 +878,15 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                     </CardHeader>
                     <CardContent>
                       <ul className="space-y-2">
-                        {interview.summary.criticalIssues.map((issue, index) => (
-                          <li key={index} className="flex items-start gap-3 p-3 bg-destructive/5 rounded-lg">
-                            <div className="w-2 h-2 bg-destructive rounded-full mt-2 flex-shrink-0" />
-                            <span className="text-destructive">{issue}</span>
-                          </li>
-                        ))}
+                        {interview.summary.criticalIssues.map((issue, index) => {
+                          const issueText = typeof issue === 'string' ? issue : issue.issue;
+                          return (
+                            <li key={index} className="flex items-start gap-3 p-3 bg-destructive/5 rounded-lg">
+                              <div className="w-2 h-2 bg-destructive rounded-full mt-2 flex-shrink-0" />
+                              <span className="text-destructive">{issueText}</span>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </CardContent>
                   </Card>
