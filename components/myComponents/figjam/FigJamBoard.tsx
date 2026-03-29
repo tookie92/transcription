@@ -872,8 +872,6 @@ export function FigJamBoard({
             targetType: "canvas",
             createdBy: userId || "",
             createdByName: currentUserName,
-          }).then((bubbleId) => {
-            setSelectedBubbleId(bubbleId as string);
           }).catch(console.error);
         }
         setIsCommentToolActive(false);
@@ -1690,8 +1688,6 @@ export function FigJamBoard({
               targetType,
               createdBy: userId || "",
               createdByName: currentUserName,
-            }).then((bubbleId) => {
-              setSelectedBubbleId(bubbleId as string);
             }).catch(console.error);
           }
           setContextMenu(null);

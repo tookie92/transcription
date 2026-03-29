@@ -51,6 +51,7 @@ export function CommentBubble({
   const [isDragging, setIsDragging] = useState(false);
   const [localPos, setLocalPos] = useState<Position | null>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const hasMovedRef = useRef(false);
 
   const screenPos = {
     x: (localPos?.x ?? bubble.position.x) * zoom + pan.x,
@@ -61,16 +62,22 @@ export function CommentBubble({
     if (e.button === 2) return;
     e.stopPropagation();
     setIsDragging(true);
+    hasMovedRef.current = false;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDragging || !dragStartRef.current) return;
-    
+
     const dx = (e.clientX - dragStartRef.current.x) / zoom;
     const dy = (e.clientY - dragStartRef.current.y) / zoom;
-    
+
+    // Check if there was actual movement (more than 3 pixels threshold)
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      hasMovedRef.current = true;
+    }
+
     setLocalPos({
       x: bubble.position.x + dx,
       y: bubble.position.y + dy,
@@ -79,12 +86,16 @@ export function CommentBubble({
 
   const handlePointerUp = (e: React.PointerEvent) => {
     if (!isDragging) return;
-    
+
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    
+
     const finalPos = localPos ?? bubble.position;
-    onDragEnd(finalPos);
-    
+
+    // Only save position if there was actual movement
+    if (hasMovedRef.current) {
+      onDragEnd(finalPos);
+    }
+
     setIsDragging(false);
     setLocalPos(null);
     dragStartRef.current = null;
@@ -119,10 +130,13 @@ export function CommentBubble({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onClick={(e) => {
-        if (!isDragging) {
+        // Only open thread if there was no movement (just a click, not a drag)
+        if (!hasMovedRef.current) {
           e.stopPropagation();
           onOpenThread();
         }
+        // Reset the moved flag after click
+        hasMovedRef.current = false;
       }}
     >
       {/* Ping ring animation - expands outward like radar */}

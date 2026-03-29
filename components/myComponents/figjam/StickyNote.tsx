@@ -8,20 +8,20 @@ import { useDraggable } from "@/hooks/useDraggable";
 
 export const STICKY_COLORS: Record<
   StickyColor,
-  { bg: string; header: string; text: string; accent: string }
+  { bg: string; header: string; text: string; accent: string; shadow: string }
 > = {
-  yellow:  { bg: "#FFF59D", header: "#FFF176", text: "#3E2723", accent: "#F9A825" },
-  pink:    { bg: "#F8BBD9", header: "#F48FB1", text: "#4A148C", accent: "#E91E63" },
-  green:   { bg: "#C8E6C9", header: "#A5D6A7", text: "#1B5E20", accent: "#43A047" },
-  blue:    { bg: "#BBDEFB", header: "#90CAF9", text: "#0D47A1", accent: "#1976D2" },
-  purple:  { bg: "#E1BEE7", header: "#CE93D8", text: "#4A148C", accent: "#8E24AA" },
-  orange:  { bg: "#FFE0B2", header: "#FFCC80", text: "#E65100", accent: "#FB8C00" },
-  white:   { bg: "#FAFAFA", header: "#EEEEEE", text: "#424242", accent: "#757575" },
+  yellow:  { bg: "#FFF59D", header: "#FFF176", text: "#3E2723", accent: "#F9A825", shadow: "rgba(255, 193, 7, 0.3)" },
+  pink:    { bg: "#F8BBD9", header: "#F48FB1", text: "#4A148C", accent: "#E91E63", shadow: "rgba(233, 30, 99, 0.25)" },
+  green:   { bg: "#C8E6C9", header: "#A5D6A7", text: "#1B5E20", accent: "#43A047", shadow: "rgba(76, 175, 80, 0.25)" },
+  blue:    { bg: "#BBDEFB", header: "#90CAF9", text: "#0D47A1", accent: "#1976D2", shadow: "rgba(25, 118, 210, 0.25)" },
+  purple:  { bg: "#E1BEE7", header: "#CE93D8", text: "#4A148C", accent: "#8E24AA", shadow: "rgba(142, 36, 170, 0.25)" },
+  orange:  { bg: "#FFE0B2", header: "#FFCC80", text: "#E65100", accent: "#FB8C00", shadow: "rgba(251, 140, 0, 0.25)" },
+  white:   { bg: "#FAFAFA", header: "#EEEEEE", text: "#424242", accent: "#757575", shadow: "rgba(0, 0, 0, 0.1)" },
   // Insight type colors
-  "pain-point":  { bg: "#FFCDD2", header: "#EF9A9A", text: "#B71C1C", accent: "#E53935" },
-  "quote":        { bg: "#E1BEE7", header: "#CE93D8", text: "#4A148C", accent: "#8E24AA" },
-  "insight":     { bg: "#C8E6C9", header: "#A5D6A7", text: "#1B5E20", accent: "#43A047" },
-  "follow-up":   { bg: "#BBDEFB", header: "#90CAF9", text: "#0D47A1", accent: "#1976D2" },
+  "pain-point":  { bg: "#FFCDD2", header: "#EF9A9A", text: "#B71C1C", accent: "#E53935", shadow: "rgba(229, 57, 53, 0.25)" },
+  "quote":       { bg: "#E1BEE7", header: "#CE93D8", text: "#4A148C", accent: "#8E24AA", shadow: "rgba(142, 36, 170, 0.25)" },
+  "insight":     { bg: "#C8E6C9", header: "#A5D6A7", text: "#1B5E20", accent: "#43A047", shadow: "rgba(76, 175, 80, 0.25)" },
+  "follow-up":   { bg: "#BBDEFB", header: "#90CAF9", text: "#0D47A1", accent: "#1976D2", shadow: "rgba(25, 118, 210, 0.25)" },
 };
 
 const INSIGHT_TYPE_LABELS: Record<string, { label: string; color: string }> = {
@@ -34,11 +34,11 @@ const INSIGHT_TYPE_LABELS: Record<string, { label: string; color: string }> = {
 function InsightTypeBadge({ type }: { type: string }) {
   const info = INSIGHT_TYPE_LABELS[type];
   if (!info) return null;
-  
+
   return (
-    <span 
+    <span
       className="text-[9px] px-1.5 py-0.5 rounded font-medium truncate"
-      style={{ 
+      style={{
         color: info.color,
         backgroundColor: `${info.color}15`,
         border: `1px solid ${info.color}30`,
@@ -50,14 +50,13 @@ function InsightTypeBadge({ type }: { type: string }) {
   );
 }
 
-const MIN_STICKY_SIZE = { width: 120, height: 100 };
+const MIN_STICKY_SIZE = { width: 140, height: 120 };
 const MAX_STICKY_SIZE = { width: 600, height: 600 };
-const HEADER_HEIGHT = 32;
-const FOOTER_HEIGHT = 36;
+const HEADER_HEIGHT = 28;
+const FOOTER_HEIGHT = 32;
 const PADDING = 12;
-const BASE_FONT_SIZE = 16;
+const BASE_FONT_SIZE = 14;
 const LINE_HEIGHT = 1.5;
-const READ_MORE_THRESHOLD = 3; // Number of lines before showing "read more"
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -107,19 +106,22 @@ export function StickyNote({
   isFiltered = false,
 }: StickyNoteProps) {
   const colors = STICKY_COLORS[note.color];
-  const stickySize = note.size ?? { width: 200, height: 200 };
+  const stickySize = note.size ?? { width: 180, height: 160 };
   const [isEditing, setIsEditing] = useState(false);
   const [editingContent, setEditingContent] = useState(note.content);
   const [showMenu, setShowMenu] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const textRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLDivElement>(null);
-  const previewMeasureRef = useRef<HTMLDivElement>(null);
-  const [isTextTruncated, setIsTextTruncated] = useState(false);
-  
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const contentAreaRef = useRef<HTMLDivElement>(null);
+  const textMeasureRef = useRef<HTMLDivElement>(null);
+
+  // Check if content overflows
+  const [isOverflowing, setIsOverflowing] = useState(false);
+  const [editorHeight, setEditorHeight] = useState<number | null>(null);
+
   // Sync editingContent when note.content changes from outside
   useEffect(() => {
     if (!isEditing) {
@@ -127,25 +129,48 @@ export function StickyNote({
     }
   }, [note.content, isEditing]);
 
-  // Auto-resize sticky based on content
+  // Measure if text overflows
   useEffect(() => {
-    if (!isEditing || !measureRef.current) return;
-    
-    const measure = measureRef.current;
-    const requiredHeight = measure.scrollHeight;
-    const currentTextAreaHeight = stickySize.height - HEADER_HEIGHT - FOOTER_HEIGHT - PADDING * 2;
-    
-    if (requiredHeight > currentTextAreaHeight) {
-      const newStickyHeight = Math.min(
-        Math.max(requiredHeight + HEADER_HEIGHT + FOOTER_HEIGHT + PADDING * 2, MIN_STICKY_SIZE.height),
-        MAX_STICKY_SIZE.height
-      );
-      
-      if (newStickyHeight > stickySize.height) {
-        onResize(note.id, { width: stickySize.width, height: newStickyHeight });
-      }
+    if (!textMeasureRef.current || !contentAreaRef.current || isEditing) {
+      setIsOverflowing(false);
+      return;
     }
-  }, [editingContent, isEditing, stickySize, onResize, note.id]);
+
+    const measureEl = textMeasureRef.current;
+    const contentArea = contentAreaRef.current;
+    const availableHeight = contentArea.clientHeight;
+
+    // Small delay to ensure DOM is updated
+    requestAnimationFrame(() => {
+      const actualHeight = measureEl.scrollHeight;
+      setIsOverflowing(actualHeight > availableHeight + 4);
+    });
+  }, [note.content, stickySize, isEditing]);
+
+  // Auto-grow textarea while editing
+  useEffect(() => {
+    if (!isEditing || !textareaRef.current) {
+      setEditorHeight(null);
+      return;
+    }
+
+    const textarea = textareaRef.current;
+    const updateHeight = () => {
+      const scrollHeight = textarea.scrollHeight;
+      const minHeight = 60;
+      const maxHeight = 400;
+      const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
+      setEditorHeight(newHeight);
+    };
+
+    updateHeight();
+
+    // Update on content change
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(textarea);
+
+    return () => observer.disconnect();
+  }, [isEditing, editingContent]);
 
   const isDraggingRef = useRef(false);
   const { visualPosition, handlePointerDown } = useDraggable({
@@ -172,61 +197,50 @@ export function StickyNote({
     selectedIds,
   });
 
-  // Check if text is truncated (for preview mode)
-  useEffect(() => {
-    if (isEditing || isExpanded || !previewMeasureRef.current || !note.content) {
-      setIsTextTruncated(false);
-      return;
-    }
-    
-    const preview = previewMeasureRef.current;
-    const visibleHeight = stickySize.height - HEADER_HEIGHT - FOOTER_HEIGHT - PADDING * 2;
-    const lineHeight = BASE_FONT_SIZE * LINE_HEIGHT;
-    const maxVisibleLines = Math.floor(visibleHeight / lineHeight);
-    
-    // Calculate how many lines the text would take
-    const text = note.content || "";
-    const lines = text.split("\n");
-    let totalLines = 0;
-    
-    for (const line of lines) {
-      const charsPerLine = Math.floor((stickySize.width - PADDING * 2) / (BASE_FONT_SIZE * 0.6));
-      totalLines += Math.max(1, Math.ceil(line.length / charsPerLine));
-    }
-    
-    const isTruncated = totalLines > maxVisibleLines && maxVisibleLines > 0;
-    setIsTextTruncated(isTruncated);
-  }, [note.content, stickySize, isEditing, isExpanded]);
-
   const isDragging = isDraggingRef.current;
 
   const handleDoubleClick = useCallback(() => {
     if (isLocked) return;
     setIsEditing(true);
+    setIsExpanded(true);
     setEditingContent(note.content);
-    setTimeout(() => textareaRef.current?.focus(), 0);
+    setTimeout(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.select();
+    }, 0);
   }, [isLocked, note.content]);
 
-  const handleBlur = useCallback(() => {
+  const finishEditing = useCallback(() => {
+    if (editingContent !== note.content) {
+      onUpdate(note.id, { content: editingContent });
+    }
     setIsEditing(false);
-  }, []);
+    // Keep expanded if content is still long
+    if (textMeasureRef.current && contentAreaRef.current) {
+      const measureEl = textMeasureRef.current;
+      const contentArea = contentAreaRef.current;
+      requestAnimationFrame(() => {
+        const actualHeight = measureEl.scrollHeight;
+        const availableHeight = contentArea.clientHeight;
+        if (actualHeight <= availableHeight + 4) {
+          setIsExpanded(false);
+        }
+      });
+    }
+  }, [editingContent, note.content, note.id, onUpdate]);
 
   const handlePointerDownWrapper = useCallback(
     (e: React.PointerEvent) => {
       if (isLocked) return;
-
-      // Always stop propagation to prevent parent section from capturing the event
       e.stopPropagation();
 
       const multi = e.shiftKey || e.ctrlKey || e.metaKey;
 
-      // For multi-select (Ctrl+click), select but don't start dragging
       if (multi) {
         onSelect(note.id, true);
         return;
       }
 
-      // Normal click - select and start dragging
       onSelect(note.id, false);
       handlePointerDown(e);
     },
@@ -275,24 +289,26 @@ export function StickyNote({
     ? "se-resize"
     : "grab";
 
+  // Calculate content area height
+  const contentHeight = stickySize.height - HEADER_HEIGHT - FOOTER_HEIGHT;
+
   return (
     <div
       ref={containerRef}
       className="absolute group sticky-note"
       data-sticky-id={note.id}
-      data-section-id={note.id}
       style={{
         left: visualPosition.x,
         top: visualPosition.y,
         zIndex: note.zIndex,
         cursor: isVotingMode ? "default" : cursorStyle,
         filter: isDragging
-          ? "drop-shadow(4px 8px 16px rgba(0,0,0,0.25))"
+          ? `drop-shadow(6px 12px 20px ${colors.shadow})`
           : isSelected
-          ? "drop-shadow(0 4px 12px rgba(0,0,0,0.15))"
-          : "drop-shadow(0 2px 8px rgba(0,0,0,0.1))",
+          ? `drop-shadow(0 4px 16px ${colors.shadow})`
+          : `drop-shadow(0 2px 8px rgba(0,0,0,0.08))`,
         transform: isDragging ? "rotate(-2deg) scale(1.02)" : "rotate(0deg)",
-        transition: "none",
+        transition: isDragging ? "none" : "transform 0.2s ease, filter 0.2s ease",
         opacity: isVotingMode ? 0.85 : isFiltered ? 0.25 : 1,
         pointerEvents: isFiltered ? "none" as const : "auto" as const,
       }}
@@ -304,11 +320,13 @@ export function StickyNote({
         className="relative overflow-hidden"
         style={{
           width: stickySize.width,
-          height: stickySize.height,
+          height: isExpanded && isEditing ? undefined : stickySize.height,
+          minHeight: stickySize.height,
           background: colors.bg,
-          borderRadius: 4,
-          outline: isSelected ? "2px solid #0d99ff" : "1px solid rgba(0,0,0,0.08)",
+          borderRadius: 6,
+          outline: isSelected ? `2px solid ${colors.accent}` : "1px solid rgba(0,0,0,0.06)",
           outlineOffset: 2,
+          transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -318,9 +336,9 @@ export function StickyNote({
       >
         {/* Lock indicator */}
         {isLocked && lockedByName && (
-          <div 
-            className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 bg-amber-100 rounded text-xs text-amber-800 z-10"
-            title={`Locked by ${lockedByName}`}
+          <div
+            className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 bg-amber-100/90 backdrop-blur-sm rounded-md text-xs text-amber-800 z-10 shadow-sm"
+            title={`Verrouillé par ${lockedByName}`}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
@@ -329,11 +347,11 @@ export function StickyNote({
           </div>
         )}
 
-        {/* Cluster badge - shows which cluster this sticky belongs to */}
+        {/* Cluster badge */}
         {clusterLabel && (
-          <div 
+          <div
             className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium opacity-60 hover:opacity-100 transition-opacity max-w-[80%] group/cluster"
-            style={{ 
+            style={{
               backgroundColor: `${colors.accent}20`,
               color: colors.accent,
               border: `1px solid ${colors.accent}40`,
@@ -348,98 +366,107 @@ export function StickyNote({
           </div>
         )}
 
-        {/* Text area */}
+        {/* Text content area */}
         <div
-          className="absolute left-0 right-0 overflow-hidden"
+          ref={contentAreaRef}
+          className="absolute left-0 right-0 flex flex-col"
           style={{
             top: HEADER_HEIGHT,
             bottom: FOOTER_HEIGHT,
-            padding: PADDING,
+            padding: `0 ${PADDING}px`,
           }}
         >
           {isEditing ? (
-            <>
+            <div className="flex-1 flex flex-col min-h-0">
               <textarea
                 ref={textareaRef}
-                className="w-full min-h-[60px] resize-none outline-none bg-transparent"
+                className="w-full resize-none outline-none bg-transparent flex-shrink-0"
                 style={{
                   color: colors.text,
-                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                  fontFamily: "'Inter', 'DM Sans', system-ui, sans-serif",
                   fontSize: BASE_FONT_SIZE,
                   lineHeight: LINE_HEIGHT,
+                  minHeight: editorHeight ?? 60,
+                  maxHeight: 400,
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
                 }}
                 value={editingContent}
-                onChange={(e) => {
-                  setEditingContent(e.target.value);
-                }}
-                onBlur={() => {
-                  if (editingContent !== note.content) {
-                    onUpdate(note.id, { content: editingContent });
+                onChange={(e) => setEditingContent(e.target.value)}
+                onBlur={finishEditing}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setEditingContent(note.content);
+                    finishEditing();
                   }
-                  setIsEditing(false);
+                  // Don't stop propagation for normal typing
+                  if (e.key === "Escape" || (e.key === "Enter" && (e.metaKey || e.ctrlKey))) {
+                    e.preventDefault();
+                    finishEditing();
+                  }
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
-                placeholder="Tapez votre insight..."
+                placeholder="Écrivez votre insight..."
               />
-              {/* Hidden measure div for auto-resize */}
-              <div
-                ref={measureRef}
-                className="absolute left-0 right-0 top-0 px-3 pointer-events-none opacity-0 overflow-hidden"
-                style={{
-                  fontFamily: "'DM Sans', system-ui, sans-serif",
-                  fontSize: BASE_FONT_SIZE,
-                  lineHeight: LINE_HEIGHT,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  minWidth: stickySize.width - PADDING * 2,
-                }}
-              >
-                {editingContent || " "}
-              </div>
-            </>
+            </div>
           ) : (
-            <div className="relative w-full h-full">
-              {/* Hidden measure for truncation detection */}
+            <div
+              className="relative w-full h-full cursor-text"
+              onClick={() => {
+                if (!isLocked) {
+                  setIsEditing(true);
+                  setIsExpanded(true);
+                  setEditingContent(note.content);
+                  setTimeout(() => {
+                    textareaRef.current?.focus();
+                    textareaRef.current?.select();
+                  }, 0);
+                }
+              }}
+            >
+              {/* Hidden measure element - always full height */}
               <div
-                ref={previewMeasureRef}
-                className="absolute opacity-0 pointer-events-none overflow-hidden"
+                ref={textMeasureRef}
+                className="absolute inset-0 overflow-visible pointer-events-none"
                 style={{
-                  width: stickySize.width - PADDING * 2,
-                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                  color: colors.text,
+                  fontFamily: "'Inter', 'DM Sans', system-ui, sans-serif",
                   fontSize: BASE_FONT_SIZE,
                   lineHeight: LINE_HEIGHT,
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
+                  visibility: "hidden",
                 }}
               >
                 {note.content || " "}
               </div>
-              
-              {/* Visible text */}
+
+              {/* Visible text with truncation */}
               <div
-                ref={textRef}
-                className="w-full h-full break-words whitespace-pre-wrap overflow-hidden"
+                className={`w-full h-full break-words whitespace-pre-wrap ${
+                  isOverflowing && !isExpanded ? "overflow-hidden" : "overflow-hidden"
+                }`}
                 style={{
-                  color: note.content ? colors.text : "#aaa",
-                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                  color: note.content ? colors.text : `${colors.text}60`,
+                  fontFamily: "'Inter', 'DM Sans', system-ui, sans-serif",
                   fontSize: BASE_FONT_SIZE,
                   lineHeight: LINE_HEIGHT,
+                  display: "-webkit-box",
+                  WebkitLineClamp: isOverflowing && !isExpanded ? undefined : undefined,
+                  WebkitBoxOrient: "vertical",
                 }}
               >
                 {note.content || (
-                  <span className="opacity-60">Double-cliquez pour éditer</span>
+                  <span className="italic">Double-cliquez pour éditer</span>
                 )}
               </div>
-              
-              {/* Read more indicator */}
-              {isTextTruncated && !isExpanded && (
+
+              {/* Truncation indicator with gradient fade */}
+              {isOverflowing && !isExpanded && !isEditing && (
                 <button
-                  className="absolute bottom-0 left-0 right-0 flex items-center justify-center py-3 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute bottom-0 left-0 right-0 pt-6 cursor-pointer group/btn"
                   style={{
-                    background: `linear-gradient(to top, ${colors.bg}ee, ${colors.bg}00)`,
-                    color: colors.accent,
+                    background: `linear-gradient(to top, ${colors.bg} 30%, transparent)`,
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
@@ -447,27 +474,76 @@ export function StickyNote({
                     setIsExpanded(true);
                   }}
                 >
-                  <span className="text-xs font-medium flex items-center gap-1">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <div
+                    className="flex items-center justify-center gap-1 py-1 text-xs font-medium transition-transform group-hover/btn:scale-105"
+                    style={{ color: colors.accent }}
+                  >
+                    <span
+                      className="px-2 py-0.5 rounded-full"
+                      style={{
+                        backgroundColor: `${colors.accent}15`,
+                      }}
+                    >
+                      ...
+                    </span>
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      className="opacity-0 group-hover/btn:opacity-100 transition-opacity"
+                    >
                       <polyline points="6 9 12 15 18 9" />
                     </svg>
-                    Lire la suite
-                  </span>
+                  </div>
+                </button>
+              )}
+
+              {/* Expanded state - show collapse button */}
+              {isExpanded && !isEditing && isOverflowing && (
+                <button
+                  className="absolute bottom-0 right-0 cursor-pointer"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsExpanded(false);
+                  }}
+                >
+                  <div
+                    className="flex items-center gap-1 py-0.5 px-2 rounded-full text-xs font-medium transition-all hover:scale-105"
+                    style={{
+                      color: colors.accent,
+                      backgroundColor: `${colors.accent}15`,
+                    }}
+                  >
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                    >
+                      <polyline points="18 15 12 9 6 15" />
+                    </svg>
+                  </div>
                 </button>
               )}
             </div>
           )}
         </div>
 
-        {/* Footer: author + source + vote badge */}
+        {/* Footer: author + source badge */}
         <div
           className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-3"
           style={{ height: FOOTER_HEIGHT }}
         >
           <div className="flex items-center gap-2 min-w-0">
             {note.authorName && (
-              <span 
-                className="text-[10px] font-medium truncate opacity-70"
+              <span
+                className="text-[10px] font-medium truncate opacity-60"
                 style={{ color: colors.text }}
                 title={note.authorName}
               >
@@ -480,14 +556,14 @@ export function StickyNote({
           </div>
         </div>
 
-        {/* Resize handle (bottom-right corner) */}
+        {/* Resize handle */}
         <div
-          className="absolute bottom-0 right-0 w-5 h-5 flex items-center justify-end cursor-se-resize z-10"
+          className="absolute bottom-0 right-0 w-5 h-5 flex items-center justify-end cursor-se-resize z-10 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
           style={{ padding: "0 4px 4px 0" }}
           onPointerDown={handleResizePointerDown}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path d="M2 8 L8 8 L8 2" stroke={colors.accent} strokeWidth="2" strokeLinecap="round"/>
+            <path d="M2 8 L8 8 L8 2" stroke={colors.accent} strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
         </div>
       </div>
@@ -564,7 +640,7 @@ function ContextMenu({
                 onClose();
               }}
             >
-              <div 
+              <div
                 className="w-5 h-5 rounded"
                 style={{ backgroundColor: STICKY_COLORS[type.id].bg }}
               />
