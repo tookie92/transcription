@@ -4,9 +4,10 @@ import React from "react";
 import type { ToolType, StickyColor } from "@/types/figjam";
 import { VotingSettings } from "./VotingSettings";
 import { StickyColorPicker } from "./StickyColorPicker";
+import { ExportPanel } from "./ExportPanel";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { BarChart3, Plus, Minus, MousePointer2, Hand, Tag, ArrowLeft, Sparkles, MessageSquare, Presentation, Filter } from "lucide-react";
+import { BarChart3, Plus, Minus, MousePointer2, Hand, Tag, ArrowLeft, Sparkles, MessageSquare, Presentation, Filter, Download } from "lucide-react";
 
 interface VotingConfig {
   dotsPerUser: number;
@@ -55,6 +56,8 @@ interface FigJamToolbarProps {
   isFiltersActive?: boolean;
   onToggleFilters?: () => void;
   filterCount?: number;
+  canvasRef?: React.RefObject<HTMLElement>;
+  projectName?: string;
 }
 
 function formatTime(ms: number): string {
@@ -98,6 +101,8 @@ export function FigJamToolbar({
   isFiltersActive = false,
   onToggleFilters,
   filterCount = 0,
+  canvasRef,
+  projectName,
 }: FigJamToolbarProps) {
 
   const sortedResults = [...(voteResults || [])].sort((a, b) => b.voteCount - a.voteCount);
@@ -371,7 +376,15 @@ export function FigJamToolbar({
         </div>
 
         {/* ── Zoom controls (bottom right) ── */}
-        <div className="absolute right-5 bottom-6 z-30 flex items-center gap-1 bg-card/95 backdrop-blur-sm rounded-xl shadow-lg border border-border px-1.5 py-1">
+        <div className="absolute right-5 bottom-6 z-30 flex items-center gap-1">
+          {/* Export hidden for now */}
+          {/* <ExportPanel canvasRef={canvasRef} projectName={projectName}>
+            <Button variant="ghost" size="icon" className="w-9 h-9 rounded-xl bg-card/95 backdrop-blur-sm shadow-lg border border-border">
+              <Download className="w-4 h-4" />
+            </Button>
+          </ExportPanel> */}
+          
+          <div className="flex items-center gap-1 bg-card/95 backdrop-blur-sm rounded-xl shadow-lg border border-border px-1.5 py-1">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" className="w-7 h-7 rounded-lg" onClick={onZoomOut}>
@@ -393,6 +406,7 @@ export function FigJamToolbar({
             </TooltipTrigger>
             <TooltipContent side="top">Zoom in</TooltipContent>
           </Tooltip>
+          </div>
         </div>
       </>
     </TooltipProvider>

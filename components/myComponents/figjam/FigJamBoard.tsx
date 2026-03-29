@@ -1514,6 +1514,8 @@ export function FigJamBoard({
         onStopAndReveal={() => voting.stopVoting()}
         onStartNewVote={() => voting.startVoting({ dotsPerUser: voting.session?.maxDotsPerUser ?? 5, durationMinutes: voting.session?.durationMinutes ?? null })}
         isManualVotingMode={false}
+        canvasRef={canvasRef}
+        projectName={projectName}
       />
 
       {Object.keys(state.elements).length === 0 && (
