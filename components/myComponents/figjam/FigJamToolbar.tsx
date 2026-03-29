@@ -2,12 +2,10 @@
 
 import React from "react";
 import type { ToolType, StickyColor } from "@/types/figjam";
-import { VotingSettings } from "./VotingSettings";
 import { StickyColorPicker } from "./StickyColorPicker";
-import { ExportPanel } from "./ExportPanel";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { BarChart3, Plus, Minus, MousePointer2, Hand, Tag, ArrowLeft, Sparkles, MessageSquare, Presentation, Filter, Download } from "lucide-react";
+import { BarChart3, Plus, Minus, MousePointer2, Hand, Tag, ArrowLeft, Sparkles, MessageSquare, Presentation, Filter, Download, DownloadCloud } from "lucide-react";
 
 interface VotingConfig {
   dotsPerUser: number;
@@ -56,8 +54,10 @@ interface FigJamToolbarProps {
   isFiltersActive?: boolean;
   onToggleFilters?: () => void;
   filterCount?: number;
-  canvasRef?: React.RefObject<HTMLElement>;
+  canvasRef?: React.RefObject<HTMLElement | null>;
   projectName?: string;
+  newInsightsCount?: number;
+  onImportInsights?: () => void;
 }
 
 function formatTime(ms: number): string {
@@ -103,6 +103,8 @@ export function FigJamToolbar({
   filterCount = 0,
   canvasRef,
   projectName,
+  newInsightsCount = 0,
+  onImportInsights,
 }: FigJamToolbarProps) {
 
   const sortedResults = [...(voteResults || [])].sort((a, b) => b.voteCount - a.voteCount);
@@ -371,6 +373,31 @@ export function FigJamToolbar({
             </TooltipTrigger>
             <TooltipContent side="right" className="bg-card border-border shadow-lg">
               {filterCount > 0 ? `${filterCount} filters active` : "Open Filters"}
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={newInsightsCount === 0 || !onImportInsights}
+                className={`gap-2 rounded-xl shadow-lg bg-card hover:bg-accent border border-border ${
+                  newInsightsCount > 0 ? "text-primary" : "text-muted-foreground"
+                }`}
+                onClick={onImportInsights}
+              >
+                <DownloadCloud className="w-4 h-4" />
+                <span className="text-sm font-medium">Importer</span>
+                {newInsightsCount > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 bg-primary text-primary-foreground text-xs font-bold rounded-full min-w-[18px] text-center">
+                    {newInsightsCount}
+                  </span>
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="bg-card border-border shadow-lg">
+              {newInsightsCount > 0 ? `Importer ${newInsightsCount} insight${newInsightsCount > 1 ? "s" : ""}` : "Aucun insight à importer"}
             </TooltipContent>
           </Tooltip>
         </div>

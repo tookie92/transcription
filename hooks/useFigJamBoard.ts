@@ -52,10 +52,12 @@ type Action =
   | { type: "UNDO" }
   | { type: "REDO" };
 
-interface HistoryEntry {
-  elements: Record<string, FigJamElement>;
-  votesUsed: number;
-}
+// HistoryEntry kept for reference but using BoardState directly now
+// interface HistoryEntry {
+//   elements: Record<string, FigJamElement>;
+//   votesUsed: number;
+//   wasJustAdded?: string;
+// }
 
 function maxZIndex(elements: Record<string, FigJamElement>): number {
   const vals = Object.values(elements).map((e) => e.zIndex);
@@ -434,65 +436,178 @@ function initialState(): BoardState {
 
 export function useFigJamBoard(): UseFigJamBoardReturn {
   const [state, baseDispatch] = useReducer(reducer, undefined, initialState);
-  const historyRef = useRef<HistoryEntry[]>([]);
-  const futureRef = useRef<HistoryEntry[]>([]);
-  const isUndoingRedoing = useRef(false);
+  
+  // Ref to always have latest state (avoids closure issues)
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  
+  // Complete state snapshots for history
+  const historyRef = useRef<BoardState[]>([]);
+  const futureRef = useRef<BoardState[]>([]);
+  const isUndoingRedoingRef = useRef(false);
+  const isLoadingRef = useRef(true);
+  const isDraggingRef = useRef(false);
+  const pendingDragSnapshotRef = useRef<BoardState | null>(null);
 
-  const pushToHistory = () => {
-    historyRef.current = [
-      ...historyRef.current.slice(-MAX_HISTORY + 1),
-      { elements: cloneElements(state.elements), votesUsed: state.votesUsed },
-    ];
-    // Clear future when new action is performed
-    futureRef.current = [];
-  };
+  // Actions that modify state and should be undoable
+  const UNDOABLE_ACTIONS = new Set([
+    "ADD_ELEMENT", "UPDATE_ELEMENT", "UPDATE_MANY", "DELETE_ELEMENT",
+    "MOVE_SECTION_WITH_CHILDREN", "RESET_VOTES"
+  ]);
 
-  const dispatch = (action: Action) => {
-    const modifiableActions = [
-      "ADD_ELEMENT", "UPDATE_ELEMENT", "UPDATE_MANY", "DELETE_ELEMENT",
-      "MOVE_SECTION_WITH_CHILDREN", "MOVE_STICKY", "RESET_VOTES"
-    ];
+  // Actions that use drag optimization (only save on drag end)
+  const DRAG_ACTIONS = new Set(["MOVE_STICKY", "MOVE_SELECTED"]);
 
-    if (modifiableActions.includes(action.type) && !isUndoingRedoing.current) {
-      pushToHistory();
+  // Mark loading as complete after first meaningful user action
+  const markLoaded = useCallback(() => {
+    isLoadingRef.current = false;
+    console.log("[History] Board loaded, history tracking enabled. Elements:", Object.keys(stateRef.current.elements).length);
+  }, []);
+
+  // Call this when drag starts to prepare snapshot
+  const startDrag = useCallback(() => {
+    if (isLoadingRef.current || isUndoingRedoingRef.current) return;
+    
+    pendingDragSnapshotRef.current = {
+      elements: cloneElements(stateRef.current.elements),
+      selectedIds: [...stateRef.current.selectedIds],
+      activeTool: stateRef.current.activeTool,
+      pan: { ...stateRef.current.pan },
+      zoom: stateRef.current.zoom,
+      currentUserId: stateRef.current.currentUserId,
+      maxVotesPerUser: stateRef.current.maxVotesPerUser,
+      votesUsed: stateRef.current.votesUsed,
+      votingModeActive: stateRef.current.votingModeActive,
+      votesRevealed: stateRef.current.votesRevealed,
+    };
+    isDraggingRef.current = true;
+  }, []);
+
+  // Call this when drag ends to save to history
+  const endDrag = useCallback(() => {
+    if (!isDraggingRef.current) return;
+    
+    isDraggingRef.current = false;
+    
+    if (pendingDragSnapshotRef.current && !isLoadingRef.current && !isUndoingRedoingRef.current) {
+      historyRef.current = [
+        ...historyRef.current.slice(-MAX_HISTORY + 1),
+        pendingDragSnapshotRef.current,
+      ];
+      futureRef.current = [];
     }
+    pendingDragSnapshotRef.current = null;
+  }, []);
 
+  // Dispatch with history tracking - captures state BEFORE action
+  const dispatch = useCallback((action: Action) => {
+    // Handle drag actions specially - skip during drag, save on drag end
+    if (DRAG_ACTIONS.has(action.type)) {
+      if (!isDraggingRef.current) {
+        // First drag action - save snapshot
+        startDrag();
+      }
+      baseDispatch(action);
+      return;
+    }
+    
+    // Skip history for initial loading and undo/redo operations
+    if (UNDOABLE_ACTIONS.has(action.type) && !isUndoingRedoingRef.current && !isLoadingRef.current) {
+      const currentState = stateRef.current;
+      const elementsBefore = Object.keys(currentState.elements).length;
+      console.log(`[History] ${action.type}: ${elementsBefore} elements`);
+      
+      // Save complete state snapshot BEFORE action
+      const stateSnapshot: BoardState = {
+        elements: cloneElements(currentState.elements),
+        selectedIds: [...currentState.selectedIds],
+        activeTool: currentState.activeTool,
+        pan: { ...currentState.pan },
+        zoom: currentState.zoom,
+        currentUserId: currentState.currentUserId,
+        maxVotesPerUser: currentState.maxVotesPerUser,
+        votesUsed: currentState.votesUsed,
+        votingModeActive: currentState.votingModeActive,
+        votesRevealed: currentState.votesRevealed,
+      };
+      
+      historyRef.current = [
+        ...historyRef.current.slice(-MAX_HISTORY + 1),
+        stateSnapshot,
+      ];
+      futureRef.current = []; // Clear redo stack on new action
+    }
+    
     baseDispatch(action);
-  };
+  }, [startDrag]);
 
   const undo = useCallback(() => {
-    if (historyRef.current.length === 0) return;
+    if (historyRef.current.length === 0) {
+      console.log("[Undo] No history");
+      return;
+    }
     
-    // Save current state to future for redo
-    futureRef.current = [
-      ...futureRef.current,
-      { elements: cloneElements(state.elements), votesUsed: state.votesUsed },
-    ];
-    
-    const previous = historyRef.current[historyRef.current.length - 1];
+    const previousState = historyRef.current[historyRef.current.length - 1];
     historyRef.current = historyRef.current.slice(0, -1);
-
-    isUndoingRedoing.current = true;
-    baseDispatch({ type: "LOAD_ELEMENTS", elements: previous.elements });
-    isUndoingRedoing.current = false;
-  }, [state.elements, state.votesUsed]);
+    
+    console.log(`[Undo] History size: ${historyRef.current.length}, will restore: ${Object.keys(previousState.elements).length}`);
+    
+    // Save current state to redo stack
+    const currentState = stateRef.current;
+    const currentSnapshot: BoardState = {
+      elements: cloneElements(currentState.elements),
+      selectedIds: [...currentState.selectedIds],
+      activeTool: currentState.activeTool,
+      pan: { ...currentState.pan },
+      zoom: currentState.zoom,
+      currentUserId: currentState.currentUserId,
+      maxVotesPerUser: currentState.maxVotesPerUser,
+      votesUsed: currentState.votesUsed,
+      votingModeActive: currentState.votingModeActive,
+      votesRevealed: currentState.votesRevealed,
+    };
+    futureRef.current = [...futureRef.current, currentSnapshot];
+    
+    isUndoingRedoingRef.current = true;
+    baseDispatch({ type: "LOAD_ELEMENTS", elements: previousState.elements });
+    isUndoingRedoingRef.current = false;
+    
+    console.log(`[Undo] Restored ${Object.keys(previousState.elements).length}, redo stack: ${futureRef.current.length}`);
+  }, []);
 
   const redo = useCallback(() => {
-    if (futureRef.current.length === 0) return;
+    if (futureRef.current.length === 0) {
+      console.log("[Redo] Nothing to redo");
+      return;
+    }
     
-    // Save current state to history
-    historyRef.current = [
-      ...historyRef.current,
-      { elements: cloneElements(state.elements), votesUsed: state.votesUsed },
-    ];
-    
-    const next = futureRef.current[futureRef.current.length - 1];
+    const nextState = futureRef.current[futureRef.current.length - 1];
     futureRef.current = futureRef.current.slice(0, -1);
-
-    isUndoingRedoing.current = true;
-    baseDispatch({ type: "LOAD_ELEMENTS", elements: next.elements });
-    isUndoingRedoing.current = false;
-  }, [state.elements, state.votesUsed]);
+    
+    console.log(`[Redo] Will restore: ${Object.keys(nextState.elements).length}, history: ${historyRef.current.length}`);
+    
+    // Save current state to undo stack
+    const currentState = stateRef.current;
+    const currentSnapshot: BoardState = {
+      elements: cloneElements(currentState.elements),
+      selectedIds: [...currentState.selectedIds],
+      activeTool: currentState.activeTool,
+      pan: { ...currentState.pan },
+      zoom: currentState.zoom,
+      currentUserId: currentState.currentUserId,
+      maxVotesPerUser: currentState.maxVotesPerUser,
+      votesUsed: currentState.votesUsed,
+      votingModeActive: currentState.votingModeActive,
+      votesRevealed: currentState.votesRevealed,
+    };
+    historyRef.current = [...historyRef.current, currentSnapshot];
+    
+    isUndoingRedoingRef.current = true;
+    baseDispatch({ type: "LOAD_ELEMENTS", elements: nextState.elements });
+    isUndoingRedoingRef.current = false;
+    
+    console.log(`[Redo] Restored ${Object.keys(nextState.elements).length}, history: ${historyRef.current.length}`);
+  }, []);
 
   const canUndo = historyRef.current.length > 0;
   const canRedo = futureRef.current.length > 0;
@@ -863,6 +978,9 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     redo,
     canUndo,
     canRedo,
+    markLoaded,
+    startDrag,
+    endDrag,
     groupSelectedIntoSection,
     autoArrange,
     addDot,

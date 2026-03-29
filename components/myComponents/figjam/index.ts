@@ -6,6 +6,8 @@ export { FigJamBoard } from "./FigJamBoard";
 export { StickyNote, STICKY_COLORS } from "./StickyNote";
 export { ClusterLabel, LABEL_COLORS } from "./ClusterLabel";
 export { FigJamToolbar } from "./FigJamToolbar";
+export { WorkshopTemplateSelector, WORKSHOP_TEMPLATES } from "./WorkshopTemplateSelector";
+export type { WorkshopTemplate } from "./WorkshopTemplateSelector";
 
 // Re-export hook and types for custom boards
 export { useFigJamBoard } from "@/hooks/useFigJamBoard";

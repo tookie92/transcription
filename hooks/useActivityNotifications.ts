@@ -15,7 +15,7 @@ export interface ActivityNotification {
 }
 
 interface UseActivityNotificationsOptions {
-  mapId: Id<"affinityMaps">;
+  mapId?: Id<"affinityMaps"> | null;
   pollInterval?: number;
   maxNotifications?: number;
   onMention?: (userName: string) => void;
@@ -41,10 +41,10 @@ export function useActivityNotifications({
   const previousActivityCountRef = useRef(0);
   const previousIdsRef = useRef<Set<string>>(new Set());
 
-  const activities = useQuery(api.activityLog.getActivityForMap, { 
-    mapId, 
-    limit: maxNotifications 
-  });
+  const activities = useQuery(
+    api.activityLog.getActivityForMap,
+    mapId ? { mapId, limit: maxNotifications } : "skip"
+  ) as any;
 
   useEffect(() => {
     if (!activities || activities.length === 0) return;

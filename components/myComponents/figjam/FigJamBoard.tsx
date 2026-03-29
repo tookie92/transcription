@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useRef, useState, useEffect, useMemo } from "react";
+
 import { useFigJamBoard } from "@/hooks/useFigJamBoard";
 import { StickyNote } from "./StickyNote";
 import { ClusterLabel } from "./ClusterLabel";
@@ -10,7 +11,8 @@ import { LassoContextMenu } from "./ContextMenu";
 import { CommentBubblesLayer } from "./CommentBubble";
 import { PresentationMode } from "./PresentationMode";
 import { FiltersPanel, type FilterState } from "./FiltersPanel";
-import type { FigJamElement, Position, Size, StickyColor, StickyNoteData, DotData, ToolType, ClusterLabelData, SectionData, TextData } from "@/types/figjam";
+import type { FigJamElement, Position, Size, StickyColor, StickyNoteData, DotData, ClusterLabelData, SectionData, TextData } from "@/types/figjam";
+import type { Insight } from "@/types";
 
 interface CommentBubbleData {
   id: string;
@@ -88,6 +90,12 @@ interface FigJamBoardProps {
   voting?: ReturnType<typeof useVotingSync>;
   onBack?: () => void;
   onOpenComment?: (elementId: string, elementRect: DOMRect, elementTitle?: string) => void;
+  // Import insights
+  projectInsights?: Insight[];
+  existingInsightIds?: string[];
+  onImportInsights?: (insights: Insight[]) => void;
+  // Callback to get current insight IDs on canvas
+  onCanvasInsightIdsChange?: (insightIds: string[]) => void;
 }
 
 export function FigJamBoard({
@@ -103,6 +111,10 @@ export function FigJamBoard({
   voting: votingProp,
   onBack,
   onOpenComment,
+  projectInsights = [],
+  existingInsightIds = [],
+  onImportInsights,
+  onCanvasInsightIdsChange,
 }: FigJamBoardProps) {
   const board = useFigJamBoard();
   const { state, setTool } = board;
@@ -181,6 +193,84 @@ export function FigJamBoard({
   });
   const [bouncingBubbleId, setBouncingBubbleId] = useState<string | null>(null);
 
+  // Compute new insights that can be imported
+  const existingIdsSet = useMemo(() => new Set(existingInsightIds), [existingInsightIds]);
+  const newInsightsCount = useMemo(() => {
+    return projectInsights.filter(insight => !existingIdsSet.has(insight.id)).length;
+  }, [projectInsights, existingIdsSet]);
+
+  // Track which insights are currently on canvas (use ref to avoid infinite loop)
+  const onCanvasInsightIdsChangeRef = useRef(onCanvasInsightIdsChange);
+  useEffect(() => {
+    onCanvasInsightIdsChangeRef.current = onCanvasInsightIdsChange;
+  });
+  
+  useEffect(() => {
+    if (!onCanvasInsightIdsChangeRef.current) return;
+    
+    const canvasInsightIds = Object.values(state.elements)
+      .filter(el => el.type === "sticky" && (el as any).insightId)
+      .map(el => (el as any).insightId as string);
+    
+    onCanvasInsightIdsChangeRef.current(canvasInsightIds);
+  }, [state.elements]);
+
+  // Import insights to canvas
+  const handleImportInsights = useCallback(() => {
+    const newInsights = projectInsights.filter(insight => !existingIdsSet.has(insight.id));
+    if (newInsights.length === 0) return;
+
+    // Position the stickies in a grid
+    const startX = 100;
+    const startY = 100;
+    const spacingX = 220;
+    const spacingY = 220;
+    const cols = Math.min(newInsights.length, 5);
+
+    newInsights.forEach((insight, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+      const position = {
+        x: startX + col * spacingX,
+        y: startY + row * spacingY,
+      };
+      const size = { width: 200, height: 200 };
+      
+      // Determine color based on insight type
+      let stickyColor: StickyColor = "insight";
+      if (insight.type === "quote") stickyColor = "quote";
+      else if (insight.type === "pain-point") stickyColor = "pain-point";
+      
+      const stickyId = board.addStickyNote(position, stickyColor, size, insight.createdByName || "Imported");
+      
+      // Update content with the insight text and store the insight ID
+      board.updateElement(stickyId, { 
+        content: insight.text,
+        insightId: insight.id,
+      });
+    });
+
+    toast.success(`${newInsights.length} insight${newInsights.length > 1 ? "s" : ""} importé${newInsights.length > 1 ? "s" : ""}`, {
+      action: {
+        label: "Annuler",
+        onClick: () => {
+          // Remove the imported stickies
+          newInsights.forEach(insight => {
+            const stickyId = Object.keys(state.elements).find(
+              id => state.elements[id].type === "sticky" && (state.elements[id] as any).insightId === insight.id
+            );
+            if (stickyId) {
+              board.deleteElement(stickyId);
+            }
+          });
+          // Reset the imported state so button re-activates
+          onImportInsights?.([]);
+        },
+      },
+    });
+    onImportInsights?.(newInsights);
+  }, [projectInsights, existingIdsSet, board, onImportInsights]);
+
   // Track element positions to update bubbles that follow targets
   const elementPositionsRef = useRef<Record<string, Position>>({});
 
@@ -231,49 +321,7 @@ export function FigJamBoard({
         setIsCommentToolActive(false);
       } else if (key === "s") {
         setTool("sticky");
-        // Create sticky immediately at center, then open picker for quick color change
-        const position = pendingStickyPosition || { x: 400, y: 300 };
-        const stickyColor: StickyColor = "insight";
-        const size = { width: 200, height: 200 };
-        const stickyId = board.addStickyNote(position, stickyColor, size, currentUserName);
-        
-        if (hasMapId && mapId) {
-          const newElement: FigJamElement = {
-            id: stickyId,
-            type: "sticky",
-            position,
-            color: stickyColor,
-            content: "",
-            author: userId || "local-user",
-            authorName: currentUserName,
-            source: stickyColor,
-            votes: 0,
-            votedBy: [],
-            parentSectionId: null,
-            size,
-            zIndex: 1,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          };
-          saveToConvex({
-            mapId: mapId as Id<"affinityMaps">,
-            elements: { ...state.elements, [stickyId]: newElement },
-          });
-          throttledBroadcast(stickyId, "sticky", "update", position, size, newElement);
-          try {
-            logActivity({
-              mapId: mapId as Id<"affinityMaps">,
-              action: "sticky_created",
-              targetId: stickyId,
-              targetName: stickyColor,
-              details: { color: stickyColor },
-            });
-          } catch (err) {
-            console.error("Failed to log activity:", err);
-          }
-        }
-        board.selectElement(stickyId);
-        setPendingStickyPosition(null);
+        setShowStickyPicker(true);
         setIsCommentToolActive(false);
       } else if (key === "f") {
         setTool("section");
@@ -444,7 +492,6 @@ export function FigJamBoard({
     const lock = elementLocks?.find(l => l.elementId === id);
     if (lock && lock.userId !== userId) {
       // Element is locked by another user - can't select
-      console.log("[FigJamBoard] Element locked by another user:", lock.userId);
       return;
     }
     
@@ -475,13 +522,26 @@ export function FigJamBoard({
   // LOAD: Priority Convex > initialElements > localStorage
   // ============================================
   const hasLoadedInitialRef = useRef(false);
+  const savedElementsRef = useRef(savedElements);
   
+  // Update ref when savedElements changes
+  useEffect(() => {
+    savedElementsRef.current = savedElements;
+  }, [savedElements]);
+  
+  // Effect to mark board as loaded AFTER state has been updated
+  useEffect(() => {
+    if (!isLoaded) return;
+    
+    board.markLoaded();
+  }, [isLoaded, board]);
+
   useEffect(() => {
     // Only run on mount (when savedElements first loads)
     if (hasLoadedInitialRef.current) return;
     
     // Wait for savedElements to be defined (not undefined)
-    if (savedElements === undefined) return;
+    if (savedElementsRef.current === undefined) return;
     
     hasLoadedInitialRef.current = true;
     
@@ -499,14 +559,18 @@ export function FigJamBoard({
       return;
     }
 
-    // Priority 3: localStorage (fallback for offline)
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as Record<string, FigJamElement>;
-        board.loadElements(parsed);
-      } catch (e) {
-        console.error("Failed to load board from localStorage:", e);
+    // Priority 3: localStorage (fallback for offline) - only if storageKey is defined
+    if (storageKey) {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved) as Record<string, FigJamElement>;
+          board.loadElements(parsed);
+          setIsLoaded(true);
+          return;
+        } catch (e) {
+          console.error("Failed to load board from localStorage:", e);
+        }
       }
     }
     
@@ -528,8 +592,10 @@ export function FigJamBoard({
       return;
     }
     
-    // Always save to localStorage (instant)
-    localStorage.setItem(storageKey, JSON.stringify(state.elements));
+    // Save to localStorage (instant) - only if storageKey is defined
+    if (storageKey) {
+      localStorage.setItem(storageKey, JSON.stringify(state.elements));
+    }
     
     // Save to Convex (throttled) - only if there are elements
     if (Object.keys(state.elements).length > 0) {
@@ -980,10 +1046,6 @@ export function FigJamBoard({
         case "v": case "V": board.setTool("select"); break;
         case "h": case "H": board.setTool("hand");   break;
         case "t": case "T": board.setTool("text");   break;
-        case "s": case "S": 
-          e.preventDefault();
-          setShowStickyPicker((v) => !v);
-          break;
         case "f": case "F": board.setTool("section"); break;
         case "c": case "C": board.setTool("label"); break;
         case "F2":
@@ -1407,6 +1469,7 @@ export function FigJamBoard({
                 onDragStart={(id) => {
                   draggingRef.current.add(id);
                   setDraggingStickyId(id);
+                  board.startDrag();
                   const el = state.elements[id];
                   if (el && el.type === "sticky") {
                     draggingPositionRef.current = { 
@@ -1419,6 +1482,7 @@ export function FigJamBoard({
                   draggingRef.current.delete(id);
                   setDraggingStickyId(null);
                   draggingPositionRef.current = null;
+                  board.endDrag();
                 }}
               />
             );
@@ -1437,55 +1501,8 @@ export function FigJamBoard({
         showStickyPicker={showStickyPicker}
         onToggleStickyPicker={() => setShowStickyPicker((v) => !v)}
         onAddSticky={(color?: StickyColor) => {
-          const stickyColor = color || "insight";
-          // Use pending position if set (from canvas click), otherwise use center of screen
-          const position = pendingStickyPosition 
-            ? { x: pendingStickyPosition.x, y: pendingStickyPosition.y }
-            : { x: 400, y: 300 };
-          const size = { width: 200, height: 200 };
-          const stickyId = board.addStickyNote(position, stickyColor, size, currentUserName);
-          
-          if (hasMapId && mapId) {
-            // Create the element object to save immediately
-            const newElement: FigJamElement = {
-              id: stickyId,
-              type: "sticky",
-              position,
-              color: stickyColor,
-              content: "",
-              author: userId || "local-user",
-              authorName: currentUserName,
-              source: stickyColor,
-              votes: 0,
-              votedBy: [],
-              parentSectionId: null,
-              size,
-              zIndex: 1,
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-            };
-            
-            // IMMEDIATE SAVE with new element included - critical for real-time sync
-            saveToConvex({
-              mapId: mapId as Id<"affinityMaps">,
-              elements: { ...state.elements, [stickyId]: newElement },
-            });
-            
-            // Broadcast the creation so other users can see it
-            throttledBroadcast(stickyId, "sticky", "update", position, size, newElement);
-            
-            try {
-              logActivity({
-                mapId: mapId as Id<"affinityMaps">,
-                action: "sticky_created",
-                targetId: stickyId,
-                targetName: stickyColor,
-                details: { color: stickyColor },
-              });
-            } catch (err) {
-              console.error("Failed to log activity:", err);
-            }
-          }
+          // Just set the tool to sticky - sticky is created on canvas click
+          board.setTool("sticky");
           setShowStickyPicker(false);
         }}
         onGroupSelected={() => board.groupSelectedIntoSection()}
@@ -1516,14 +1533,20 @@ export function FigJamBoard({
         isManualVotingMode={false}
         canvasRef={canvasRef}
         projectName={projectName}
+        newInsightsCount={newInsightsCount}
+        onImportInsights={handleImportInsights}
       />
 
       {Object.keys(state.elements).length === 0 && (
         <div className="absolute inset-0 top-12 flex items-center justify-center pointer-events-none">
           <div className="text-center">
             <p className="text-gray-300 text-4xl mb-3">✦</p>
-            <p className="text-gray-400 text-sm font-medium">Click the sticky note tool to start</p>
-            <p className="text-gray-300 text-xs mt-1">Or press S, Ctrl+scroll to zoom</p>
+            <p className="text-gray-400 text-sm font-medium">Appuyez sur S ou cliquez sur l'outil sticky pour commencer</p>
+            {newInsightsCount > 0 && (
+              <p className="text-muted-foreground text-xs mt-2">
+                {newInsightsCount} insight{newInsightsCount > 1 ? "s" : ""} disponible{newInsightsCount > 1 ? "s" : ""} à importer
+              </p>
+            )}
           </div>
         </div>
       )}

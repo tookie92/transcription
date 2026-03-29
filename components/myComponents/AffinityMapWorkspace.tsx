@@ -4,7 +4,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import { AffinityGroup, Insight, ActivePanel, ThemeAnalysis, ThemeRecommendation } from "@/types";
 import { toast } from "sonner";
@@ -68,6 +68,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const [isThemesAnalyzing, setIsThemesAnalyzing] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [commentPanel, setCommentPanel] = useState<{groupId: string; rect: DOMRect; title?: string} | null>(null);
+  const [canvasInsightIds, setCanvasInsightIds] = useState<Set<string>>(new Set());
 
   // ==================== COMMENT HANDLER ====================
   const handleOpenComment = useCallback((elementId: string, rect: DOMRect, title?: string) => {
@@ -491,14 +492,22 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           projectName={project.name}
           projectId={projectId}
           mapId={affinityMap._id}
+          storageKey={affinityMap._id ? `figjam-${affinityMap._id}` : undefined}
           style={{ paddingTop: isVotingMode ? '96px' : '56px' }}
+          projectInsights={insights}
+          existingInsightIds={Array.from(canvasInsightIds)}
           isVotingMode={isVotingMode}
           voting={voting}
           onBack={() => router.push(`/project/${projectId}`)}
           onOpenComment={handleOpenComment}
           onChange={(elements) => {
-            console.log("Board changed:", Object.keys(elements).length, "elements");
+            // console.log("Board changed:", Object.keys(elements).length, "elements");
           }}
+          onImportInsights={(insightsToImport) => {
+            // The canvas will automatically update canvasInsightIds via onCanvasInsightIdsChange
+            // No manual state update needed
+          }}
+          onCanvasInsightIdsChange={(ids) => setCanvasInsightIds(new Set(ids))}
         />
       )}
 

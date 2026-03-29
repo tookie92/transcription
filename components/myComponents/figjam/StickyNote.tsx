@@ -57,6 +57,7 @@ const FOOTER_HEIGHT = 36;
 const PADDING = 12;
 const BASE_FONT_SIZE = 16;
 const LINE_HEIGHT = 1.5;
+const READ_MORE_THRESHOLD = 3; // Number of lines before showing "read more"
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -111,10 +112,13 @@ export function StickyNote({
   const [editingContent, setEditingContent] = useState(note.content);
   const [showMenu, setShowMenu] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const textRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
+  const previewMeasureRef = useRef<HTMLDivElement>(null);
+  const [isTextTruncated, setIsTextTruncated] = useState(false);
   
   // Sync editingContent when note.content changes from outside
   useEffect(() => {
@@ -167,6 +171,32 @@ export function StickyNote({
     stickyHeight: stickySize.height,
     selectedIds,
   });
+
+  // Check if text is truncated (for preview mode)
+  useEffect(() => {
+    if (isEditing || isExpanded || !previewMeasureRef.current || !note.content) {
+      setIsTextTruncated(false);
+      return;
+    }
+    
+    const preview = previewMeasureRef.current;
+    const visibleHeight = stickySize.height - HEADER_HEIGHT - FOOTER_HEIGHT - PADDING * 2;
+    const lineHeight = BASE_FONT_SIZE * LINE_HEIGHT;
+    const maxVisibleLines = Math.floor(visibleHeight / lineHeight);
+    
+    // Calculate how many lines the text would take
+    const text = note.content || "";
+    const lines = text.split("\n");
+    let totalLines = 0;
+    
+    for (const line of lines) {
+      const charsPerLine = Math.floor((stickySize.width - PADDING * 2) / (BASE_FONT_SIZE * 0.6));
+      totalLines += Math.max(1, Math.ceil(line.length / charsPerLine));
+    }
+    
+    const isTruncated = totalLines > maxVisibleLines && maxVisibleLines > 0;
+    setIsTextTruncated(isTruncated);
+  }, [note.content, stickySize, isEditing, isExpanded]);
 
   const isDragging = isDraggingRef.current;
 
@@ -370,18 +400,60 @@ export function StickyNote({
               </div>
             </>
           ) : (
-            <div
-              ref={textRef}
-              className="w-full break-words whitespace-pre-wrap"
-              style={{
-                color: note.content ? colors.text : "#aaa",
-                fontFamily: "'DM Sans', system-ui, sans-serif",
-                fontSize: BASE_FONT_SIZE,
-                lineHeight: LINE_HEIGHT,
-              }}
-            >
-              {note.content || (
-                <span className="opacity-60">Double-cliquez pour éditer</span>
+            <div className="relative w-full h-full">
+              {/* Hidden measure for truncation detection */}
+              <div
+                ref={previewMeasureRef}
+                className="absolute opacity-0 pointer-events-none overflow-hidden"
+                style={{
+                  width: stickySize.width - PADDING * 2,
+                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                  fontSize: BASE_FONT_SIZE,
+                  lineHeight: LINE_HEIGHT,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {note.content || " "}
+              </div>
+              
+              {/* Visible text */}
+              <div
+                ref={textRef}
+                className="w-full h-full break-words whitespace-pre-wrap overflow-hidden"
+                style={{
+                  color: note.content ? colors.text : "#aaa",
+                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                  fontSize: BASE_FONT_SIZE,
+                  lineHeight: LINE_HEIGHT,
+                }}
+              >
+                {note.content || (
+                  <span className="opacity-60">Double-cliquez pour éditer</span>
+                )}
+              </div>
+              
+              {/* Read more indicator */}
+              {isTextTruncated && !isExpanded && (
+                <button
+                  className="absolute bottom-0 left-0 right-0 flex items-center justify-center py-3 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{
+                    background: `linear-gradient(to top, ${colors.bg}ee, ${colors.bg}00)`,
+                    color: colors.accent,
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsExpanded(true);
+                  }}
+                >
+                  <span className="text-xs font-medium flex items-center gap-1">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                    Lire la suite
+                  </span>
+                </button>
               )}
             </div>
           )}

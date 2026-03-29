@@ -50,6 +50,7 @@ export interface StickyNoteData extends BaseElement {
   author?: string;
   authorName?: string;
   source?: string;
+  insightId?: string; // ID of the original insight this sticky was imported from
   votes: number;
   votedBy: string[]; // user IDs who voted
   /** ID of the section this sticky is attached to. null = free-floating. */
@@ -160,6 +161,12 @@ export interface UseFigJamBoardReturn {
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  /** Mark that initial loading is complete - starts tracking history for undo/redo */
+  markLoaded: () => void;
+  /** Call when drag starts to prepare snapshot for history */
+  startDrag: () => void;
+  /** Call when drag ends to save to history */
+  endDrag: () => void;
   // Multi-selection actions
   groupSelectedIntoSection: (title?: string) => string | null;
   autoArrange: (sectionId?: string) => void;
