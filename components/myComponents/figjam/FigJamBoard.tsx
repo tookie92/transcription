@@ -6,9 +6,10 @@ import { StickyNote } from "./StickyNote";
 import { ClusterLabel } from "./ClusterLabel";
 import { FigJamToolbar } from "./FigJamToolbar";
 import { AIGroupingPanel } from "./AIGroupingPanel";
-import { StickyColorPicker } from "./StickyColorPicker";
 import { LassoContextMenu } from "./ContextMenu";
 import { CommentBubblesLayer } from "./CommentBubble";
+import { PresentationMode } from "./PresentationMode";
+import { FiltersPanel, type FilterState } from "./FiltersPanel";
 import type { FigJamElement, Position, Size, StickyColor, StickyNoteData, DotData, ToolType, ClusterLabelData, SectionData, TextData } from "@/types/figjam";
 
 interface CommentBubbleData {
@@ -26,8 +27,10 @@ import { Id } from "@/convex/_generated/dataModel";
 import { motion } from "framer-motion";
 import { useThrottle } from "@/hooks/useThrottle";
 import { useVotingSync } from "@/hooks/useVotingSync";
+import { MentionToastProvider } from "@/hooks/useMentionToasts";
 import { toast } from "sonner";
 import { MessageSquare } from "lucide-react";
+import { useConfirmationToast } from "@/hooks/useConfirmationToast";
 
 interface PresenceUser {
   _id: string;
@@ -144,11 +147,71 @@ export function FigJamBoard({
     ids: string[];
   } | null>(null);
 
-  // Comment bubbles state
-  const [commentBubbles, setCommentBubbles] = useState<CommentBubbleData[]>([]);
+  // Comment bubbles state - loaded from Convex
+  const convexBubbles = useQuery(
+    mapId ? api.commentBubbles.getBubblesByMap : "skip" as any,
+    mapId ? { mapId: mapId as Id<"affinityMaps"> } : {}
+  );
+  
+  const commentBubbles: CommentBubbleData[] = (convexBubbles ?? []).map((b: any) => ({
+    id: b._id,
+    position: b.position,
+    targetId: b.targetId,
+    targetType: b.targetType,
+    resolved: b.resolved,
+  }));
+
+  const createBubbleMutation = useMutation(api.commentBubbles.createBubble);
+  const deleteBubbleMutation = useMutation(api.commentBubbles.deleteBubble);
+  const updateBubblePositionMutation = useMutation(api.commentBubbles.updateBubblePosition);
+  const resolveBubbleMutation = useMutation(api.commentBubbles.resolveBubble);
+
   const [selectedBubbleId, setSelectedBubbleId] = useState<string | null>(null);
   const [isCommentToolActive, setIsCommentToolActive] = useState(false);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
+  const [newBubbleCount, setNewBubbleCount] = useState(0);
+  const [isPresentationModeActive, setIsPresentationModeActive] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterState, setFilterState] = useState<FilterState>({
+    searchQuery: "",
+    stickyTypes: [],
+    authors: [],
+    showResolvedComments: true,
+    showUngrouped: true,
+  });
+  const [bouncingBubbleId, setBouncingBubbleId] = useState<string | null>(null);
+
+  // Track element positions to update bubbles that follow targets
+  const elementPositionsRef = useRef<Record<string, Position>>({});
+
+  // Update bubble positions when target elements move
+  useEffect(() => {
+    if (!convexBubbles) return;
+
+    commentBubbles.forEach((bubble) => {
+      if (bubble.targetId && bubble.targetType !== "canvas") {
+        const targetElement = state.elements[bubble.targetId];
+        if (targetElement) {
+          const newPos = targetElement.position;
+          const oldPos = elementPositionsRef.current[bubble.targetId];
+          
+          if (oldPos && (oldPos.x !== newPos.x || oldPos.y !== newPos.y)) {
+            const dx = newPos.x - oldPos.x;
+            const dy = newPos.y - oldPos.y;
+            const newBubblePos = {
+              x: bubble.position.x + dx,
+              y: bubble.position.y + dy,
+            };
+            updateBubblePositionMutation({ 
+              bubbleId: bubble.id as Id<"commentBubbles">, 
+              position: newBubblePos 
+            });
+          }
+        }
+        elementPositionsRef.current[bubble.targetId] = targetElement.position;
+      }
+    });
+  }, [state.elements, commentBubbles]);
   
   // Keyboard shortcuts
   useEffect(() => {
@@ -159,29 +222,80 @@ export function FigJamBoard({
 
       const key = e.key.toLowerCase();
       
-      // Tool shortcuts
+      // Tool shortcuts - deactivate comment tool when using other tools
       if (key === "v") {
         setTool("select");
+        setIsCommentToolActive(false);
       } else if (key === "h") {
         setTool("hand");
+        setIsCommentToolActive(false);
       } else if (key === "s") {
         setTool("sticky");
+        // Create sticky immediately at center, then open picker for quick color change
+        const position = pendingStickyPosition || { x: 400, y: 300 };
+        const stickyColor: StickyColor = "insight";
+        const size = { width: 200, height: 200 };
+        const stickyId = board.addStickyNote(position, stickyColor, size, currentUserName);
+        
+        if (hasMapId && mapId) {
+          const newElement: FigJamElement = {
+            id: stickyId,
+            type: "sticky",
+            position,
+            color: stickyColor,
+            content: "",
+            author: userId || "local-user",
+            authorName: currentUserName,
+            source: stickyColor,
+            votes: 0,
+            votedBy: [],
+            parentSectionId: null,
+            size,
+            zIndex: 1,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          };
+          saveToConvex({
+            mapId: mapId as Id<"affinityMaps">,
+            elements: { ...state.elements, [stickyId]: newElement },
+          });
+          throttledBroadcast(stickyId, "sticky", "update", position, size, newElement);
+          try {
+            logActivity({
+              mapId: mapId as Id<"affinityMaps">,
+              action: "sticky_created",
+              targetId: stickyId,
+              targetName: stickyColor,
+              details: { color: stickyColor },
+            });
+          } catch (err) {
+            console.error("Failed to log activity:", err);
+          }
+        }
+        board.selectElement(stickyId);
+        setPendingStickyPosition(null);
+        setIsCommentToolActive(false);
       } else if (key === "f") {
         setTool("section");
+        setIsCommentToolActive(false);
       } else if (key === "c") {
         setTool("label");
+        setIsCommentToolActive(false);
       } else if (key === "m") {
         setIsCommentToolActive(prev => !prev);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [setTool]);
+  }, [setTool, setIsCommentToolActive]);
 
   // ── Presence (cursors) ───────────────────────────────────────────────────
   const { userId } = useAuth();
   const { user } = useUser();
   const currentUserName = user?.fullName || user?.firstName || "Anonymous";
+
+  // ── Confirmation Toasts ─────────────────────────────────────────────────
+  const { confirmDelete, confirmMerge, showUndoToast } = useConfirmationToast();
   
   const CURSOR_COLORS = [
     "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -272,7 +386,7 @@ export function FigJamBoard({
   // Mutation: Log activity
   const logActivity = useMutation(api.activityLog.logActivity);
   
-  // Throttled save - only saves every 2 seconds to avoid too many writes to Convex
+  // Throttled save - saves every 500ms to keep Convex in sync
   const throttledSave = useThrottle((elements: Record<string, FigJamElement>) => {
     if (hasMapId) {
       saveToConvex({
@@ -280,9 +394,9 @@ export function FigJamBoard({
         elements,
       });
     }
-  }, 2000);
+  }, 500);
   
-  // Throttled broadcast - sends movement updates every 200ms for real-time sync
+  // Throttled broadcast - sends movement updates every 100ms for real-time sync
   const throttledBroadcast = useThrottle((
     elementId: string,
     elementType: "sticky" | "section" | "dot" | "label",
@@ -360,7 +474,17 @@ export function FigJamBoard({
   // ============================================
   // LOAD: Priority Convex > initialElements > localStorage
   // ============================================
+  const hasLoadedInitialRef = useRef(false);
+  
   useEffect(() => {
+    // Only run on mount (when savedElements first loads)
+    if (hasLoadedInitialRef.current) return;
+    
+    // Wait for savedElements to be defined (not undefined)
+    if (savedElements === undefined) return;
+    
+    hasLoadedInitialRef.current = true;
+    
     // Priority 1: Convex (shared state from other users)
     if (savedElements && Object.keys(savedElements).length > 0) {
       board.loadElements(savedElements);
@@ -495,6 +619,20 @@ export function FigJamBoard({
     (el): el is StickyNoteData => el.type === "sticky"
   );
 
+  // ── Filtered stickies ────────────────────────────────────────────────
+  const hasActiveFilters = 
+    filterState.searchQuery.length > 0 ||
+    filterState.stickyTypes.length > 0 ||
+    filterState.authors.length > 0 ||
+    !filterState.showUngrouped;
+
+  // Calculate active filter count for badge
+  const activeFilterCount = 
+    (filterState.searchQuery.length > 0 ? 1 : 0) +
+    filterState.stickyTypes.length +
+    filterState.authors.length +
+    (!filterState.showUngrouped ? 1 : 0);
+
   // ── Space key for pan ────────────────────────────────────────────────────
   
   useEffect(() => {
@@ -616,25 +754,66 @@ export function FigJamBoard({
 
       if (state.activeTool === "sticky") {
         const pos = screenToCanvas(e.clientX, e.clientY);
-        setPendingStickyPosition({ x: pos.x - 100, y: pos.y - 100 });
-        setShowStickyPicker(true);
+        const stickyColor: StickyColor = "insight";
+        const size = { width: 200, height: 200 };
+        const stickyId = board.addStickyNote({ x: pos.x - 100, y: pos.y - 100 }, stickyColor, size, currentUserName);
+        
+        if (hasMapId && mapId) {
+          const newElement: FigJamElement = {
+            id: stickyId,
+            type: "sticky",
+            position: { x: pos.x - 100, y: pos.y - 100 },
+            color: stickyColor,
+            content: "",
+            author: userId || "local-user",
+            authorName: currentUserName,
+            source: stickyColor,
+            votes: 0,
+            votedBy: [],
+            parentSectionId: null,
+            size,
+            zIndex: 1,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          };
+          saveToConvex({
+            mapId: mapId as Id<"affinityMaps">,
+            elements: { ...state.elements, [stickyId]: newElement },
+          });
+          throttledBroadcast(stickyId, "sticky", "update", { x: pos.x - 100, y: pos.y - 100 }, size, newElement);
+          try {
+            logActivity({
+              mapId: mapId as Id<"affinityMaps">,
+              action: "sticky_created",
+              targetId: stickyId,
+              targetName: stickyColor,
+              details: { color: stickyColor },
+            });
+          } catch (err) {
+            console.error("Failed to log activity:", err);
+          }
+        }
+        board.selectElement(stickyId);
+        board.setTool("select");
       }
 
       if (isCommentToolActive) {
         const pos = screenToCanvas(e.clientX, e.clientY);
-        const newBubbleId = `comment-${Date.now()}`;
-        const newBubble: CommentBubbleData = {
-          id: newBubbleId,
-          position: pos,
-          targetType: "canvas",
-          resolved: false,
-        };
-        setCommentBubbles(prev => [...prev, newBubble]);
-        setSelectedBubbleId(newBubbleId);
+        if (mapId) {
+          createBubbleMutation({
+            mapId: mapId as Id<"affinityMaps">,
+            position: pos,
+            targetType: "canvas",
+            createdBy: userId || "",
+            createdByName: currentUserName,
+          }).then((bubbleId) => {
+            setSelectedBubbleId(bubbleId as string);
+          }).catch(console.error);
+        }
         setIsCommentToolActive(false);
       }
     },
-    [state.activeTool, state.pan, board, screenToCanvas, isSpacePressed, currentUserName, hasMapId, mapId, logActivity]
+    [state.activeTool, state.pan, board, screenToCanvas, isSpacePressed, currentUserName, hasMapId, mapId, logActivity, createBubbleMutation, userId]
   );
 
   const handleCanvasPointerMove = useCallback(
@@ -898,6 +1077,39 @@ export function FigJamBoard({
     });
   }, [stickies, getStickyCluster]);
 
+  // ── Is sticky filtered function ──────────────────────────────────────
+  const isStickyFiltered = useCallback((sticky: StickyNoteData): boolean => {
+    // Check ungrouped filter
+    if (!filterState.showUngrouped) {
+      const clusterId = getStickyCluster(sticky.position, sticky.size ?? { width: 200, height: 200 });
+      if (clusterId === null) return true;
+    }
+
+    if (filterState.searchQuery) {
+      const query = filterState.searchQuery.toLowerCase();
+      const matchesText = 
+        sticky.content?.toLowerCase().includes(query) ||
+        sticky.source?.toLowerCase().includes(query) ||
+        sticky.authorName?.toLowerCase().includes(query);
+      if (!matchesText) return true;
+    }
+
+    if (filterState.stickyTypes.length > 0) {
+      if (!filterState.stickyTypes.includes(sticky.color as StickyColor)) {
+        return true;
+      }
+    }
+
+    if (filterState.authors.length > 0) {
+      const authorName = sticky.authorName || sticky.author;
+      if (!authorName || !filterState.authors.includes(authorName)) {
+        return true;
+      }
+    }
+
+    return false;
+  }, [filterState, getStickyCluster]);
+
   // Handle creating a cluster from AI grouping suggestions
   const handleCreateClusterFromAI = useCallback((
     stickyIds: string[],
@@ -910,6 +1122,14 @@ export function FigJamBoard({
     
     // Update the cluster title
     board.updateElement(clusterId, { text: title });
+    
+    // IMMEDIATE SAVE - critical for sync
+    if (hasMapId) {
+      saveToConvex({
+        mapId: mapId as Id<"affinityMaps">,
+        elements: state.elements,
+      });
+    }
     
     // Position stickies within the proximity radius (350px from cluster label)
     // Sticky center must be within this distance from cluster label
@@ -1150,6 +1370,7 @@ export function FigJamBoard({
                 isLocked={getLockInfo(el.id).isLocked}
                 lockedByName={getLockInfo(el.id).lockedByName}
                 clusterLabel={stickyClusterLabel}
+                isFiltered={hasActiveFilters && isStickyFiltered(el)}
                 onSelect={handleSelectWithLock}
                 onMove={(id, pos) => {
                   board.moveSticky(id, pos);
@@ -1216,15 +1437,50 @@ export function FigJamBoard({
         showStickyPicker={showStickyPicker}
         onToggleStickyPicker={() => setShowStickyPicker((v) => !v)}
         onAddSticky={(color?: StickyColor) => {
-          const stickyId = board.addStickyNote({ x: 200 / state.zoom, y: 200 / state.zoom }, color || "insight", { width: 200, height: 200 }, currentUserName);
+          const stickyColor = color || "insight";
+          // Use pending position if set (from canvas click), otherwise use center of screen
+          const position = pendingStickyPosition 
+            ? { x: pendingStickyPosition.x, y: pendingStickyPosition.y }
+            : { x: 400, y: 300 };
+          const size = { width: 200, height: 200 };
+          const stickyId = board.addStickyNote(position, stickyColor, size, currentUserName);
+          
           if (hasMapId && mapId) {
+            // Create the element object to save immediately
+            const newElement: FigJamElement = {
+              id: stickyId,
+              type: "sticky",
+              position,
+              color: stickyColor,
+              content: "",
+              author: userId || "local-user",
+              authorName: currentUserName,
+              source: stickyColor,
+              votes: 0,
+              votedBy: [],
+              parentSectionId: null,
+              size,
+              zIndex: 1,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            };
+            
+            // IMMEDIATE SAVE with new element included - critical for real-time sync
+            saveToConvex({
+              mapId: mapId as Id<"affinityMaps">,
+              elements: { ...state.elements, [stickyId]: newElement },
+            });
+            
+            // Broadcast the creation so other users can see it
+            throttledBroadcast(stickyId, "sticky", "update", position, size, newElement);
+            
             try {
               logActivity({
                 mapId: mapId as Id<"affinityMaps">,
                 action: "sticky_created",
                 targetId: stickyId,
-                targetName: color || "insight",
-                details: { color },
+                targetName: stickyColor,
+                details: { color: stickyColor },
               });
             } catch (err) {
               console.error("Failed to log activity:", err);
@@ -1238,7 +1494,12 @@ export function FigJamBoard({
         onToggleAIGroupingPanel={() => setShowAIGroupingPanel((v) => !v)}
         isCommentToolActive={isCommentToolActive}
         onToggleCommentTool={() => setIsCommentToolActive((v) => !v)}
-        bubbleCount={commentBubbles.length}
+        bubbleCount={commentBubbles.length + newBubbleCount}
+        isPresentationModeActive={isPresentationModeActive}
+        onTogglePresentationMode={() => setIsPresentationModeActive((v) => !v)}
+        isFiltersActive={showFilters}
+        onToggleFilters={() => setShowFilters((v) => !v)}
+        filterCount={activeFilterCount}
         selectedCount={state.selectedIds.length}
         votingConfig={{ dotsPerUser: voting.session?.maxDotsPerUser ?? 5, durationMinutes: voting.session?.durationMinutes ?? null }}
         onVotingConfigChange={(config) => {}}
@@ -1253,41 +1514,6 @@ export function FigJamBoard({
         onStopAndReveal={() => voting.stopVoting()}
         onStartNewVote={() => voting.startVoting({ dotsPerUser: voting.session?.maxDotsPerUser ?? 5, durationMinutes: voting.session?.durationMinutes ?? null })}
         isManualVotingMode={false}
-      />
-
-      {/* ── Sticky Color Picker ── */}
-      <StickyColorPicker
-        isOpen={showStickyPicker}
-        onClose={() => {
-          setShowStickyPicker(false);
-          setPendingStickyPosition(null);
-        }}
-        onSelectColor={(color) => {
-          if (pendingStickyPosition) {
-            const stickyId = board.addStickyNote(
-              pendingStickyPosition,
-              color,
-              { width: 200, height: 200 },
-              currentUserName
-            );
-            if (hasMapId && mapId) {
-              try {
-                logActivity({
-                  mapId: mapId as Id<"affinityMaps">,
-                  action: "sticky_created",
-                  targetId: stickyId,
-                  targetName: color,
-                });
-              } catch (err) {
-                console.error("Failed to log activity:", err);
-              }
-            }
-            board.selectElement(stickyId);
-            board.setTool("select");
-          }
-          setShowStickyPicker(false);
-          setPendingStickyPosition(null);
-        }}
       />
 
       {Object.keys(state.elements).length === 0 && (
@@ -1308,17 +1534,22 @@ export function FigJamBoard({
         selectedBubbleId={selectedBubbleId}
         onBubbleClick={(id) => {
           setSelectedBubbleId(prev => prev === id ? null : id);
+          // Stop bouncing animation when bubble is opened
+          if (bouncingBubbleId === id) {
+            setBouncingBubbleId(null);
+          }
         }}
         onBubbleDelete={(id) => {
-          setCommentBubbles(prev => prev.filter(b => b.id !== id));
+          deleteBubbleMutation({ bubbleId: id as Id<"commentBubbles"> });
           if (selectedBubbleId === id) {
             setSelectedBubbleId(null);
           }
         }}
         onBubblePositionChange={(id, position) => {
-          setCommentBubbles(prev => prev.map(b => 
-            b.id === id ? { ...b, position } : b
-          ));
+          updateBubblePositionMutation({ 
+            bubbleId: id as Id<"commentBubbles">, 
+            position 
+          });
         }}
         mapId={mapId || ""}
         projectId={projectId || ""}
@@ -1326,6 +1557,40 @@ export function FigJamBoard({
           id: u.userId,
           name: u.user?.name || "User",
         })) || []}
+        hideResolved={!filterState.showResolvedComments}
+        currentUserId={userId ?? undefined}
+        currentUserName={currentUserName}
+        bouncingBubbleId={bouncingBubbleId}
+      />
+
+      {/* ── Presentation Mode ── */}
+      <PresentationMode
+        isActive={isPresentationModeActive}
+        onClose={() => setIsPresentationModeActive(false)}
+        groups={labels.map(l => ({
+          id: l.id,
+          title: l.text || "Untitled Cluster",
+          position: l.position,
+        }))}
+        stickies={stickies}
+        labels={labels}
+        zoom={state.zoom}
+        pan={state.pan}
+        onZoomChange={(zoom) => board.setZoom(zoom)}
+        onPanChange={(pan) => board.setPan(pan)}
+      />
+
+      {/* ── Filters Panel ── */}
+      <FiltersPanel
+        isOpen={showFilters}
+        onClose={() => setShowFilters(false)}
+        stickies={allStickies}
+        commentCount={commentBubbles.length}
+        resolvedCommentCount={commentBubbles.filter(b => b.resolved).length}
+        initialFilters={filterState}
+        onFiltersChange={(filters) => {
+          setFilterState(filters);
+        }}
       />
 
       {/* ── Comment Tool Cursor ── */}
@@ -1359,7 +1624,15 @@ export function FigJamBoard({
           setContextMenu(null);
         }}
         onDelete={() => {
-          contextMenu?.ids.forEach(id => board.deleteElement(id));
+          const ids = contextMenu?.ids || [];
+          const count = ids.length;
+          confirmDelete(
+            `${count} élément${count > 1 ? "s" : ""}`,
+            count,
+            async () => {
+              ids.forEach(id => board.deleteElement(id));
+            }
+          );
           setContextMenu(null);
         }}
         onDuplicate={() => {
@@ -1367,7 +1640,7 @@ export function FigJamBoard({
           setContextMenu(null);
         }}
         onComment={() => {
-          if (contextMenu?.ids.length) {
+          if (contextMenu?.ids.length && mapId) {
             const firstId = contextMenu.ids[0];
             const element = state.elements[firstId];
             
@@ -1385,16 +1658,16 @@ export function FigJamBoard({
               ? { x: element.position.x + elementWidth / 2, y: element.position.y - 30 }
               : screenToCanvas(contextMenu.position.x, contextMenu.position.y);
             
-            const newBubbleId = `comment-${Date.now()}`;
-            const newBubble: CommentBubbleData = {
-              id: newBubbleId,
+            createBubbleMutation({
+              mapId: mapId as Id<"affinityMaps">,
               position: pos,
               targetId: firstId,
               targetType,
-              resolved: false,
-            };
-            setCommentBubbles(prev => [...prev, newBubble]);
-            setSelectedBubbleId(newBubbleId);
+              createdBy: userId || "",
+              createdByName: currentUserName,
+            }).then((bubbleId) => {
+              setSelectedBubbleId(bubbleId as string);
+            }).catch(console.error);
           }
           setContextMenu(null);
         }}
@@ -1407,6 +1680,11 @@ export function FigJamBoard({
           toast.info("Move to cluster feature coming soon");
           setContextMenu(null);
         }}
+      />
+
+      {/* ── Mention Toasts ── */}
+      <MentionToastProvider 
+        setBouncingBubbleId={setBouncingBubbleId}
       />
 
     </div>

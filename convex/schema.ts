@@ -454,24 +454,46 @@ silentSortingSessions: defineTable({
 .index("by_map", ["mapId"])
 .index("by_active", ["isActive"]),
 
-// Table for group connections
-groupConnections: defineTable({
-  mapId: v.id("affinityMaps"),
-  sourceGroupId: v.string(),
-  targetGroupId: v.string(),
-  type: v.union(
-    v.literal("related"),
-    v.literal("hierarchy"),
-    v.literal("dependency"),
-    v.literal("contradiction")
-  ),
-  label: v.optional(v.string()),
-  strength: v.optional(v.number()),
-  createdBy: v.string(),
-  createdAt: v.number(),
-  updatedAt: v.number(),
-})
-.index("by_map", ["mapId"])
+  // Table for group connections
+  groupConnections: defineTable({
+    mapId: v.id("affinityMaps"),
+    sourceGroupId: v.string(),
+    targetGroupId: v.string(),
+    type: v.union(
+      v.literal("related"),
+      v.literal("hierarchy"),
+      v.literal("dependency"),
+      v.literal("contradiction")
+    ),
+    label: v.optional(v.string()),
+    strength: v.optional(v.number()),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+  .index("by_map", ["mapId"]),
+
+  // Comment Bubbles - persisted floating comments like Figma
+  commentBubbles: defineTable({
+    mapId: v.id("affinityMaps"),
+    position: v.object({
+      x: v.number(),
+      y: v.number(),
+    }),
+    targetId: v.optional(v.string()),
+    targetType: v.optional(v.union(
+      v.literal("sticky"),
+      v.literal("label"),
+      v.literal("canvas")
+    )),
+    resolved: v.boolean(),
+    createdBy: v.string(),
+    createdByName: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+  .index("by_map", ["mapId"])
+  .index("by_target", ["targetId"])
 
 });
 

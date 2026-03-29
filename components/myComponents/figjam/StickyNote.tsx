@@ -31,7 +31,7 @@ const INSIGHT_TYPE_LABELS: Record<string, { label: string; color: string }> = {
   "follow-up": { label: "Follow-up", color: "#1976D2" },
 };
 
-function InsightTypeBadge({ type, colors }: { type: string; colors: { text: string } }) {
+function InsightTypeBadge({ type }: { type: string }) {
   const info = INSIGHT_TYPE_LABELS[type];
   if (!info) return null;
   
@@ -55,8 +55,8 @@ const MAX_STICKY_SIZE = { width: 600, height: 600 };
 const HEADER_HEIGHT = 32;
 const FOOTER_HEIGHT = 36;
 const PADDING = 12;
-const MIN_FONT_SIZE = 14;
-const MAX_FONT_SIZE = 20;
+const BASE_FONT_SIZE = 16;
+const LINE_HEIGHT = 1.5;
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -67,6 +67,7 @@ interface StickyNoteProps {
   isVotingMode?: boolean;
   isLocked?: boolean;
   lockedByName?: string;
+  isFiltered?: boolean;
   onSelect: (id: string, multi: boolean) => void;
   onMove: (id: string, pos: { x: number; y: number }) => void;
   onMoveSelected?: (ids: string[], dx: number, dy: number) => void;
@@ -79,17 +80,6 @@ interface StickyNoteProps {
   onDragEnd?: (id: string) => void;
   selectedIds?: string[];
   clusterLabel?: string;
-}
-
-// ─── Auto-sizing text hook (simplified) ─────────────────────────────────────
-
-function useAutoFontSize(text: string, containerWidth: number, containerHeight: number): number {
-  const fontSize = useMemo(() => {
-    // Fixed font size - more readable
-    return 16;
-  }, [text, containerWidth, containerHeight]);
-
-  return fontSize;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -113,6 +103,7 @@ export function StickyNote({
   isLocked = false,
   lockedByName,
   clusterLabel,
+  isFiltered = false,
 }: StickyNoteProps) {
   const colors = STICKY_COLORS[note.color];
   const stickySize = note.size ?? { width: 200, height: 200 };
@@ -123,6 +114,7 @@ export function StickyNote({
   const textRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
   
   // Sync editingContent when note.content changes from outside
   useEffect(() => {
@@ -131,12 +123,25 @@ export function StickyNote({
     }
   }, [note.content, isEditing]);
 
-  // Calculate text area dimensions
-  const textAreaHeight = stickySize.height - HEADER_HEIGHT - FOOTER_HEIGHT - PADDING * 2;
-  const textAreaWidth = stickySize.width - PADDING * 2;
-
-  // Auto-size font to fit
-  const fontSize = useAutoFontSize(note.content, textAreaWidth, textAreaHeight);
+  // Auto-resize sticky based on content
+  useEffect(() => {
+    if (!isEditing || !measureRef.current) return;
+    
+    const measure = measureRef.current;
+    const requiredHeight = measure.scrollHeight;
+    const currentTextAreaHeight = stickySize.height - HEADER_HEIGHT - FOOTER_HEIGHT - PADDING * 2;
+    
+    if (requiredHeight > currentTextAreaHeight) {
+      const newStickyHeight = Math.min(
+        Math.max(requiredHeight + HEADER_HEIGHT + FOOTER_HEIGHT + PADDING * 2, MIN_STICKY_SIZE.height),
+        MAX_STICKY_SIZE.height
+      );
+      
+      if (newStickyHeight > stickySize.height) {
+        onResize(note.id, { width: stickySize.width, height: newStickyHeight });
+      }
+    }
+  }, [editingContent, isEditing, stickySize, onResize, note.id]);
 
   const isDraggingRef = useRef(false);
   const { visualPosition, handlePointerDown } = useDraggable({
@@ -168,8 +173,9 @@ export function StickyNote({
   const handleDoubleClick = useCallback(() => {
     if (isLocked) return;
     setIsEditing(true);
+    setEditingContent(note.content);
     setTimeout(() => textareaRef.current?.focus(), 0);
-  }, []);
+  }, [isLocked, note.content]);
 
   const handleBlur = useCallback(() => {
     setIsEditing(false);
@@ -257,9 +263,10 @@ export function StickyNote({
           : "drop-shadow(0 2px 8px rgba(0,0,0,0.1))",
         transform: isDragging ? "rotate(-2deg) scale(1.02)" : "rotate(0deg)",
         transition: "none",
-        opacity: isVotingMode ? 0.85 : 1,
+        opacity: isVotingMode ? 0.85 : isFiltered ? 0.25 : 1,
+        pointerEvents: isFiltered ? "none" as const : "auto" as const,
       }}
-      onPointerDown={handlePointerDownWrapper}
+      onPointerDown={isFiltered ? undefined : handlePointerDownWrapper}
       onDoubleClick={handleDoubleClick}
     >
       {/* Card body */}
@@ -273,28 +280,12 @@ export function StickyNote({
           outline: isSelected ? "2px solid #0d99ff" : "1px solid rgba(0,0,0,0.08)",
           outlineOffset: 2,
         }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setShowMenu(true);
+        }}
       >
-        {/* Minimal header - just menu button */}
-        <div
-          className="absolute top-0 right-0 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ height: HEADER_HEIGHT }}
-        >
-          <button
-            className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/10"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowMenu((v) => !v);
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-gray-500">
-              <circle cx="8" cy="3" r="1.5"/>
-              <circle cx="8" cy="8" r="1.5"/>
-              <circle cx="8" cy="13" r="1.5"/>
-            </svg>
-          </button>
-        </div>
-
         {/* Lock indicator */}
         {isLocked && lockedByName && (
           <div 
@@ -329,7 +320,7 @@ export function StickyNote({
 
         {/* Text area */}
         <div
-          className="absolute left-0 right-0"
+          className="absolute left-0 right-0 overflow-hidden"
           style={{
             top: HEADER_HEIGHT,
             bottom: FOOTER_HEIGHT,
@@ -337,43 +328,60 @@ export function StickyNote({
           }}
         >
           {isEditing ? (
-            <textarea
-              ref={textareaRef}
-              className="w-full h-full resize-none outline-none bg-transparent"
-              style={{
-                color: colors.text,
-                fontFamily: "'DM Sans', system-ui, sans-serif",
-                fontSize: 16,
-                lineHeight: 1.6,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-              value={editingContent}
-              onChange={(e) => {
-                setEditingContent(e.target.value);
-              }}
-              onBlur={() => {
-                if (editingContent !== note.content) {
-                  onUpdate(note.id, { content: editingContent });
-                }
-                setIsEditing(false);
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              placeholder="Type your insight here..."
-            />
+            <>
+              <textarea
+                ref={textareaRef}
+                className="w-full min-h-[60px] resize-none outline-none bg-transparent"
+                style={{
+                  color: colors.text,
+                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                  fontSize: BASE_FONT_SIZE,
+                  lineHeight: LINE_HEIGHT,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+                value={editingContent}
+                onChange={(e) => {
+                  setEditingContent(e.target.value);
+                }}
+                onBlur={() => {
+                  if (editingContent !== note.content) {
+                    onUpdate(note.id, { content: editingContent });
+                  }
+                  setIsEditing(false);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                placeholder="Tapez votre insight..."
+              />
+              {/* Hidden measure div for auto-resize */}
+              <div
+                ref={measureRef}
+                className="absolute left-0 right-0 top-0 px-3 pointer-events-none opacity-0 overflow-hidden"
+                style={{
+                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                  fontSize: BASE_FONT_SIZE,
+                  lineHeight: LINE_HEIGHT,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  minWidth: stickySize.width - PADDING * 2,
+                }}
+              >
+                {editingContent || " "}
+              </div>
+            </>
           ) : (
             <div
               ref={textRef}
-              className="w-full h-full overflow-hidden break-words whitespace-pre-wrap text-sm"
+              className="w-full break-words whitespace-pre-wrap"
               style={{
                 color: note.content ? colors.text : "#aaa",
                 fontFamily: "'DM Sans', system-ui, sans-serif",
-                fontSize: Math.max(MIN_FONT_SIZE, fontSize),
-                lineHeight: 1.6,
+                fontSize: BASE_FONT_SIZE,
+                lineHeight: LINE_HEIGHT,
               }}
             >
               {note.content || (
-                <span className="opacity-60">Double-click to edit</span>
+                <span className="opacity-60">Double-cliquez pour éditer</span>
               )}
             </div>
           )}
@@ -395,7 +403,7 @@ export function StickyNote({
               </span>
             )}
             {note.source && (note.source === "pain-point" || note.source === "quote" || note.source === "insight" || note.source === "follow-up") && (
-              <InsightTypeBadge type={note.source} colors={colors} />
+              <InsightTypeBadge type={note.source} />
             )}
           </div>
         </div>
@@ -445,72 +453,103 @@ function ContextMenu({
   onClose: () => void;
   isLocked?: boolean;
 }) {
-  const insightTypes: StickyColor[] = ["pain-point", "quote", "insight", "follow-up"];
+  const insightTypes: { id: StickyColor; label: string; desc: string }[] = [
+    { id: "pain-point", label: "Pain Point", desc: "Problèmes" },
+    { id: "insight", label: "Insight", desc: "Découvertes" },
+    { id: "quote", label: "Quote", desc: "Citations" },
+    { id: "follow-up", label: "Follow-up", desc: "À suivre" },
+  ];
 
   return (
     <>
       <div className="fixed inset-0 z-40" onPointerDown={onClose} />
       <div
-        className="absolute right-0 top-10 z-50 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 min-w-[180px] overflow-hidden"
+        className="absolute right-0 top-8 z-50 bg-card rounded-xl shadow-2xl border border-border p-2 min-w-[200px]"
         onPointerDown={(e) => e.stopPropagation()}
       >
-        {/* Insight type picker section */}
-        <div className="px-3 pb-2 mb-1 border-b border-gray-100">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-gray-400 font-medium">Insight Type</p>
-            {isLocked && (
-              <span className="text-[10px] text-amber-600 flex items-center gap-1">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
-                </svg>
-                Locked
-              </span>
-            )}
+        {isLocked && (
+          <div className="flex items-center gap-2 px-2 py-1 mb-2 text-xs text-amber-600 bg-amber-50 rounded-lg">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2z"/>
+            </svg>
+            Verrouillé par un autre utilisateur
           </div>
-          <div className="flex gap-1.5">
-            {insightTypes.map((c) => (
-              <button
-                key={c}
-                disabled={isLocked}
-                className={`w-6 h-6 rounded-md transition-transform hover:scale-110 ${isLocked ? "opacity-50 cursor-not-allowed" : ""}`}
-                style={{
-                  background: STICKY_COLORS[c].bg,
-                  border: currentColor === c ? "2px solid #0d99ff" : "1px solid rgba(0,0,0,0.1)",
-                  boxShadow: currentColor === c ? "0 0 0 2px rgba(13, 153, 255, 0.3)" : "none",
-                }}
-                onClick={() => {
-                  if (isLocked) return;
-                  onColorChange(c, c);
-                  onClose();
-                }}
-                title={c.charAt(0).toUpperCase() + c.slice(1).replace("-", " ")}
+        )}
+
+        {/* Type d'insight */}
+        <div className="text-xs font-medium text-muted-foreground px-2 pb-2">Type</div>
+        <div className="space-y-1 mb-2">
+          {insightTypes.map((type) => (
+            <button
+              key={type.id}
+              disabled={isLocked}
+              className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg transition-colors ${
+                isLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-accent"
+              } ${currentColor === type.id ? "bg-accent" : ""}`}
+              onClick={() => {
+                if (isLocked) return;
+                onColorChange(type.id, type.id);
+                onClose();
+              }}
+            >
+              <div 
+                className="w-5 h-5 rounded"
+                style={{ backgroundColor: STICKY_COLORS[type.id].bg }}
               />
-            ))}
-          </div>
+              <div className="text-left">
+                <div className="text-sm font-medium">{type.label}</div>
+                <div className="text-[10px] text-muted-foreground">{type.desc}</div>
+              </div>
+              {currentColor === type.id && (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="ml-auto text-primary">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+            </button>
+          ))}
         </div>
 
         {/* Actions */}
-        {[
-          { label: "Duplicate", shortcut: "⌘D", action: onDuplicate },
-          { label: "Bring to front", shortcut: "", action: onBringFront },
-          { label: "Delete", shortcut: "⌫", action: onDelete, danger: true },
-        ].map((item) => (
+        <div className="border-t border-border pt-2 mt-1 space-y-1">
           <button
-            key={item.label}
-            disabled={isLocked && item.label !== "Delete"}
-            className={`w-full flex items-center justify-between gap-4 px-4 py-2 text-sm text-left transition-colors ${
-              item.danger
-                ? "text-red-600 hover:bg-red-50"
-                : "text-gray-700 hover:bg-gray-50"
-            } ${isLocked && item.label !== "Delete" ? "opacity-50 cursor-not-allowed" : ""}`}
-            onClick={item.action}
+            disabled={isLocked}
+            className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors ${
+              isLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-accent text-foreground"
+            }`}
+            onClick={onDuplicate}
           >
-            <span>{item.label}</span>
-            {item.shortcut && (
-              <span className="text-xs text-gray-400">{item.shortcut}</span>
-            )}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+            <span>Dupliquer</span>
+            <span className="ml-auto text-xs text-muted-foreground">⌘D</span>
           </button>
-        ))}
+          <button
+            disabled={isLocked}
+            className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors ${
+              isLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-accent text-foreground"
+            }`}
+            onClick={onBringFront}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="8" y="8" width="12" height="12" rx="2" />
+              <path d="M4 16V4a2 2 0 0 1 2-2h12" />
+            </svg>
+            <span>Mettre au premier plan</span>
+          </button>
+          <button
+            className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors"
+            onClick={onDelete}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+            <span>Supprimer</span>
+            <span className="ml-auto text-xs text-muted-foreground">⌫</span>
+          </button>
+        </div>
       </div>
     </>
   );

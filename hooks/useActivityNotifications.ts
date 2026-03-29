@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { toast } from "sonner";
 
 export interface ActivityNotification {
   id: string;
@@ -17,6 +18,7 @@ interface UseActivityNotificationsOptions {
   mapId: Id<"affinityMaps">;
   pollInterval?: number;
   maxNotifications?: number;
+  onMention?: (userName: string) => void;
 }
 
 interface UseActivityNotificationsReturn {
@@ -32,10 +34,12 @@ export function useActivityNotifications({
   mapId,
   pollInterval = 5000,
   maxNotifications = 50,
+  onMention,
 }: UseActivityNotificationsOptions): UseActivityNotificationsReturn {
   const [notifications, setNotifications] = useState<ActivityNotification[]>([]);
   const [lastActivityTime, setLastActivityTime] = useState<number | null>(null);
   const previousActivityCountRef = useRef(0);
+  const previousIdsRef = useRef<Set<string>>(new Set());
 
   const activities = useQuery(api.activityLog.getActivityForMap, { 
     mapId, 
@@ -45,8 +49,17 @@ export function useActivityNotifications({
   useEffect(() => {
     if (!activities || activities.length === 0) return;
 
-    const newActivities = activities.slice(0, activities.length - previousActivityCountRef.current);
-    previousActivityCountRef.current = activities.length;
+    // Initialize previous IDs on first load
+    if (previousIdsRef.current.size === 0) {
+      activities.forEach(a => previousIdsRef.current.add(a._id));
+      return;
+    }
+
+    // Find NEW activities (not in previous IDs)
+    const newActivities = activities.filter(a => !previousIdsRef.current.has(a._id));
+    
+    // Update previous IDs
+    activities.forEach(a => previousIdsRef.current.add(a._id));
 
     if (newActivities.length > 0) {
       const newNotifications: ActivityNotification[] = newActivities
@@ -67,6 +80,12 @@ export function useActivityNotifications({
           } else if (action === "user_mentioned") {
             type = "mention";
             message = `${activity.userName || "Someone"} mentioned you`;
+            // Show toast for mention
+            toast.info(`${activity.userName || "Someone"} vous a mentionné`, {
+              description: activity.targetName || "dans un commentaire",
+              duration: 5000,
+            });
+            onMention?.(activity.userName || "Someone");
           } else {
             type = "update";
             message = `${activity.userName || "Someone"} updated ${activity.targetName}`;
@@ -89,7 +108,7 @@ export function useActivityNotifications({
         setLastActivityTime(Date.now());
       }
     }
-  }, [activities, maxNotifications]);
+  }, [activities, maxNotifications, onMention]);
 
   const markAsRead = useCallback((id: string) => {
     setNotifications(prev =>

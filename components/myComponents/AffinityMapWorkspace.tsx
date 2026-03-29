@@ -22,8 +22,10 @@ import { useVotingSync } from "@/hooks/useVotingSync";
 
 // Activity
 import { useActivity } from "@/hooks/useActivity";
+import { useActivityNotifications } from "@/hooks/useActivityNotifications";
 import { ActivityPanel } from "./ActivityPanel";
 import { CommentPanel } from "./CommentPanel";
+import { ActivityButtonWithBadge } from "./figjam/NotificationBadge";
 import { ArrowLeft, Clock, Vote } from "lucide-react";
 
 // Side panels for features (AI suggestions, analytics, etc.)
@@ -53,6 +55,13 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   // ==================== STATE ====================
   const activity = useActivity();
   const [showActivityPanel, setShowActivityPanel] = useState(false);
+  
+  // Activity notifications with badge
+  const { unreadCount: activityUnreadCount, markAllAsRead } = useActivityNotifications({
+    mapId: affinityMap?._id as Id<"affinityMaps">,
+    maxNotifications: 50,
+  });
+  
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const [showVotingConfig, setShowVotingConfig] = useState(false);
   const [themeAnalysis, setThemeAnalysis] = useState<ThemeAnalysis | null>(null);
@@ -382,17 +391,16 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
             )}
           </button>
 
-          <button
-            onClick={() => setShowActivityPanel(!showActivityPanel)}
-            className={`px-3 py-1.5 rounded-lg border flex items-center gap-2 text-sm ${
-              showActivityPanel
-                ? "bg-primary/20 border-primary text-primary"
-                : "bg-muted border-border text-foreground hover:bg-accent"
-            }`}
-          >
-            <span>📋</span>
-            Activity
-          </button>
+          <ActivityButtonWithBadge
+            count={activityUnreadCount}
+            isActive={showActivityPanel}
+            onClick={() => {
+              setShowActivityPanel(!showActivityPanel);
+              if (!showActivityPanel) {
+                markAllAsRead();
+              }
+            }}
+          />
         </div>
       </div>
 
@@ -578,7 +586,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
 
       {/* Side Panels Toggle */}
       <div className="fixed top-16 left-4 z-20 flex flex-col gap-2">
-        <button
+        {/* <button
           onClick={() => setActivePanel(activePanel === "aiAssistant" ? null : "aiAssistant")}
           aria-label="AI Assistant panel"
           aria-pressed={activePanel === "aiAssistant"}
@@ -593,9 +601,9 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
             <path d="M2 17l10 5 10-5" />
             <path d="M2 12l10 5 10-5" />
           </svg>
-        </button>
+        </button> */}
         
-        <button
+        {/* <button
           onClick={() => setActivePanel(activePanel === "analytics" ? null : "analytics")}
           aria-label="Analytics panel"
           aria-pressed={activePanel === "analytics"}
@@ -608,9 +616,9 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M18 20V10M12 20V4M6 20v-6" />
           </svg>
-        </button>
+        </button> */}
         
-        <button
+        {/* <button
           onClick={() => setActivePanel(activePanel === "persona" ? null : "persona")}
           aria-label="Personas panel"
           aria-pressed={activePanel === "persona"}
@@ -624,7 +632,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
           </svg>
-        </button>
+        </button> */}
       </div>
 
       {/* Voting Config Modal */}

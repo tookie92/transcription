@@ -133,10 +133,17 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
   }, []);
 
   // Récupérer les données
-  const project = useQuery(api.projects.getById, { projectId });
+  const isValidProjectId = projectId && !projectId.includes("affinity");
+  const project = useQuery(
+    api.projects.getById, 
+    isValidProjectId ? { projectId } : "skip"
+  );
   const interview = useQuery(api.interviews.getById, { interviewId });
   const insights = useQuery(api.insights.getByInterview, { interviewId });
-  const projectInterviews = useQuery(api.interviews.getProjectInterviews, { projectId });
+  const projectInterviews = useQuery(
+    api.interviews.getProjectInterviews, 
+    isValidProjectId ? { projectId } : "skip"
+  );
 
   // Determine current stage based on data
   const currentStage = useMemo<InterviewStage>(() => {

@@ -11,6 +11,7 @@
 import type * as activityLog from "../activityLog.js";
 import type * as affinityMaps from "../affinityMaps.js";
 import type * as analytics from "../analytics.js";
+import type * as commentBubbles from "../commentBubbles.js";
 import type * as comments from "../comments.js";
 import type * as connections from "../connections.js";
 import type * as dotVoting from "../dotVoting.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   activityLog: typeof activityLog;
   affinityMaps: typeof affinityMaps;
   analytics: typeof analytics;
+  commentBubbles: typeof commentBubbles;
   comments: typeof comments;
   connections: typeof connections;
   dotVoting: typeof dotVoting;

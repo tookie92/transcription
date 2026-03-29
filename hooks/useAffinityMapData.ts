@@ -7,10 +7,23 @@ import { AffinityGroup, Insight } from "@/types";
 import { useEffect } from "react";
 
 export function useAffinityMapData(projectId: Id<"projects">) {
-  // Queries
-  const project = useQuery(api.projects.getById, { projectId });
-  const insightsData = useQuery(api.insights.getByProject, { projectId });
-  const affinityMap = useQuery(api.affinityMaps.getCurrent, { projectId });
+  // Validate that projectId is not an affinityMap ID
+  // This is a defensive check to prevent errors from wrong IDs in URL
+  const isValidProjectId = projectId && !projectId.includes("affinity");
+  
+  // Queries - skip if projectId is invalid
+  const project = useQuery(
+    api.projects.getById, 
+    isValidProjectId ? { projectId } : "skip"
+  );
+  const insightsData = useQuery(
+    api.insights.getByProject, 
+    isValidProjectId ? { projectId } : "skip"
+  );
+  const affinityMap = useQuery(
+    api.affinityMaps.getCurrent, 
+    isValidProjectId ? { projectId } : "skip"
+  );
 
   // Mutations
   const createAffinityMap = useMutation(api.affinityMaps.create);

@@ -2,12 +2,11 @@
 
 import React from "react";
 import type { ToolType, StickyColor } from "@/types/figjam";
-import { STICKY_COLORS } from "./StickyNote";
 import { VotingSettings } from "./VotingSettings";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { StickyColorPicker } from "./StickyColorPicker";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { BarChart3, Plus, Minus, MousePointer2, Hand, StickyNote, Tag, ArrowLeft, Sparkles, MessageSquare } from "lucide-react";
+import { BarChart3, Plus, Minus, MousePointer2, Hand, Tag, ArrowLeft, Sparkles, MessageSquare, Presentation, Filter } from "lucide-react";
 
 interface VotingConfig {
   dotsPerUser: number;
@@ -51,6 +50,11 @@ interface FigJamToolbarProps {
   isCommentToolActive?: boolean;
   onToggleCommentTool?: () => void;
   bubbleCount?: number;
+  isPresentationModeActive?: boolean;
+  onTogglePresentationMode?: () => void;
+  isFiltersActive?: boolean;
+  onToggleFilters?: () => void;
+  filterCount?: number;
 }
 
 function formatTime(ms: number): string {
@@ -89,6 +93,11 @@ export function FigJamToolbar({
   isCommentToolActive = false,
   onToggleCommentTool,
   bubbleCount = 0,
+  isPresentationModeActive = false,
+  onTogglePresentationMode,
+  isFiltersActive = false,
+  onToggleFilters,
+  filterCount = 0,
 }: FigJamToolbarProps) {
 
   const sortedResults = [...(voteResults || [])].sort((a, b) => b.voteCount - a.voteCount);
@@ -133,44 +142,17 @@ export function FigJamToolbar({
             <div className="w-px h-6 bg-border mx-1" />
 
             {/* Sticky Note */}
-            <Popover open={showStickyPicker} onOpenChange={onToggleStickyPicker}>
-              <PopoverTrigger asChild>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={`w-10 h-10 rounded-xl ${activeTool === "sticky" || showStickyPicker ? "bg-primary/20 text-primary ring-2 ring-primary/30" : ""}`}
-                    >
-                      <StickyNote className="w-5 h-5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="bg-card border-border shadow-lg">Sticky Note (S)</TooltipContent>
-                </Tooltip>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-2" side="top" sideOffset={8}>
-                <div className="flex flex-row gap-1">
-                  {(["pain-point", "quote", "insight", "follow-up"] as StickyColor[]).map((color) => (
-                    <Button
-                      key={color}
-                      variant="ghost"
-                      size="sm"
-                      className="flex flex-col gap-1 px-3 py-2 h-auto min-w-[80px]"
-                      onClick={() => {
-                        onAddSticky(color);
-                        onToggleStickyPicker?.();
-                      }}
-                    >
-                      <div 
-                        className="w-5 h-5 rounded shrink-0" 
-                        style={{ background: STICKY_COLORS[color].bg, border: `2px solid ${STICKY_COLORS[color].header}` }}
-                      />
-                      <span className="text-[10px] font-medium">{color}</span>
-                    </Button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <StickyColorPicker 
+                  onSelectColor={onAddSticky} 
+                  isActive={activeTool === "sticky"}
+                  isOpen={showStickyPicker}
+                  onOpenChange={onToggleStickyPicker}
+                />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="bg-card border-border shadow-lg">Sticky Note (S)</TooltipContent>
+            </Tooltip>
 
             {/* Cluster Label Tool */}
             <Tooltip>
@@ -215,26 +197,26 @@ export function FigJamToolbar({
 
             {/* Comment Tool */}
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`w-10 h-10 rounded-xl ${isCommentToolActive ? "bg-primary/20 text-primary ring-2 ring-primary/30" : ""}`}
-                  onClick={onToggleCommentTool}
-                >
-                  <div className="relative">
-                    <MessageSquare className="w-5 h-5" />
-                    {bubbleCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-blue-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                        {bubbleCount > 9 ? "9+" : bubbleCount}
-                      </span>
-                    )}
-                  </div>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="bg-card border-border shadow-lg">
-                Comment (M)
-              </TooltipContent>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`w-10 h-10 rounded-xl ${isCommentToolActive ? "bg-primary/20 text-primary ring-2 ring-primary/30" : ""}`}
+                    onClick={onToggleCommentTool}
+                  >
+                    <div className="relative">
+                      <MessageSquare className="w-5 h-5" />
+                      {bubbleCount > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-blue-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
+                          {bubbleCount > 99 ? "99+" : bubbleCount}
+                        </span>
+                      )}
+                    </div>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="bg-card border-border shadow-lg">
+                  {bubbleCount > 0 ? `${bubbleCount} discussion${bubbleCount > 1 ? "s" : ""}` : "Discuter (M)"}
+                </TooltipContent>
             </Tooltip>
           </div>
         </div>
@@ -341,6 +323,52 @@ export function FigJamToolbar({
             <span className="text-sm font-medium">{selectedCount} selected</span>
           </div>
         )}
+
+        {/* ── Presentation Mode Button (top left) ── */}
+        <div className="absolute left-5 top-20 z-30 flex flex-col gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={isPresentationModeActive ? "default" : "ghost"}
+                size="sm"
+                className={`gap-2 rounded-xl shadow-lg ${
+                  isPresentationModeActive ? "bg-primary" : "bg-card hover:bg-accent border border-border"
+                }`}
+                onClick={onTogglePresentationMode}
+              >
+                <Presentation className="w-4 h-4" />
+                <span className="text-sm font-medium">Present</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="bg-card border-border shadow-lg">
+              Start Presentation Mode
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={isFiltersActive ? "default" : "ghost"}
+                size="sm"
+                className={`gap-2 rounded-xl shadow-lg ${
+                  isFiltersActive ? "bg-primary" : "bg-card hover:bg-accent border border-border"
+                }`}
+                onClick={onToggleFilters}
+              >
+                <Filter className="w-4 h-4" />
+                <span className="text-sm font-medium">Filters</span>
+                {filterCount > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 bg-primary-foreground text-primary text-xs font-bold rounded-full min-w-[18px] text-center">
+                    {filterCount}
+                  </span>
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="bg-card border-border shadow-lg">
+              {filterCount > 0 ? `${filterCount} filters active` : "Open Filters"}
+            </TooltipContent>
+          </Tooltip>
+        </div>
 
         {/* ── Zoom controls (bottom right) ── */}
         <div className="absolute right-5 bottom-6 z-30 flex items-center gap-1 bg-card/95 backdrop-blur-sm rounded-xl shadow-lg border border-border px-1.5 py-1">
