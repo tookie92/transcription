@@ -664,15 +664,17 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
   );
 
   const addClusterLabel = useCallback(
-    (pos: Position): string => {
+    (pos: Position, size?: { width: number; height: number }): string => {
       const id = uid();
       const element: ClusterLabelData = {
         id,
         type: "label",
         position: pos,
         text: "New Cluster",
-        color: "#3b82f6",
-        fontSize: 14,
+        color: "#B8B4FF",
+        fontSize: 13,
+        width: size?.width ?? 400,
+        height: size?.height ?? 300,
         zIndex: 1,
         createdAt: now(),
         updatedAt: now(),

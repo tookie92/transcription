@@ -59,6 +59,8 @@ export interface StickyNoteData extends BaseElement {
   relativePosition?: Position;
   /** Size of the sticky note - allows user to resize */
   size: Size;
+  /** ID of the cluster this sticky belongs to (explicit assignment via hit-test) */
+  clusterId?: string | null;
 }
 
 export interface SectionData extends BaseElement {
@@ -76,6 +78,8 @@ export interface ClusterLabelData extends BaseElement {
   text: string;
   color: string;
   fontSize: number;
+  width: number;
+  height: number;
 }
 
 export interface TextData extends BaseElement {
@@ -127,7 +131,7 @@ export interface UseFigJamBoardReturn {
   // Element actions
   addStickyNote: (pos: Position, color?: StickyColor, size?: Size, authorName?: string) => string;
   addSection: (pos: Position, size?: Size) => string;
-  addClusterLabel: (pos: Position) => string;
+  addClusterLabel: (pos: Position, size?: { width: number; height: number }) => string;
   addDot: (pos: Position, parentSectionId: string | null, color: string) => string;
   updateElement: (id: string, patch: Partial<FigJamElement>) => void;
   updateMany: (patches: { id: string; patch: Partial<FigJamElement> }[]) => void;

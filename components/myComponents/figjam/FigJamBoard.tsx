@@ -138,6 +138,7 @@ export function FigJamBoard({
   const lastProcessedTimestampRef = useRef<number>(0);
 
   const draggingRef = useRef<Set<string>>(new Set());
+  const draggingClusterRef = useRef<string | null>(null);
 
   const isDraggingElement = useCallback((id: string) => {
     return draggingRef.current.has(id);
@@ -841,6 +842,7 @@ export function FigJamBoard({
             zIndex: 1,
             createdAt: Date.now(),
             updatedAt: Date.now(),
+            clusterId: null,
           };
           saveToConvex({
             mapId: mapId as Id<"affinityMaps">,
@@ -1107,32 +1109,15 @@ export function FigJamBoard({
   const labels    = sorted.filter((el): el is ClusterLabelData     => el.type === "label");
   const stickies  = sorted.filter((el): el is StickyNoteData      => el.type === "sticky");
 
-  // Proximity grouping - find which label a sticky belongs to
-  const PROXIMITY_RADIUS = 350; // px
+  // Explicit clusterId-based grouping - use clusterId from sticky directly
+  const getStickyCluster = useCallback((sticky: StickyNoteData): string | null => {
+    return sticky.clusterId ?? null;
+  }, []);
 
-  const getStickyCluster = useCallback((stickyPos: Position, stickySize: Size): string | null => {
-    const stickyCenterX = stickyPos.x + stickySize.width / 2;
-    const stickyCenterY = stickyPos.y + stickySize.height / 2;
-    
-    for (const label of labels) {
-      const labelCenterX = label.position.x;
-      const labelCenterY = label.position.y;
-      const distance = Math.sqrt(
-        Math.pow(stickyCenterX - labelCenterX, 2) + 
-        Math.pow(stickyCenterY - labelCenterY, 2)
-      );
-      
-      if (distance < PROXIMITY_RADIUS) {
-        return label.id;
-      }
-    }
-    return null;
-  }, [labels]);
-
-  // Ungrouped stickies - stickies not near any cluster label
+  // Ungrouped stickies - stickies not in any cluster
   const ungroupedStickies = useMemo(() => {
     return stickies.filter((s) => {
-      const clusterId = getStickyCluster(s.position, s.size ?? { width: 200, height: 200 });
+      const clusterId = getStickyCluster(s as StickyNoteData);
       return clusterId === null;
     });
   }, [stickies, getStickyCluster]);
@@ -1141,7 +1126,7 @@ export function FigJamBoard({
   const isStickyFiltered = useCallback((sticky: StickyNoteData): boolean => {
     // Check ungrouped filter
     if (!filterState.showUngrouped) {
-      const clusterId = getStickyCluster(sticky.position, sticky.size ?? { width: 200, height: 200 });
+      const clusterId = getStickyCluster(sticky);
       if (clusterId === null) return true;
     }
 
@@ -1176,9 +1161,8 @@ export function FigJamBoard({
     title: string,
     position: Position
   ) => {
-    // Cluster label position is the CENTER of the proximity zone
-    // PROXIMITY_RADIUS = 350px - stickies must be within this distance from cluster label center
-    const clusterId = board.addClusterLabel(position);
+    // Create cluster with default size
+    const clusterId = board.addClusterLabel(position, { width: 400, height: 300 });
     
     // Update the cluster title
     board.updateElement(clusterId, { text: title });
@@ -1191,63 +1175,36 @@ export function FigJamBoard({
       });
     }
     
-    // Position stickies within the proximity radius (350px from cluster label)
-    // Sticky center must be within this distance from cluster label
-    const STICKY_SPACING_X = 220; // Horizontal spacing between sticky centers
-    const STICKY_SPACING_Y = 160; // Vertical spacing - kept small to stay within radius
+    // Position stickies within the cluster zone
+    const STICKY_SPACING_X = 220;
+    const STICKY_SPACING_Y = 160;
     const COLUMNS = 3;
-    const FIRST_ROW_OFFSET = 40; // First row starts close to cluster label center
+    const CLUSTER_PADDING = 40;
     
     stickyIds.forEach((stickyId, index) => {
       const col = index % COLUMNS;
       const row = Math.floor(index / COLUMNS);
       
-      // Calculate offset from cluster label center
-      const offsetX = (col - 1) * STICKY_SPACING_X;
-      const offsetY = FIRST_ROW_OFFSET + row * STICKY_SPACING_Y;
-      
-      // Sticky position: top-left corner = center - half size
-      // Cluster label is at (position.x, position.y) - this is the proximity center
       const stickyPosition = {
-        x: position.x + offsetX - 100, // -100 centers the 200px wide sticky
-        y: position.y + offsetY, // offset from cluster label center
+        x: position.x + CLUSTER_PADDING + col * STICKY_SPACING_X,
+        y: position.y + CLUSTER_PADDING + row * STICKY_SPACING_Y,
       };
       
-      // Get current sticky to preserve size
       const sticky = state.elements[stickyId];
       const size = (sticky && sticky.type === "sticky") 
         ? (sticky as StickyNoteData).size 
         : { width: 200, height: 200 };
       
-      // Update sticky position
-      board.updateElement(stickyId, { position: stickyPosition, size });
+      // Update sticky position AND assign to cluster
+      board.updateElement(stickyId, { 
+        position: stickyPosition, 
+        size,
+        clusterId: clusterId 
+      });
     });
     
     toast.success(`Created cluster "${title}" with ${stickyIds.length} stickies`);
   }, [board, state.elements]);
-
-  // Get distance from sticky to nearest cluster (for highlight effect)
-  const getDistanceToNearestCluster = useCallback((stickyPos: Position, stickySize: Size): { id: string; distance: number } | null => {
-    const stickyCenterX = stickyPos.x + stickySize.width / 2;
-    const stickyCenterY = stickyPos.y + stickySize.height / 2;
-    
-    let nearest: { id: string; distance: number } | null = null;
-    
-    for (const label of labels) {
-      const labelCenterX = label.position.x;
-      const labelCenterY = label.position.y;
-      const distance = Math.sqrt(
-        Math.pow(stickyCenterX - labelCenterX, 2) + 
-        Math.pow(stickyCenterY - labelCenterY, 2)
-      );
-      
-      if (!nearest || distance < nearest.distance) {
-        nearest = { id: label.id, distance };
-      }
-    }
-    
-    return nearest;
-  }, [labels]);
 
   // Vote results for ranking display (using voting hook)
   const voteResults = useMemo(() => {
@@ -1366,59 +1323,123 @@ export function FigJamBoard({
 
           {/* ── Cluster Labels ── */}
           {labels.map((el) => {
-            const isDragging = draggingStickyId !== null;
-            const nearestCluster = draggingPositionRef.current
-              ? getDistanceToNearestCluster(
-                  draggingPositionRef.current.pos,
-                  draggingPositionRef.current.size
-                )
-              : null;
-            const isHighlighted = isDragging && nearestCluster?.id === el.id;
+            const isClusterDragging = draggingClusterRef.current === el.id;
             
-            const clusterVotes = voting.getClusterVotes(el.id);
+            const clusterWidth = el.width ?? 400;
+            const clusterHeight = el.height ?? 300;
+            
             const stickiesInThisCluster = stickies.filter(s => {
-              const clusterId = getStickyCluster(s.position, s.size ?? { width: 200, height: 200 });
-              return clusterId === el.id;
+              const stickyPos = s.position;
+              const stickySize = s.size ?? { width: 200, height: 200 };
+              const stickyCenterX = stickyPos.x + stickySize.width / 2;
+              const stickyCenterY = stickyPos.y + stickySize.height / 2;
+              
+              return (
+                stickyCenterX >= el.position.x &&
+                stickyCenterX <= el.position.x + clusterWidth &&
+                stickyCenterY >= el.position.y &&
+                stickyCenterY <= el.position.y + clusterHeight
+              );
             });
+            
             return (
               <ClusterLabel
                 key={el.id}
-                label={el}
-                zoom={state.zoom}
-                isSelected={state.selectedIds.includes(el.id)}
-                isHighlighted={isHighlighted && nearestCluster?.id === el.id}
-                highlightDistance={nearestCluster?.id === el.id ? nearestCluster.distance : 0}
+                cluster={el}
+                memberStickies={stickiesInThisCluster}
+                isDragging={isClusterDragging}
                 isLocked={getLockInfo(el.id).isLocked}
-                isVotingMode={voting.isVoting}
-                isRevealed={voting.isRevealed}
-                votes={clusterVotes}
-                userNames={userNamesMap}
-                hasUserVoted={voting.myVotes.has(el.id)}
-                userVotesRemaining={voting.getUserVotesRemaining()}
-                stickiesInCluster={stickiesInThisCluster}
-                projectContext={projectName ? `PROJECT NAME: ${projectName}` : undefined}
+                onDragStart={() => {
+                  draggingClusterRef.current = el.id;
+                  board.startDrag();
+                }}
+                onDrag={(dx, dy) => {
+                  const newPos = {
+                    x: el.position.x + dx,
+                    y: el.position.y + dy,
+                  };
+                  board.updateElement(el.id, { position: newPos });
+                  
+                  stickiesInThisCluster.forEach(sticky => {
+                    const newStickyPos = {
+                      x: sticky.position.x + dx,
+                      y: sticky.position.y + dy,
+                    };
+                    board.updateElement(sticky.id, { position: newStickyPos });
+                  });
+                }}
+                onDragEnd={(finalX, finalY) => {
+                  const oldPos = el.position;
+                  const dx = finalX - oldPos.x;
+                  const dy = finalY - oldPos.y;
+                  
+                  board.updateElement(el.id, { 
+                    position: { x: finalX, y: finalY } 
+                  });
+                  
+                  const newClusterWidth = el.width ?? 400;
+                  const newClusterHeight = el.height ?? 300;
+                  
+                  stickies.forEach(sticky => {
+                    const stickySize = sticky.size ?? { width: 200, height: 200 };
+                    const currentCenterX = sticky.position.x + stickySize.width / 2;
+                    const currentCenterY = sticky.position.y + stickySize.height / 2;
+                    
+                    const isInsideCluster = 
+                      currentCenterX >= finalX &&
+                      currentCenterX <= finalX + newClusterWidth &&
+                      currentCenterY >= finalY &&
+                      currentCenterY <= finalY + newClusterHeight;
+                    
+                    const currentClusterId = (sticky as StickyNoteData).clusterId;
+                    
+                    if (isInsideCluster && currentClusterId !== el.id) {
+                      board.updateElement(sticky.id, { 
+                        position: { x: sticky.position.x + dx, y: sticky.position.y + dy },
+                        clusterId: el.id 
+                      });
+                      if (hasMapId) {
+                        throttledBroadcast(sticky.id, "sticky", "move", { x: sticky.position.x + dx, y: sticky.position.y + dy });
+                      }
+                    } else if (!isInsideCluster && currentClusterId === el.id) {
+                      board.updateElement(sticky.id, { 
+                        position: { x: sticky.position.x + dx, y: sticky.position.y + dy },
+                        clusterId: null 
+                      });
+                      if (hasMapId) {
+                        throttledBroadcast(sticky.id, "sticky", "move", { x: sticky.position.x + dx, y: sticky.position.y + dy });
+                      }
+                    } else if (isInsideCluster && currentClusterId === el.id) {
+                      board.updateElement(sticky.id, { 
+                        position: { x: sticky.position.x + dx, y: sticky.position.y + dy }
+                      });
+                      if (hasMapId) {
+                        throttledBroadcast(sticky.id, "sticky", "move", { x: sticky.position.x + dx, y: sticky.position.y + dy });
+                      }
+                    }
+                  });
+                  
+                  if (hasMapId) {
+                    throttledBroadcast(el.id, "label", "move", { x: finalX, y: finalY });
+                  }
+                  
+                  draggingClusterRef.current = null;
+                  board.endDrag();
+                }}
+                onLabelChange={(newLabel) => {
+                  board.updateElement(el.id, { text: newLabel });
+                  if (hasMapId) {
+                    throttledBroadcast(el.id, "label", "update", el.position, undefined, { text: newLabel });
+                  }
+                }}
                 onSelect={handleSelectWithLock}
-                onMove={(id, pos) => {
-                  board.updateElement(id, { position: pos });
-                  if (hasMapId) {
-                    throttledBroadcast(id, "label", "move", pos);
-                  }
-                }}
-                onUpdate={(id, patch) => {
-                  board.updateElement(id, patch);
-                  if (hasMapId) {
-                    throttledBroadcast(id, "label", "update", patch.position, undefined, patch);
-                  }
-                }}
-                onDelete={board.deleteElement}
-                onVote={voting.toggleVote}
               />
             );
           })}
 
           {/* ── All Sticky notes (flat canvas - no hierarchy) ── */}
           {stickies.map((el) => {
-            const stickyClusterId = getStickyCluster(el.position, el.size ?? { width: 200, height: 200 });
+            const stickyClusterId = (el as StickyNoteData).clusterId;
             const stickyClusterLabel = stickyClusterId ? (labels.find(l => l.id === stickyClusterId)?.text || "Untitled") : undefined;
             
             return (
@@ -1477,6 +1498,42 @@ export function FigJamBoard({
                   }
                 }}
                 onDragEnd={(id) => {
+                  const sticky = state.elements[id];
+                  if (sticky && sticky.type === "sticky") {
+                    const stickyPos = sticky.position;
+                    const stickySize = sticky.size ?? { width: 200, height: 200 };
+                    const centerX = stickyPos.x + stickySize.width / 2;
+                    const centerY = stickyPos.y + stickySize.height / 2;
+                    
+                    let foundClusterId: string | null = null;
+                    
+                    for (const label of labels) {
+                      const clusterX = label.position.x;
+                      const clusterY = label.position.y;
+                      const clusterWidth = label.width ?? 400;
+                      const clusterHeight = label.height ?? 300;
+                      
+                      if (
+                        centerX >= clusterX &&
+                        centerX <= clusterX + clusterWidth &&
+                        centerY >= clusterY &&
+                        centerY <= clusterY + clusterHeight
+                      ) {
+                        foundClusterId = label.id;
+                        break;
+                      }
+                    }
+                    
+                    const currentClusterId = (sticky as StickyNoteData).clusterId;
+                    
+                    if (foundClusterId !== currentClusterId) {
+                      board.updateElement(id, { clusterId: foundClusterId });
+                      if (hasMapId) {
+                        throttledBroadcast(id, "sticky", "update", stickyPos, undefined, { clusterId: foundClusterId });
+                      }
+                    }
+                  }
+                  
                   draggingRef.current.delete(id);
                   setDraggingStickyId(null);
                   draggingPositionRef.current = null;
