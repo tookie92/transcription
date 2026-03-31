@@ -1360,12 +1360,24 @@ export function FigJamBoard({
                   };
                   board.updateElement(el.id, { position: newPos });
                   
-                  stickiesInThisCluster.forEach(sticky => {
-                    const newStickyPos = {
-                      x: sticky.position.x + dx,
-                      y: sticky.position.y + dy,
-                    };
-                    board.updateElement(sticky.id, { position: newStickyPos });
+                  stickies.forEach(sticky => {
+                    const stickySize = sticky.size ?? { width: 200, height: 200 };
+                    const currentCenterX = sticky.position.x + stickySize.width / 2;
+                    const currentCenterY = sticky.position.y + stickySize.height / 2;
+                    
+                    const isUnderCluster = 
+                      currentCenterX >= newPos.x &&
+                      currentCenterX <= newPos.x + clusterWidth &&
+                      currentCenterY >= newPos.y &&
+                      currentCenterY <= newPos.y + clusterHeight;
+                    
+                    if (isUnderCluster) {
+                      const newStickyPos = {
+                        x: sticky.position.x + dx,
+                        y: sticky.position.y + dy,
+                      };
+                      board.updateElement(sticky.id, { position: newStickyPos });
+                    }
                   });
                 }}
                 onDragEnd={(finalX, finalY) => {
@@ -1439,8 +1451,15 @@ export function FigJamBoard({
 
           {/* ── All Sticky notes (flat canvas - no hierarchy) ── */}
           {stickies.map((el) => {
-            const stickyClusterId = (el as StickyNoteData).clusterId;
-            const stickyClusterLabel = stickyClusterId ? (labels.find(l => l.id === stickyClusterId)?.text || "Untitled") : undefined;
+            const stickyClusterLabel = (() => {
+              const stickyClusterId = (el as StickyNoteData).clusterId;
+              if (!stickyClusterId) return undefined;
+              
+              const cluster = labels.find(l => l.id === stickyClusterId);
+              if (!cluster) return undefined;
+              
+              return cluster.text || "Untitled";
+            })();
             
             return (
               <StickyNote
