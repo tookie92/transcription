@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import type { StickyNoteData, ClusterLabelData } from "@/types/figjam";
 
 interface GroupingSuggestion {
+  id: string;
   action: "create_new" | "add_to_existing";
   confidence: number;
   reason: string;
@@ -32,6 +33,8 @@ interface GroupingSuggestion {
   newGroupTitle?: string;
   newGroupDescription?: string;
   cachedAt?: number;
+  isApplied?: boolean;
+  isDismissed?: boolean;
 }
 
 interface AIGroupingPanelProps {
@@ -69,7 +72,8 @@ export function AIGroupingPanel({
   const cachedSuggestionsRef = useRef<GroupingSuggestion[]>([]);
   const lastFetchTimeRef = useRef<number>(0);
 
-  // Check if we have valid cached suggestions
+  // Filter out applied and dismissed suggestions
+  const visibleSuggestions = suggestions.filter(s => !s.isApplied && !s.isDismissed);
   const hasValidCache = suggestions.length > 0 && !fromCache;
 
   const toggleSuggestion = (index: number) => {
@@ -82,6 +86,26 @@ export function AIGroupingPanel({
       }
       return next;
     });
+  };
+
+  const dismissSuggestion = (index: number) => {
+    setSuggestions(prev => {
+      const updated = [...prev];
+      // Find the actual index in the full suggestions array
+      let realIndex = 0;
+      for (let i = 0; i < updated.length; i++) {
+        if (!updated[i].isApplied && !updated[i].isDismissed) {
+          if (realIndex === index) {
+            updated[i] = { ...updated[i], isDismissed: true };
+            break;
+          }
+          realIndex++;
+        }
+      }
+      cachedSuggestionsRef.current = updated;
+      return updated;
+    });
+    toast.info("Suggestion dismissed");
   };
 
   // Auto-load cached suggestions when panel opens
@@ -141,9 +165,12 @@ export function AIGroupingPanel({
       }
 
       const data = await response.json();
-      const newSuggestions = (data.suggestions || []).map((s: GroupingSuggestion) => ({
+      const newSuggestions = (data.suggestions || []).map((s: GroupingSuggestion, idx: number) => ({
         ...s,
-        cachedAt: Date.now()
+        id: `suggestion-${Date.now()}-${idx}`,
+        cachedAt: Date.now(),
+        isApplied: false,
+        isDismissed: false,
       }));
       
       // Cache the suggestions
@@ -171,6 +198,22 @@ export function AIGroupingPanel({
       return;
     }
 
+    // Mark selected suggestions as applied
+    setSuggestions(prev => {
+      const updated = prev.map(s => ({ ...s }));
+      let selectedCount = 0;
+      for (let i = 0; i < updated.length; i++) {
+        if (!updated[i].isApplied && !updated[i].isDismissed) {
+          if (selectedSuggestions.has(selectedCount)) {
+            updated[i] = { ...updated[i], isApplied: true };
+          }
+          selectedCount++;
+        }
+      }
+      cachedSuggestionsRef.current = updated;
+      return updated;
+    });
+
     const selectedList = Array.from(selectedSuggestions).map((i) => suggestions[i]);
     
     // Calculate bounds of ungrouped stickies
@@ -188,33 +231,63 @@ export function AIGroupingPanel({
     const avgX = stickyCenters.reduce((sum, c) => sum + c.x, 0) / stickyCenters.length;
     const avgY = stickyCenters.reduce((sum, c) => sum + c.y, 0) / stickyCenters.length;
 
-    // PROXIMITY_RADIUS = 350px in FigJamBoard
-    // Stickies will be placed at cluster.y + 40 to cluster.y + 360
-    // Cluster label should be ABOVE where we want the stickies to end up
-    // Place cluster label above the original sticky positions
-    const CLUSTER_LABEL_OFFSET_Y = -150; // Cluster label is above the stickies
-    const SPACING_X = 350; // Horizontal space between cluster centers
-    const SPACING_Y = 400; // Vertical space between rows of clusters
+    const CLUSTER_LABEL_OFFSET_Y = -150;
+    const SPACING_X = 450;
+    const SPACING_Y = 500;
+    const CLUSTER_WIDTH = 400;
+    const CLUSTER_HEIGHT = 300;
 
-    // Position cluster label above and to the left of the stickies
+    // Find a non-overlapping position for clusters
+    const findEmptySpot = (startX: number, startY: number): { x: number; y: number } => {
+      const existingBounds = existingClusters.map(c => ({
+        x: c.position.x,
+        y: c.position.y,
+        width: c.width || CLUSTER_WIDTH,
+        height: c.height || CLUSTER_HEIGHT
+      }));
+
+      let bestX = startX;
+      let bestY = startY;
+      let found = false;
+      const maxAttempts = 20;
+
+      for (let attempt = 0; attempt < maxAttempts && !found; attempt++) {
+        found = true;
+        for (const bounds of existingBounds) {
+          const overlap = !(
+            bestX + CLUSTER_WIDTH < bounds.x - 50 ||
+            bestX > bounds.x + bounds.width + 50 ||
+            bestY + CLUSTER_HEIGHT < bounds.y - 50 ||
+            bestY > bounds.y + bounds.height + 50
+          );
+          if (overlap) {
+            found = false;
+            // Move to the right and down
+            bestX += SPACING_X;
+            bestY += SPACING_Y * 0.3;
+            if (bestX > window.innerWidth - 500) {
+              bestX = 100;
+              bestY += SPACING_Y;
+            }
+            break;
+          }
+        }
+      }
+
+      return { x: bestX, y: bestY };
+    };
+
     const baseClusterX = avgX - (selectedList.length * SPACING_X) / 2;
     const baseClusterY = avgY + CLUSTER_LABEL_OFFSET_Y;
 
     selectedList.forEach((suggestion, index) => {
-      // Arrange in rows of max 3 clusters
       const COLS_PER_ROW = Math.min(3, selectedList.length);
       const col = index % COLS_PER_ROW;
       const row = Math.floor(index / COLS_PER_ROW);
       
-      // Position cluster label center
-      // Stickies will be placed at cluster.y + 40 to cluster.y + 360 (within 350px radius)
-      // So if cluster.y = avgY - 150, stickies will be at avgY - 110 to avgY + 210
-      // Original stickies are at avgY - 100 to avgY + 100
-      // Stickies will end up ABOVE their original position (higher on screen)
-      const clusterPosition = {
-        x: baseClusterX + col * SPACING_X,
-        y: baseClusterY - row * SPACING_Y
-      };
+      const targetX = baseClusterX + col * SPACING_X;
+      const targetY = baseClusterY - row * SPACING_Y;
+      const clusterPosition = findEmptySpot(targetX, targetY);
       
       onCreateCluster(
         suggestion.insightIds,
@@ -222,21 +295,30 @@ export function AIGroupingPanel({
         clusterPosition
       );
     });
-
-    // Remove created suggestions from the list
-    const newSuggestions = suggestions.filter((_, i) => !selectedSuggestions.has(i));
-    setSuggestions(newSuggestions);
-    cachedSuggestionsRef.current = newSuggestions;
     
     // Clear selection
     setSelectedSuggestions(new Set());
     
-    if (newSuggestions.length === 0) {
+    const remaining = visibleSuggestions.length - selectedList.length;
+    if (remaining === 0) {
       toast.success(`Created ${selectedList.length} cluster(s). All done!`);
       onClose();
     } else {
-      toast.success(`Created ${selectedList.length} cluster(s). ${newSuggestions.length} remaining.`);
+      toast.success(`Created ${selectedList.length} cluster(s). ${remaining} remaining.`);
     }
+  };
+
+  // Get confidence color
+  const getConfidenceColor = (confidence: number) => {
+    if (confidence >= 0.8) return "bg-green-500";
+    if (confidence >= 0.6) return "bg-yellow-500";
+    return "bg-gray-400";
+  };
+
+  const getConfidenceLabel = (confidence: number) => {
+    if (confidence >= 0.8) return "High confidence";
+    if (confidence >= 0.6) return "Medium confidence";
+    return "Low confidence";
   };
 
   if (!isOpen) return null;
@@ -276,8 +358,22 @@ export function AIGroupingPanel({
             </div>
             <p className="text-sm font-medium text-foreground">All organized!</p>
             <p className="text-xs text-muted-foreground mt-1">
-              All {ungroupedStickies.length} stickies are grouped
+              All stickies are grouped
             </p>
+          </div>
+        ) : visibleSuggestions.length === 0 && suggestions.length > 0 ? (
+          <div className="text-center py-8">
+            <div className="w-12 h-12 bg-violet-100 dark:bg-violet-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Sparkles size={20} className="text-violet-600 dark:text-violet-400" />
+            </div>
+            <p className="text-sm font-medium text-foreground">No more suggestions</p>
+            <p className="text-xs text-muted-foreground mt-1 mb-4">
+              You've used or dismissed all suggestions
+            </p>
+            <Button variant="outline" onClick={() => fetchSuggestions(true)}>
+              <RefreshCw size={14} className="mr-2" />
+              Generate New Suggestions
+            </Button>
           </div>
         ) : (
           <div className="space-y-4">
@@ -336,12 +432,12 @@ export function AIGroupingPanel({
             )}
 
             {/* Suggestions */}
-            {suggestions.length > 0 && (
+            {visibleSuggestions.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-foreground">
-                      {suggestions.length} suggestions
+                      {visibleSuggestions.length} suggestion{visibleSuggestions.length !== 1 ? "s" : ""}
                     </p>
                     {fromCache && (
                       <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
@@ -351,89 +447,131 @@ export function AIGroupingPanel({
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => fetchSuggestions(true)}>
                     <RefreshCw size={14} className="mr-1" />
-                    New Request
+                    Refresh
                   </Button>
                 </div>
 
-                <div className="space-y-2 max-h-80 overflow-y-auto">
-                  {suggestions.map((suggestion, index) => {
+                <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+                  {visibleSuggestions.map((suggestion, index) => {
                     const isSelected = selectedSuggestions.has(index);
                     const stickiesInSuggestion = ungroupedStickies.filter((s) =>
                       suggestion.insightIds.includes(s.id)
                     );
 
                     return (
-                      <button
-                        key={index}
-                        onClick={() => toggleSuggestion(index)}
-                        className={`w-full text-left p-3 rounded-lg border transition-all ${
+                      <motion.div
+                        key={suggestion.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        className={`group relative p-3 rounded-lg border transition-all ${
                           isSelected
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/50 hover:bg-muted/50"
+                            ? "border-primary bg-primary/5 shadow-md"
+                            : "border-border hover:border-primary/50 hover:bg-muted/30"
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <p className="font-medium text-sm text-foreground line-clamp-1">
-                            {suggestion.newGroupTitle || "New Group"}
+                        {/* Dismiss button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            dismissSuggestion(index);
+                          }}
+                          className="absolute top-2 right-2 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-muted transition-all"
+                        >
+                          <X size={12} className="text-muted-foreground" />
+                        </button>
+
+                        <button
+                          onClick={() => toggleSuggestion(index)}
+                          className="w-full text-left"
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-2 pr-6">
+                            <p className="font-medium text-sm text-foreground line-clamp-1">
+                              {suggestion.newGroupTitle || "New Group"}
+                            </p>
+                          </div>
+
+                          {/* Confidence indicator */}
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                              <motion.div
+                                initial={{ width: 0 }}
+                                animate={{ width: `${suggestion.confidence * 100}%` }}
+                                transition={{ duration: 0.5, delay: index * 0.05 }}
+                                className={`h-full ${getConfidenceColor(suggestion.confidence)}`}
+                              />
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Badge 
+                                variant="secondary" 
+                                className={`text-xs ${
+                                  suggestion.confidence >= 0.8 
+                                    ? "bg-green-100 text-green-700" 
+                                    : suggestion.confidence >= 0.6 
+                                      ? "bg-yellow-100 text-yellow-700"
+                                      : "bg-gray-100 text-gray-600"
+                                }`}
+                              >
+                                {Math.round(suggestion.confidence * 100)}%
+                              </Badge>
+                            </div>
+                          </div>
+                          
+                          <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                            {suggestion.reason}
                           </p>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Badge variant="secondary" className="text-xs">
+
+                          {/* Preview of stickies in this group */}
+                          <div className="flex flex-wrap gap-1">
+                            {stickiesInSuggestion.slice(0, 3).map((sticky) => (
+                              <span
+                                key={sticky.id}
+                                className="text-[10px] px-1.5 py-0.5 bg-muted rounded truncate max-w-[100px]"
+                              >
+                                {sticky.content.slice(0, 20)}...
+                              </span>
+                            ))}
+                            {stickiesInSuggestion.length > 3 && (
+                              <span className="text-[10px] px-1.5 py-0.5 text-muted-foreground">
+                                +{stickiesInSuggestion.length - 3}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Selection indicator */}
+                          <div className={`mt-3 flex items-center gap-2 text-xs ${
+                            isSelected ? "text-primary" : "text-muted-foreground"
+                          }`}>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                              isSelected
+                                ? "bg-primary border-primary"
+                                : "border-muted-foreground"
+                            }`}>
+                              {isSelected && (
+                                <Check size={12} className="text-white" />
+                              )}
+                            </div>
+                            <span>{isSelected ? "Selected" : "Add to selection"}</span>
+                            <Badge variant="outline" className="ml-auto text-[10px]">
                               {suggestion.insightIds.length} items
                             </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {Math.round(suggestion.confidence * 100)}%
-                            </Badge>
                           </div>
-                        </div>
-
-                        <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
-                          {suggestion.reason}
-                        </p>
-
-                        {/* Preview of stickies in this group */}
-                        <div className="flex flex-wrap gap-1">
-                          {stickiesInSuggestion.slice(0, 3).map((sticky) => (
-                            <span
-                              key={sticky.id}
-                              className="text-[10px] px-1.5 py-0.5 bg-muted rounded truncate max-w-[100px]"
-                            >
-                              {sticky.content.slice(0, 20)}...
-                            </span>
-                          ))}
-                          {stickiesInSuggestion.length > 3 && (
-                            <span className="text-[10px] px-1.5 py-0.5 text-muted-foreground">
-                              +{stickiesInSuggestion.length - 3}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Selection indicator */}
-                        <div className={`mt-2 flex items-center gap-1 text-xs ${
-                          isSelected ? "text-primary" : "text-muted-foreground"
-                        }`}>
-                          <div className={`w-4 h-4 rounded border ${
-                            isSelected
-                              ? "bg-primary border-primary"
-                              : "border-muted-foreground"
-                          } flex items-center justify-center`}>
-                            {isSelected && <Check size={12} className="text-white" />}
-                          </div>
-                          <span>{isSelected ? "Selected" : "Click to select"}</span>
-                        </div>
-                      </button>
+                        </button>
+                      </motion.div>
                     );
                   })}
                 </div>
 
                 {/* Create Button */}
-                <div className="sticky bottom-0 bg-card pt-2 border-t border-border">
+                <div className="sticky bottom-0 bg-gradient-to-t from-card to-transparent pt-4 pb-2">
                   <Button
                     onClick={handleCreateClusters}
                     disabled={selectedSuggestions.size === 0}
                     className="w-full"
+                    size="lg"
                   >
-                    <Plus size={16} className="mr-2" />
-                    Create {selectedSuggestions.size} Cluster{selectedSuggestions.size !== 1 ? "s" : ""}
+                    <Sparkles size={16} className="mr-2" />
+                    Create {selectedSuggestions.size > 0 ? `${selectedSuggestions.size} ` : ""}Cluster{selectedSuggestions.size !== 1 ? "s" : ""}
                   </Button>
                 </div>
               </div>

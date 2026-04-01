@@ -72,6 +72,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [commentPanel, setCommentPanel] = useState<{groupId: string; rect: DOMRect; title?: string} | null>(null);
   const [canvasInsightIds, setCanvasInsightIds] = useState<Set<string>>(new Set());
+  const [hideVotingDock, setHideVotingDock] = useState(false);
 
   // ==================== COMMENT HANDLER ====================
   const handleOpenComment = useCallback((elementId: string, rect: DOMRect, title?: string) => {
@@ -84,13 +85,14 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const isRevealed = voting.isRevealed;
 
   // Compute vote results from sessionVotes directly
+  // Note: We need to pass cluster labels from the board to get real names
   const voteResults = useMemo(() => {
     if (!voting.session || voting.session.votingPhase === "voting") return [];
     
-    const clusterVoteMap = new Map<string, { count: number; colors: string[] }>();
+    const clusterVoteMap = new Map<string, { count: number; colors: string[]; clusterName?: string }>();
     
     for (const vote of voting.sessionVotes || []) {
-      const existing = clusterVoteMap.get(vote.targetId) || { count: 0, colors: [] };
+      const existing = clusterVoteMap.get(vote.targetId) || { count: 0, colors: [], clusterName: vote.targetId };
       existing.count++;
       existing.colors.push(vote.color);
       clusterVoteMap.set(vote.targetId, existing);
@@ -98,10 +100,11 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     
     return Array.from(clusterVoteMap.entries())
       .map(([clusterId, { count, colors }]) => {
+        // Find cluster name from groups
         const group = groups.find(g => g.id === clusterId);
         return {
           sectionId: clusterId,
-          title: group?.title || "Cluster",
+          title: group?.title || clusterId.slice(0, 12),
           voteCount: count,
           colors,
         };
@@ -446,8 +449,19 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
       </div>
 
       {/* Voting Status Banner */}
-      {voting.session && voting.session.votingPhase !== "setup" && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 bg-card backdrop-blur-sm rounded-xl shadow-lg border border-border px-5 py-2.5 flex items-center gap-5">
+      {voting.session && voting.session.votingPhase !== "setup" && !hideVotingDock && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 bg-card backdrop-blur-sm rounded-xl shadow-lg border border-border px-4 py-2 flex items-center gap-4">
+          
+          {/* Minimize Button */}
+          <button
+            onClick={() => setHideVotingDock(true)}
+            className="p-1 hover:bg-muted rounded transition-colors"
+            title="Masquer"
+          >
+            <svg className="w-4 h-4 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 15l-6-6-6 6"/>
+            </svg>
+          </button>
           
           {/* Voting Phase Indicator */}
           {voting.session.votingPhase === "voting" && (
@@ -514,6 +528,17 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
             </>
           )}
         </div>
+      )}
+
+      {/* Voting Dock Toggle Button (when hidden) */}
+      {voting.session && voting.session.votingPhase === "revealed" && hideVotingDock && (
+        <button
+          onClick={() => setHideVotingDock(false)}
+          className="absolute top-14 left-1/2 -translate-x-1/2 z-40 bg-card/90 backdrop-blur-sm rounded-full shadow-lg border border-border px-4 py-2 flex items-center gap-2 hover:bg-card transition-colors"
+        >
+          <div className="w-2 h-2 bg-green-500 rounded-full"/>
+          <span className="text-sm font-medium text-foreground">Voir les résultats</span>
+        </button>
       )}
 
       {/* Loading state */}

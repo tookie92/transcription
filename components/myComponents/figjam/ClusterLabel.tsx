@@ -273,13 +273,19 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
     }
   }, [AUTO_HEIGHT, cluster.id, cluster.height, onResize]);
 
-  // Auto-fit when explicitly requested
+  // Auto-fit when explicitly requested - only once
+  const autoFitTriggeredRef = useRef(false);
   useEffect(() => {
-    if (needsAutoFit && onResize) {
+    if (needsAutoFit && onResize && !autoFitTriggeredRef.current) {
+      autoFitTriggeredRef.current = true;
       onResize(cluster.id, AUTO_HEIGHT);
-      setNeedsAutoFit(false);
+      // Clear after a tick
+      setTimeout(() => {
+        setNeedsAutoFit(false);
+        autoFitTriggeredRef.current = false;
+      }, 0);
     }
-  }, [needsAutoFit, AUTO_HEIGHT, cluster.id, onResize]);
+  }, [needsAutoFit, cluster.id, onResize]);
 
   // Expose auto-fit function via ref
   useEffect(() => {
@@ -301,12 +307,17 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
     }
   }, [triggerEdit, isEditing]);
 
-  // Handle external auto-fit trigger
+  // Handle external auto-fit trigger - only once per trigger
+  const autoFitHandledRef = useRef(false);
   useEffect(() => {
-    if (triggerAutoFit && onResize) {
+    if (triggerAutoFit && onResize && !autoFitHandledRef.current) {
+      autoFitHandledRef.current = true;
       onResize(cluster.id, AUTO_HEIGHT);
     }
-  }, [triggerAutoFit, AUTO_HEIGHT, cluster.id, onResize]);
+    if (!triggerAutoFit) {
+      autoFitHandledRef.current = false;
+    }
+  }, [triggerAutoFit, cluster.id, onResize]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { Plus, GripVertical, Search, X } from "lucide-react";
+import { Plus, GripVertical, Search, X, Filter, Check } from "lucide-react";
 import type { StickyNoteData, StickyColor } from "@/types/figjam";
 
 const STICKY_COLORS: Record<string, { bg: string; header: string; text: string; accent: string }> = {
@@ -36,6 +41,8 @@ const STICKY_TYPES: { id: StickyColor; label: string; desc: string }[] = [
   { id: "quote", label: "Quote", desc: "Quote" },
   { id: "follow-up", label: "Follow-up", desc: "To follow" },
 ];
+
+type FilterType = "all" | StickyColor;
 
 interface InsightCardProps {
   sticky: StickyNoteData;
@@ -193,15 +200,48 @@ export function InsightsSidebar({
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState<FilterType>("all");
+  const [filterAuthor, setFilterAuthor] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
 
-  const filteredStickies = searchQuery 
-    ? ungroupedStickies.filter(s => 
-        s.content?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : ungroupedStickies;
+  // Get unique authors
+  const authors = useMemo(() => {
+    const authorSet = new Set<string>();
+    ungroupedStickies.forEach(s => {
+      if (s.authorName) authorSet.add(s.authorName);
+    });
+    return Array.from(authorSet).sort();
+  }, [ungroupedStickies]);
+
+  // Filter stickies
+  const filteredStickies = useMemo(() => {
+    return ungroupedStickies.filter(s => {
+      // Search filter
+      if (searchQuery && !s.content?.toLowerCase().includes(searchQuery.toLowerCase())) {
+        return false;
+      }
+      // Type filter
+      if (filterType !== "all" && s.color !== filterType) {
+        return false;
+      }
+      // Author filter
+      if (filterAuthor && s.authorName !== filterAuthor) {
+        return false;
+      }
+      return true;
+    });
+  }, [ungroupedStickies, searchQuery, filterType, filterAuthor]);
+
+  const hasActiveFilters = filterType !== "all" || filterAuthor !== null;
+  const activeFilterCount = (filterType !== "all" ? 1 : 0) + (filterAuthor ? 1 : 0);
 
   const handleCreate = (content: string, color: StickyColor) => {
     onCreateSticky(content, color);
+  };
+
+  const clearFilters = () => {
+    setFilterType("all");
+    setFilterAuthor(null);
   };
 
   return (
@@ -217,6 +257,7 @@ export function InsightsSidebar({
           "shadow-[0_4px_24px_rgba(0,0,0,0.12),0_1px_4px_rgba(0,0,0,0.06)]",
           "border border-[#e8e8e8] dark:border-border",
           "transition-all duration-300 ease-in-out",
+          "overflow-hidden",
           isOpen 
             ? "w-[272px] h-[610px] opacity-100 visible" 
             : "w-[272px] h-[52px] opacity-0 invisible"
@@ -242,30 +283,134 @@ export function InsightsSidebar({
           </div>
         </div>
         
-        {/* Search */}
-        <div className="shrink-0 p-3 pb-2">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#bbb]" />
-            <Input
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 h-8 text-xs rounded-lg border-[#e8e8e8] dark:border-border bg-[#fafafa] dark:bg-muted/50 placeholder:text-[#bbb]"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-[#eee] rounded"
-              >
-                <X className="w-3 h-3 text-[#999]" />
-              </button>
-            )}
+        {/* Search & Filter */}
+        <div className="shrink-0 p-3 pb-2 space-y-2">
+          <div className="relative flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#bbb]" />
+              <Input
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 h-8 text-xs rounded-lg border-[#e8e8e8] dark:border-border bg-[#fafafa] dark:bg-muted/50 placeholder:text-[#bbb]"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-[#eee] rounded"
+                >
+                  <X className="w-3 h-3 text-[#999]" />
+                </button>
+              )}
+            </div>
+            
+            {/* Filter Button */}
+            <Popover open={showFilters} onOpenChange={setShowFilters}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "h-8 px-2 rounded-lg border-[#e8e8e8] dark:border-border",
+                    hasActiveFilters && "bg-primary/10 border-primary text-primary"
+                  )}
+                >
+                  <Filter className="w-3.5 h-3.5" />
+                  {activeFilterCount > 0 && (
+                    <span className="ml-1 text-[10px] font-bold">{activeFilterCount}</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-0" align="end" sideOffset={4}>
+                <div className="p-3 border-b border-border">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">Filters</p>
+                    {hasActiveFilters && (
+                      <button
+                        onClick={clearFilters}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Type Filter */}
+                <div className="p-3 border-b border-border">
+                  <p className="text-xs text-muted-foreground mb-2">Type</p>
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => setFilterType("all")}
+                      className={cn(
+                        "w-full text-left px-2 py-1.5 text-sm rounded flex items-center justify-between",
+                        filterType === "all" ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                      )}
+                    >
+                      All types
+                      {filterType === "all" && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                    {STICKY_TYPES.map((type) => (
+                      <button
+                        key={type.id}
+                        onClick={() => setFilterType(type.id as FilterType)}
+                        className={cn(
+                          "w-full text-left px-2 py-1.5 text-sm rounded flex items-center justify-between",
+                          filterType === type.id ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                        )}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span 
+                            className="w-2.5 h-2.5 rounded-full" 
+                            style={{ backgroundColor: STICKY_COLORS[type.id]?.bg }}
+                          />
+                          {type.label}
+                        </span>
+                        {filterType === type.id && <Check className="w-3.5 h-3.5" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Author Filter */}
+                {authors.length > 0 && (
+                  <div className="p-3">
+                    <p className="text-xs text-muted-foreground mb-2">Author</p>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      <button
+                        onClick={() => setFilterAuthor(null)}
+                        className={cn(
+                          "w-full text-left px-2 py-1.5 text-sm rounded flex items-center justify-between",
+                          filterAuthor === null ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                        )}
+                      >
+                        All authors
+                        {filterAuthor === null && <Check className="w-3.5 h-3.5" />}
+                      </button>
+                      {authors.map((author) => (
+                        <button
+                          key={author}
+                          onClick={() => setFilterAuthor(author)}
+                          className={cn(
+                            "w-full text-left px-2 py-1.5 text-sm rounded flex items-center justify-between truncate",
+                            filterAuthor === author ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                          )}
+                        >
+                          <span className="truncate">{author}</span>
+                          {filterAuthor === author && <Check className="w-3.5 h-3.5 shrink-0" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
         
         {/* Scrollable Content */}
-        <ScrollArea className="flex-1 px-3 pb-3">
-          <div className="space-y-2">
+        <ScrollArea className="flex-1 min-h-0 px-3 pb-3">
+          <div className="space-y-2 pr-2">
             {filteredStickies.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <div className="w-10 h-10 rounded-xl bg-[#f5f5f5] dark:bg-muted flex items-center justify-center mb-3">
@@ -274,9 +419,9 @@ export function InsightsSidebar({
                   </svg>
                 </div>
                 <p className="text-xs text-[#666] dark:text-muted-foreground font-medium">
-                  {searchQuery ? "No results" : "No insights yet"}
+                  {searchQuery || hasActiveFilters ? "No results" : "No insights yet"}
                 </p>
-                {!searchQuery && (
+                {!searchQuery && !hasActiveFilters && (
                   <p className="text-[10px] text-[#999] mt-1">Click {`Add`} to create</p>
                 )}
               </div>
