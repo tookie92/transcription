@@ -815,6 +815,7 @@ export const castVote = mutation({
     targetId: v.string(),
     targetType: v.union(v.literal("group"), v.literal("insight")),
     color: v.string(),
+    position: v.optional(v.object({ x: v.number(), y: v.number() })),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -846,14 +847,14 @@ export const castVote = mutation({
       throw new Error("No votes remaining");
     }
 
-    // Create vote with position at cluster center
+    // Create vote with provided position or at cluster center
     const voteId = await ctx.db.insert("dotVotes", {
       sessionId: args.sessionId,
       userId: args.userId,
       targetId: args.targetId,
       targetType: args.targetType,
       color: args.color,
-      position: { x: 0, y: 0 }, // Will be calculated client-side
+      position: args.position || { x: 0, y: 0 },
       createdAt: Date.now(),
     });
 
@@ -900,6 +901,37 @@ export const completeVoting = mutation({
       votingPhase: "completed",
       updatedAt: Date.now(),
     });
+
+    return true;
+  },
+});
+
+/**
+ * Delete a voting session and all its votes (cascade delete)
+ */
+export const deleteVotingSession = mutation({
+  args: {
+    sessionId: v.id("dotVotingSessions"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Session not found");
+
+    // Delete all votes for this session first (cascade)
+    const votes = await ctx.db
+      .query("dotVotes")
+      .withIndex("by_session", q => q.eq("sessionId", args.sessionId))
+      .collect();
+
+    for (const vote of votes) {
+      await ctx.db.delete(vote._id);
+    }
+
+    // Delete the session
+    await ctx.db.delete(args.sessionId);
 
     return true;
   },

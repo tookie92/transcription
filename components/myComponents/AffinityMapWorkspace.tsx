@@ -28,6 +28,9 @@ import { CommentPanel } from "./CommentPanel";
 import { ActivityButtonWithBadge } from "./figjam/NotificationBadge";
 import { ArrowLeft, Clock, Vote } from "lucide-react";
 
+// Avatar components
+import { Avatar, AvatarImage, AvatarFallback, AvatarGroup } from "@/components/ui/avatar";
+
 // Side panels for features (AI suggestions, analytics, etc.)
 import { CanvasSidePanels } from "./canvas/CanvasSidePanels";
 
@@ -78,23 +81,34 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   // ==================== VOTING (Synchronized via Convex) ====================
   const voting = useVotingSync(affinityMap?._id, projectId as Id<"projects">);
   const isVotingMode = voting.isVoting;
+  const isRevealed = voting.isRevealed;
 
-  // Compute vote results for ranking
+  // Compute vote results from sessionVotes directly
   const voteResults = useMemo(() => {
-    if (!voting.session || voting.session.isActive) return [];
-    return groups
-      .map(group => {
-        const clusterVotes = voting.getClusterVotes(group.id);
+    if (!voting.session || voting.session.votingPhase === "voting") return [];
+    
+    const clusterVoteMap = new Map<string, { count: number; colors: string[] }>();
+    
+    for (const vote of voting.sessionVotes || []) {
+      const existing = clusterVoteMap.get(vote.targetId) || { count: 0, colors: [] };
+      existing.count++;
+      existing.colors.push(vote.color);
+      clusterVoteMap.set(vote.targetId, existing);
+    }
+    
+    return Array.from(clusterVoteMap.entries())
+      .map(([clusterId, { count, colors }]) => {
+        const group = groups.find(g => g.id === clusterId);
         return {
-          sectionId: group.id,
-          title: group.title,
-          voteCount: clusterVotes.length,
-          colors: clusterVotes.map((v: { color: string }) => v.color),
+          sectionId: clusterId,
+          title: group?.title || "Cluster",
+          voteCount: count,
+          colors,
         };
       })
-      .filter((r: { voteCount: number }) => r.voteCount > 0)
-      .sort((a: { voteCount: number }, b: { voteCount: number }) => b.voteCount - a.voteCount);
-  }, [groups, voting.session, voting]);
+      .filter(r => r.voteCount > 0)
+      .sort((a, b) => b.voteCount - a.voteCount);
+  }, [groups, voting.session, voting.sessionVotes]);
 
   // Keyboard shortcut for voting mode
   useEffect(() => {
@@ -362,6 +376,32 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           <span className="text-sm text-muted-foreground">Affinity Map</span>
         </div>
         <div className="flex items-center gap-2">
+          {/* Presence Avatars - Before vote button */}
+          {otherUsers && otherUsers.length > 0 && (
+            <AvatarGroup className="mr-1">
+              {otherUsers.slice(0, 5).map((presenceUser) => (
+                <Avatar
+                  key={presenceUser._id}
+                  size="sm"
+                  className="ring-2 ring-background"
+                  style={{ borderColor: presenceUser.cursorColor || '#3B82F6' }}
+                >
+                  <AvatarImage src={presenceUser.user?.avatar} alt={presenceUser.user?.name || "User"} />
+                  <AvatarFallback className="bg-muted text-xs">
+                    {presenceUser.user?.name?.slice(0, 2).toUpperCase() || "U"}
+                  </AvatarFallback>
+                </Avatar>
+              ))}
+              {otherUsers.length > 5 && (
+                <Avatar size="sm" className="ring-2 ring-background">
+                  <AvatarFallback className="bg-muted text-xs">
+                    +{otherUsers.length - 5}
+                  </AvatarFallback>
+                </Avatar>
+              )}
+            </AvatarGroup>
+          )}
+          
           {/* Vote Button - Start/Stop Voting */}
           <button
             onClick={() => {
@@ -407,44 +447,44 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
 
       {/* Voting Status Banner */}
       {voting.session && voting.session.votingPhase !== "setup" && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 bg-gradient-to-r from-violet-500/10 to-purple-500/10 backdrop-blur-sm rounded-xl shadow-lg border border-violet-200 px-6 py-3 flex items-center gap-6">
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 bg-card backdrop-blur-sm rounded-xl shadow-lg border border-border px-5 py-2.5 flex items-center gap-5">
           
           {/* Voting Phase Indicator */}
           {voting.session.votingPhase === "voting" && (
             <>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-violet-500 rounded-full animate-pulse"/>
-                <span className="text-sm font-medium text-violet-700">Voting in progress</span>
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse"/>
+                <span className="text-sm font-medium text-foreground">Vote en cours</span>
               </div>
               
               {voting.remainingTime !== null && (
                 <>
-                  <div className="h-6 w-px bg-violet-200"/>
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-violet-500" />
-                    <span className="text-sm font-mono font-medium text-violet-700">
+                  <div className="h-5 w-px bg-border"/>
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-muted rounded-lg">
+                    <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-sm font-mono font-medium text-foreground">
                       {Math.floor(voting.remainingTime / 60000).toString().padStart(2, '0')}:{Math.floor((voting.remainingTime % 60000) / 1000).toString().padStart(2, '0')}
                     </span>
                   </div>
                 </>
               )}
               
-              <div className="h-6 w-px bg-violet-200"/>
+              <div className="h-5 w-px bg-border"/>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Your votes:</span>
-                <div className="flex gap-1">
+                {/* Sticker-style vote dots */}
+                <div className="flex gap-1.5">
                   {Array.from({ length: voting.session?.maxDotsPerUser || 0 }).map((_, i) => (
                     <div
                       key={i}
-                      className={`w-5 h-5 rounded-full border-2 transition-all ${
+                      className={`w-6 h-6 rounded-full border-[2px] border-white shadow-md transition-all ${
                         i < voting.myVotesCount
-                          ? "bg-violet-500 border-violet-500 scale-110"
-                          : "border-gray-300"
+                          ? "bg-primary scale-110"
+                          : "bg-muted-foreground/20"
                       }`}
                     />
                   ))}
                 </div>
-                <span className="text-xs text-gray-500">({voting.myVotesCount}/{voting.session?.maxDotsPerUser})</span>
+                <span className="text-xs text-muted-foreground">({voting.myVotesCount}/{voting.session?.maxDotsPerUser})</span>
               </div>
             </>
           )}
@@ -453,15 +493,15 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           {voting.session.votingPhase === "revealed" && (
             <>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full"/>
-                <span className="text-sm font-medium text-green-700">Results Revealed</span>
+                <div className="w-2 h-2 bg-green-500 rounded-full"/>
+                <span className="text-sm font-medium text-foreground">Résultats révélés</span>
               </div>
-              <div className="h-6 w-px bg-violet-200"/>
+              <div className="h-5 w-px bg-border"/>
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-violet-700">Top Clusters:</span>
+                <span className="text-sm text-muted-foreground">Top clusters:</span>
                 <div className="flex items-center gap-2">
                   {voteResults.slice(0, 3).map((result: { sectionId: string; title: string; voteCount: number }, i: number) => (
-                    <div key={result.sectionId} className="flex items-center gap-1 bg-white/50 px-2 py-1 rounded-lg">
+                    <div key={result.sectionId} className="flex items-center gap-1.5 bg-muted px-2.5 py-1 rounded-lg shadow-sm">
                       <span className={`text-xs font-bold ${i === 0 ? 'text-yellow-600' : i === 1 ? 'text-gray-500' : i === 2 ? 'text-amber-600' : 'text-gray-400'}`}>
                         #{i + 1}
                       </span>
@@ -508,6 +548,8 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
             // No manual state update needed
           }}
           onCanvasInsightIdsChange={(ids) => setCanvasInsightIds(new Set(ids))}
+          presenceUsers={otherUsers || []}
+          currentUser={{ userId: userId || "", name: user?.fullName || user?.firstName || "You" }}
         />
       )}
 

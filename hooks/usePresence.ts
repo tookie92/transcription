@@ -31,7 +31,7 @@ export function usePresence(mapId: string) {
       },
       cursorColor,
     });
-  }, 100);
+  }, 200);
 
   useEffect(() => {
     if (!hasValidMapId || !userId) return;

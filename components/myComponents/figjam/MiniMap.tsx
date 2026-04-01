@@ -1,64 +1,43 @@
-/**
- * FigJam-style MiniMap Component
- * 
- * Compact overview of the canvas:
- * - Shows all sections/clusters
- * - Shows viewport indicator
- * - Click to navigate
- */
-
 "use client";
 
 import React, { memo, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { AffinityGroup as AffinityGroupType } from "@/types";
+import type { ClusterLabelData } from "@/types/figjam";
 
 interface MiniMapProps {
-  /** All clusters/sections */
-  groups: AffinityGroupType[];
-  /** Current viewport position */
+  clusters: ClusterLabelData[];
   viewportPosition: { x: number; y: number };
-  /** Current zoom level */
   scale: number;
-  /** Viewport size */
   viewportSize: { width: number; height: number };
-  /** Callback for navigation */
   onNavigate: (x: number, y: number) => void;
-  /** Additional class */
   className?: string;
 }
 
-const MINIMAP_WIDTH = 120;
-const MINIMAP_HEIGHT = 80;
-const MINIMAP_PADDING = 20;
+const MINIMAP_WIDTH = 140;
+const MINIMAP_HEIGHT = 100;
+const MINIMAP_PADDING = 40;
 
 export const MiniMap = memo(function MiniMap({
-  groups,
+  clusters,
   viewportPosition,
   scale,
   viewportSize,
   onNavigate,
   className,
 }: MiniMapProps) {
-  /**
-   * Calculate bounds of all content
-   */
   const bounds = useMemo(() => {
-    if (groups.length === 0) {
-      return { minX: 0, minY: 0, maxX: 1000, maxY: 800 };
+    if (clusters.length === 0) {
+      return { minX: -200, minY: -200, maxX: 800, maxY: 600 };
     }
 
-    const minX = Math.min(...groups.map((g) => g.position.x)) - MINIMAP_PADDING;
-    const minY = Math.min(...groups.map((g) => g.position.y)) - MINIMAP_PADDING;
-    const maxX = Math.max(...groups.map((g) => g.position.x + 460)) + MINIMAP_PADDING;
-    const maxY = Math.max(...groups.map((g) => g.position.y + 320)) + MINIMAP_PADDING;
+    const minX = Math.min(...clusters.map((c) => c.position.x)) - MINIMAP_PADDING;
+    const minY = Math.min(...clusters.map((c) => c.position.y)) - MINIMAP_PADDING;
+    const maxX = Math.max(...clusters.map((c) => c.position.x + (c.width ?? 400))) + MINIMAP_PADDING;
+    const maxY = Math.max(...clusters.map((c) => c.position.y + (c.height ?? 200))) + MINIMAP_PADDING;
 
     return { minX, minY, maxX, maxY };
-  }, [groups]);
+  }, [clusters]);
 
-  /**
-   * Calculate minimap scale
-   */
   const minimapScale = useMemo(() => {
     const contentWidth = bounds.maxX - bounds.minX;
     const contentHeight = bounds.maxY - bounds.minY;
@@ -66,22 +45,15 @@ export const MiniMap = memo(function MiniMap({
     const scaleX = MINIMAP_WIDTH / contentWidth;
     const scaleY = MINIMAP_HEIGHT / contentHeight;
 
-    return Math.min(scaleX, scaleY, 0.1);
+    return Math.min(scaleX, scaleY, 0.15);
   }, [bounds]);
 
-  /**
-   * Convert world position to minimap position
-   */
   const toMinimap = (x: number, y: number) => ({
     x: (x - bounds.minX) * minimapScale,
     y: (y - bounds.minY) * minimapScale,
   });
 
-  /**
-   * Calculate viewport rectangle on minimap
-   */
   const viewportRect = useMemo(() => {
-    // World coordinates of viewport
     const worldX = (-viewportPosition.x) / scale;
     const worldY = (-viewportPosition.y) / scale;
     const worldWidth = viewportSize.width / scale;
@@ -97,15 +69,11 @@ export const MiniMap = memo(function MiniMap({
     };
   }, [viewportPosition, scale, viewportSize, minimapScale, bounds]);
 
-  /**
-   * Handle click on minimap
-   */
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
-    // Convert to world coordinates
     const worldX = clickX / minimapScale + bounds.minX;
     const worldY = clickY / minimapScale + bounds.minY;
 
@@ -115,66 +83,63 @@ export const MiniMap = memo(function MiniMap({
   return (
     <div
       className={cn(
-        "absolute right-4 top-16",
-        "bg-card rounded-[10px]",
-        "shadow-[0_2px_12px_rgba(0,0,0,0.1)] dark:shadow-none",
-        "border border-border",
+        "absolute right-4 top-20",
+        "bg-card rounded-xl",
+        "shadow-lg border border-border",
         "p-2",
-        "z-20",
+        "z-30",
         className
       )}
       onClick={handleClick}
     >
-      {/* Header */}
-      <div className="text-[10px] text-muted-foreground font-semibold tracking-[0.5px] mb-1.5">
-        MINIMAP
+      <div className="text-[9px] text-muted-foreground font-semibold tracking-wide mb-1.5 uppercase">
+        Minimap
       </div>
 
-      {/* Map area */}
       <div
-        className="relative rounded-[6px] overflow-hidden bg-muted"
+        className="relative rounded-lg overflow-hidden"
         style={{
           width: MINIMAP_WIDTH,
           height: MINIMAP_HEIGHT,
+          backgroundColor: "hsl(var(--muted))",
         }}
       >
-        {/* Dot grid pattern */}
         <div
-          className="absolute inset-0 opacity-30 dark:opacity-20"
+          className="absolute inset-0 opacity-30"
           style={{
-            backgroundImage: "radial-gradient(circle, currentColor 0.5px, transparent 0.5px)",
-            backgroundSize: "8px 8px",
+            backgroundImage: "radial-gradient(circle, hsl(var(--border)) 0.5px, transparent 0.5px)",
+            backgroundSize: "10px 10px",
           }}
         />
 
-        {/* Section indicators */}
-        {groups.map((group) => {
-          const { x, y } = toMinimap(group.position.x, group.position.y);
+        {clusters.map((cluster) => {
+          const { x, y } = toMinimap(cluster.position.x, cluster.position.y);
+          const width = Math.max(12, (cluster.width ?? 400) * minimapScale);
+          const height = Math.max(8, (cluster.height ?? 200) * minimapScale);
           return (
             <div
-              key={group.id}
-              className="absolute rounded-[1px]"
+              key={cluster.id}
+              className="absolute rounded-sm"
               style={{
                 left: x,
                 top: y,
-                width: Math.max(8, 46 * minimapScale),
-                height: Math.max(6, 32 * minimapScale),
-                backgroundColor: group.color || "#9747FF",
-                opacity: 0.8,
+                width,
+                height,
+                backgroundColor: "#B8B4FF",
+                opacity: 0.7,
               }}
             />
           );
         })}
 
-        {/* Viewport indicator */}
         <div
-          className="absolute border-[1.5px] border-[#9747FF] rounded-[4px] pointer-events-none"
+          className="absolute border-2 border-primary rounded pointer-events-none"
           style={{
-            left: viewportRect.x,
-            top: viewportRect.y,
-            width: Math.max(10, viewportRect.width),
-            height: Math.max(10, viewportRect.height),
-            opacity: 0.5,
+            left: Math.max(0, viewportRect.x),
+            top: Math.max(0, viewportRect.y),
+            width: Math.min(viewportRect.width, MINIMAP_WIDTH - Math.max(0, viewportRect.x)),
+            height: Math.min(viewportRect.height, MINIMAP_HEIGHT - Math.max(0, viewportRect.y)),
+            opacity: 0.6,
           }}
         />
       </div>

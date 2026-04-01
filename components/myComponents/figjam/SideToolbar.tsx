@@ -1,13 +1,3 @@
-/**
- * FigJam-style Side Toolbar Component - Simplified
- * 
- * Tools:
- * - Select (pointer)
- * - Add Cluster (plus)
- * - Add Sticky (note)
- * - Hand (pan)
- */
-
 "use client";
 
 import React, { memo } from "react";
@@ -72,10 +62,10 @@ export const SideToolbar = memo(function SideToolbar({
     <div
       className={cn(
         "absolute left-4 top-1/2 -translate-y-1/2",
-        "bg-card rounded-2xl",
+        "bg-white dark:bg-card rounded-2xl",
         "shadow-[0_4px_20px_rgba(0,0,0,0.12),0_1px_4px_rgba(0,0,0,0.06)]",
-        "border border-border dark:shadow-none",
-        "p-2",
+        "border border-[#e8e8e8] dark:border-border",
+        "p-1.5",
         "flex flex-col gap-1",
         "z-[100]",
         className
@@ -90,12 +80,12 @@ export const SideToolbar = memo(function SideToolbar({
             onToolChange(tool.id);
           }}
           className={cn(
-            "w-11 h-11 rounded-xl",
+            "w-10 h-10 rounded-xl",
             "flex items-center justify-center",
             "transition-all duration-150",
             activeTool === tool.id
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              ? "bg-[#1d1d1b] dark:bg-primary text-white dark:text-primary-foreground"
+              : "text-[#555] dark:text-muted-foreground hover:bg-[#f0f0f0] dark:hover:bg-accent hover:text-[#1d1d1b] dark:hover:text-foreground"
           )}
           title={tool.label}
         >

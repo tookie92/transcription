@@ -80,6 +80,12 @@ interface StickyNoteProps {
   onDragEnd?: (id: string) => void;
   selectedIds?: string[];
   clusterLabel?: string;
+  clusterBounds?: {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+  } | null;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -103,6 +109,7 @@ export function StickyNote({
   isLocked = false,
   lockedByName,
   clusterLabel,
+  clusterBounds,
   isFiltered = false,
 }: StickyNoteProps) {
   const colors = STICKY_COLORS[note.color];
@@ -195,6 +202,7 @@ export function StickyNote({
     stickyWidth: stickySize.width,
     stickyHeight: stickySize.height,
     selectedIds,
+    bounds: clusterBounds ?? undefined,
   });
 
   const isDragging = isDraggingRef.current;

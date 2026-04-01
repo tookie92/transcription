@@ -9,12 +9,10 @@ import {
   ChevronRight,
   X,
   Layers,
-  MousePointer2,
   Eye,
   LayoutGrid,
   Focus
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import type { Position } from "@/types/figjam";
 
@@ -158,11 +156,6 @@ export function PresentationMode({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isActive, handlePrev, handleNext, onClose]);
 
-  const isClusterFocused = useCallback((clusterId: string) => {
-    if (currentItem?.type === "overview") return true;
-    return currentItem?.id === clusterId;
-  }, [currentItem]);
-
   if (!isActive) return null;
 
   return (
@@ -171,68 +164,70 @@ export function PresentationMode({
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-card/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-border px-4 py-2 flex items-center gap-4"
+        className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-white dark:bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.06)] border border-[#e8e8e8] dark:border-border px-4 py-2.5 flex items-center gap-3"
       >
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <LayoutGrid className="w-4 h-4 text-primary" />
-          <span className="font-medium">Mode Présentation</span>
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-[#1d1d1b] dark:bg-primary flex items-center justify-center">
+            <LayoutGrid className="w-3.5 h-3.5 text-white dark:text-primary-foreground" />
+          </div>
+          <span className="text-sm font-semibold text-[#1d1d1b] dark:text-foreground">Mode Présentation</span>
         </div>
 
-        <div className="w-px h-6 bg-border" />
+        <div className="w-px h-6 bg-[#e8e8e8] dark:bg-border" />
 
         <button
           onClick={onClose}
-          className="p-1.5 hover:bg-accent rounded-lg transition-colors"
+          className="p-1.5 hover:bg-[#f5f5f5] dark:hover:bg-accent rounded-lg transition-colors"
           title="Quitter (Esc)"
         >
-          <X className="w-4 h-4 text-muted-foreground" />
+          <X className="w-4 h-4 text-[#999] dark:text-muted-foreground" />
         </button>
 
-        <div className="w-px h-6 bg-border" />
+        <div className="w-px h-6 bg-[#e8e8e8] dark:bg-border" />
 
         <button
           onClick={handlePrev}
           disabled={currentStep === 0}
-          className="p-1.5 hover:bg-accent rounded-lg transition-colors disabled:opacity-40"
+          className="p-1.5 hover:bg-[#f5f5f5] dark:hover:bg-accent rounded-lg transition-colors disabled:opacity-40"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="w-4 h-4 text-[#666] dark:text-muted-foreground" />
         </button>
 
         <button
           onClick={() => setIsPlaying(!isPlaying)}
-          className="p-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+          className="p-2 bg-[#1d1d1b] dark:bg-primary text-white dark:text-primary-foreground rounded-xl hover:bg-[#333] dark:hover:bg-primary/90 transition-colors shadow-sm"
         >
-          {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
         </button>
 
         <button
           onClick={handleNext}
           disabled={currentStep === steps.length - 1}
-          className="p-1.5 hover:bg-accent rounded-lg transition-colors disabled:opacity-40"
+          className="p-1.5 hover:bg-[#f5f5f5] dark:hover:bg-accent rounded-lg transition-colors disabled:opacity-40"
         >
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight className="w-4 h-4 text-[#666] dark:text-muted-foreground" />
         </button>
 
-        <div className="w-px h-6 bg-border" />
+        <div className="w-px h-6 bg-[#e8e8e8] dark:bg-border" />
 
-        <div className="flex items-center gap-2 min-w-[80px]">
-          <Progress value={progress} className="h-1 flex-1" />
-          <span className="text-[11px] text-muted-foreground font-mono">
+        <div className="flex items-center gap-2 min-w-[100px]">
+          <Progress value={progress} className="h-1.5 flex-1 [&>div]:bg-[#1d1d1b] dark:[&>div]:bg-primary" />
+          <span className="text-[11px] text-[#999] dark:text-muted-foreground font-mono tabular-nums">
             {currentStep + 1}/{steps.length}
           </span>
         </div>
 
-        <div className="w-px h-6 bg-border" />
+        <div className="w-px h-6 bg-[#e8e8e8] dark:bg-border" />
 
-        <div className="text-sm font-medium max-w-[120px] truncate">
+        <div className="text-sm font-medium text-[#1d1d1b] dark:text-foreground max-w-[140px] truncate">
           {currentItem?.title}
         </div>
 
-        <div className="w-px h-6 bg-border" />
+        <div className="w-px h-6 bg-[#e8e8e8] dark:bg-border" />
 
         <button
           onClick={zoomToOverview}
-          className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-[#666] dark:text-muted-foreground hover:text-[#1d1d1b] dark:hover:text-foreground hover:bg-[#f5f5f5] dark:hover:bg-accent rounded-lg transition-colors"
           title="Vue d'ensemble"
         >
           <LayoutGrid className="w-3.5 h-3.5" />
@@ -244,19 +239,19 @@ export function PresentationMode({
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
-        className="fixed left-4 bottom-6 z-[100] bg-card/95 backdrop-blur-sm rounded-xl shadow-lg border border-border p-3 w-[220px]"
+        className="fixed left-4 bottom-6 z-[100] bg-white dark:bg-card rounded-xl shadow-[0_4px_24px_rgba(0,0,0,0.1),0_1px_4px_rgba(0,0,0,0.06)] border border-[#e8e8e8] dark:border-border p-3 w-[240px]"
       >
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium">Clusters</span>
+            <Layers className="w-4 h-4 text-[#666] dark:text-muted-foreground" />
+            <span className="text-sm font-semibold text-[#1d1d1b] dark:text-foreground">Clusters</span>
           </div>
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-[10px] text-[#999] dark:text-muted-foreground bg-[#f5f5f5] dark:bg-muted px-2 py-0.5 rounded-full">
             {groups.length} cluster{groups.length > 1 ? "s" : ""}
           </span>
         </div>
         
-        <div className="space-y-1 max-h-[180px] overflow-y-auto pr-1">
+        <div className="space-y-1 max-h-[200px] overflow-y-auto pr-1">
           {groups.map((group, index) => {
             const isCurrent = currentItem?.id === group.id;
             const isPast = index < currentStep;
@@ -265,32 +260,32 @@ export function PresentationMode({
               <button
                 key={group.id}
                 onClick={() => handleStepClick(index + 1)}
-                className={`w-full flex items-center gap-2 p-2 rounded-lg transition-all text-left ${
+                className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl transition-all text-left ${
                   isCurrent 
-                    ? "bg-primary/15 border border-primary/30" 
+                    ? "bg-[#1d1d1b] dark:bg-primary text-white dark:text-primary-foreground shadow-sm" 
                     : isPast 
-                    ? "hover:bg-accent" 
-                    : "opacity-60 hover:opacity-80"
+                    ? "hover:bg-[#f5f5f5] dark:hover:bg-accent text-[#666] dark:text-muted-foreground" 
+                    : "opacity-60 hover:opacity-80 text-[#999] dark:text-muted-foreground"
                 }`}
               >
                 <div 
-                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${
                     isCurrent 
-                      ? "bg-primary text-primary-foreground" 
+                      ? "bg-white/20 text-white" 
                       : isPast 
-                      ? "bg-muted text-muted-foreground" 
-                      : "bg-muted text-muted-foreground/60"
+                      ? "bg-[#eee] dark:bg-muted text-[#666] dark:text-muted-foreground" 
+                      : "bg-[#f5f5f5] dark:bg-muted text-[#999] dark:text-muted-foreground/60"
                   }`}
                 >
                   {index + 1}
                 </div>
                 <span className={`text-xs truncate flex-1 ${
-                  isCurrent ? "font-medium" : ""
+                  isCurrent ? "font-semibold" : "font-medium"
                 }`}>
                   {group.title}
                 </span>
                 {isCurrent && (
-                  <Focus className="w-3 h-3 text-primary shrink-0" />
+                  <Focus className="w-3.5 h-3.5 shrink-0" />
                 )}
               </button>
             );
@@ -298,59 +293,21 @@ export function PresentationMode({
         </div>
       </motion.div>
 
-      {/* Navigation dots - bottom center, below toolbar */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 bg-card/90 backdrop-blur-sm rounded-full px-4 py-2 shadow-md border border-border"
-      >
-        <span className="text-[10px] text-muted-foreground mr-1">Passer à:</span>
-        {steps.map((step, index) => (
-          <button
-            key={step.id}
-            onClick={() => handleStepClick(index)}
-            className={`h-2 rounded-full transition-all ${
-              index === currentStep
-                ? "bg-primary w-5"
-                : index < currentStep
-                ? "bg-primary/50 hover:bg-primary/70 w-2"
-                : "bg-muted-foreground/30 hover:bg-muted-foreground/50 w-2"
-            }`}
-            title={step.title}
-          />
-        ))}
-      </motion.div>
-
-      {/* Free navigation hint */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.5 }}
-        className="fixed right-4 bottom-6 z-[100] flex items-center gap-3 text-[10px] text-muted-foreground bg-card/80 backdrop-blur-sm rounded-lg px-3 py-2 border border-border"
-      >
-        <div className="flex items-center gap-1.5">
-          <MousePointer2 className="w-3 h-3" />
-          <span>Pan & Zoom libres</span>
-        </div>
-        <div className="w-px h-3 bg-border" />
-        <span><kbd className="px-1 py-0.5 bg-muted rounded text-[9px]">←</kbd><kbd className="px-1 py-0.5 bg-muted rounded text-[9px] ml-0.5">→</kbd> naviguer</span>
-      </motion.div>
-
-      {/* Focused cluster indicator - floating badge when zoomed */}
+      {/* Focused cluster indicator */}
       <AnimatePresence>
         {currentItem?.type === "cluster" && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="fixed top-20 left-1/2 -translate-x-1/2 z-[90] bg-card/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg border border-border"
+            initial={{ opacity: 0, scale: 0.9, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: -10 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-[90] bg-white dark:bg-card/95 backdrop-blur-sm rounded-xl px-5 py-2.5 shadow-[0_4px_20px_rgba(0,0,0,0.1)] border border-[#e8e8e8] dark:border-border"
           >
-            <div className="flex items-center gap-2">
-              <Eye className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium">Focus: {currentItem.title}</span>
+            <div className="flex items-center gap-3">
+              <Eye className="w-4 h-4 text-[#666] dark:text-muted-foreground" />
+              <span className="text-sm font-semibold text-[#1d1d1b] dark:text-foreground">Focus: {currentItem.title}</span>
               <button
                 onClick={zoomToOverview}
-                className="ml-2 text-xs text-muted-foreground hover:text-foreground underline"
+                className="ml-2 text-xs font-medium text-[#666] dark:text-muted-foreground hover:text-[#1d1d1b] dark:hover:text-foreground underline-offset-2 hover:underline transition-colors"
               >
                 Voir tout
               </button>
@@ -359,17 +316,17 @@ export function PresentationMode({
         )}
       </AnimatePresence>
 
-      {/* Subtle focus ring around current cluster area */}
+      {/* Cluster progress indicator */}
       <AnimatePresence>
         {currentItem?.type === "cluster" && groups.find(g => g.id === currentItem?.id) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed top-20 right-6 z-[90] bg-primary/10 border border-primary/20 rounded-lg px-3 py-2 flex items-center gap-2"
+            className="fixed top-20 right-4 z-[90] bg-[#1d1d1b] dark:bg-primary/10 border border-[#1d1d1b] dark:border-primary/20 rounded-lg px-3 py-1.5 flex items-center gap-2"
           >
-            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span className="text-xs font-medium text-primary">
+            <div className="w-2 h-2 rounded-full bg-[#1d1d1b] dark:bg-primary animate-pulse" />
+            <span className="text-[11px] font-semibold text-white dark:text-primary">
               Cluster {groups.findIndex(g => g.id === currentItem?.id) + 1}/{groups.length}
             </span>
           </motion.div>

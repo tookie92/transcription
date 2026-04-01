@@ -11,7 +11,12 @@ import {
   ArrowRight,
   ZoomIn,
   AlignLeft,
-  MoreHorizontal
+  MoreHorizontal,
+  Edit3,
+  Maximize2,
+  Minimize2,
+  Move,
+  Palette
 } from "lucide-react";
 
 export interface ContextMenuAction {
@@ -301,6 +306,94 @@ export function StickyContextMenu({
       position={position}
       onClose={onClose}
       actions={actions}
+    />
+  );
+}
+
+interface ClusterContextMenuProps {
+  clusterId: string;
+  clusterTitle: string;
+  position: { x: number; y: number };
+  onClose: () => void;
+  onRename: () => void;
+  onAutoFit: () => void;
+  onDelete: () => void;
+  onChangeColor: () => void;
+  onDuplicate: () => void;
+  onComment: () => void;
+  isOpen: boolean;
+}
+
+export function ClusterContextMenu({
+  clusterId,
+  clusterTitle,
+  position,
+  onClose,
+  onRename,
+  onAutoFit,
+  onDelete,
+  onChangeColor,
+  onDuplicate,
+  onComment,
+  isOpen,
+}: ClusterContextMenuProps) {
+  const actions: ContextMenuAction[] = [
+    {
+      id: "rename",
+      label: "Renommer",
+      icon: <Edit3 className="w-4 h-4" />,
+      shortcut: "F2",
+      onClick: onRename,
+    },
+    {
+      id: "color",
+      label: "Changer la couleur",
+      icon: <Palette className="w-4 h-4" />,
+      onClick: onChangeColor,
+    },
+    {
+      id: "autofit",
+      label: "Ajuster à la taille",
+      icon: <Maximize2 className="w-4 h-4" />,
+      shortcut: "Ctrl+Shift+F",
+      onClick: onAutoFit,
+    },
+    {
+      id: "move",
+      label: "Déplacer les notes ici",
+      icon: <Move className="w-4 h-4" />,
+      onClick: () => {},
+    },
+    {
+      id: "comment",
+      label: "Ajouter un commentaire",
+      icon: <MessageSquare className="w-4 h-4" />,
+      onClick: onComment,
+    },
+    {
+      id: "duplicate",
+      label: "Dupliquer",
+      icon: <Copy className="w-4 h-4" />,
+      shortcut: "Ctrl+D",
+      onClick: onDuplicate,
+    },
+    {
+      id: "delete",
+      label: "Supprimer le cluster",
+      icon: <Trash2 className="w-4 h-4" />,
+      shortcut: "Del",
+      variant: "danger",
+      onClick: onDelete,
+    },
+  ];
+
+  return (
+    <ContextMenu
+      isOpen={isOpen}
+      position={position}
+      onClose={onClose}
+      actions={actions}
+      title={clusterTitle}
     />
   );
 }

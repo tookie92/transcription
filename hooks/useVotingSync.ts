@@ -9,6 +9,7 @@ import { useAuth, useUser } from "@clerk/nextjs";
 export interface ClusterVote {
   clusterId: string;
   votedBy: string;
+  votedByName?: string;
   color: string;
   targetType: "group" | "insight";
 }
@@ -157,8 +158,14 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
     }
   }, [mapId, projectId, startSession]);
 
-  const toggleVote = useCallback(async (clusterId: string) => {
+  const toggleVote = useCallback(async (clusterId: string, position?: { x: number; y: number }) => {
     if (!activeSession || !currentUserId || currentUserId === "anonymous") return;
+    
+    // Only allow voting during voting phase
+    if (activeSession.votingPhase !== "voting") {
+      console.log("Voting is not in voting phase");
+      return;
+    }
     
     // Check if user can vote
     const userVoteCount = myVotes?.length || 0;
@@ -176,6 +183,7 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
         targetId: clusterId,
         targetType: "group",
         color: userColor,
+        position,
       });
     } catch (error) {
       console.error("Failed to cast vote:", error);
@@ -262,6 +270,9 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
     // User's votes
     myVotes: myVotedClusters,
     myVotesCount: myVotes?.length || 0,
+    
+    // Raw votes with user IDs (for displaying voter names)
+    sessionVotes,
     
     // Actions
     startVoting,

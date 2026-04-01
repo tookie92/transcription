@@ -4,8 +4,11 @@
 
 export { FigJamBoard } from "./FigJamBoard";
 export { StickyNote, STICKY_COLORS } from "./StickyNote";
-export { ClusterLabel, LABEL_COLORS } from "./ClusterLabel";
+export { ClusterLabel } from "./ClusterLabel";
+export { InsightsSidebar } from "./InsightsSidebar";
 export { FigJamToolbar } from "./FigJamToolbar";
+export { MiniMap } from "./MiniMap";
+export { SideToolbar } from "./SideToolbar";
 export { WorkshopTemplateSelector, WORKSHOP_TEMPLATES } from "./WorkshopTemplateSelector";
 export type { WorkshopTemplate } from "./WorkshopTemplateSelector";
 
