@@ -4,7 +4,8 @@
       "Bash(ls:*)",
       "Bash(claude skills:*)",
       "Bash(npx tsc:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }

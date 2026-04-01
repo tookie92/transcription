@@ -27,14 +27,14 @@ export function useAffinityMapData(projectId: Id<"projects">) {
 
   // Mutations
   const createAffinityMap = useMutation(api.affinityMaps.create);
-  const addGroup = useMutation(api.affinityMaps.addGroup);
-  const moveGroup = useMutation(api.affinityMaps.moveGroup);
-  const resizeGroup = useMutation(api.affinityMaps.resizeGroup);
-  const addInsightToGroup = useMutation(api.affinityMaps.addInsightToGroup);
-  const updateGroupTitle = useMutation(api.affinityMaps.updateGroupTitle);
-  const removeGroup = useMutation(api.affinityMaps.removeGroup);
-  const removeInsightFromGroup = useMutation(api.affinityMaps.removeInsightFromGroup);
-  const replaceAllGroups = useMutation(api.affinityMaps.replaceAllGroups);
+  const addCluster = useMutation(api.affinityMaps.addCluster);
+  const moveCluster = useMutation(api.affinityMaps.moveCluster);
+  const resizeCluster = useMutation(api.affinityMaps.resizeCluster);
+  const addInsightToCluster = useMutation(api.affinityMaps.addInsightToCluster);
+  const updateClusterTitle = useMutation(api.affinityMaps.updateClusterTitle);
+  const removeCluster = useMutation(api.affinityMaps.removeCluster);
+  const removeInsightFromCluster = useMutation(api.affinityMaps.removeInsightFromCluster);
+  const replaceAllClusters = useMutation(api.affinityMaps.replaceAllClusters);
   const createManualInsight = useMutation(api.affinityMaps.createManualInsight);
   const deleteInsight = useMutation(api.insights.deleteInsight);
 
@@ -63,14 +63,14 @@ export function useAffinityMapData(projectId: Id<"projects">) {
   const updateStickyPositionsMutation = useMutation(api.affinityMaps.updateStickyPositions);
 
   // Transform data
-  const groups: AffinityGroup[] =
-    affinityMap?.groups.map((group) => ({
-      id: group.id,
-      title: group.title,
-      color: group.color,
-      position: group.position,
-      insightIds: group.insightIds as string[],
-      size: group.size || { width: 400, height: 300 },
+  const clusters: AffinityGroup[] =
+    affinityMap?.clusters.map((cluster) => ({
+      id: cluster.id,
+      title: cluster.title,
+      color: cluster.color,
+      position: cluster.position,
+      insightIds: cluster.insightIds as string[],
+      size: cluster.size || { width: 400, height: 300 },
     })) || [];
 
   // Sticky positions on canvas
@@ -96,21 +96,21 @@ export function useAffinityMapData(projectId: Id<"projects">) {
   return {
     project,
     affinityMap,
-    groups,
+    clusters,
     insights,
     activities,
     insightsData,
     stickyPositions,
 
     // Mutations
-    addGroup,
-    moveGroup,
-    resizeGroup,
-    addInsightToGroup,
-    updateGroupTitle,
-    removeGroup,
-    removeInsightFromGroup,
-    replaceAllGroups,
+    addCluster,
+    moveCluster,
+    resizeCluster,
+    addInsightToCluster,
+    updateClusterTitle,
+    removeCluster,
+    removeInsightFromCluster,
+    replaceAllClusters,
     createManualInsight,
     deleteInsight,
     updateStickyPositions: updateStickyPositionsMutation,

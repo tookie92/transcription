@@ -1,17 +1,16 @@
 "use client";
 
 import React, { useCallback, useRef, useState, memo, useEffect } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import type { ClusterLabelData, StickyNoteData } from "@/types/figjam";
-import { X, MoreHorizontal, GripVertical } from "lucide-react";
+import { X, MoreHorizontal, GripVertical, Vote } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { VoteBadge } from "./VoteBadge";
 
-interface VoteDotData {
-  id: string;
+interface Voter {
   userId: string;
-  color: string;
   name: string;
-  position: { x: number; y: number };
-  isCurrentUser?: boolean;
+  color: string;
 }
 
 interface ClusterLabelProps {
@@ -23,10 +22,7 @@ interface ClusterLabelProps {
   isVotingActive?: boolean;
   isVotingRevealed?: boolean;
   voteCount?: number;
-  voteColors?: string[];
   voteUsers?: Array<{ userId: string; name: string; color: string }>;
-  // Vote dots with positions
-  voteDots?: VoteDotData[];
   // Current user info for voting
   currentUserId?: string;
   currentUserColor?: string;
@@ -42,7 +38,7 @@ interface ClusterLabelProps {
   onDrop?: (stickyId: string) => void;
   onContextMenu?: (e: React.MouseEvent, clusterId: string) => void;
   onResize?: (clusterId: string, newHeight: number) => void;
-  onClusterClick?: (clusterId: string, position?: { x: number; y: number }) => void;
+  onClusterClick?: (clusterId: string) => void;
   onAutoFit?: (clusterId: string) => void;
   triggerEdit?: boolean;
   triggerAutoFit?: boolean;
@@ -216,6 +212,38 @@ function RealStickyCard({
   );
 }
 
+interface ClusterLabelProps {
+  cluster: ClusterLabelData;
+  memberStickies: StickyNoteData[];
+  isDragging: boolean;
+  isLocked?: boolean;
+  isDropTarget?: boolean;
+  isVotingActive?: boolean;
+  isVotingRevealed?: boolean;
+  areVotesVisible?: boolean;
+  voteCount?: number;
+  voteUsers?: Array<{ userId: string; name: string; color: string }>;
+  // Current user info for voting
+  currentUserId?: string;
+  currentUserColor?: string;
+  currentUserName?: string;
+  hasUserVoted?: boolean;
+  onDragStart: () => void;
+  onDrag: (dx: number, dy: number) => void;
+  onDragEnd: (finalX: number, finalY: number) => void;
+  onLabelChange?: (newLabel: string) => void;
+  onSelect?: (id: string, multi: boolean) => void;
+  onRemoveSticky?: (stickyId: string) => void;
+  onStickyClick?: (stickyId: string) => void;
+  onDrop?: (stickyId: string) => void;
+  onContextMenu?: (e: React.MouseEvent, clusterId: string) => void;
+  onResize?: (clusterId: string, newHeight: number) => void;
+  onClusterClick?: (clusterId: string) => void;
+  onAutoFit?: (clusterId: string) => void;
+  triggerEdit?: boolean;
+  triggerAutoFit?: boolean;
+}
+
 export const ClusterLabel = memo(function ClusterLabelComponent({
   cluster,
   memberStickies,
@@ -224,10 +252,9 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   isDropTarget = false,
   isVotingActive = false,
   isVotingRevealed = false,
+  areVotesVisible = true,
   voteCount = 0,
-  voteColors = [],
   voteUsers = [],
-  voteDots = [],
   currentUserId,
   currentUserColor,
   currentUserName,
@@ -250,11 +277,10 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const [needsAutoFit, setNeedsAutoFit] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const clusterRef = useRef<HTMLDivElement>(null);
-  
+
   const isDraggingActive = isDragging;
   const canInteract = !isLocked && !isEditing;
 
@@ -496,7 +522,26 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         )}
       </div>
 
-      {/* Count and menu button */}
+      {/* Voting controls - votes row above cluster header */}
+      <div
+        className="absolute left-0 right-0"
+        style={{
+          top: -80,
+        }}
+      >
+        {/* Votes displayed as row above the cluster tag */}
+        {areVotesVisible && (isVotingActive || isVotingRevealed) && voteCount > 0 && (
+          <VoteBadge
+            voteCount={voteCount}
+            voters={voteUsers || []}
+            isRevealed={isVotingRevealed}
+            hasUserVoted={hasUserVoted}
+            displayMode="row"
+          />
+        )}
+      </div>
+
+      {/* Cluster header section */}
       <div
         className="absolute flex items-center gap-2"
         style={{
@@ -504,16 +549,6 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
           right: 0,
         }}
       >
-        {/* Vote count badge - only show when revealed */}
-        {isVotingRevealed && voteCount > 0 && (
-          <div 
-            className="px-1.5 py-0.5 rounded-full text-[10px] font-bold"
-            style={{ backgroundColor: `${voteColors[0] || "#8B5CF6"}`, color: "white" }}
-          >
-            {voteCount}
-          </div>
-        )}
-
         {/* Sticky count */}
         <span
           className="pointer-events-none"
@@ -526,7 +561,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         >
           {memberStickies.length}
         </span>
-        
+
         {isHovered && !isEditing && (
           <button
             onClick={(e) => {
@@ -541,110 +576,47 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         )}
       </div>
 
-      {/* Voting Area - Enhanced voting experience */}
-      {isVotingActive && !isVotingRevealed && (
-        <div
-          className="absolute inset-0 rounded-xl overflow-hidden"
-          style={{ pointerEvents: 'auto' }}
-          onMouseMove={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            setMousePos({
-              x: e.clientX - rect.left,
-              y: e.clientY - rect.top,
-            });
-          }}
-          onMouseLeave={() => setMousePos(null)}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (mousePos) {
-              onClusterClick?.(cluster.id, mousePos);
-            }
-          }}
-        >
-          {/* User's own votes */}
-          {voteDots.filter(v => v.isCurrentUser).map((dot) => (
-            <div
-              key={dot.id}
-              className="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 animate-in fade-in zoom-in duration-200"
-              style={{
-                left: dot.position.x,
-                top: dot.position.y,
-              }}
-            >
-              <div
-                className="w-full h-full rounded-full border-[3px] border-white shadow-lg"
-                style={{ backgroundColor: dot.color }}
-                title={`${dot.name} voted here`}
+      {/* Voting Interaction - Click with halo effect */}
+      <AnimatePresence>
+        {isVotingActive && !isVotingRevealed && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 rounded-xl cursor-pointer z-10"
+            style={{ pointerEvents: 'auto' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClusterClick?.(cluster.id);
+            }}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+          >
+            {/* Halo effect for click interaction */}
+            {isHovered && (
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.8, opacity: 0 }}
+                className="absolute inset-0 rounded-xl pointer-events-none"
+                style={{
+                  backgroundColor: currentUserColor || "#8B5CF6",
+                  opacity: 0.15,
+                filter: "blur(12px)",
+                  transform: "scale(1.1)",
+                }}
               />
-            </div>
-          ))}
-          
-          {/* Preview dot on hover */}
-          {mousePos && !hasUserVoted && (
-            <div
-              className="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 pointer-events-none animate-pulse"
-              style={{
-                left: mousePos.x,
-                top: mousePos.y,
-              }}
-            >
-              <div
-                className="w-full h-full rounded-full border-[3px] border-white shadow-lg opacity-70"
-                style={{ backgroundColor: currentUserColor || '#8B5CF6' }}
-              />
-            </div>
-          )}
-          
-          {/* Vote prompt overlay */}
-          {mousePos && !hasUserVoted && (
-            <div
-              className="absolute bg-white/90 backdrop-blur-sm rounded-lg shadow-lg px-3 py-1.5 text-xs font-medium text-gray-800 -translate-x-1/2 whitespace-nowrap"
-              style={{
-                left: mousePos.x,
-                top: Math.max(20, mousePos.y - 30),
-              }}
-            >
-              Click to vote
-            </div>
-          )}
-          
-          {/* Already voted indicator */}
-          {hasUserVoted && (
+            )}
+
+            {/* Hidden votes placeholder */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg px-4 py-2 text-sm font-medium text-gray-800 flex items-center gap-2">
-                <div 
-                  className="w-4 h-4 rounded-full border-2 border-white shadow"
-                  style={{ backgroundColor: currentUserColor || '#8B5CF6' }}
-                />
-                You voted here
+              <div className="bg-gray-200/80 rounded-lg px-2 py-1 text-xs font-medium text-gray-500">
+                ?
               </div>
             </div>
-          )}
-        </div>
-      )}
-      
-      {/* Revealed votes display */}
-      {isVotingRevealed && voteDots.length > 0 && (
-        <div className="absolute inset-0 pointer-events-none">
-          {voteDots.map((dot, i) => (
-            <div
-              key={dot.id}
-              className="absolute w-7 h-7 -translate-x-1/2 -translate-y-1/2 animate-in fade-in zoom-in"
-              style={{
-                left: dot.position.x,
-                top: dot.position.y,
-                animationDelay: `${i * 50}ms`,
-              }}
-            >
-              <div
-                className="w-full h-full rounded-full border-[2px] border-white shadow-md hover:scale-110 transition-transform"
-                style={{ backgroundColor: dot.color }}
-                title={dot.name}
-              />
-            </div>
-          ))}
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Stickies grid */}
       <div

@@ -11,7 +11,6 @@ import { AIGroupingPanel } from "./AIGroupingPanel";
 import { LassoContextMenu, ClusterContextMenu } from "./ContextMenu";
 import { CommentBubblesLayer } from "./CommentBubble";
 import { PresentationMode } from "./PresentationMode";
-import { VotingOverlay } from "./VotingOverlay";
 import { InsightsSidebar } from "./InsightsSidebar";
 import type { FigJamElement, Position, Size, StickyColor, StickyNoteData, DotData, ClusterLabelData, SectionData, TextData } from "@/types/figjam";
 import type { Insight } from "@/types";
@@ -1424,8 +1423,10 @@ export function FigJamBoard({
             );
 
             const clusterVotes = voting.getClusterVotes(el.id);
-            const isVotingActive = voting.isVoting || voting.isRevealed;
-            
+            const isVotingActive = voting.isVoting;
+            const isVotingRevealed = voting.isRevealed;
+            const areVotesVisible = voting.areVotesVisible;
+
             // Create voteUsers mapping from sessionVotes and presenceUsers
             const voteUsers = (voting.sessionVotes || [])
               .filter(v => v.targetId === el.id)
@@ -1434,35 +1435,13 @@ export function FigJamBoard({
                 const isCurrentUser = currentUser?.userId === v.userId;
                 return {
                   userId: v.userId,
-                  name: isCurrentUser 
+                  name: isCurrentUser
                     ? (currentUser.name || "You")
                     : (presenceUser?.user?.name || v.userId.split('-')[0] || "User"),
                   color: v.color,
                 };
               });
-            
-            // Create voteDots with positions from sessionVotes
-            const voteDots = (voting.sessionVotes || [])
-              .filter(v => v.targetId === el.id)
-              .map((v, i) => {
-                const presenceUser = presenceUsers.find(p => p.userId === v.userId);
-                const isCurrentUser = currentUser?.userId === v.userId;
-                // Distribute dots in a grid within the cluster
-                const gridCols = Math.ceil(Math.sqrt(clusterVotes.length || 1));
-                const gridX = (i % gridCols) * 40 + 60;
-                const gridY = Math.floor(i / gridCols) * 40 + 70;
-                return {
-                  id: v._id,
-                  userId: v.userId,
-                  color: v.color,
-                  name: isCurrentUser 
-                    ? (currentUser.name || "You")
-                    : (presenceUser?.user?.name || v.userId.split('-')[0] || "User"),
-                  position: v.position?.x !== undefined ? v.position : { x: gridX, y: gridY },
-                  isCurrentUser,
-                };
-              });
-            
+
             // Calculate if user has voted for this cluster
             const hasUserVotedForCluster = (voting.sessionVotes || [])
               .some(v => v.targetId === el.id && v.userId === currentUser?.userId);
@@ -1476,19 +1455,17 @@ export function FigJamBoard({
                 isDropTarget={draggingStickyId !== null}
                 isLocked={getLockInfo(el.id).isLocked}
                 isVotingActive={isVotingActive}
-                isVotingRevealed={voting.isRevealed}
+                isVotingRevealed={isVotingRevealed}
+                areVotesVisible={areVotesVisible}
                 voteCount={clusterVotes.length}
-                voteColors={clusterVotes.map(v => v.color)}
                 voteUsers={voteUsers}
-                voteDots={voteDots}
                 currentUserId={currentUser?.userId}
                 currentUserColor={voting.userColor}
                 currentUserName={currentUser?.name || "You"}
                 hasUserVoted={hasUserVotedForCluster}
-                onClusterClick={(clusterId, position) => {
-                  if (voting.session && voting.isVoting) {
-                    voting.toggleVote(clusterId, position);
-                  }
+                onClusterClick={(clusterId) => {
+                  // Simplified vote - just pass cluster ID
+                  voting.toggleVote(clusterId, { x: 0, y: 0 });
                 }}
                 onDragStart={() => {
                   draggingClusterRef.current = el.id;
@@ -1500,7 +1477,7 @@ export function FigJamBoard({
                     y: el.position.y + dy,
                   };
                   board.updateElement(el.id, { position: newPos });
-                  
+
                   // Only move stickies that belong to this cluster
                   stickies.filter(s => s.clusterId === el.id).forEach(sticky => {
                     const newStickyPos = {
@@ -1511,28 +1488,28 @@ export function FigJamBoard({
                   });
                 }}
                 onDragEnd={(finalX, finalY) => {
-                  board.updateElement(el.id, { 
-                    position: { x: finalX, y: finalY } 
+                  board.updateElement(el.id, {
+                    position: { x: finalX, y: finalY }
                   });
-                  
+
                   // Move all stickies belonging to this cluster
                   stickies.filter(s => s.clusterId === el.id).forEach(sticky => {
                     const dx = finalX - el.position.x;
                     const dy = finalY - el.position.y;
-                    board.updateElement(sticky.id, { 
-                      position: { 
-                        x: sticky.position.x + dx, 
-                        y: sticky.position.y + dy 
+                    board.updateElement(sticky.id, {
+                      position: {
+                        x: sticky.position.x + dx,
+                        y: sticky.position.y + dy
                       }
                     });
                     if (hasMapId) {
-                      throttledBroadcast(sticky.id, "sticky", "move", { 
-                        x: sticky.position.x + dx, 
-                        y: sticky.position.y + dy 
+                      throttledBroadcast(sticky.id, "sticky", "move", {
+                        x: sticky.position.x + dx,
+                        y: sticky.position.y + dy
                       });
                     }
                   });
-                  
+
                   if (hasMapId) {
                     throttledBroadcast(el.id, "label", "move", { x: finalX, y: finalY });
                   }
@@ -1683,6 +1660,25 @@ export function FigJamBoard({
         projectName={projectName}
         newInsightsCount={newInsightsCount}
         onImportInsights={handleImportInsights}
+        // Voting props
+        isVotingActive={voting.isVoting}
+        isVotingRevealed={voting.isRevealed}
+        votesRemaining={voting.getUserVotesRemaining()}
+        maxVotes={voting.session?.maxDotsPerUser || 5}
+        totalVotes={(voting.sessionVotes || []).length}
+        areVotesVisible={voting.areVotesVisible}
+        onStartVoting={async (config) => {
+          await voting.startVoting({
+            dotsPerUser: config.dotsPerUser,
+            durationMinutes: config.durationMinutes,
+            prompt: "Vote for your favorite clusters"
+          });
+        }}
+        onStopVoting={() => voting.stopVoting()}
+        onRevealVotes={() => voting.completeVoting()}
+        onNewVotingRound={() => voting.startNewRound()}
+        onToggleVoteVisibility={() => voting.toggleVoteVisibility()}
+        canControlVoting={true}
       />
 
       {/* ── MiniMap ── */}
@@ -1857,41 +1853,9 @@ export function FigJamBoard({
       />
 
       {/* ── Mention Toasts ── */}
-      <MentionToastProvider 
+      <MentionToastProvider
         setBouncingBubbleId={setBouncingBubbleId}
       />
-
-      {/* ── Voting Overlay ── */}
-      {voting.isVoting && (
-        <VotingOverlay
-          votes={voting.sessionVotes || []}
-          currentUserId={userId || ""}
-          currentUserColor={voting.userColor}
-          currentUserName={currentUserName || "You"}
-          onVote={(position: { x: number; y: number }) => {
-            // Calculate canvas position from screen position
-            const canvasPos = screenToCanvas(position.x, position.y);
-            // Find if there's a cluster at this position
-            const clusterAtPos = labels.find(l => {
-              const width = l.width ?? 400;
-              const height = l.height ?? 300;
-              return (
-                canvasPos.x >= l.position.x &&
-                canvasPos.x <= l.position.x + width &&
-                canvasPos.y >= l.position.y &&
-                canvasPos.y <= l.position.y + height
-              );
-            });
-            
-            if (clusterAtPos) {
-              voting.toggleVote(clusterAtPos.id, { 
-                x: position.x, 
-                y: position.y 
-              });
-            }
-          }}
-        />
-      )}
 
     </div>
   );

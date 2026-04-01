@@ -142,7 +142,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     version: v.number(),
     isCurrent: v.boolean(),
-    groups: v.array(v.object({
+    clusters: v.array(v.object({
       id: v.string(),
       title: v.string(),
       color: v.string(),

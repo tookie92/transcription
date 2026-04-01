@@ -48,10 +48,10 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
 
   // ==================== DATA HOOK ====================
   const { 
-    project, affinityMap, groups, insights, insightsData, activities,
+    project, affinityMap, clusters, insights, insightsData, activities,
     stickyPositions, updateStickyPositions,
-    addGroup, moveGroup, resizeGroup, addInsightToGroup, updateGroupTitle, 
-    removeGroup, removeInsightFromGroup, replaceAllGroups, createManualInsight, deleteInsight,
+    addCluster, moveCluster, resizeCluster, addInsightToCluster, updateClusterTitle, 
+    removeCluster, removeInsightFromCluster, replaceAllClusters, createManualInsight, deleteInsight,
     broadcastGroupCreated, broadcastInsightMoved
   } = useAffinityMapData(projectId);
 
@@ -101,7 +101,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     return Array.from(clusterVoteMap.entries())
       .map(([clusterId, { count, colors }]) => {
         // Find cluster name from groups
-        const group = groups.find(g => g.id === clusterId);
+        const group = clusters.find(c => c.id === clusterId);
         return {
           sectionId: clusterId,
           title: group?.title || clusterId.slice(0, 12),
@@ -111,7 +111,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
       })
       .filter(r => r.voteCount > 0)
       .sort((a, b) => b.voteCount - a.voteCount);
-  }, [groups, voting.session, voting.sessionVotes]);
+  }, [clusters, voting.session, voting.sessionVotes]);
 
   // Keyboard shortcut for voting mode
   useEffect(() => {
@@ -142,14 +142,14 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     projectId,
     userId: userId || undefined,
     userName: user?.fullName || user?.firstName || "Un utilisateur",
-    addGroup,
-    moveGroup,
-    resizeGroup,
-    addInsightToGroup,
-    updateGroupTitle,
-    removeGroup,
-    removeInsightFromGroup,
-    replaceAllGroups,
+    addCluster,
+    moveCluster,
+    resizeCluster,
+    addInsightToCluster,
+    updateClusterTitle,
+    removeCluster,
+    removeInsightFromCluster,
+    replaceAllClusters,
     createManualInsight: createManualInsight as (args: { projectId: Id<"projects">; text: string; type: string }) => Promise<string>,
     deleteInsight,
     updateStickyPositions,
@@ -175,8 +175,8 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
 
   // ==================== THEME ANALYSIS HANDLERS ====================
   const handleAnalyzeThemes = useCallback(async () => {
-    if (groups.length === 0) {
-      toast.error("No groups to analyze");
+    if (clusters.length === 0) {
+      toast.error("No clusters to analyze");
       return;
     }
 
@@ -186,14 +186,14 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          groups: groups.map(g => ({
-            id: g.id,
-            title: g.title,
-            insights: insights.filter(i => g.insightIds.includes(i.id)).map(i => i.text),
-            insightCount: g.insightIds.length,
+          groups: clusters.map(c => ({
+            id: c.id,
+            title: c.title,
+            insights: insights.filter(i => c.insightIds.includes(i.id)).map(i => i.text),
+            insightCount: c.insightIds.length,
           })),
           projectContext: project?.name || "Project",
-          totalGroups: groups.length,
+          totalGroups: clusters.length,
           totalInsights: insights.length,
         }),
       });
@@ -209,7 +209,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     } finally {
       setIsThemesAnalyzing(false);
     }
-  }, [groups, insights, project]);
+  }, [clusters, insights, project]);
 
   const handleClearThemes = useCallback(() => {
     setThemeAnalysis(null);
@@ -222,7 +222,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           toast.error("Need at least 2 groups to merge");
           return;
         }
-        const groupsToMerge = groups.filter(g => recommendation.groups.includes(g.id));
+        const groupsToMerge = clusters.filter(c => recommendation.groups.includes(c.id));
         if (groupsToMerge.length < 2) {
           toast.error("Selected groups not found");
           return;
@@ -233,7 +233,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         const mergedInsightIds = groupsToMerge.flatMap(g => g.insightIds);
         
         handlers.handleGroupsReplace([
-          ...groups.filter(g => !recommendation.groups.includes(g.id)),
+          ...clusters.filter(c => !recommendation.groups.includes(c.id)),
           {
             ...mergedGroup,
             title: mergedGroup.title,
@@ -249,7 +249,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           toast.info("Split requires selecting one group");
           return;
         }
-        const groupToSplit = groups.find(g => g.id === recommendation.groups[0]);
+        const groupToSplit = clusters.find(c => c.id === recommendation.groups[0]);
         if (!groupToSplit) {
           toast.error("Group not found");
           return;
@@ -274,7 +274,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           }
         }
         handlers.handleGroupsReplace([
-          ...groups.filter(g => g.id !== groupToSplit.id),
+          ...clusters.filter(c => c.id !== groupToSplit.id),
           ...newGroups,
         ]);
         toast.success(`Split into ${newGroups.length} groups`);
@@ -285,7 +285,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         break;
 
       case "create_parent":
-        const parentGroups = groups.filter(g => recommendation.groups.includes(g.id));
+        const parentGroups = clusters.filter(c => recommendation.groups.includes(c.id));
         if (parentGroups.length === 0) {
           toast.error("No groups selected for parent");
           return;
@@ -301,21 +301,21 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           size: { width: 500, height: 400 },
         };
         handlers.handleGroupsReplace([
-          ...groups,
+          ...clusters,
           newParent,
         ]);
         toast.success("Created parent theme - drag groups inside");
         break;
     }
     setThemeAnalysis(null);
-  }, [groups, handlers]);
+  }, [clusters, handlers]);
 
   const handleGroupsMerge = useCallback((groupIds: string[], newTitle: string) => {
     if (groupIds.length < 2) {
       toast.error("Select at least 2 groups to merge");
       return;
     }
-    const groupsToMerge = groups.filter(g => groupIds.includes(g.id));
+    const groupsToMerge = clusters.filter(c => groupIds.includes(c.id));
     if (groupsToMerge.length < 2) {
       toast.error("Groups not found");
       return;
@@ -326,7 +326,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     const mergedInsightIds = groupsToMerge.flatMap(g => g.insightIds);
     
     handlers.handleGroupsReplace([
-      ...groups.filter(g => !groupIds.includes(g.id)),
+      ...clusters.filter(c => !groupIds.includes(c.id)),
       {
         ...mergedGroup,
         title: newTitle || mergedGroup.title,
@@ -336,7 +336,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
       } as AffinityGroup,
     ]);
     toast.success(`Merged ${groupsToMerge.length} groups into "${newTitle}"`);
-  }, [groups, handlers]);
+  }, [clusters, handlers]);
 
   // ==================== OTHER USERS (MOCK FOR NOW) ====================
   const otherUsers = useQuery(api.presence.getByMap, affinityMap ? { 
@@ -583,7 +583,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         isPresentMode={false}
         activePanel={activePanel}
         setActivePanel={setActivePanel}
-        groups={groups}
+        groups={clusters}
         insights={insights}
         projectId={projectId}
         projectInfo={{ name: project.name, description: project.description }}
@@ -633,7 +633,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
             id: u.userId,
             name: u.user?.name || "User",
           })) || []}
-          groupTitle={commentPanel.title || groups.find(g => g.id === commentPanel.groupId)?.title || "Element"}
+          groupTitle={commentPanel.title || clusters.find(c => c.id === commentPanel.groupId)?.title || "Element"}
           projectId={projectId}
           projectMembers={project?.members || []}
           onClose={() => setCommentPanel(null)}
@@ -718,7 +718,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         onStartVoting={(config) => {
           voting.startVoting(config);
         }}
-        clusterCount={groups.length || 3}
+        clusterCount={clusters.length || 3}
       />
     </div>
   );

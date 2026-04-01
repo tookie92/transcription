@@ -91,7 +91,7 @@ export interface AffinityMap {
   description?: string;
   version: number;
   isCurrent: boolean;
-  groups: AffinityGroup[];
+  clusters: AffinityCluster[];
   createdAt: number;
   updatedAt: number;
   createdBy: string;
@@ -99,7 +99,7 @@ export interface AffinityMap {
 
 export type AffinityMapId = AffinityMap['_id'];
 
-export interface AffinityGroup {
+export interface AffinityCluster {
   id: string;
   title: string;
   color: string;
@@ -107,6 +107,9 @@ export interface AffinityGroup {
   insightIds: string[];
   size?: { width: number; height: number }; // explicit size, auto-expands (defaults to 400x300)
 }
+
+// Backwards compatibility alias
+export type AffinityGroup = AffinityCluster;
 
 // API Request/Response types
 export interface VerboseTranscription {
@@ -235,7 +238,7 @@ export const CONNECTION_TYPES = [
 ] as const;
 
 export interface HistoryState {
-  groups: AffinityGroup[];
+  clusters: AffinityCluster[];
   insights: Insight[];
   timestamp: number;
   action: string;
@@ -243,9 +246,9 @@ export interface HistoryState {
 }
 
 export interface HistoryActions {
-  pushState: (groups: AffinityGroup[], action: string, description: string) => void;
-  undo: () => AffinityGroup[] | null;
-  redo: () => AffinityGroup[] | null;
+  pushState: (clusters: AffinityCluster[], action: string, description: string) => void;
+  undo: () => AffinityCluster[] | null;
+  redo: () => AffinityCluster[] | null;
   canUndo: boolean;
   canRedo: boolean;
   clear: () => void;
