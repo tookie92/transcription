@@ -4,9 +4,9 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Id } from "@/convex/_generated/dataModel";
-import { AffinityGroup, Insight, ActivePanel, ThemeAnalysis, ThemeRecommendation } from "@/types";
+import { AffinityCluster, Insight, ActivePanel, ThemeAnalysis, ThemeRecommendation } from "@/types";
 import { toast } from "sonner";
 import { useAuth, useUser } from "@clerk/nextjs";
 
@@ -26,16 +26,13 @@ import { useActivityNotifications } from "@/hooks/useActivityNotifications";
 import { ActivityPanel } from "./ActivityPanel";
 import { CommentPanel } from "./CommentPanel";
 import { ActivityButtonWithBadge } from "./figjam/NotificationBadge";
-import { ArrowLeft, Clock, Vote } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 // Avatar components
 import { Avatar, AvatarImage, AvatarFallback, AvatarGroup } from "@/components/ui/avatar";
 
 // Side panels for features (AI suggestions, analytics, etc.)
 import { CanvasSidePanels } from "./canvas/CanvasSidePanels";
-
-// Voting config modal
-import { VotingConfigModal } from "./figjam/VotingConfigModal";
 
 interface AffinityMapWorkspaceProps {
   projectId: Id<"projects">;
@@ -52,7 +49,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     stickyPositions, updateStickyPositions,
     addCluster, moveCluster, resizeCluster, addInsightToCluster, updateClusterTitle, 
     removeCluster, removeInsightFromCluster, replaceAllClusters, createManualInsight, deleteInsight,
-    broadcastGroupCreated, broadcastInsightMoved
+    broadcastClusterCreated, broadcastInsightMoved
   } = useAffinityMapData(projectId);
 
   // ==================== STATE ====================
@@ -66,63 +63,19 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   });
   
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
-  const [showVotingConfig, setShowVotingConfig] = useState(false);
   const [themeAnalysis, setThemeAnalysis] = useState<ThemeAnalysis | null>(null);
   const [isThemesAnalyzing, setIsThemesAnalyzing] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [commentPanel, setCommentPanel] = useState<{groupId: string; rect: DOMRect; title?: string} | null>(null);
   const [canvasInsightIds, setCanvasInsightIds] = useState<Set<string>>(new Set());
-  const [hideVotingDock, setHideVotingDock] = useState(false);
 
   // ==================== COMMENT HANDLER ====================
   const handleOpenComment = useCallback((elementId: string, rect: DOMRect, title?: string) => {
     setCommentPanel({ groupId: elementId, rect, title });
   }, []);
 
-  // ==================== VOTING (Synchronized via Convex) ====================
+  // ==================== VOTING (passed to FigJamBoard) ====================
   const voting = useVotingSync(affinityMap?._id, projectId as Id<"projects">);
-  const isVotingMode = voting.isVoting;
-  const isRevealed = voting.isRevealed;
-
-  // Compute vote results from sessionVotes directly
-  // Note: We need to pass cluster labels from the board to get real names
-  const voteResults = useMemo(() => {
-    if (!voting.session || voting.session.votingPhase === "voting") return [];
-    
-    const clusterVoteMap = new Map<string, { count: number; colors: string[]; clusterName?: string }>();
-    
-    for (const vote of voting.sessionVotes || []) {
-      const existing = clusterVoteMap.get(vote.targetId) || { count: 0, colors: [], clusterName: vote.targetId };
-      existing.count++;
-      existing.colors.push(vote.color);
-      clusterVoteMap.set(vote.targetId, existing);
-    }
-    
-    return Array.from(clusterVoteMap.entries())
-      .map(([clusterId, { count, colors }]) => {
-        // Find cluster name from groups
-        const group = clusters.find(c => c.id === clusterId);
-        return {
-          sectionId: clusterId,
-          title: group?.title || clusterId.slice(0, 12),
-          voteCount: count,
-          colors,
-        };
-      })
-      .filter(r => r.voteCount > 0)
-      .sort((a, b) => b.voteCount - a.voteCount);
-  }, [clusters, voting.session, voting.sessionVotes]);
-
-  // Keyboard shortcut for voting mode
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName)) return;
-      const active = document.activeElement;
-      if (active?.tagName === "INPUT" || active?.tagName === "TEXTAREA" || (active as HTMLElement)?.isContentEditable) return;
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
 
   // ==================== AUTO-CREATE MAP ====================
   const createAffinityMap = useMutation(api.affinityMaps.create);
@@ -153,7 +106,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     createManualInsight: createManualInsight as (args: { projectId: Id<"projects">; text: string; type: string }) => Promise<string>,
     deleteInsight,
     updateStickyPositions,
-    broadcastGroupCreated,
+    broadcastClusterCreated,
     broadcastInsightMoved,
     activity,
   });
@@ -186,11 +139,11 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          groups: clusters.map(c => ({
-            id: c.id,
-            title: c.title,
-            insights: insights.filter(i => c.insightIds.includes(i.id)).map(i => i.text),
-            insightCount: c.insightIds.length,
+          clusters: clusters.map(g => ({
+            id: g.id,
+            title: g.title,
+            insights: insights.filter(i => g.insightIds.includes(i.id)).map(i => i.text),
+            insightCount: g.insightIds.length,
           })),
           projectContext: project?.name || "Project",
           totalGroups: clusters.length,
@@ -219,21 +172,21 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     switch (recommendation.type) {
       case "merge":
         if (recommendation.groups.length < 2) {
-          toast.error("Need at least 2 groups to merge");
+          toast.error("Need at least 2 clusters to merge");
           return;
         }
-        const groupsToMerge = clusters.filter(c => recommendation.groups.includes(c.id));
-        if (groupsToMerge.length < 2) {
-          toast.error("Selected groups not found");
+        const clustersToMerge = clusters.filter(g => recommendation.groups.includes(g.id));
+        if (clustersToMerge.length < 2) {
+          toast.error("Selected clusters not found");
           return;
         }
-        const mergedGroup = groupsToMerge[0];
-        const avgX = groupsToMerge.reduce((sum, g) => sum + g.position.x, 0) / groupsToMerge.length;
-        const avgY = groupsToMerge.reduce((sum, g) => sum + g.position.y, 0) / groupsToMerge.length;
-        const mergedInsightIds = groupsToMerge.flatMap(g => g.insightIds);
+        const mergedGroup = clustersToMerge[0];
+        const avgX = clustersToMerge.reduce((sum, g) => sum + g.position.x, 0) / clustersToMerge.length;
+        const avgY = clustersToMerge.reduce((sum, g) => sum + g.position.y, 0) / clustersToMerge.length;
+        const mergedInsightIds = clustersToMerge.flatMap(g => g.insightIds);
         
-        handlers.handleGroupsReplace([
-          ...clusters.filter(c => !recommendation.groups.includes(c.id)),
+        handlers.handleClustersReplace([
+          ...clusters.filter(g => !recommendation.groups.includes(g.id)),
           {
             ...mergedGroup,
             title: mergedGroup.title,
@@ -241,7 +194,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
             insightIds: mergedInsightIds,
           },
         ]);
-        toast.success(`Merged ${groupsToMerge.length} groups`);
+        toast.success(`Merged ${clustersToMerge.length} clusters`);
         break;
 
       case "split":
@@ -249,13 +202,13 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           toast.info("Split requires selecting one group");
           return;
         }
-        const groupToSplit = clusters.find(c => c.id === recommendation.groups[0]);
+        const groupToSplit = clusters.find(g => g.id === recommendation.groups[0]);
         if (!groupToSplit) {
           toast.error("Group not found");
           return;
         }
         const insightsPerGroup = Math.ceil(groupToSplit.insightIds.length / 2);
-        const newGroups: AffinityGroup[] = [];
+        const newGroups: AffinityCluster[] = [];
         for (let i = 0; i < 2; i++) {
           const startIdx = i * insightsPerGroup;
           const endIdx = Math.min(startIdx + insightsPerGroup, groupToSplit.insightIds.length);
@@ -273,26 +226,26 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
             });
           }
         }
-        handlers.handleGroupsReplace([
-          ...clusters.filter(c => c.id !== groupToSplit.id),
+        handlers.handleClustersReplace([
+          ...clusters.filter(g => g.id !== groupToSplit.id),
           ...newGroups,
         ]);
-        toast.success(`Split into ${newGroups.length} groups`);
+        toast.success(`Split into ${newGroups.length} clusters`);
         break;
 
       case "reorganize":
-        toast.info("Select insights to move to different groups");
+        toast.info("Select insights to move to different clusters");
         break;
 
       case "create_parent":
-        const parentGroups = clusters.filter(c => recommendation.groups.includes(c.id));
+        const parentGroups = clusters.filter(g => recommendation.groups.includes(g.id));
         if (parentGroups.length === 0) {
-          toast.error("No groups selected for parent");
+          toast.error("No clusters selected for parent");
           return;
         }
         const parentX = Math.min(...parentGroups.map(g => g.position.x)) - 50;
         const parentY = Math.min(...parentGroups.map(g => g.position.y)) - 50;
-        const newParent: AffinityGroup = {
+        const newParent: AffinityCluster = {
           id: `parent-${Date.now()}`,
           title: "Parent Theme",
           color: "#9747FF",
@@ -300,11 +253,11 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           insightIds: [],
           size: { width: 500, height: 400 },
         };
-        handlers.handleGroupsReplace([
+        handlers.handleClustersReplace([
           ...clusters,
           newParent,
         ]);
-        toast.success("Created parent theme - drag groups inside");
+        toast.success("Created parent theme - drag clusters inside");
         break;
     }
     setThemeAnalysis(null);
@@ -312,30 +265,30 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
 
   const handleGroupsMerge = useCallback((groupIds: string[], newTitle: string) => {
     if (groupIds.length < 2) {
-      toast.error("Select at least 2 groups to merge");
+      toast.error("Select at least 2 clusters to merge");
       return;
     }
-    const groupsToMerge = clusters.filter(c => groupIds.includes(c.id));
-    if (groupsToMerge.length < 2) {
+    const clustersToMerge = clusters.filter(g => groupIds.includes(g.id));
+    if (clustersToMerge.length < 2) {
       toast.error("Groups not found");
       return;
     }
-    const mergedGroup = groupsToMerge[0];
-    const avgX = groupsToMerge.reduce((sum, g) => sum + g.position.x, 0) / groupsToMerge.length;
-    const avgY = groupsToMerge.reduce((sum, g) => sum + g.position.y, 0) / groupsToMerge.length;
-    const mergedInsightIds = groupsToMerge.flatMap(g => g.insightIds);
+    const mergedGroup = clustersToMerge[0];
+    const avgX = clustersToMerge.reduce((sum, g) => sum + g.position.x, 0) / clustersToMerge.length;
+    const avgY = clustersToMerge.reduce((sum, g) => sum + g.position.y, 0) / clustersToMerge.length;
+    const mergedInsightIds = clustersToMerge.flatMap(g => g.insightIds);
     
-    handlers.handleGroupsReplace([
-      ...clusters.filter(c => !groupIds.includes(c.id)),
+    handlers.handleClustersReplace([
+      ...clusters.filter(g => !groupIds.includes(g.id)),
       {
         ...mergedGroup,
         title: newTitle || mergedGroup.title,
         position: { x: avgX, y: avgY },
         insightIds: mergedInsightIds,
         size: mergedGroup.size || { width: 400, height: 300 },
-      } as AffinityGroup,
+      } as AffinityCluster,
     ]);
-    toast.success(`Merged ${groupsToMerge.length} groups into "${newTitle}"`);
+    toast.success(`Merged ${clustersToMerge.length} clusters into "${newTitle}"`);
   }, [clusters, handlers]);
 
   // ==================== OTHER USERS (MOCK FOR NOW) ====================
@@ -405,36 +358,6 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
             </AvatarGroup>
           )}
           
-          {/* Vote Button - Start/Stop Voting */}
-          <button
-            onClick={() => {
-              if (isVotingMode) {
-                voting.stopVoting();
-              } else {
-                setShowVotingConfig(true);
-              }
-            }}
-            className={`px-4 py-1.5 rounded-lg border flex items-center gap-2 text-sm font-medium transition-all ${
-              isVotingMode
-                ? "bg-red-500 border-red-600 text-white hover:bg-red-600 shadow-lg animate-pulse"
-                : "bg-primary text-white hover:bg-primary/80 shadow-md"
-            }`}
-          >
-            {isVotingMode ? (
-              <>
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="6" y="6" width="12" height="12" rx="2"/>
-                </svg>
-                Stop Voting
-              </>
-            ) : (
-              <>
-                <Vote className="w-4 h-4" />
-                Start Voting
-              </>
-            )}
-          </button>
-
           <ActivityButtonWithBadge
             count={activityUnreadCount}
             isActive={showActivityPanel}
@@ -447,99 +370,6 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           />
         </div>
       </div>
-
-      {/* Voting Status Banner */}
-      {voting.session && voting.session.votingPhase !== "setup" && !hideVotingDock && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 bg-card backdrop-blur-sm rounded-xl shadow-lg border border-border px-4 py-2 flex items-center gap-4">
-          
-          {/* Minimize Button */}
-          <button
-            onClick={() => setHideVotingDock(true)}
-            className="p-1 hover:bg-muted rounded transition-colors"
-            title="Masquer"
-          >
-            <svg className="w-4 h-4 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 15l-6-6-6 6"/>
-            </svg>
-          </button>
-          
-          {/* Voting Phase Indicator */}
-          {voting.session.votingPhase === "voting" && (
-            <>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-primary rounded-full animate-pulse"/>
-                <span className="text-sm font-medium text-foreground">Vote en cours</span>
-              </div>
-              
-              {voting.remainingTime !== null && (
-                <>
-                  <div className="h-5 w-px bg-border"/>
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-muted rounded-lg">
-                    <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-sm font-mono font-medium text-foreground">
-                      {Math.floor(voting.remainingTime / 60000).toString().padStart(2, '0')}:{Math.floor((voting.remainingTime % 60000) / 1000).toString().padStart(2, '0')}
-                    </span>
-                  </div>
-                </>
-              )}
-              
-              <div className="h-5 w-px bg-border"/>
-              <div className="flex items-center gap-2">
-                {/* Sticker-style vote dots */}
-                <div className="flex gap-1.5">
-                  {Array.from({ length: voting.session?.maxDotsPerUser || 0 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`w-6 h-6 rounded-full border-[2px] border-white shadow-md transition-all ${
-                        i < voting.myVotesCount
-                          ? "bg-primary scale-110"
-                          : "bg-muted-foreground/20"
-                      }`}
-                    />
-                  ))}
-                </div>
-                <span className="text-xs text-muted-foreground">({voting.myVotesCount}/{voting.session?.maxDotsPerUser})</span>
-              </div>
-            </>
-          )}
-
-          {/* Revealed Phase - Show Ranking */}
-          {voting.session.votingPhase === "revealed" && (
-            <>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"/>
-                <span className="text-sm font-medium text-foreground">Résultats révélés</span>
-              </div>
-              <div className="h-5 w-px bg-border"/>
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-muted-foreground">Top clusters:</span>
-                <div className="flex items-center gap-2">
-                  {voteResults.slice(0, 3).map((result: { sectionId: string; title: string; voteCount: number }, i: number) => (
-                    <div key={result.sectionId} className="flex items-center gap-1.5 bg-muted px-2.5 py-1 rounded-lg shadow-sm">
-                      <span className={`text-xs font-bold ${i === 0 ? 'text-yellow-600' : i === 1 ? 'text-gray-500' : i === 2 ? 'text-amber-600' : 'text-gray-400'}`}>
-                        #{i + 1}
-                      </span>
-                      <span className="text-xs text-gray-700 truncate max-w-[100px]">{result.title}</span>
-                      <span className="text-xs font-bold text-violet-600">{result.voteCount}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Voting Dock Toggle Button (when hidden) */}
-      {voting.session && voting.session.votingPhase === "revealed" && hideVotingDock && (
-        <button
-          onClick={() => setHideVotingDock(false)}
-          className="absolute top-14 left-1/2 -translate-x-1/2 z-40 bg-card/90 backdrop-blur-sm rounded-full shadow-lg border border-border px-4 py-2 flex items-center gap-2 hover:bg-card transition-colors"
-        >
-          <div className="w-2 h-2 bg-green-500 rounded-full"/>
-          <span className="text-sm font-medium text-foreground">Voir les résultats</span>
-        </button>
-      )}
 
       {/* Loading state */}
       {isLoading && (
@@ -558,10 +388,9 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           projectId={projectId}
           mapId={affinityMap._id}
           storageKey={affinityMap._id ? `figjam-${affinityMap._id}` : undefined}
-          style={{ paddingTop: isVotingMode ? '96px' : '56px' }}
+          style={{ paddingTop: '56px' }}
           projectInsights={insights}
           existingInsightIds={Array.from(canvasInsightIds)}
-          isVotingMode={isVotingMode}
           voting={voting}
           onBack={() => router.push(`/project/${projectId}`)}
           onOpenComment={handleOpenComment}
@@ -600,7 +429,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         onClearThemes={handleClearThemes}
         onCreateGroup={async (insightIds, title) => {
           const position = { x: 400 + Math.random() * 200, y: 400 + Math.random() * 200 };
-          const groupId = await handlers.handleGroupCreate(position, title);
+          const groupId = await handlers.handleClusterCreate(position, title);
           insightIds.forEach(insightId => {
             if (groupId) {
               handlers.handleInsightDrop(insightId, groupId);
@@ -633,7 +462,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
             id: u.userId,
             name: u.user?.name || "User",
           })) || []}
-          groupTitle={commentPanel.title || clusters.find(c => c.id === commentPanel.groupId)?.title || "Element"}
+          groupTitle={commentPanel.title || clusters.find(g => g.id === commentPanel.groupId)?.title || "Element"}
           projectId={projectId}
           projectMembers={project?.members || []}
           onClose={() => setCommentPanel(null)}
@@ -710,16 +539,6 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           </svg>
         </button> */}
       </div>
-
-      {/* Voting Config Modal */}
-      <VotingConfigModal
-        open={showVotingConfig}
-        onOpenChange={setShowVotingConfig}
-        onStartVoting={(config) => {
-          voting.startVoting(config);
-        }}
-        clusterCount={clusters.length || 3}
-      />
     </div>
   );
 }

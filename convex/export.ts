@@ -10,7 +10,7 @@ const exportMapDataSchema = v.object({
   map: v.object({
     name: v.string(),
     description: v.optional(v.string()),
-    groups: v.array(v.object({
+    clusters: v.array(v.object({
       id: v.string(),
       title: v.string(),
       color: v.string(),
@@ -39,7 +39,7 @@ export const exportMapData = query({
       map: {
         name: map.name,
         description: map.description,
-        groups: map.groups,
+        clusters: map.clusters || [],
       },
     };
 
@@ -83,7 +83,7 @@ export const importMapData = mutation({
       description: args.importData.map.description,
       version: 1,
       isCurrent: true,
-      groups: args.importData.map.groups,
+      clusters: args.importData.map.clusters,
       createdBy: identity.subject,
       createdAt: Date.now(),
       updatedAt: Date.now(),

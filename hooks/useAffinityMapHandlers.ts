@@ -15,6 +15,7 @@ interface UseAffinityMapHandlersProps {
   userId: string | null | undefined;
   userName: string;
 
+  // Mutations
   addCluster: (args: { mapId: Id<"affinityMaps">; title: string; color: string; position: { x: number; y: number } }) => Promise<string>;
   moveCluster: (args: { mapId: Id<"affinityMaps">; clusterId: string; position: { x: number; y: number } }) => Promise<unknown>;
   resizeCluster: (args: { mapId: Id<"affinityMaps">; clusterId: string; size: { width: number; height: number } }) => Promise<unknown>;
@@ -27,10 +28,11 @@ interface UseAffinityMapHandlersProps {
   deleteInsight: (args: { insightId: Id<"insights"> }) => Promise<unknown>;
   updateStickyPositions: (args: { mapId: Id<"affinityMaps">; positions: Record<string, { x: number; y: number }> }) => Promise<unknown>;
 
-  broadcastGroupCreated: (args: {
+  // Notifications
+  broadcastClusterCreated: (args: {
     mapId: Id<"affinityMaps">;
-    groupId: string;
-    groupTitle: string;
+    clusterId: string;
+    clusterTitle: string;
     createdByUserId: string;
     createdByUserName: string;
   }) => Promise<unknown>;
@@ -44,13 +46,14 @@ interface UseAffinityMapHandlersProps {
     movedByUserName: string;
   }) => Promise<unknown>;
 
+  // Activity
   activity: {
-    logGroupCreated: (mapId: Id<"affinityMaps">, groupId: string, groupTitle: string) => void;
-    logGroupMoved: (mapId: Id<"affinityMaps">, groupId: string, groupTitle: string, fromPos: { x: number; y: number }, toPos: { x: number; y: number }) => void;
-    logGroupRenamed: (mapId: Id<"affinityMaps">, groupId: string, oldTitle: string, newTitle: string) => void;
-    logGroupDeleted: (mapId: Id<"affinityMaps">, groupId: string, groupTitle: string) => void;
-    logInsightAdded: (mapId: Id<"affinityMaps">, groupId: string, groupTitle: string, insightId: string) => void;
-    logInsightRemoved: (mapId: Id<"affinityMaps">, groupId: string, groupTitle: string, insightId: string) => void;
+    logGroupCreated: (mapId: Id<"affinityMaps">, clusterId: string, clusterTitle: string) => void;
+    logGroupMoved: (mapId: Id<"affinityMaps">, clusterId: string, clusterTitle: string, fromPos: { x: number; y: number }, toPos: { x: number; y: number }) => void;
+    logGroupRenamed: (mapId: Id<"affinityMaps">, clusterId: string, oldTitle: string, newTitle: string) => void;
+    logGroupDeleted: (mapId: Id<"affinityMaps">, clusterId: string, clusterTitle: string) => void;
+    logInsightAdded: (mapId: Id<"affinityMaps">, clusterId: string, clusterTitle: string, insightId: string) => void;
+    logInsightRemoved: (mapId: Id<"affinityMaps">, clusterId: string, clusterTitle: string, insightId: string) => void;
     logInsightMoved: (mapId: Id<"affinityMaps">, fromGroupId: string, toGroupId: string, fromGroupTitle: string, toGroupTitle: string, insightId: string) => void;
   };
 
@@ -72,88 +75,88 @@ export function useAffinityMapHandlers({
   createManualInsight,
   deleteInsight,
   updateStickyPositions,
-  broadcastGroupCreated,
+  broadcastClusterCreated,
   broadcastInsightMoved,
   activity,
   projectId,
 }: UseAffinityMapHandlersProps) {
-  const handleGroupCreate = useCallback(
+  const handleClusterCreate = useCallback(
     async (position: { x: number; y: number }, title?: string) => {
       if (!affinityMap || !userId) return "";
 
-      const groupTitle = title || "New Theme";
-      const groupColor = "#F59E0B";
+      const clusterTitle = title || "New Theme";
+      const clusterColor = "#F59E0B";
 
       try {
-        const groupId = await addCluster({
+        const clusterId = await addCluster({
           mapId: affinityMap._id,
-          title: groupTitle,
-          color: groupColor,
+          title: clusterTitle,
+          color: clusterColor,
           position,
         });
 
-        activity.logGroupCreated(affinityMap._id, groupId, groupTitle);
+        activity.logGroupCreated(affinityMap._id, clusterId, clusterTitle);
 
-        await broadcastGroupCreated({
+        await broadcastClusterCreated({
           mapId: affinityMap._id,
-          groupId,
-          groupTitle: groupTitle,
+          clusterId,
+          clusterTitle: clusterTitle,
           createdByUserId: userId,
           createdByUserName: userName,
         });
 
-        return groupId;
+        return clusterId;
       } catch (error) {
-        console.error("Failed to create cluster:", error);
+        console.error("Failed to create group:", error);
         return "";
       }
     },
-    [affinityMap, userId, userName, addCluster, activity, broadcastGroupCreated]
+    [affinityMap, userId, userName, addCluster, activity, broadcastClusterCreated]
   );
 
-  const handleGroupMove = useCallback(
-    async (groupId: string, position: { x: number; y: number }) => {
+  const handleClusterMove = useCallback(
+    async (clusterId: string, position: { x: number; y: number }) => {
       if (!affinityMap) return;
 
-      const group = affinityMap.clusters.find((c) => c.id === groupId);
+      const group = affinityMap.clusters.find((g) => g.id === clusterId);
       const oldPosition = group?.position;
 
       try {
         await moveCluster({
           mapId: affinityMap._id,
-          clusterId: groupId,
+          clusterId,
           position,
         });
 
         if (group && oldPosition) {
           activity.logGroupMoved(
             affinityMap._id,
-            groupId,
+            clusterId,
             group.title,
             oldPosition,
             position
           );
         }
       } catch (error) {
-        console.error("Failed to move cluster:", error);
-        toast.error("Failed to move cluster");
+        console.error("Failed to move group:", error);
+        toast.error("Failed to move group");
       }
     },
     [affinityMap, moveCluster, activity]
   );
 
-  const handleGroupResize = useCallback(
-    async (groupId: string, size: { width: number; height: number }) => {
+  const handleClusterResize = useCallback(
+    async (clusterId: string, size: { width: number; height: number }) => {
       if (!affinityMap) return;
 
       try {
         await resizeCluster({
           mapId: affinityMap._id,
-          clusterId: groupId,
+          clusterId,
           size,
         });
       } catch (error) {
-        console.error("Failed to resize cluster:", error);
+        console.error("Failed to resize group:", error);
         toast.error("Failed to resize section");
       }
     },
@@ -165,10 +168,10 @@ export function useAffinityMapHandlers({
       if (!affinityMap || !userId) return;
 
       const targetGroup = affinityMap.clusters.find(
-        (c) => c.id === targetGroupId
+        (g) => g.id === targetGroupId
       );
-      const sourceGroup = affinityMap.clusters.find((c) =>
-        c.insightIds.includes(insightId)
+      const sourceGroup = affinityMap.clusters.find((g) =>
+        g.insightIds.includes(insightId)
       );
 
       try {
@@ -208,8 +211,8 @@ export function useAffinityMapHandlers({
           }
         }
       } catch (error) {
-        console.error("Failed to add insight to cluster:", error);
-        toast.error("Failed to add insight to cluster");
+        console.error("Failed to add insight to group:", error);
+        toast.error("Failed to add insight to group");
       }
     },
     [
@@ -227,17 +230,20 @@ export function useAffinityMapHandlers({
       if (!affinityMap) return;
       
       try {
+        // Create the insight
         const insightId = await createManualInsight({
           projectId: projectId as Id<"projects">,
           text,
           type,
         }) as string;
 
+        // If position provided, save it in stickyPositions
         if (position && insightId) {
+          // Get current stickyPositions from the map
           const currentPositions = affinityMap.stickyPositions || {};
           await replaceAllClusters({
             mapId: affinityMap._id,
-            clusters: affinityMap.clusters.map(c => ({ ...c })),
+            clusters: affinityMap.clusters.map(g => ({ ...g })),
             stickyPositions: {
               ...currentPositions,
               [insightId]: position,
@@ -254,102 +260,102 @@ export function useAffinityMapHandlers({
     [projectId, createManualInsight, affinityMap, replaceAllClusters]
   );
 
-  const handleGroupTitleUpdate = useCallback(
-    async (groupId: string, title: string) => {
+  const handleClusterTitleUpdate = useCallback(
+    async (clusterId: string, title: string) => {
       if (!affinityMap) return;
 
-      const group = affinityMap.clusters.find((c) => c.id === groupId);
+      const group = affinityMap.clusters.find((g) => g.id === clusterId);
       const oldTitle = group?.title;
 
       try {
         await updateClusterTitle({
           mapId: affinityMap._id,
-          clusterId: groupId,
+          clusterId,
           title,
         });
 
         if (oldTitle && oldTitle !== title) {
           activity.logGroupRenamed(
             affinityMap._id,
-            groupId,
+            clusterId,
             oldTitle,
             title
           );
         }
       } catch (error) {
-        console.error("Failed to update cluster title:", error);
+        console.error("Failed to update group title:", error);
       }
     },
     [affinityMap, updateClusterTitle, activity]
   );
 
-  const handleGroupDelete = useCallback(
-    async (groupId: string) => {
+  const handleClusterDelete = useCallback(
+    async (clusterId: string) => {
       if (!affinityMap) return;
 
-      const group = affinityMap.clusters.find((c) => c.id === groupId);
+      const group = affinityMap.clusters.find((g) => g.id === clusterId);
 
       try {
         if (group) {
           activity.logGroupDeleted(
             affinityMap._id,
-            groupId,
+            clusterId,
             group.title
           );
         }
 
         await removeCluster({
           mapId: affinityMap._id,
-          clusterId: groupId,
+          clusterId,
         });
       } catch (error) {
-        console.error("Failed to delete cluster:", error);
+        console.error("Failed to delete group:", error);
       }
     },
     [affinityMap, removeCluster, activity]
   );
 
-  const handleInsightRemoveFromGroup = useCallback(
-    async (insightId: string, groupId: string) => {
+  const handleInsightRemoveFromCluster = useCallback(
+    async (insightId: string, clusterId: string) => {
       if (!affinityMap) return;
 
-      const group = affinityMap.clusters.find((c) => c.id === groupId);
+      const group = affinityMap.clusters.find((g) => g.id === clusterId);
 
       try {
         await removeInsightFromCluster({
           mapId: affinityMap._id,
-          clusterId: groupId,
+          clusterId,
           insightId: insightId as Id<"insights">,
         });
 
         if (group) {
           activity.logInsightRemoved(
             affinityMap._id,
-            groupId,
+            clusterId,
             group.title,
             insightId
           );
         }
       } catch (error) {
-        console.error("Failed to remove insight from cluster:", error);
+        console.error("Failed to remove insight from group:", error);
       }
     },
     [affinityMap, removeInsightFromCluster, activity]
   );
 
-  const handleGroupsReplace = useCallback(
+  const handleClustersReplace = useCallback(
     async (newGroups: AffinityCluster[]) => {
       if (!affinityMap) return;
 
       try {
-        const convexClusters = newGroups.map((cluster) => ({
-          ...cluster,
-          insightIds: cluster.insightIds as string[],
+        const convexGroups = newGroups.map((group) => ({
+          ...group,
+          insightIds: group.insightIds as string[],
         }));
 
         await replaceAllClusters({
           mapId: affinityMap._id,
-          clusters: convexClusters,
+          clusters: convexGroups,
         });
       } catch (error) {
         console.error("Failed to replace clusters:", error);
@@ -376,15 +382,15 @@ export function useAffinityMapHandlers({
   );
 
   return {
-    handleGroupCreate,
-    handleGroupMove,
-    handleGroupResize,
+    handleClusterCreate,
+    handleClusterMove,
+    handleClusterResize,
     handleInsightDrop,
     handleManualInsightCreate,
-    handleGroupTitleUpdate,
-    handleGroupDelete,
-    handleInsightRemoveFromGroup,
+    handleClusterTitleUpdate,
+    handleClusterDelete,
+    handleInsightRemoveFromCluster,
     handleInsightDelete,
-    handleGroupsReplace,
+    handleClustersReplace,
   };
 }

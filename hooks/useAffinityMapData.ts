@@ -3,7 +3,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { AffinityGroup, Insight } from "@/types";
+import { AffinityCluster, Insight } from "@/types";
 import { useEffect } from "react";
 
 export function useAffinityMapData(projectId: Id<"projects">) {
@@ -45,7 +45,7 @@ export function useAffinityMapData(projectId: Id<"projects">) {
   );
 
   // Notification mutations
-  const broadcastGroupCreated = useMutation(api.notificationService.broadcastGroupCreated);
+  const broadcastClusterCreated = useMutation(api.notificationService.broadcastGroupCreated);
   const broadcastInsightMoved = useMutation(api.notificationService.broadcastInsightMoved);
 
   // Auto-create map
@@ -62,8 +62,8 @@ export function useAffinityMapData(projectId: Id<"projects">) {
   // Mutations
   const updateStickyPositionsMutation = useMutation(api.affinityMaps.updateStickyPositions);
 
-  // Transform data
-  const clusters: AffinityGroup[] =
+  // Transform data - clusters from affinityMap
+  const clusters: AffinityCluster[] =
     affinityMap?.clusters.map((cluster) => ({
       id: cluster.id,
       title: cluster.title,
@@ -101,6 +101,7 @@ export function useAffinityMapData(projectId: Id<"projects">) {
     activities,
     insightsData,
     stickyPositions,
+    updateStickyPositions: updateStickyPositionsMutation,
 
     // Mutations
     addCluster,
@@ -113,10 +114,7 @@ export function useAffinityMapData(projectId: Id<"projects">) {
     replaceAllClusters,
     createManualInsight,
     deleteInsight,
-    updateStickyPositions: updateStickyPositionsMutation,
-
-    // Notifications
-    broadcastGroupCreated,
+    broadcastClusterCreated,
     broadcastInsightMoved,
   };
 }

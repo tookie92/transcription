@@ -154,7 +154,7 @@ export default defineSchema({
       insightPositions: v.optional(v.record(v.string(), v.object({
         x: v.number(),
         y: v.number(),
-      }))), // position de chaque insight dans le cluster
+      }))),
       size: v.optional(v.object({
         width: v.number(),
         height: v.number(),

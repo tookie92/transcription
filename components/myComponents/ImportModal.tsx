@@ -209,14 +209,14 @@ export function ImportModal({ open, onOpenChange, projectId, onImportSuccess }: 
                   </div>
                   
                   <div>
-                    <span className="text-gray-600">Groups:</span>
-                    <Badge variant="secondary">{importData.map.groups.length}</Badge>
+                    <span className="text-gray-600">Clusters:</span>
+                    <Badge variant="secondary">{importData.map.clusters.length}</Badge>
                   </div>
                   
                   <div>
                     <span className="text-gray-600">Total Insights:</span>
                     <Badge variant="secondary">
-                      {importData.map.groups.reduce((sum, group) => sum + group.insightIds.length, 0)}
+                      {importData.map.clusters.reduce((sum: number, cluster) => sum + cluster.insightIds.length, 0)}
                     </Badge>
                   </div>
                   
@@ -235,23 +235,23 @@ export function ImportModal({ open, onOpenChange, projectId, onImportSuccess }: 
                   </div>
                 )}
 
-                {/* Groups Preview */}
+                {/* Clusters Preview */}
                 <div className="space-y-2">
-                  <span className="text-gray-600 text-sm">Groups:</span>
+                  <span className="text-gray-600 text-sm">Clusters:</span>
                   <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
-                    {importData.map.groups.slice(0, 10).map((group) => (
+                    {importData.map.clusters.slice(0, 10).map((cluster) => (
                       <Badge 
-                        key={group.id} 
+                        key={cluster.id} 
                         variant="outline"
                         className="text-xs"
-                        style={{ borderLeftColor: group.color, borderLeftWidth: '3px' }}
+                        style={{ borderLeftColor: cluster.color, borderLeftWidth: '3px' }}
                       >
-                        {group.title}
+                        {cluster.title}
                       </Badge>
                     ))}
-                    {importData.map.groups.length > 10 && (
+                    {importData.map.clusters.length > 10 && (
                       <Badge variant="secondary" className="text-xs">
-                        +{importData.map.groups.length - 10} more
+                        +{importData.map.clusters.length - 10} more
                       </Badge>
                     )}
                   </div>

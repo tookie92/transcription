@@ -68,13 +68,13 @@ export const deleteInsight = mutation({
       .collect();
 
     for (const map of maps) {
-      const updatedGroups = map.groups.map(group => ({
-        ...group,
-        insightIds: group.insightIds.filter(id => id !== args.insightId)
+      const updatedClusters = (map.clusters || []).map((cluster) => ({
+        ...cluster,
+        insightIds: cluster.insightIds.filter((id: string) => id !== args.insightId)
       }));
       
       await ctx.db.patch(map._id, {
-        groups: updatedGroups,
+        clusters: updatedClusters,
         updatedAt: Date.now(),
       });
     }

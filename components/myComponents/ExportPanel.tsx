@@ -88,14 +88,14 @@ export function ExportPanel({ mapId, projectId, onClose }: ExportPanelProps) {
       throw new Error("No data available for PDF export");
     }
 
-    if (!canGeneratePdf(mapData.map.groups)) {
-      throw new Error("No groups available for PDF export");
+    if (!canGeneratePdf(mapData.map.clusters)) {
+      throw new Error("No clusters available for PDF export");
     }
 
     generatePdfReport({
       title: mapData.map.name,
       projectName: projectData?.name,
-      groups: mapData.map.groups,
+      groups: mapData.map.clusters,
       insights: insightsData
     });
 
@@ -128,7 +128,7 @@ export function ExportPanel({ mapId, projectId, onClose }: ExportPanelProps) {
   };
 
   const pdfStats = mapData && insightsData ? 
-    getPdfStats(mapData.map.groups, insightsData) : null;
+    getPdfStats(mapData.map.clusters, insightsData) : null;
 
   const formatOptions = [
     {
@@ -229,13 +229,13 @@ export function ExportPanel({ mapId, projectId, onClose }: ExportPanelProps) {
               <span className="font-medium text-foreground">{mapData.map.name}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Groups:</span>
-              <Badge variant="secondary">{mapData.map.groups.length}</Badge>
+              <span className="text-muted-foreground">Clusters:</span>
+              <Badge variant="secondary">{mapData.map.clusters.length}</Badge>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Total Insights:</span>
               <Badge variant="secondary">
-                {mapData.map.groups.reduce((sum, group) => sum + group.insightIds.length, 0)}
+                {mapData.map.clusters.reduce((sum: number, cluster) => sum + cluster.insightIds.length, 0)}
               </Badge>
             </div>
           </div>
@@ -251,7 +251,7 @@ export function ExportPanel({ mapId, projectId, onClose }: ExportPanelProps) {
             <div className="text-xs text-foreground space-y-1">
               <div>• Professional cover page</div>
               <div>• Project statistics</div>
-              <div>• {pdfStats.groupCount} theme groups</div>
+              <div>• {pdfStats.clusterCount} theme clusters</div>
               <div>• {pdfStats.totalInsights} total insights</div>
               <div>• Insight type distribution</div>
             </div>
@@ -277,8 +277,8 @@ export function ExportPanel({ mapId, projectId, onClose }: ExportPanelProps) {
               <pre className="text-xs text-foreground">
                 {JSON.stringify({
                   name: mapData.map.name,
-                  groups: mapData.map.groups.length,
-                  insights: mapData.map.groups.reduce((sum, group) => sum + group.insightIds.length, 0)
+                  clusters: mapData.map.clusters.length,
+                  insights: mapData.map.clusters.reduce((sum: number, cluster) => sum + cluster.insightIds.length, 0)
                 }, null, 2)}
               </pre>
             </div>

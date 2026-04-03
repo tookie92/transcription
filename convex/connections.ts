@@ -25,9 +25,9 @@ export const createConnection = mutation({
     const map = await ctx.db.get(args.mapId);
     if (!map) throw new Error("Affinity map not found");
 
-    // Vérifier que les groupes existent dans la map
-    const sourceGroup = map.groups.find(g => g.id === args.sourceGroupId);
-    const targetGroup = map.groups.find(g => g.id === args.targetGroupId);
+    // Vérifier que les clusters existent dans la map
+    const sourceGroup = (map.clusters || []).find((g: { id: string }) => g.id === args.sourceGroupId);
+    const targetGroup = (map.clusters || []).find((g: { id: string }) => g.id === args.targetGroupId);
     
     if (!sourceGroup) throw new Error("Source group not found in this map");
     if (!targetGroup) throw new Error("Target group not found in this map");

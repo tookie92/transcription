@@ -12,6 +12,7 @@ import { LassoContextMenu, ClusterContextMenu } from "./ContextMenu";
 import { CommentBubblesLayer } from "./CommentBubble";
 import { PresentationMode } from "./PresentationMode";
 import { InsightsSidebar } from "./InsightsSidebar";
+import { VotingHeader } from "./VotingHeader";
 import type { FigJamElement, Position, Size, StickyColor, StickyNoteData, DotData, ClusterLabelData, SectionData, TextData } from "@/types/figjam";
 import type { Insight } from "@/types";
 
@@ -1425,7 +1426,6 @@ export function FigJamBoard({
             const clusterVotes = voting.getClusterVotes(el.id);
             const isVotingActive = voting.isVoting;
             const isVotingRevealed = voting.isRevealed;
-            const areVotesVisible = voting.areVotesVisible;
 
             // Create voteUsers mapping from sessionVotes and presenceUsers
             const voteUsers = (voting.sessionVotes || [])
@@ -1456,7 +1456,6 @@ export function FigJamBoard({
                 isLocked={getLockInfo(el.id).isLocked}
                 isVotingActive={isVotingActive}
                 isVotingRevealed={isVotingRevealed}
-                areVotesVisible={areVotesVisible}
                 voteCount={clusterVotes.length}
                 voteUsers={voteUsers}
                 currentUserId={currentUser?.userId}
@@ -1660,25 +1659,29 @@ export function FigJamBoard({
         projectName={projectName}
         newInsightsCount={newInsightsCount}
         onImportInsights={handleImportInsights}
-        // Voting props
-        isVotingActive={voting.isVoting}
-        isVotingRevealed={voting.isRevealed}
-        votesRemaining={voting.getUserVotesRemaining()}
-        maxVotes={voting.session?.maxDotsPerUser || 5}
+      />
+
+      {/* ── Voting Header ── */}
+      <VotingHeader
+        isActive={voting.session?.isActive ?? false}
+        isVoting={voting.isVoting}
+        isRevealed={voting.isRevealed}
+        sessionName={voting.session?.name ?? "Dot Voting"}
+        maxDotsPerUser={voting.session?.maxDotsPerUser ?? 5}
+        usedDots={voting.myVotesCount}
         totalVotes={(voting.sessionVotes || []).length}
-        areVotesVisible={voting.areVotesVisible}
+        remainingTime={voting.remainingTime}
+        userColor={voting.userColor}
         onStartVoting={async (config) => {
           await voting.startVoting({
             dotsPerUser: config.dotsPerUser,
             durationMinutes: config.durationMinutes,
-            prompt: "Vote for your favorite clusters"
+            prompt: config.prompt,
           });
         }}
         onStopVoting={() => voting.stopVoting()}
-        onRevealVotes={() => voting.completeVoting()}
-        onNewVotingRound={() => voting.startNewRound()}
-        onToggleVoteVisibility={() => voting.toggleVoteVisibility()}
-        canControlVoting={true}
+        onReveal={() => voting.completeVoting()}
+        onNewRound={() => voting.startNewRound()}
       />
 
       {/* ── MiniMap ── */}
@@ -1702,7 +1705,7 @@ export function FigJamBoard({
         <div className="absolute inset-0 top-12 flex items-center justify-center pointer-events-none">
           <div className="text-center">
             <p className="text-gray-300 text-4xl mb-3">✦</p>
-            <p className="text-gray-400 text-sm font-medium">Appuyez sur S ou cliquez sur l'outil sticky pour commencer</p>
+            <p className="text-gray-400 text-sm font-medium">Appuyez sur S ou cliquez sur l&apos;outil sticky pour commencer</p>
             {newInsightsCount > 0 && (
               <p className="text-muted-foreground text-xs mt-2">
                 {newInsightsCount} insight{newInsightsCount > 1 ? "s" : ""} disponible{newInsightsCount > 1 ? "s" : ""} à importer

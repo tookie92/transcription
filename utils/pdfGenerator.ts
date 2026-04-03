@@ -1,11 +1,11 @@
 // utils/pdfGenerator.ts - VERSION AVEC ENCODAGE CORRIGÉ
 import jsPDF from "jspdf";
-import { AffinityGroup, Insight, ConvexInsight } from "@/types";
+import { AffinityCluster, Insight, ConvexInsight } from "@/types";
 
 interface PdfConfig {
   title: string;
   projectName?: string;
-  groups: AffinityGroup[];
+  groups: AffinityCluster[];
   insights: (Insight | ConvexInsight)[];
 }
 
@@ -358,19 +358,19 @@ export const generatePdfReport = (config: PdfConfig): void => {
 /**
  * Vérifie si le PDF peut être généré
  */
-export const canGeneratePdf = (groups: AffinityGroup[]): boolean => {
-  return groups.length > 0;
+export const canGeneratePdf = (clusters: AffinityCluster[]): boolean => {
+  return clusters.length > 0;
 };
 
 /**
  * Obtient les statistiques pour l'aperçu PDF
  */
-export const getPdfStats = (groups: AffinityGroup[], insights: (Insight | ConvexInsight)[]) => {
+export const getPdfStats = (clusters: AffinityCluster[], insights: (Insight | ConvexInsight)[]) => {
   const normalizedInsights = normalizeInsights(insights);
-  const totalInsights = groups.reduce((sum, group) => sum + group.insightIds.length, 0);
+  const totalInsights = clusters.reduce((sum, cluster) => sum + cluster.insightIds.length, 0);
   
   return {
-    groupCount: groups.length,
+    clusterCount: clusters.length,
     totalInsights,
     insightsByType: normalizedInsights.reduce((acc, insight) => {
       acc[insight.type] = (acc[insight.type] || 0) + 1;

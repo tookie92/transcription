@@ -57,8 +57,8 @@ const project = useQuery(api.projects.getProjectForInvite, { projectId });
   
   // Get current affinity map
   const currentMap = affinityMaps?.find(m => m.isCurrent);
-  const totalGroups = currentMap?.groups.length || 0;
-  const groupedInsights = currentMap?.groups.reduce((sum, g) => sum + g.insightIds.length, 0) || 0;
+  const totalClusters = currentMap?.clusters.length || 0;
+  const groupedInsights = currentMap?.clusters.reduce((sum: number, g) => sum + g.insightIds.length, 0) || 0;
   
   // Analytics calculations
   const interviewStatusBreakdown = {
@@ -179,7 +179,7 @@ useEffect(() => {
             <CircuitBoard className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalGroups}</div>
+            <div className="text-2xl font-bold">{totalClusters}</div>
             <p className="text-xs text-muted-foreground">{groupedInsights} insights grouped</p>
           </CardContent>
         </Card>

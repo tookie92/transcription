@@ -6,8 +6,6 @@ import { StickyColorPicker } from "./StickyColorPicker";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MousePointer2, Hand, ArrowLeft, Sparkles, MessageSquare, Presentation, DownloadCloud } from "lucide-react";
-import { VotingControls } from "./VotingControls";
-import type { VotingConfig } from "./VotingConfigDialog";
 
 interface FigJamToolbarProps {
   activeTool: ToolType;
@@ -32,17 +30,6 @@ interface FigJamToolbarProps {
   projectName?: string;
   newInsightsCount?: number;
   onImportInsights?: () => void;
-  // Voting props
-  isVotingActive?: boolean;
-  isVotingRevealed?: boolean;
-  votesRemaining?: number;
-  maxVotes?: number;
-  totalVotes?: number;
-  onStartVoting?: (config: VotingConfig) => void;
-  onStopVoting?: () => void;
-  onRevealVotes?: () => void;
-  onNewVotingRound?: () => void;
-  canControlVoting?: boolean;
 }
 
 export function FigJamToolbar({
@@ -68,17 +55,6 @@ export function FigJamToolbar({
   projectName,
   newInsightsCount = 0,
   onImportInsights,
-  // Voting props
-  isVotingActive = false,
-  isVotingRevealed = false,
-  votesRemaining = 0,
-  maxVotes = 5,
-  totalVotes = 0,
-  onStartVoting,
-  onStopVoting,
-  onRevealVotes,
-  onNewVotingRound,
-  canControlVoting = true,
 }: FigJamToolbarProps) {
 
   return (
@@ -108,22 +84,6 @@ export function FigJamToolbar({
         {/* ── Canvas Tools (Bottom Center) ── */}
         <div className="absolute left-1/2 bottom-6 -translate-x-1/2 z-30">
           <div className="flex items-center gap-3 bg-card/95 backdrop-blur-sm rounded-2xl shadow-xl border border-border px-3 py-2">
-
-            {/* Voting Controls */}
-            <VotingControls
-              isVotingActive={isVotingActive}
-              isRevealed={isVotingRevealed}
-              votesRemaining={votesRemaining}
-              maxVotes={maxVotes}
-              totalVotes={totalVotes}
-              onStartVoting={onStartVoting || (() => {})}
-              onStopVoting={onStopVoting || (() => {})}
-              onReveal={onRevealVotes || (() => {})}
-              onNewRound={onNewVotingRound || (() => {})}
-              canControl={canControlVoting}
-            />
-
-            <div className="w-px h-6 bg-border" />
 
             {/* Select Tool */}
             <Tooltip>

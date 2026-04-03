@@ -14,6 +14,16 @@ export interface ActivityNotification {
   isRead: boolean;
 }
 
+interface ActivityLogEntry {
+  _id: Id<"activityLog">;
+  userId: string;
+  userName: string;
+  action: string;
+  targetId: string;
+  targetName?: string;
+  timestamp: number;
+}
+
 interface UseActivityNotificationsOptions {
   mapId?: Id<"affinityMaps"> | null;
   pollInterval?: number;
@@ -44,26 +54,26 @@ export function useActivityNotifications({
   const activities = useQuery(
     api.activityLog.getActivityForMap,
     mapId ? { mapId, limit: maxNotifications } : "skip"
-  ) as any;
+  ) as ActivityLogEntry[] | undefined;
 
   useEffect(() => {
     if (!activities || activities.length === 0) return;
 
     // Initialize previous IDs on first load
     if (previousIdsRef.current.size === 0) {
-      activities.forEach(a => previousIdsRef.current.add(a._id));
+      activities.forEach((a: ActivityLogEntry) => previousIdsRef.current.add(a._id));
       return;
     }
 
     // Find NEW activities (not in previous IDs)
-    const newActivities = activities.filter(a => !previousIdsRef.current.has(a._id));
+    const newActivities = activities.filter((a: ActivityLogEntry) => !previousIdsRef.current.has(a._id));
     
     // Update previous IDs
-    activities.forEach(a => previousIdsRef.current.add(a._id));
+    activities.forEach((a: ActivityLogEntry) => previousIdsRef.current.add(a._id));
 
     if (newActivities.length > 0) {
       const newNotifications: ActivityNotification[] = newActivities
-        .map(activity => {
+        .map((activity: ActivityLogEntry) => {
           let type: ActivityNotification["type"] = "update";
           let message = "";
 

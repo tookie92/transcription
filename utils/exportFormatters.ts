@@ -1,7 +1,7 @@
 // utils/exportFormatters.ts - version corrigée
 
 // Types pour l'export/import
-export interface ExportGroup {
+export interface ExportCluster {
   id: string;
   title: string;
   color: string;
@@ -12,7 +12,7 @@ export interface ExportGroup {
 export interface ExportMap {
   name: string;
   description?: string;
-  groups: ExportGroup[];
+  clusters: ExportCluster[];
 }
 
 // ✅ Version avec literal type pour correspondre à Convex
@@ -23,20 +23,20 @@ export interface ExportMapData {
 }
 
 // Type guard pour valider la structure
-const isExportGroup = (obj: unknown): obj is ExportGroup => {
+const isExportCluster = (obj: unknown): obj is ExportCluster => {
   if (!obj || typeof obj !== 'object') return false;
   
-  const group = obj as Record<string, unknown>;
+  const cluster = obj as Record<string, unknown>;
   return (
-    typeof group.id === 'string' &&
-    typeof group.title === 'string' &&
-    typeof group.color === 'string' &&
-    typeof group.position === 'object' &&
-    group.position !== null &&
-    typeof (group.position as Record<string, unknown>).x === 'number' &&
-    typeof (group.position as Record<string, unknown>).y === 'number' &&
-    Array.isArray(group.insightIds) &&
-    group.insightIds.every((id: unknown) => typeof id === 'string')
+    typeof cluster.id === 'string' &&
+    typeof cluster.title === 'string' &&
+    typeof cluster.color === 'string' &&
+    typeof cluster.position === 'object' &&
+    cluster.position !== null &&
+    typeof (cluster.position as Record<string, unknown>).x === 'number' &&
+    typeof (cluster.position as Record<string, unknown>).y === 'number' &&
+    Array.isArray(cluster.insightIds) &&
+    cluster.insightIds.every((id: unknown) => typeof id === 'string')
   );
 };
 
@@ -47,8 +47,8 @@ const isExportMap = (obj: unknown): obj is ExportMap => {
   return (
     typeof map.name === 'string' &&
     (map.description === undefined || typeof map.description === 'string') &&
-    Array.isArray(map.groups) &&
-    map.groups.every(isExportGroup)
+    Array.isArray(map.clusters) &&
+    map.clusters.every(isExportCluster)
   );
 };
 
@@ -98,12 +98,12 @@ export const validateImportFile = (content: string): { isValid: boolean; data?: 
           errors.push('Missing or invalid map name');
         }
         
-        if (!Array.isArray(mapData.groups)) {
-          errors.push('Missing or invalid groups array');
+        if (!Array.isArray(mapData.clusters)) {
+          errors.push('Missing or invalid clusters array');
         } else {
-          mapData.groups.forEach((group: unknown, index: number) => {
-            if (!isExportGroup(group)) {
-              errors.push(`Group ${index + 1}: Invalid group structure`);
+          mapData.clusters.forEach((cluster: unknown, index: number) => {
+            if (!isExportCluster(cluster)) {
+              errors.push(`Cluster ${index + 1}: Invalid cluster structure`);
             }
           });
         }
@@ -132,14 +132,14 @@ export const generateExportFilename = (mapName: string, format: string): string 
 };
 
 // ✅ Fonction utilitaire pour créer des données d'export
-export const createExportData = (mapName: string, groups: ExportGroup[], description?: string): ExportMapData => {
+export const createExportData = (mapName: string, clusters: ExportCluster[], description?: string): ExportMapData => {
   return {
     version: "1.0",
     exportedAt: Date.now(),
     map: {
       name: mapName,
       description,
-      groups,
+      clusters,
     },
   };
 };

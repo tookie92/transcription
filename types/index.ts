@@ -103,12 +103,11 @@ export interface AffinityCluster {
   id: string;
   title: string;
   color: string;
-  position: { x: number; y: number }; // always absolute on canvas
+  position: { x: number; y: number };
   insightIds: string[];
-  size?: { width: number; height: number }; // explicit size, auto-expands (defaults to 400x300)
+  size?: { width: number; height: number };
 }
 
-// Backwards compatibility alias
 export type AffinityGroup = AffinityCluster;
 
 // API Request/Response types
@@ -238,7 +237,7 @@ export const CONNECTION_TYPES = [
 ] as const;
 
 export interface HistoryState {
-  clusters: AffinityCluster[];
+  groups: AffinityGroup[];
   insights: Insight[];
   timestamp: number;
   action: string;
@@ -246,9 +245,9 @@ export interface HistoryState {
 }
 
 export interface HistoryActions {
-  pushState: (clusters: AffinityCluster[], action: string, description: string) => void;
-  undo: () => AffinityCluster[] | null;
-  redo: () => AffinityCluster[] | null;
+  pushState: (groups: AffinityGroup[], action: string, description: string) => void;
+  undo: () => AffinityGroup[] | null;
+  redo: () => AffinityGroup[] | null;
   canUndo: boolean;
   canRedo: boolean;
   clear: () => void;

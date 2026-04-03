@@ -373,7 +373,7 @@ export const endSession = mutation({
     if (!map) throw new Error("Affinity map not found");
 
     const results = Array.from(groupResults.values()).map(result => {
-      const group = map.groups.find(g => g.id === result.groupId);
+      const group = (map.clusters || []).find((g: { id: string }) => g.id === result.groupId);
       return {
         groupId: result.groupId,
         groupTitle: group?.title || "Unknown Group",

@@ -16,6 +16,16 @@ import {
 import { Progress } from "@/components/ui/progress";
 import type { Position } from "@/types/figjam";
 
+interface StickyData {
+  id: string;
+  position: { x: number; y: number };
+}
+
+interface LabelData {
+  id: string;
+  position: { x: number; y: number };
+}
+
 interface PresentationModeProps {
   isActive: boolean;
   onClose: () => void;
@@ -24,8 +34,8 @@ interface PresentationModeProps {
     title: string;
     position: { x: number; y: number };
   }>;
-  stickies?: any[];
-  labels?: any[];
+  stickies?: StickyData[];
+  labels?: LabelData[];
   zoom: number;
   pan: { x: number; y: number };
   onZoomChange?: (zoom: number) => void;

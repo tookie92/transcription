@@ -82,12 +82,10 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
   const stopVotingMutation = useMutation(api.affinityMaps.stopVoting);
   const completeVotingMutation = useMutation(api.affinityMaps.completeVoting);
   const startNewRoundMutation = useMutation(api.affinityMaps.startNewVoteRound);
-  const deleteSessionMutation = useMutation(api.affinityMaps.deleteVotingSession);
 
   // ── Local State ─────────────────────────────────────────────────────────────
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
   const [isLocallyVoting, setIsLocallyVoting] = useState(false);
-  const [areVotesVisible, setAreVotesVisible] = useState(true);
 
   // Timer effect
   useEffect(() => {
@@ -162,10 +160,19 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
 
   const toggleVote = useCallback(async (clusterId: string, position?: { x: number; y: number }) => {
     if (!activeSession || !currentUserId || currentUserId === "anonymous") return;
-
+    
     // Only allow voting during voting phase
     if (activeSession.votingPhase !== "voting") {
       console.log("Voting is not in voting phase");
+      return;
+    }
+    
+    // Check if user can vote
+    const userVoteCount = myVotes?.length || 0;
+    const hasVotedForThis = myVotedClusters.has(clusterId);
+    
+    if (!hasVotedForThis && userVoteCount >= activeSession.maxDotsPerUser) {
+      console.log("No votes remaining");
       return;
     }
 
@@ -179,9 +186,9 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
         position,
       });
     } catch (error) {
-      console.error("Failed to toggle vote:", error);
+      console.error("Failed to cast vote:", error);
     }
-  }, [activeSession, currentUserId, castVoteMutation, userColor]);
+  }, [activeSession, currentUserId, myVotes, myVotedClusters, castVoteMutation, userColor]);
 
   const stopVoting = useCallback(async () => {
     if (!activeSession) return;
@@ -196,18 +203,13 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
 
   const completeVoting = useCallback(async () => {
     if (!activeSession) return;
-
+    
     try {
       await completeVotingMutation({ sessionId: activeSession._id });
-      setAreVotesVisible(true);
     } catch (error) {
       console.error("Failed to complete voting:", error);
     }
   }, [activeSession, completeVotingMutation]);
-
-  const toggleVoteVisibility = useCallback(() => {
-    setAreVotesVisible(prev => !prev);
-  }, []);
 
   const startNewRound = useCallback(async () => {
     if (!activeSession) return;
@@ -218,26 +220,6 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
       console.error("Failed to start new round:", error);
     }
   }, [activeSession, startNewRoundMutation]);
-
-  const deleteSession = useCallback(async () => {
-    if (!activeSession) return;
-    
-    try {
-      await deleteSessionMutation({ sessionId: activeSession._id });
-    } catch (error) {
-      console.error("Failed to delete session:", error);
-    }
-  }, [activeSession, deleteSessionMutation]);
-
-  const saveResults = useCallback(async () => {
-    if (!activeSession) return;
-    
-    try {
-      await completeVotingMutation({ sessionId: activeSession._id });
-    } catch (error) {
-      console.error("Failed to save results:", error);
-    }
-  }, [activeSession, completeVotingMutation]);
 
   // Get votes to display (filter based on silent mode)
   const getClusterVotes = useCallback((clusterId: string): ClusterVote[] => {
@@ -284,27 +266,21 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
     isSilentMode,
     remainingTime,
     userColor,
-
+    
     // User's votes
     myVotes: myVotedClusters,
     myVotesCount: myVotes?.length || 0,
-
+    
     // Raw votes with user IDs (for displaying voter names)
     sessionVotes,
-
-    // Visibility
-    areVotesVisible,
-
+    
     // Actions
     startVoting,
     stopVoting,
     completeVoting,
     startNewRound,
-    deleteSession,
-    saveResults,
     toggleVote,
-    toggleVoteVisibility,
-
+    
     // Helpers
     getClusterVotes,
     hasUserVotedFor,

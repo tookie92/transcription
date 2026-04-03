@@ -22,7 +22,7 @@ export const getMapAnalytics = query({
 
     // Calculer les métriques de base
     const totalInsights = insights.length;
-    const groupedInsights = map.groups.reduce((sum, group) => sum + group.insightIds.length, 0);
+    const groupedInsights = (map.clusters || []).reduce((sum: number, cluster) => sum + cluster.insightIds.length, 0);
     
     // Distribution par type
     const insightTypes = insights.reduce((acc, insight) => {
@@ -30,12 +30,12 @@ export const getMapAnalytics = query({
       return acc;
     }, {} as Record<string, number>);
 
-    // Taille moyenne des groupes
-    const avgGroupSize = map.groups.length > 0 ? groupedInsights / map.groups.length : 0;
+    // Taille moyenne des clusters
+    const avgClusterSize = (map.clusters || []).length > 0 ? groupedInsights / (map.clusters || []).length : 0;
 
-    // Groupes par taille
-    const groupSizes = map.groups.reduce((acc, group) => {
-      const size = group.insightIds.length;
+    // Clusters par taille
+    const clusterSizes = (map.clusters || []).reduce((acc, cluster) => {
+      const size = cluster.insightIds.length;
       if (size <= 3) acc.small++;
       else if (size <= 7) acc.medium++;
       else acc.large++;
@@ -47,12 +47,12 @@ export const getMapAnalytics = query({
         totalInsights,
         groupedInsights,
         ungroupedInsights: totalInsights - groupedInsights,
-        groupCount: map.groups.length,
+        clusterCount: (map.clusters || []).length,
         completionRate: totalInsights > 0 ? (groupedInsights / totalInsights) * 100 : 0,
-        avgGroupSize,
+        avgClusterSize,
       },
       insightTypes,
-      groupSizes,
+      clusterSizes,
       generatedAt: Date.now(),
     };
   },

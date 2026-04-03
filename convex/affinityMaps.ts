@@ -119,7 +119,7 @@ export const addCluster = mutation({
       size: { width: 400, height: 300 },
     };
 
-    const updatedClusters = [...map.clusters, newCluster];
+    const updatedClusters = [...(map.clusters || []), newCluster];
 
     await ctx.db.patch(args.mapId, {
       clusters: updatedClusters,
@@ -142,24 +142,24 @@ export const moveCluster = mutation({
     if (!map) throw new Error("Affinity map not found");
 
     // 🔒 on récupère la position actuelle
-    const cluster = map.clusters.find((g) => g.id === args.clusterId);
+    const cluster = (map.clusters || []).find((g) => g.id === args.clusterId);
     if (!cluster) throw new Error("Cluster not found");
 
     const oldPos = cluster.position; // ← oldPos
 
     // on met à jour
-    const updatedClusters = map.clusters.map((g) =>
+    const updatedClusters = (map.clusters || []).map((g) =>
       g.id === args.clusterId ? { ...g, position: args.position } : g
     );
 
     await ctx.db.patch(args.mapId, { clusters: updatedClusters, updatedAt: Date.now() });
 
-    // // 🔒 on log l’action
+    // // 🔒 on log l'action
     // await ctx.db.insert("activityLog", {
     //   mapId: args.mapId,
     //   userId: identity.subject,
-    //   action: "group_moved",
-    //   payload: { groupId: args.clusterId, oldValue: oldPos, newValue: args.position },
+    //   action: "cluster_moved",
+    //   payload: { clusterId: args.clusterId, oldValue: oldPos, newValue: args.position },
     //   timestamp: Date.now(),
     // });
 
@@ -180,21 +180,21 @@ export const addInsightToCluster = mutation({
     const map = await ctx.db.get(args.mapId);
     if (!map) throw new Error("Affinity map not found");
 
-    // Retirer l'insight de tous les autres groupes d'abord
-    const updatedClusters = map.clusters.map(group => {
-      // Retirer l'insight de tous les groupes
-      const filteredInsightIds = group.insightIds.filter(id => id !== args.insightId);
+    // Retirer l'insight de tous les autres clusters d'abord
+    const updatedClusters = (map.clusters || []).map(cluster => {
+      // Retirer l'insight de tous les clusters
+      const filteredInsightIds = cluster.insightIds.filter((id: string) => id !== args.insightId);
       
-      // Si c'est le groupe cible, ajouter l'insight
-      if (group.id === args.clusterId && !filteredInsightIds.includes(args.insightId)) {
+      // Si c'est le cluster cible, ajouter l'insight
+      if (cluster.id === args.clusterId && !filteredInsightIds.includes(args.insightId)) {
         return {
-          ...group,
+          ...cluster,
           insightIds: [...filteredInsightIds, args.insightId]
         };
       }
       
       return {
-        ...group,
+        ...cluster,
         insightIds: filteredInsightIds
       };
     });
@@ -239,16 +239,17 @@ export const createIndependentInsight = mutation({
       // interviewId est optionnel maintenant
     });
 
+    // Créer un nouveau cluster pour cet insight indépendant
     const newCluster = {
       id: `cluster-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      title: "Note",
+      title: "Note", // Titre plus court
       color: "#6B7280",
       position: args.position,
       insightIds: [insightId],
       size: { width: 200, height: 120 },
     };
 
-    const updatedClusters = [...map.clusters, newCluster];
+    const updatedClusters = [...(map.clusters || []), newCluster];
 
     await ctx.db.patch(args.mapId, {
       clusters: updatedClusters,
@@ -271,7 +272,8 @@ export const removeCluster = mutation({
     const map = await ctx.db.get(args.mapId);
     if (!map) throw new Error("Affinity map not found");
 
-    const updatedClusters = map.clusters.filter(cluster => cluster.id !== args.clusterId);
+    // Filtrer les clusters pour retirer celui spécifié
+    const updatedClusters = (map.clusters || []).filter(cluster => cluster.id !== args.clusterId);
 
     await ctx.db.patch(args.mapId, {
       clusters: updatedClusters,
@@ -293,11 +295,12 @@ export const removeInsightFromCluster = mutation({
     const map = await ctx.db.get(args.mapId);
     if (!map) throw new Error("Affinity map not found");
 
-    const updatedClusters = map.clusters.map(cluster => {
+    // Retirer l'insight du cluster spécifié
+    const updatedClusters = (map.clusters || []).map(cluster => {
       if (cluster.id === args.clusterId) {
         return {
           ...cluster,
-          insightIds: cluster.insightIds.filter(id => id !== args.insightId)
+          insightIds: cluster.insightIds.filter((id: string) => id !== args.insightId)
         };
       }
       return cluster;
@@ -326,7 +329,7 @@ export const resizeCluster = mutation({
     const map = await ctx.db.get(args.mapId);
     if (!map) throw new Error("Affinity map not found");
 
-    const updatedClusters = map.clusters.map(cluster =>
+    const updatedClusters = (map.clusters || []).map(cluster =>
       cluster.id === args.clusterId
         ? { ...cluster, size: args.size }
         : cluster
@@ -384,7 +387,7 @@ export const reorderInsights = mutation({
     const map = await ctx.db.get(args.mapId);
     if (!map) throw new Error("Affinity map not found");
 
-    const updatedClusters = map.clusters.map(cluster =>
+    const updatedClusters = (map.clusters || []).map(cluster =>
       cluster.id === args.clusterId
         ? { ...cluster, insightIds: args.insightIds }
         : cluster
@@ -410,7 +413,7 @@ export const updateClusterTitle = mutation({
     const map = await ctx.db.get(args.mapId);
     if (!map) throw new Error("Affinity map not found");
 
-    const updatedClusters = map.clusters.map(cluster =>
+    const updatedClusters = (map.clusters || []).map(cluster =>
       cluster.id === args.clusterId
         ? { ...cluster, title: args.title }
         : cluster
@@ -504,6 +507,7 @@ export const replaceAllClusters = mutation({
     const map = await ctx.db.get(args.mapId);
     if (!map) throw new Error("Affinity map not found");
 
+    // Determine sticky positions to save
     let stickyPositionsToSave: typeof map.stickyPositions;
     if (args.preserveStickyPositions === false) {
       stickyPositionsToSave = undefined;
@@ -831,21 +835,16 @@ export const castVote = mutation({
 
     const userVotes = allSessionVotes.filter(v => v.userId === args.userId);
     const existingVote = userVotes.find(v => v.targetId === args.targetId);
-
+    
     if (existingVote) {
       // Remove vote (toggle off)
       await ctx.db.delete(existingVote._id);
       return { action: "removed", voteId: existingVote._id };
     }
 
-    // Check if user has remaining votes - if not, recycle oldest vote
+    // Check if user has remaining votes
     if (userVotes.length >= session.maxDotsPerUser) {
-      // Remove oldest vote (first in array)
-      const oldestVote = userVotes[0];
-      if (oldestVote) {
-        await ctx.db.delete(oldestVote._id);
-      }
-      // Continue to add new vote
+      throw new Error("No votes remaining");
     }
 
     // Create vote with provided position or at cluster center

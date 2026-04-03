@@ -6,8 +6,8 @@ import { v } from "convex/values";
 export const broadcastGroupCreated = mutation({
   args: {
     mapId: v.id("affinityMaps"),
-    groupId: v.string(),
-    groupTitle: v.string(),
+    clusterId: v.string(),
+    clusterTitle: v.string(),
     createdByUserId: v.string(),
     createdByUserName: v.string(),
   },
@@ -32,10 +32,10 @@ export const broadcastGroupCreated = mutation({
         userId: member.userId,
         type: "group_created",
         title: "Nouveau groupe créé",
-        message: `${args.createdByUserName} a créé le groupe "${args.groupTitle}"`,
-        relatedId: args.groupId,
+        message: `${args.createdByUserName} a créé le groupe "${args.clusterTitle}"`,
+        relatedId: args.clusterId,
         relatedType: "group",
-        actionUrl: `/project/${project._id}/affinity?focus=${args.groupId}`,
+        actionUrl: `/project/${project._id}/affinity?focus=${args.clusterId}`,
         read: false,
         createdAt: Date.now(),
       });

@@ -280,7 +280,8 @@ function DraggableGroup({
               <motion.div
                 key={insightId}
                 draggable
-                onDragStart={(e) => onInsightDragStart(e as unknown as React.DragEvent, insightId)}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                onDragStart={(e) => onInsightDragStart(e as any, insightId)}
                 onDragEnd={onInsightDragEnd}
                 animate={{
                   scale: draggedInsightId === insightId ? 0.9 : 1,

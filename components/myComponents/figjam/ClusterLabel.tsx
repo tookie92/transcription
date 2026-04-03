@@ -1,48 +1,11 @@
 "use client";
 
 import React, { useCallback, useRef, useState, memo, useEffect } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import type { ClusterLabelData, StickyNoteData } from "@/types/figjam";
-import { X, MoreHorizontal, GripVertical, Vote } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VoteBadge } from "./VoteBadge";
-
-interface Voter {
-  userId: string;
-  name: string;
-  color: string;
-}
-
-interface ClusterLabelProps {
-  cluster: ClusterLabelData;
-  memberStickies: StickyNoteData[];
-  isDragging: boolean;
-  isLocked?: boolean;
-  isDropTarget?: boolean;
-  isVotingActive?: boolean;
-  isVotingRevealed?: boolean;
-  voteCount?: number;
-  voteUsers?: Array<{ userId: string; name: string; color: string }>;
-  // Current user info for voting
-  currentUserId?: string;
-  currentUserColor?: string;
-  currentUserName?: string;
-  hasUserVoted?: boolean;
-  onDragStart: () => void;
-  onDrag: (dx: number, dy: number) => void;
-  onDragEnd: (finalX: number, finalY: number) => void;
-  onLabelChange?: (newLabel: string) => void;
-  onSelect?: (id: string, multi: boolean) => void;
-  onRemoveSticky?: (stickyId: string) => void;
-  onStickyClick?: (stickyId: string) => void;
-  onDrop?: (stickyId: string) => void;
-  onContextMenu?: (e: React.MouseEvent, clusterId: string) => void;
-  onResize?: (clusterId: string, newHeight: number) => void;
-  onClusterClick?: (clusterId: string) => void;
-  onAutoFit?: (clusterId: string) => void;
-  triggerEdit?: boolean;
-  triggerAutoFit?: boolean;
-}
 
 const DEFAULT_BORDER_COLOR = "#B8B4FF";
 const DEFAULT_BG_COLOR = "rgba(184, 180, 255, 0.05)";
@@ -220,7 +183,6 @@ interface ClusterLabelProps {
   isDropTarget?: boolean;
   isVotingActive?: boolean;
   isVotingRevealed?: boolean;
-  areVotesVisible?: boolean;
   voteCount?: number;
   voteUsers?: Array<{ userId: string; name: string; color: string }>;
   // Current user info for voting
@@ -252,7 +214,6 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   isDropTarget = false,
   isVotingActive = false,
   isVotingRevealed = false,
-  areVotesVisible = true,
   voteCount = 0,
   voteUsers = [],
   currentUserId,
@@ -352,8 +313,20 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       
       const target = e.target as HTMLElement;
       if (target.closest('input')) return;
-      if (target.closest('[data-sticky-card]')) return;
       if (target.closest('button')) return;
+
+      // During voting mode - clicking sticky cards still works, clicking cluster votes
+      if (target.closest('[data-sticky-card]')) {
+        // Let sticky cards handle their own events
+        return;
+      }
+
+      // During voting - click anywhere on cluster (not sticky) to vote
+      if (isVotingActive && !isVotingRevealed) {
+        e.stopPropagation();
+        onClusterClick?.(cluster.id);
+        return;
+      }
 
       e.stopPropagation();
       e.preventDefault();
@@ -366,17 +339,28 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
 
       const startX = e.clientX;
       const startY = e.clientY;
+      let hasMoved = false;
 
       const handlePointerMove = (moveEvent: PointerEvent) => {
         const dx = moveEvent.clientX - startX;
         const dy = moveEvent.clientY - startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+          hasMoved = true;
+        }
         onDrag(dx, dy);
       };
 
       const handlePointerUp = (upEvent: PointerEvent) => {
-        const finalX = cluster.position.x + (upEvent.clientX - startX);
-        const finalY = cluster.position.y + (upEvent.clientY - startY);
-        onDragEnd(finalX, finalY);
+        if (!hasMoved) {
+          // This was a click, not a drag - voting
+          if (isVotingActive && !isVotingRevealed) {
+            onClusterClick?.(cluster.id);
+          }
+        } else {
+          const finalX = cluster.position.x + (upEvent.clientX - startX);
+          const finalY = cluster.position.y + (upEvent.clientY - startY);
+          onDragEnd(finalX, finalY);
+        }
         window.removeEventListener("pointermove", handlePointerMove);
         window.removeEventListener("pointerup", handlePointerUp);
       };
@@ -384,7 +368,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       window.addEventListener("pointermove", handlePointerMove);
       window.addEventListener("pointerup", handlePointerUp);
     },
-    [canInteract, cluster.id, cluster.position.x, cluster.position.y, onDragStart, onDrag, onDragEnd, onSelect]
+    [canInteract, isVotingActive, isVotingRevealed, cluster.id, cluster.position.x, cluster.position.y, onDragStart, onDrag, onDragEnd, onSelect, onClusterClick]
   );
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
@@ -522,25 +506,6 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         )}
       </div>
 
-      {/* Voting controls - votes row above cluster header */}
-      <div
-        className="absolute left-0 right-0"
-        style={{
-          top: -80,
-        }}
-      >
-        {/* Votes displayed as row above the cluster tag */}
-        {areVotesVisible && (isVotingActive || isVotingRevealed) && voteCount > 0 && (
-          <VoteBadge
-            voteCount={voteCount}
-            voters={voteUsers || []}
-            isRevealed={isVotingRevealed}
-            hasUserVoted={hasUserVoted}
-            displayMode="row"
-          />
-        )}
-      </div>
-
       {/* Cluster header section */}
       <div
         className="absolute flex items-center gap-2"
@@ -549,20 +514,72 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
           right: 0,
         }}
       >
-        {/* Sticky count */}
-        <span
-          className="pointer-events-none"
-          style={{
-            fontFamily: "'DM Sans', sans-serif",
-            fontSize: 11,
-            color: labelColor,
-            opacity: 0.7,
-          }}
-        >
-          {memberStickies.length}
-        </span>
+        {/* Vote badge - visible when votes exist */}
+        {(isVotingActive || isVotingRevealed) && voteCount > 0 && (
+          <VoteBadge
+            voteCount={voteCount}
+            voters={voteUsers || []}
+            isRevealed={isVotingRevealed}
+            hasUserVoted={hasUserVoted}
+            compact
+          />
+        )}
 
-        {isHovered && !isEditing && (
+        {/* Vote button during voting - always visible */}
+        {isVotingActive && !isVotingRevealed && (
+          <motion.button
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            whileHover={{ scale: 1.15 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onClusterClick?.(cluster.id);
+            }}
+            className={cn(
+              "w-8 h-8 rounded-full flex items-center justify-center",
+              "border-2 shadow-md transition-all duration-200 cursor-pointer",
+              hasUserVoted
+                ? "bg-primary border-primary text-primary-foreground"
+                : "bg-white border-slate-300 text-slate-400 hover:border-primary hover:text-primary"
+            )}
+            style={!hasUserVoted ? { 
+              borderColor: currentUserColor,
+              boxShadow: `0 0 0 2px ${currentUserColor}40`
+            } : {}}
+            title={hasUserVoted ? "Remove vote" : "Vote!"}
+          >
+            {hasUserVoted ? (
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+            ) : (
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: currentUserColor }}
+              />
+            )}
+          </motion.button>
+        )}
+
+        {/* Sticky count - hidden during voting */}
+        {!isVotingActive && (
+          <span
+            className="pointer-events-none"
+            style={{
+              fontFamily: "'DM Sans', sans-serif",
+              fontSize: 11,
+              color: labelColor,
+              opacity: 0.7,
+            }}
+          >
+            {memberStickies.length}
+          </span>
+        )}
+
+        {/* Three dots menu - hidden during voting */}
+        {!isVotingActive && isHovered && !isEditing && (
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -575,48 +592,6 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
           </button>
         )}
       </div>
-
-      {/* Voting Interaction - Click with halo effect */}
-      <AnimatePresence>
-        {isVotingActive && !isVotingRevealed && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 rounded-xl cursor-pointer z-10"
-            style={{ pointerEvents: 'auto' }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onClusterClick?.(cluster.id);
-            }}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-          >
-            {/* Halo effect for click interaction */}
-            {isHovered && (
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.8, opacity: 0 }}
-                className="absolute inset-0 rounded-xl pointer-events-none"
-                style={{
-                  backgroundColor: currentUserColor || "#8B5CF6",
-                  opacity: 0.15,
-                filter: "blur(12px)",
-                  transform: "scale(1.1)",
-                }}
-              />
-            )}
-
-            {/* Hidden votes placeholder */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="bg-gray-200/80 rounded-lg px-2 py-1 text-xs font-medium text-gray-500">
-                ?
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Stickies grid */}
       <div
