@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Group, 
@@ -16,8 +16,11 @@ import {
   Maximize2,
   Minimize2,
   Move,
-  Palette
+  Palette,
+  Sparkles,
+  Loader2
 } from "lucide-react";
+import { ClusterAIRename } from "./ClusterAIRename";
 
 export interface ContextMenuAction {
   id: string;
@@ -167,7 +170,7 @@ export function LassoContextMenu({
   const actions: ContextMenuAction[] = [
     {
       id: "group",
-      label: "Grouper en cluster",
+      label: "Group into cluster",
       icon: <Group className="w-4 h-4" />,
       shortcut: "Ctrl+G",
       onClick: onGroup,
@@ -186,20 +189,20 @@ export function LassoContextMenu({
     },
     {
       id: "comment",
-      label: "Ajouter un commentaire",
+      label: "Add comment",
       icon: <MessageSquare className="w-4 h-4" />,
       onClick: onComment,
     },
     {
       id: "duplicate",
-      label: "Dupliquer",
+      label: "Duplicate",
       icon: <Copy className="w-4 h-4" />,
       shortcut: "Ctrl+D",
       onClick: onDuplicate,
     },
     {
       id: "delete",
-      label: "Supprimer",
+      label: "Delete",
       icon: <Trash2 className="w-4 h-4" />,
       shortcut: "Del",
       variant: "danger",
@@ -213,7 +216,7 @@ export function LassoContextMenu({
       position={position}
       onClose={onClose}
       actions={actions}
-      title={`${selectedIds.length} élément${selectedIds.length > 1 ? "s" : ""} sélectionné${selectedIds.length > 1 ? "s" : ""}`}
+      title={`${selectedIds.length} item${selectedIds.length > 1 ? "s" : ""} selected`}
     />
   );
 }
@@ -277,7 +280,7 @@ export function StickyContextMenu({
         },
         {
           id: "cluster-move",
-          label: "Déplacer vers cluster",
+      label: "Move to cluster",
           icon: <AlignLeft className="w-4 h-4" />,
           onClick: onMoveToCluster,
         },
@@ -313,73 +316,36 @@ export function StickyContextMenu({
 interface ClusterContextMenuProps {
   clusterId: string;
   clusterTitle: string;
+  stickyTexts?: string[];
   position: { x: number; y: number };
   onClose: () => void;
-  onRename: () => void;
+  onRename: (newName: string) => void;
   onAutoFit: () => void;
   onDelete: () => void;
-  onChangeColor: () => void;
-  onDuplicate: () => void;
-  onComment: () => void;
   isOpen: boolean;
 }
 
 export function ClusterContextMenu({
   clusterId,
   clusterTitle,
+  stickyTexts = [],
   position,
   onClose,
   onRename,
   onAutoFit,
   onDelete,
-  onChangeColor,
-  onDuplicate,
-  onComment,
   isOpen,
 }: ClusterContextMenuProps) {
   const actions: ContextMenuAction[] = [
     {
-      id: "rename",
-      label: "Renommer",
-      icon: <Edit3 className="w-4 h-4" />,
-      shortcut: "F2",
-      onClick: onRename,
-    },
-    {
-      id: "color",
-      label: "Changer la couleur",
-      icon: <Palette className="w-4 h-4" />,
-      onClick: onChangeColor,
-    },
-    {
       id: "autofit",
-      label: "Ajuster à la taille",
+      label: "Auto-fit to content",
       icon: <Maximize2 className="w-4 h-4" />,
-      shortcut: "Ctrl+Shift+F",
       onClick: onAutoFit,
     },
     {
-      id: "move",
-      label: "Déplacer les notes ici",
-      icon: <Move className="w-4 h-4" />,
-      onClick: () => {},
-    },
-    {
-      id: "comment",
-      label: "Ajouter un commentaire",
-      icon: <MessageSquare className="w-4 h-4" />,
-      onClick: onComment,
-    },
-    {
-      id: "duplicate",
-      label: "Dupliquer",
-      icon: <Copy className="w-4 h-4" />,
-      shortcut: "Ctrl+D",
-      onClick: onDuplicate,
-    },
-    {
       id: "delete",
-      label: "Supprimer le cluster",
+      label: "Delete cluster",
       icon: <Trash2 className="w-4 h-4" />,
       shortcut: "Del",
       variant: "danger",

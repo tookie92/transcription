@@ -55,17 +55,17 @@ const WORKSHOP_TEMPLATES: WorkshopTemplate[] = [
     icon: <ClipboardList className="w-5 h-5" />,
     color: "bg-emerald-500",
     stickyTypes: [
-      { type: "positive", label: "Positif", description: "Commentaire positif", color: "green" },
-      { type: "negative", label: "Négatif", description: "Insatisfaction", color: "pain-point" },
-      { type: "suggestion", label: "Suggestion", description: "Proposition", color: "yellow" },
-      { type: "question", label: "Question", description: "Question posée", color: "blue" },
+      { type: "positive", label: "Positive", description: "Positive feedback", color: "green" },
+      { type: "negative", label: "Negative", description: "Pain point", color: "pain-point" },
+      { type: "suggestion", label: "Suggestion", description: "Idea or suggestion", color: "yellow" },
+      { type: "question", label: "Question", description: "Question raised", color: "blue" },
     ],
-    suggestedLabels: ["Produit", "Service", "Prix", "Support", "Fonctionnalité"],
+    suggestedLabels: ["Product", "Service", "Price", "Support", "Feature"],
   },
   {
     id: "general",
     name: "Affinity Mapping",
-    description: "Méthode classique NNGroup pour organiser vos idées",
+    description: "Classic NNGroup method to organize your ideas",
     icon: <Sparkles className="w-5 h-5" />,
     color: "bg-violet-500",
     stickyTypes: [

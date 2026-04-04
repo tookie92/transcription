@@ -3,9 +3,15 @@
 import React, { useCallback, useRef, useState, memo, useEffect } from "react";
 import { motion } from "framer-motion";
 import type { ClusterLabelData, StickyNoteData } from "@/types/figjam";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { VoteBadge } from "./VoteBadge";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 
 const DEFAULT_BORDER_COLOR = "#B8B4FF";
 const DEFAULT_BG_COLOR = "rgba(184, 180, 255, 0.05)";
@@ -148,10 +154,10 @@ function RealStickyCard({
           </button>
           
           {/* Content area */}
-          <div ref={contentRef} className="flex-1 pr-5">
+          <div ref={contentRef} className="flex-1 pr-5 overflow-hidden">
             <p 
-              className="text-[13px] font-medium leading-relaxed text-[#1d1d1d]"
-              style={{ color: colors.text }}
+              className="text-[13px] font-medium leading-relaxed text-[#1d1d1b] break-words"
+              style={{ color: colors.text, wordBreak: "break-word", overflowWrap: "break-word" }}
             >
               {sticky.content || "Empty"}
             </p>
@@ -185,7 +191,6 @@ interface ClusterLabelProps {
   isVotingRevealed?: boolean;
   voteCount?: number;
   voteUsers?: Array<{ userId: string; name: string; color: string }>;
-  // Current user info for voting
   currentUserId?: string;
   currentUserColor?: string;
   currentUserName?: string;
@@ -204,6 +209,7 @@ interface ClusterLabelProps {
   onAutoFit?: (clusterId: string) => void;
   triggerEdit?: boolean;
   triggerAutoFit?: boolean;
+  onOpenAIRename?: (clusterId: string) => void;
 }
 
 export const ClusterLabel = memo(function ClusterLabelComponent({
@@ -234,45 +240,45 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   onAutoFit,
   triggerEdit,
   triggerAutoFit,
+  onOpenAIRename,
 }: ClusterLabelProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [needsAutoFit, setNeedsAutoFit] = useState(false);
+  const [aiPopoverOpen, setAiPopoverOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const clusterRef = useRef<HTMLDivElement>(null);
 
   const isDraggingActive = isDragging;
   const canInteract = !isLocked && !isEditing;
+  const hasInsights = memberStickies.length > 0;
 
-  // Calculate grid dimensions
+  // Calculate grid dimensions based on actual sticky content
   const CLUSTER_WIDTH = cluster.width ?? 400;
   const COLS = Math.min(MAX_COLS, Math.max(1, Math.floor((CLUSTER_WIDTH - CLUSTER_PADDING * 2) / (CARD_WIDTH + CARD_GAP))));
   const rows = Math.ceil(memberStickies.length / COLS) || 1;
-  const ESTIMATED_STICKY_HEIGHT = 140;
-  const contentHeight = rows * (ESTIMATED_STICKY_HEIGHT + CARD_GAP) - CARD_GAP + CLUSTER_PADDING * 2;
-  const AUTO_HEIGHT = Math.max(200, contentHeight + HEADER_OFFSET + 20);
+  
+  // Calculate height based on actual sticky content
+  const CARD_HEIGHT_WITH_PADDING = 166; // minHeight + padding
+  const MIN_CLUSTER_HEIGHT = 200;
+  const HEADER_AND_PADDING = HEADER_OFFSET + CLUSTER_PADDING + 20;
+  const calculatedHeight = rows * (CARD_HEIGHT_WITH_PADDING + CARD_GAP) - CARD_GAP + HEADER_AND_PADDING;
+  const AUTO_HEIGHT = Math.max(MIN_CLUSTER_HEIGHT, calculatedHeight);
 
-  // Resize cluster when content changes or when auto-fit is triggered
-  useEffect(() => {
-    if (onResize && cluster.height !== AUTO_HEIGHT) {
-      onResize(cluster.id, AUTO_HEIGHT);
-    }
-  }, [AUTO_HEIGHT, cluster.id, cluster.height, onResize]);
-
-  // Auto-fit when explicitly requested - only once
+  // Auto-fit when explicitly requested
   const autoFitTriggeredRef = useRef(false);
   useEffect(() => {
     if (needsAutoFit && onResize && !autoFitTriggeredRef.current) {
       autoFitTriggeredRef.current = true;
-      onResize(cluster.id, AUTO_HEIGHT);
-      // Clear after a tick
+      const newHeight = Math.max(MIN_CLUSTER_HEIGHT, calculatedHeight);
+      onResize(cluster.id, newHeight);
+      setNeedsAutoFit(false);
       setTimeout(() => {
-        setNeedsAutoFit(false);
         autoFitTriggeredRef.current = false;
-      }, 0);
+      }, 100);
     }
-  }, [needsAutoFit, cluster.id, onResize]);
+  }, [needsAutoFit, cluster.id, onResize, calculatedHeight]);
 
   // Expose auto-fit function via ref
   useEffect(() => {
@@ -460,9 +466,9 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         }}
       />
 
-      {/* Header with title */}
+      {/* Header with title and AI button */}
       <div
-        className="absolute"
+        className="absolute group flex items-center gap-1"
         style={{
           top: -28,
           left: 0,
@@ -490,19 +496,34 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
             onFocus={(e) => e.target.select()}
           />
         ) : (
-          <span 
-            className="cursor-text"
-            style={{ 
-              fontFamily: "'DM Sans', sans-serif",
-              fontWeight: 600,
-              fontSize: 13,
-              color: labelColor,
-              letterSpacing: "0.3px",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {cluster.text || "New Cluster"}
-          </span>
+          <>
+            <span 
+              className="cursor-text"
+              style={{ 
+                fontFamily: "'DM Sans', sans-serif",
+                fontWeight: 600,
+                fontSize: 13,
+                color: labelColor,
+                letterSpacing: "0.3px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {cluster.text || "New Cluster"}
+            </span>
+            {/* AI Rename Button - Show on hover when cluster has insights */}
+            {hasInsights && (
+              <button
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  onOpenAIRename?.(cluster.id);
+                }}
+                className="p-1 rounded-md bg-primary/20 hover:bg-primary/30 transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+                title="Rename with AI"
+              >
+                <Sparkles className="w-4 h-4 text-primary" />
+              </button>
+            )}
+          </>
         )}
       </div>
 
@@ -514,15 +535,46 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
           right: 0,
         }}
       >
-        {/* Vote badge - visible when votes exist */}
-        {(isVotingActive || isVotingRevealed) && voteCount > 0 && (
-          <VoteBadge
-            voteCount={voteCount}
-            voters={voteUsers || []}
-            isRevealed={isVotingRevealed}
-            hasUserVoted={hasUserVoted}
-            compact
-          />
+        {/* Real sticker-style dots for votes */}
+        {((isVotingActive && !isVotingRevealed && voteCount > 0) || (isVotingRevealed && voteCount > 0)) && (
+          <div className="absolute -top-3 left-0 flex -space-x-1">
+            {/* Show user's dot during voting */}
+            {isVotingActive && !isVotingRevealed && hasUserVoted && (
+              <motion.div
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                className="w-5 h-5 rounded-full border-2 border-white shadow-md"
+                style={{ backgroundColor: currentUserColor }}
+              />
+            )}
+            {/* Show hidden count during voting */}
+            {isVotingActive && !isVotingRevealed && voteCount > 0 && (
+              <div className="w-5 h-5 rounded-full bg-slate-800 border-2 border-white shadow-md flex items-center justify-center">
+                <span className="text-[9px] font-bold text-white">?</span>
+              </div>
+            )}
+            {/* Show revealed dots */}
+            {isVotingRevealed && voteUsers && voteUsers.length > 0 && (
+              <>
+                {voteUsers.slice(0, 8).map((voter, i) => (
+                  <motion.div
+                    key={voter.userId}
+                    initial={{ scale: 0, y: -10 }}
+                    animate={{ scale: 1, y: 0 }}
+                    transition={{ delay: i * 0.03 }}
+                    className="w-5 h-5 rounded-full border-2 border-white shadow-md"
+                    style={{ backgroundColor: voter.color }}
+                    title={voter.name}
+                  />
+                ))}
+                {voteUsers.length > 8 && (
+                  <div className="w-5 h-5 rounded-full bg-slate-700 border-2 border-white shadow-md flex items-center justify-center">
+                    <span className="text-[8px] font-bold text-white">+{voteUsers.length - 8}</span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         )}
 
         {/* Vote button during voting - always visible */}
@@ -538,7 +590,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
               onClusterClick?.(cluster.id);
             }}
             className={cn(
-              "w-8 h-8 rounded-full flex items-center justify-center",
+              "w-7 h-7 rounded-full flex items-center justify-center",
               "border-2 shadow-md transition-all duration-200 cursor-pointer",
               hasUserVoted
                 ? "bg-primary border-primary text-primary-foreground"
@@ -551,12 +603,12 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
             title={hasUserVoted ? "Remove vote" : "Vote!"}
           >
             {hasUserVoted ? (
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
               </svg>
             ) : (
               <div
-                className="w-3 h-3 rounded-full"
+                className="w-2.5 h-2.5 rounded-full"
                 style={{ backgroundColor: currentUserColor }}
               />
             )}
@@ -596,7 +648,10 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       {/* Stickies grid */}
       <div
         data-sticky-grid
-        className="absolute overflow-visible"
+        className={cn(
+          "absolute overflow-visible",
+          isVotingActive && !isVotingRevealed && "pointer-events-none"
+        )}
         style={{
           left: CLUSTER_PADDING,
           right: CLUSTER_PADDING,
@@ -608,8 +663,15 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
           alignContent: "start",
           justifyContent: "start",
         }}
-        onDragOver={(e) => e.preventDefault()}
+        onDragOver={(e) => {
+          if (isVotingActive && !isVotingRevealed) {
+            e.preventDefault();
+            return;
+          }
+          e.preventDefault();
+        }}
         onDrop={(e) => {
+          if (isVotingActive && !isVotingRevealed) return;
           e.preventDefault();
           const stickyId = e.dataTransfer.getData("application/sticky-id");
           if (stickyId && onDrop) {
@@ -621,13 +683,34 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
           <div 
             key={sticky.id} 
             data-sticky-card 
-            style={{ pointerEvents: "auto" }}
-            onPointerDown={(e) => e.stopPropagation()}
+            style={{ 
+              pointerEvents: isVotingActive && !isVotingRevealed ? "none" : "auto",
+            }}
+            onPointerDown={(e) => {
+              if (isVotingActive && !isVotingRevealed) {
+                e.stopPropagation();
+                onClusterClick?.(cluster.id);
+              } else {
+                e.stopPropagation();
+              }
+            }}
+            onClick={(e) => {
+              if (isVotingActive && !isVotingRevealed) {
+                e.stopPropagation();
+                onClusterClick?.(cluster.id);
+              }
+            }}
+            className={isVotingActive && !isVotingRevealed ? "select-none" : ""}
             onDragStart={(e) => {
+              if (isVotingActive && !isVotingRevealed) {
+                e.preventDefault();
+                return;
+              }
               e.dataTransfer.setData("application/sticky-id", sticky.id);
               e.dataTransfer.effectAllowed = "move";
             }}
             onDragEnd={(e) => {
+              if (isVotingActive && !isVotingRevealed) return;
               // If drag ended outside this cluster, remove the sticky
               const rect = clusterRef.current?.getBoundingClientRect();
               if (rect) {
@@ -652,8 +735,8 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         ))}
       </div>
 
-      {/* Empty state */}
-      {memberStickies.length === 0 && (
+      {/* Empty state - hidden during voting */}
+      {memberStickies.length === 0 && !isVotingActive && (
         <div
           className="absolute inset-0 flex items-center justify-center pointer-events-none"
           style={{ top: HEADER_OFFSET }}

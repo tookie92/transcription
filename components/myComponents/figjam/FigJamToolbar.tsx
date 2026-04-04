@@ -1,11 +1,36 @@
 "use client";
 
-import React from "react";
-import type { ToolType, StickyColor } from "@/types/figjam";
-import { StickyColorPicker } from "./StickyColorPicker";
+import React, { useState } from "react";
+import type { ToolType } from "@/types/figjam";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { MousePointer2, Hand, ArrowLeft, Sparkles, MessageSquare, Presentation, DownloadCloud } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MousePointer2, Hand, ArrowLeft, Sparkles, MessageSquare, Presentation, DownloadCloud, Vote, Layers, Trophy, RotateCcw, Plus } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+
+interface VotingConfig {
+  dotsPerUser: number;
+  durationMinutes: number | null;
+  prompt: string;
+}
 
 interface FigJamToolbarProps {
   activeTool: ToolType;
@@ -15,9 +40,6 @@ interface FigJamToolbarProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onZoomReset: () => void;
-  showStickyPicker?: boolean;
-  onToggleStickyPicker?: () => void;
-  onAddSticky: (color?: StickyColor) => void;
   onBack?: () => void;
   ungroupedCount?: number;
   onToggleAIGroupingPanel?: () => void;
@@ -30,7 +52,36 @@ interface FigJamToolbarProps {
   projectName?: string;
   newInsightsCount?: number;
   onImportInsights?: () => void;
+  isVotingActive?: boolean;
+  onCloseSidebar?: () => void;
+  voting?: {
+    session: { isActive: boolean; votingPhase: string } | null;
+    isVoting: boolean;
+    isRevealed: boolean;
+    myVotesCount: number;
+    maxDotsPerUser: number;
+    userColor: string;
+    remainingTime: number | null;
+    startVoting: (config: { dotsPerUser: number; durationMinutes: number | null; prompt: string }) => Promise<void>;
+    stopVoting: () => Promise<void>;
+    completeVoting: () => Promise<void>;
+    startNewRound: () => Promise<void>;
+  };
+  voteResults?: Array<{
+    clusterId: string;
+    title: string;
+    voteCount: number;
+    color?: string;
+  }>;
+  totalVotes?: number;
+  onCreateCluster?: (title: string) => void;
 }
+
+const PRESET_CONFIGS = [
+  { name: "Quick", dots: 3, duration: null },
+  { name: "Standard", dots: 5, duration: null },
+  { name: "Timed", dots: 5, duration: 5 },
+];
 
 export function FigJamToolbar({
   activeTool,
@@ -40,9 +91,6 @@ export function FigJamToolbar({
   onZoomIn,
   onZoomOut,
   onZoomReset,
-  showStickyPicker,
-  onToggleStickyPicker,
-  onAddSticky,
   onBack,
   ungroupedCount = 0,
   onToggleAIGroupingPanel,
@@ -55,7 +103,34 @@ export function FigJamToolbar({
   projectName,
   newInsightsCount = 0,
   onImportInsights,
+  isVotingActive = false,
+  onCloseSidebar,
+  voting,
+  voteResults,
+  totalVotes = 0,
+  onCreateCluster,
 }: FigJamToolbarProps) {
+  const [showVotingConfig, setShowVotingConfig] = useState(false);
+  const [showClusterDialog, setShowClusterDialog] = useState(false);
+  const [clusterTitle, setClusterTitle] = useState("");
+  const [dotsPerUser, setDotsPerUser] = useState(5);
+  const [durationMinutes, setDurationMinutes] = useState<number | null>(null);
+  const [prompt, setPrompt] = useState("Vote for priorities");
+
+  const handleClusterTool = () => {
+    if (activeTool === "cluster") {
+      onToolChange("select");
+    } else {
+      setShowClusterDialog(true);
+    }
+  };
+
+  const handleCreateCluster = (title: string) => {
+    onCreateCluster?.(title);
+    setClusterTitle("");
+    setShowClusterDialog(false);
+    onToolChange("select");
+  };
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -117,18 +192,93 @@ export function FigJamToolbar({
 
             <div className="w-px h-6 bg-border mx-1" />
 
-            {/* Sticky Note */}
+            {/* Create Cluster - Tool */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <StickyColorPicker 
-                  onSelectColor={onAddSticky} 
-                  isActive={activeTool === "sticky"}
-                  isOpen={showStickyPicker}
-                  onOpenChange={onToggleStickyPicker}
-                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "w-10 h-10 rounded-xl",
+                    activeTool === "cluster" && "bg-primary/20 text-primary ring-2 ring-primary/30"
+                  )}
+                  onClick={handleClusterTool}
+                >
+                  <Layers className="w-5 h-5" />
+                </Button>
               </TooltipTrigger>
-              <TooltipContent side="top" className="bg-card border-border shadow-lg">Sticky Note (S)</TooltipContent>
+              <TooltipContent side="top" className="bg-card border-border shadow-lg">
+                {activeTool === "cluster" ? "Click canvas to create" : "New Cluster (C)"}
+              </TooltipContent>
             </Tooltip>
+
+            {/* Voting - FigJam style */}
+            {voting && (
+              <>
+                <div className="w-px h-6 bg-border mx-1" />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "w-10 h-10 rounded-xl relative transition-all",
+                        voting.isVoting && "bg-primary text-primary-foreground hover:bg-primary/90",
+                        voting.isRevealed && "bg-primary text-primary-foreground hover:bg-primary/90",
+                        !voting.isVoting && !voting.isRevealed && "text-muted-foreground hover:text-foreground hover:bg-accent"
+                      )}
+                    >
+                      <Vote className="w-5 h-5" />
+                      {(voting.isVoting || voting.isRevealed) && voteResults && voteResults.length > 0 && (
+                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-background text-primary text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm border border-border">
+                          {totalVotes}
+                        </span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent side="top" align="center" className="w-80 p-0 overflow-hidden bg-card border-border shadow-lg">
+                    {voting.isRevealed && voteResults && voteResults.length > 0 ? (
+                      <VoteResultsContent
+                        results={voteResults}
+                        totalVotes={totalVotes}
+                        onNewRound={() => voting.startNewRound()}
+                        onClose={() => voting.stopVoting()}
+                      />
+                    ) : voting.isVoting ? (
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center gap-2 text-primary">
+                          <Vote className="w-5 h-5 animate-pulse" />
+                          <span className="font-medium">Voting in progress</span>
+                        </div>
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-2xl">{voting.userColor && <span style={{ color: voting.userColor }}>●</span>}</span>
+                          <span className="text-sm text-muted-foreground">
+                            {voting.myVotesCount}/{voting.maxDotsPerUser} votes used
+                          </span>
+                        </div>
+                        <p className="text-xs text-center text-muted-foreground">
+                          Click on clusters to vote
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Vote className="w-5 h-5 text-primary" />
+                          <span className="font-medium text-card-foreground">Dot Voting</span>
+                        </div>
+                        <Button
+                          onClick={() => setShowVotingConfig(true)}
+                          className="w-full gap-2"
+                        >
+                          <Vote className="w-4 h-4" />
+                          Start Voting
+                        </Button>
+                      </div>
+                    )}
+                  </PopoverContent>
+                </Popover>
+              </>
+            )}
 
             <div className="w-px h-6 bg-border mx-1" />
 
@@ -176,7 +326,7 @@ export function FigJamToolbar({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="bg-card border-border shadow-lg">
-                  {bubbleCount > 0 ? `${bubbleCount} discussion${bubbleCount > 1 ? "s" : ""}` : "Discuter (M)"}
+                  {bubbleCount > 0 ? `${bubbleCount} discussion${bubbleCount > 1 ? "s" : ""}` : "Discuss (M)"}
                 </TooltipContent>
             </Tooltip>
           </div>
@@ -222,7 +372,7 @@ export function FigJamToolbar({
                 onClick={onImportInsights}
               >
                 <DownloadCloud className="w-4 h-4" />
-                <span className="text-sm font-medium">Importer</span>
+                <span className="text-sm font-medium">Import</span>
                 {newInsightsCount > 0 && (
                   <span className="ml-1 px-1.5 py-0.5 bg-primary text-primary-foreground text-xs font-bold rounded-full min-w-[18px] text-center">
                     {newInsightsCount}
@@ -231,9 +381,61 @@ export function FigJamToolbar({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right" className="bg-card border-border shadow-lg">
-              {newInsightsCount > 0 ? `Importer ${newInsightsCount} insight${newInsightsCount > 1 ? "s" : ""}` : "Aucun insight à importer"}
+              {newInsightsCount > 0 ? `Import ${newInsightsCount} insight${newInsightsCount > 1 ? "s" : ""}` : "No insights to import"}
             </TooltipContent>
           </Tooltip>
+
+          {/* ── Voting Progress Panel ── */}
+          {voting?.isVoting && (
+            <div className="bg-primary/10 border border-primary/20 rounded-xl shadow-lg px-4 py-2 flex items-center gap-3">
+              <Vote className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium text-primary">Vote!</span>
+              <div className="flex items-center gap-1.5">
+                {Array.from({ length: voting.maxDotsPerUser }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "w-4 h-4 rounded-full border-2 transition-all",
+                      i < voting.myVotesCount
+                        ? "border-transparent"
+                        : "border-primary/30 bg-transparent"
+                    )}
+                    style={{
+                      backgroundColor: i < voting.myVotesCount ? voting.userColor : "transparent",
+                    }}
+                  />
+                ))}
+              </div>
+              {voting.remainingTime !== null && voting.remainingTime > 0 && (
+                <div className="flex items-center gap-1 text-primary font-mono text-sm">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <span>{Math.floor(voting.remainingTime / 60000)}:{((voting.remainingTime % 60000) / 1000).toFixed(0).padStart(2, '0')}</span>
+                </div>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowVotingConfig(true)}
+                className="ml-1 text-primary hover:text-primary/80 hover:bg-primary/10"
+                title="Settings"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                </svg>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => voting.completeVoting()}
+                className="text-primary border-primary/30 hover:bg-primary/10"
+              >
+                Reveal
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* ── Zoom controls (bottom right) ── */}
@@ -267,7 +469,302 @@ export function FigJamToolbar({
           </Tooltip>
           </div>
         </div>
+
+        {/* ── Voting Config Dialog ── */}
+        <Dialog open={showVotingConfig} onOpenChange={setShowVotingConfig}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Vote className="w-5 h-5 text-amber-500" />
+                Start Dot Voting
+              </DialogTitle>
+              <DialogDescription>
+                Configure your voting session. Click on clusters to vote.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 py-4">
+              {/* Presets */}
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Quick Presets
+                </Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {PRESET_CONFIGS.map((preset) => (
+                    <button
+                      key={preset.name}
+                      onClick={() => {
+                        setDotsPerUser(preset.dots);
+                        setDurationMinutes(preset.duration);
+                      }}
+                      className={cn(
+                        "flex flex-col items-center p-3 rounded-xl border text-center transition-all",
+                        dotsPerUser === preset.dots && durationMinutes === preset.duration
+                          ? "border-primary bg-primary/5 ring-1 ring-primary"
+                          : "border-border hover:border-primary/50 hover:bg-muted/50"
+                      )}
+                    >
+                      <span className="font-medium text-sm">{preset.name}</span>
+                      <span className="text-xs text-muted-foreground">{preset.dots} votes</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dots per user */}
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Votes per Person: {dotsPerUser}
+                </Label>
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  value={dotsPerUser}
+                  onChange={(e) => setDotsPerUser(parseInt(e.target.value))}
+                  className="w-full h-2 bg-muted rounded-full appearance-none cursor-pointer accent-primary"
+                />
+              </div>
+
+              {/* Duration */}
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Time Limit
+                </Label>
+                <Select
+                  value={durationMinutes?.toString() ?? "none"}
+                  onValueChange={(v) => setDurationMinutes(v === "none" ? null : parseInt(v))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="No time limit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No time limit</SelectItem>
+                    <SelectItem value="1">1 minute</SelectItem>
+                    <SelectItem value="3">3 minutes</SelectItem>
+                    <SelectItem value="5">5 minutes</SelectItem>
+                    <SelectItem value="10">10 minutes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Prompt */}
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Prompt
+                </Label>
+                <Input
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder="Vote for your priorities"
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              {voting?.isVoting && (
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    voting?.stopVoting();
+                    setShowVotingConfig(false);
+                  }}
+                >
+                  Stop Voting
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => setShowVotingConfig(false)}>
+                {voting?.isVoting ? "Close" : "Cancel"}
+              </Button>
+              {!voting?.isVoting && (
+                <Button
+                  onClick={async () => {
+                    onCloseSidebar?.();
+                    await voting?.startVoting({ dotsPerUser, durationMinutes, prompt });
+                    setShowVotingConfig(false);
+                  }}
+                  className="gap-2"
+                >
+                  <Vote className="w-4 h-4" />
+                  Start Voting
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Create Cluster Dialog ── */}
+        <Dialog open={showClusterDialog} onOpenChange={setShowClusterDialog}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-primary" />
+                New Cluster
+              </DialogTitle>
+              <DialogDescription>
+                Create a new cluster to organize insights.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="cluster-title">Cluster Title</Label>
+                <Input
+                  id="cluster-title"
+                  value={clusterTitle}
+                  onChange={(e) => setClusterTitle(e.target.value)}
+                  placeholder="Enter cluster title..."
+                  className="rounded-xl"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && clusterTitle.trim()) {
+                      onCreateCluster?.(clusterTitle.trim());
+                      setClusterTitle("");
+                      setShowClusterDialog(false);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setShowClusterDialog(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (clusterTitle.trim()) {
+                    onCreateCluster?.(clusterTitle.trim());
+                    setClusterTitle("");
+                    setShowClusterDialog(false);
+                  }
+                }}
+                disabled={!clusterTitle.trim()}
+                className="gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Create
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </>
     </TooltipProvider>
+  );
+}
+
+// ─── Vote Results Content (for Popover) ────────────────────────────────────────
+
+interface VoteResultsContentProps {
+  results: Array<{
+    clusterId: string;
+    title: string;
+    voteCount: number;
+    color?: string;
+  }>;
+  totalVotes: number;
+  onNewRound: () => void;
+  onClose: () => void;
+}
+
+function VoteResultsContent({ results, totalVotes, onNewRound, onClose }: VoteResultsContentProps) {
+  const topThree = results.slice(0, 3);
+  
+  return (
+    <div className="bg-card text-card-foreground">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          <Trophy className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium">Vote Results</span>
+          <span className="text-xs text-muted-foreground">({totalVotes} votes)</span>
+        </div>
+      </div>
+
+      {/* Top 3 Podium */}
+      <div className="px-4 py-3 flex items-end justify-center gap-3">
+        {/* 2nd place */}
+        {topThree[1] && (
+          <div className="flex flex-col items-center">
+            <span className="text-lg mb-1">🥈</span>
+            <div 
+              className="w-12 h-10 rounded-md flex items-center justify-center text-center px-1"
+              style={{ backgroundColor: topThree[1].color || "var(--primary)" }}
+            >
+              <span className="text-white text-[9px] font-medium line-clamp-2">{topThree[1].title}</span>
+            </div>
+            <span className="text-xs font-bold mt-1">{topThree[1].voteCount}</span>
+          </div>
+        )}
+
+        {/* 1st place */}
+        {topThree[0] && (
+          <div className="flex flex-col items-center">
+            <span className="text-xl mb-1">🥇</span>
+            <div 
+              className="w-16 h-12 rounded-md flex items-center justify-center text-center px-2 shadow-lg"
+              style={{ backgroundColor: topThree[0].color || "var(--primary)" }}
+            >
+              <span className="text-white text-xs font-semibold line-clamp-2">{topThree[0].title}</span>
+            </div>
+            <span className="text-sm font-bold text-primary mt-1">{topThree[0].voteCount}</span>
+          </div>
+        )}
+
+        {/* 3rd place */}
+        {topThree[2] && (
+          <div className="flex flex-col items-center">
+            <span className="text-lg mb-1">🥉</span>
+            <div 
+              className="w-10 h-8 rounded-md flex items-center justify-center text-center px-1"
+              style={{ backgroundColor: topThree[2].color || "var(--primary)" }}
+            >
+              <span className="text-white text-[9px] font-medium line-clamp-2">{topThree[2].title}</span>
+            </div>
+            <span className="text-xs font-bold mt-1">{topThree[2].voteCount}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Full ranking list */}
+      {results.length > 3 && (
+        <div className="px-4 pb-3 max-h-32 overflow-y-auto space-y-1">
+          {results.slice(3).map((result, index) => (
+            <div
+              key={result.clusterId}
+              className="flex items-center gap-2 py-1.5 px-2 rounded-lg bg-accent/50"
+            >
+              <span className="text-muted-foreground text-xs font-medium w-5">#{index + 4}</span>
+              <div 
+                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style={{ backgroundColor: result.color || "var(--primary)" }}
+              />
+              <span className="text-card-foreground text-xs flex-1 truncate">{result.title}</span>
+              <span className="text-muted-foreground text-xs font-medium">{result.voteCount}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onClose}
+          className="text-muted-foreground hover:text-foreground text-xs"
+        >
+          Close
+        </Button>
+        <Button
+          size="sm"
+          onClick={onNewRound}
+          className="gap-1.5 text-xs"
+        >
+          <RotateCcw className="w-3 h-3" />
+          New Round
+        </Button>
+      </div>
+    </div>
   );
 }

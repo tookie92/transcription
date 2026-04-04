@@ -9,10 +9,10 @@ import { FigJamToolbar } from "./FigJamToolbar";
 import { MiniMap } from "./MiniMap";
 import { AIGroupingPanel } from "./AIGroupingPanel";
 import { LassoContextMenu, ClusterContextMenu } from "./ContextMenu";
+import { ClusterAIRename } from "./ClusterAIRename";
 import { CommentBubblesLayer } from "./CommentBubble";
 import { PresentationMode } from "./PresentationMode";
 import { InsightsSidebar } from "./InsightsSidebar";
-import { VotingHeader } from "./VotingHeader";
 import type { FigJamElement, Position, Size, StickyColor, StickyNoteData, DotData, ClusterLabelData, SectionData, TextData } from "@/types/figjam";
 import type { Insight } from "@/types";
 
@@ -175,6 +175,9 @@ export function FigJamBoard({
     clusterId: string;
   } | null>(null);
 
+  const [showAIRenameDialog, setShowAIRenameDialog] = useState(false);
+  const [selectedClusterForRename, setSelectedClusterForRename] = useState<string | null>(null);
+
   // Comment bubbles state - loaded from Convex
   const convexBubbles = useQuery(
     mapId ? api.commentBubbles.getBubblesByMap : "skip" as any,
@@ -285,7 +288,7 @@ export function FigJamBoard({
       });
     });
 
-    toast.success(`${newInsights.length} insight${newInsights.length > 1 ? "s" : ""} importé${newInsights.length > 1 ? "s" : ""}`, {
+    toast.success(`${newInsights.length} insight${newInsights.length > 1 ? "s" : ""} imported`, {
       action: {
         label: "Annuler",
         onClick: () => {
@@ -362,7 +365,7 @@ export function FigJamBoard({
         setTool("section");
         setIsCommentToolActive(false);
       } else if (key === "c") {
-        setTool("label");
+        setTool("cluster");
         setIsCommentToolActive(false);
       } else if (key === "m") {
         setIsCommentToolActive(prev => !prev);
@@ -614,6 +617,40 @@ export function FigJamBoard({
   }, [savedElements, initialElements, storageKey]);
 
   // ============================================
+  // REAL-TIME SYNC: Sync with Convex when data changes from other users
+  // ============================================
+  const lastSyncedElementsRef = useRef<string>("");
+  
+  useEffect(() => {
+    if (!isLoaded || !savedElements) return;
+    
+    // Skip if this is the initial load (handled above)
+    if (!hasLoadedInitialRef.current) return;
+    
+    // Compare with last synced state to detect changes from other users
+    const newElementsStr = JSON.stringify(savedElements);
+    if (newElementsStr === lastSyncedElementsRef.current) return;
+    
+    // Check if there are new elements (clusters) that we don't have
+    const currentElementIds = new Set(Object.keys(state.elements));
+    const newElementIds = new Set(Object.keys(savedElements));
+    
+    // Find new elements that we don't have
+    const newIds = Array.from(newElementIds).filter(id => !currentElementIds.has(id));
+    
+    if (newIds.length > 0) {
+      // There are new elements - merge them into the board
+      const mergedElements = { ...state.elements };
+      newIds.forEach(id => {
+        mergedElements[id] = savedElements[id];
+      });
+      board.loadElements(mergedElements);
+    }
+    
+    lastSyncedElementsRef.current = newElementsStr;
+  }, [savedElements, isLoaded, state.elements, board]);
+
+  // ============================================
   // Save: On every change → Convex + localStorage
   // ============================================
   useEffect(() => {
@@ -839,7 +876,27 @@ export function FigJamBoard({
         board.setTool("select");
       }
 
-      if (state.activeTool === "sticky") {
+      // Cluster tool - create cluster at click position
+      if (state.activeTool === "cluster") {
+        const pos = screenToCanvas(e.clientX, e.clientY);
+        const clusterId = board.addClusterLabel(
+          { x: pos.x - 200, y: pos.y - 100 },
+          { width: 400, height: 200 }
+        );
+        board.updateElement(clusterId, { text: "New Cluster" });
+        board.setTool("select");
+        
+        if (hasMapId) {
+          saveToConvex({
+            mapId: mapId as Id<"affinityMaps">,
+            elements: state.elements,
+          });
+        }
+        return;
+      }
+
+      // Sticky notes - disabled during voting
+      if (state.activeTool === "sticky" && !voting.isVoting) {
         const pos = screenToCanvas(e.clientX, e.clientY);
         const stickyColor: StickyColor = "insight";
         const size = { width: 200, height: 200 };
@@ -1545,6 +1602,10 @@ export function FigJamBoard({
                 onResize={(clusterId, newHeight) => {
                   board.updateElement(clusterId, { height: newHeight });
                 }}
+                onOpenAIRename={(clusterId) => {
+                  setSelectedClusterForRename(clusterId);
+                  setShowAIRenameDialog(true);
+                }}
                 triggerEdit={renameSectionId === el.id}
                 triggerAutoFit={autoFitSectionId === el.id}
               />
@@ -1556,7 +1617,6 @@ export function FigJamBoard({
       {/* ── Cluster Context Menu ── */}
       {clusterContextMenu && (() => {
         const cluster = state.elements[clusterContextMenu.clusterId] as ClusterLabelData;
-        const clusterStickies = stickies.filter(s => s.clusterId === clusterContextMenu.clusterId);
         
         return (
           <ClusterContextMenu
@@ -1564,28 +1624,22 @@ export function FigJamBoard({
             position={clusterContextMenu.position}
             clusterId={clusterContextMenu.clusterId}
             clusterTitle={cluster?.text || "Untitled Cluster"}
+            stickyTexts={[]}
             onClose={() => setClusterContextMenu(null)}
-            onRename={() => {
-              // Trigger edit mode directly
-              setRenameSectionId(clusterContextMenu.clusterId);
+            onRename={(newName) => {
+              board.updateElement(clusterContextMenu.clusterId, { text: newName });
+              toast.success(`Renamed to "${newName}"`);
               setClusterContextMenu(null);
             }}
             onAutoFit={() => {
-              // Trigger auto-fit via state
               setAutoFitSectionId(clusterContextMenu.clusterId);
               toast.success("Cluster resized to fit content");
               setClusterContextMenu(null);
-              // Clear the trigger after a short delay
               setTimeout(() => setAutoFitSectionId(null), 100);
-            }}
-            onChangeColor={() => {
-              toast.info("Color picker coming soon...");
-              setClusterContextMenu(null);
             }}
             onDelete={() => {
               const clusterId = clusterContextMenu.clusterId;
               
-              // Return all stickies to sidebar before deleting cluster
               stickies.forEach(sticky => {
                 if (sticky.clusterId === clusterId || sticky.parentSectionId === clusterId) {
                   board.updateElement(sticky.id, { 
@@ -1601,32 +1655,34 @@ export function FigJamBoard({
                 }
               });
               
-              // Delete the cluster
               board.deleteElement(clusterId);
               setClusterContextMenu(null);
             }}
-            onDuplicate={() => {
-              const cluster = state.elements[clusterContextMenu.clusterId] as ClusterLabelData;
-              if (cluster) {
-                const newPos = {
-                  x: cluster.position.x + 50,
-                  y: cluster.position.y + 50,
-                };
-                const newClusterId = board.addClusterLabel(newPos, { 
-                  width: cluster.width, 
-                  height: cluster.height 
-                });
-                board.updateElement(newClusterId, { text: `${cluster.text || "Cluster"} (copy)` });
-                toast.success("Cluster duplicated");
-              }
-              setClusterContextMenu(null);
+          />
+        );
+      })()}
+
+      {/* ── AI Rename Dialog ── */}
+      {showAIRenameDialog && selectedClusterForRename && (() => {
+        const cluster = state.elements[selectedClusterForRename] as ClusterLabelData;
+        const clusterStickies = stickies.filter(s => s.clusterId === selectedClusterForRename);
+        const stickyTexts = clusterStickies.map(s => s.content || "");
+        
+        return (
+          <ClusterAIRename
+            isOpen={showAIRenameDialog}
+            onClose={() => {
+              setShowAIRenameDialog(false);
+              setSelectedClusterForRename(null);
             }}
-            onComment={() => {
-              if (onOpenComment) {
-                const rect = new DOMRect(clusterContextMenu.position.x, clusterContextMenu.position.y, 200, 100);
-                onOpenComment(clusterContextMenu.clusterId, rect, cluster?.text);
-              }
-              setClusterContextMenu(null);
+            clusterId={selectedClusterForRename}
+            clusterTitle={cluster?.text || "Untitled Cluster"}
+            stickyTexts={stickyTexts}
+            onRename={(id, newName) => {
+              board.updateElement(id, { text: newName });
+              toast.success(`Renamed to "${newName}"`);
+              setShowAIRenameDialog(false);
+              setSelectedClusterForRename(null);
             }}
           />
         );
@@ -1640,12 +1696,6 @@ export function FigJamBoard({
         onZoomIn={() => board.setZoom(state.zoom * 1.2)}
         onZoomOut={() => board.setZoom(state.zoom / 1.2)}
         onZoomReset={() => { board.setZoom(1); board.setPan({ x: 0, y: 0 }); }}
-        showStickyPicker={showStickyPicker}
-        onToggleStickyPicker={() => setShowStickyPicker((v) => !v)}
-        onAddSticky={(color?: StickyColor) => {
-          board.setTool("sticky");
-          setShowStickyPicker(false);
-        }}
         onBack={onBack}
         ungroupedCount={ungroupedStickies.length}
         onToggleAIGroupingPanel={() => setShowAIGroupingPanel((v) => !v)}
@@ -1659,29 +1709,38 @@ export function FigJamBoard({
         projectName={projectName}
         newInsightsCount={newInsightsCount}
         onImportInsights={handleImportInsights}
-      />
-
-      {/* ── Voting Header ── */}
-      <VotingHeader
-        isActive={voting.session?.isActive ?? false}
-        isVoting={voting.isVoting}
-        isRevealed={voting.isRevealed}
-        sessionName={voting.session?.name ?? "Dot Voting"}
-        maxDotsPerUser={voting.session?.maxDotsPerUser ?? 5}
-        usedDots={voting.myVotesCount}
-        totalVotes={(voting.sessionVotes || []).length}
-        remainingTime={voting.remainingTime}
-        userColor={voting.userColor}
-        onStartVoting={async (config) => {
-          await voting.startVoting({
-            dotsPerUser: config.dotsPerUser,
-            durationMinutes: config.durationMinutes,
-            prompt: config.prompt,
-          });
+        isVotingActive={voting.isVoting}
+        onCloseSidebar={() => setShowInsightsSidebar(false)}
+        voting={{
+          ...voting,
+          myVotesCount: voting.myVotesCount,
+          maxDotsPerUser: voting.session?.maxDotsPerUser ?? 5,
+          userColor: voting.userColor,
+          remainingTime: voting.remainingTime,
         }}
-        onStopVoting={() => voting.stopVoting()}
-        onReveal={() => voting.completeVoting()}
-        onNewRound={() => voting.startNewRound()}
+        voteResults={voteResults.map(r => ({
+          clusterId: r.sectionId,
+          title: r.title,
+          voteCount: r.voteCount,
+          color: r.colors[0] as string || "#3b82f6",
+        }))}
+        totalVotes={voteResults.reduce((sum, r) => sum + r.voteCount, 0)}
+        onCreateCluster={(title) => {
+          const position = {
+            x: -state.pan.x + 400 + Math.random() * 100,
+            y: -state.pan.y + 300 + Math.random() * 100,
+          };
+          const clusterId = board.addClusterLabel(position, { width: 400, height: 200 });
+          board.updateElement(clusterId, { text: title });
+          
+          // Save to Convex
+          if (hasMapId) {
+            saveToConvex({
+              mapId: mapId as Id<"affinityMaps">,
+              elements: state.elements,
+            });
+          }
+        }}
       />
 
       {/* ── MiniMap ── */}
@@ -1708,7 +1767,7 @@ export function FigJamBoard({
             <p className="text-gray-400 text-sm font-medium">Appuyez sur S ou cliquez sur l&apos;outil sticky pour commencer</p>
             {newInsightsCount > 0 && (
               <p className="text-muted-foreground text-xs mt-2">
-                {newInsightsCount} insight{newInsightsCount > 1 ? "s" : ""} disponible{newInsightsCount > 1 ? "s" : ""} à importer
+                {newInsightsCount} insight{newInsightsCount > 1 ? "s" : ""} available to import
               </p>
             )}
           </div>
@@ -1802,7 +1861,7 @@ export function FigJamBoard({
           const ids = contextMenu?.ids || [];
           const count = ids.length;
           confirmDelete(
-            `${count} élément${count > 1 ? "s" : ""}`,
+            `${count} item${count > 1 ? "s" : ""}`,
             count,
             async () => {
               ids.forEach(id => board.deleteElement(id));

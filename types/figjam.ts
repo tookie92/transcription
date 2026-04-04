@@ -10,7 +10,8 @@ export type ToolType =
   | "connector"
   | "shape"
   | "stamp"
-  | "vote";
+  | "vote"
+  | "cluster";
 
 export type StickyColor =
   | "yellow"

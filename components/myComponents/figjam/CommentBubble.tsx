@@ -297,15 +297,15 @@ export function CommentThread({
       }
       
       setText("");
-      toast.success("Commentaire ajouté");
+      toast.success("Comment added");
     } catch (err) {
-      toast.error("Erreur lors de l'ajout du commentaire");
+      toast.error("Failed to add comment");
     }
   };
 
   const getAuthorDisplayName = (comment: any): string => {
-    if (comment.userId === userId) return "Vous";
-    return comment.userName || "Anonyme";
+    if (comment.userId === userId) return "You";
+    return comment.userName || "Anonymous";
   };
 
   const [mentionSearch, setMentionSearch] = useState("");
@@ -389,10 +389,10 @@ export function CommentThread({
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium">Commentaire</span>
+            <span className="text-sm font-medium">Comment</span>
             {bubble.resolved && (
               <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                Résolu
+                Resolved
               </span>
             )}
           </div>
@@ -405,7 +405,7 @@ export function CommentThread({
                   ? "bg-green-100 text-green-600 hover:bg-green-200"
                   : "hover:bg-accent text-muted-foreground hover:text-foreground"
               }`}
-              title={bubble.resolved ? "Rouvrir" : "Résoudre"}
+              title={bubble.resolved ? "Reopen" : "Resolve"}
             >
               <Check className="w-4 h-4" />
             </button>
@@ -604,9 +604,9 @@ export function CommentBubblesLayer({
         bubbleId: bubbleId as Id<"commentBubbles">,
         resolved: !currentResolved 
       });
-      toast.success(currentResolved ? "Commentaire rouvert" : "Commentaire marqué comme résolu");
+      toast.success(currentResolved ? "Comment reopened" : "Comment resolved");
     } catch (err) {
-      toast.error("Erreur lors de la résolution");
+      toast.error("Failed to resolve");
     }
   };
 
