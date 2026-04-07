@@ -127,7 +127,12 @@ export default defineSchema({
       v.literal("question"),
       v.literal("idea"),
       v.literal("important"),
-      v.literal("action")
+      v.literal("action"),
+      v.literal("pain-point"),
+      v.literal("quote"),
+      v.literal("insight"),
+      v.literal("follow-up"),
+      v.literal("custom")
     )),
     insightId: v.optional(v.id("insights")), // Lien vers l'insight cree (pour suppression cascade)
     createdAt: v.number(),

@@ -259,7 +259,7 @@ export function InsightsSidebar({
           "transition-all duration-300 ease-in-out",
           "overflow-hidden",
           isOpen 
-            ? "w-[272px] h-[610px] opacity-100 visible" 
+            ? "w-[272px] h-[10vh] md:h-[450px] lg:h-[5vh] 2xl:h-[510px] opacity-100 visible" 
             : "w-[272px] h-[52px] opacity-0 invisible"
         )}
       >

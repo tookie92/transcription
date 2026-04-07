@@ -9,9 +9,10 @@
    --color-myGreen-500: #4CA771;
    --color-myGreen-light: #C0E6BA;
    --color-myGreen-dark: #013237;
-   --font-sans: var(--font-inter);
-   --font-serif: var(--font-playfair);
-   --font-mono: var(--font-inter);
+   --font-sans: var(--font-jakarta);
+   --font-serif: var(--font-display);
+   --font-display: var(--font-display);
+   --font-mono: var(--font-jakarta);
    --color-background: var(--background);
    --color-foreground: var(--foreground);
    --color-sidebar-ring: var(--sidebar-ring);
@@ -52,126 +53,124 @@
 :root {
   --radius: 0.5rem;
 
-  /* Editorial Research Lab - Warm Cream Theme */
-  --background: oklch(0.98 0.01 80);
-  --foreground: oklch(0.15 0.02 50);
+  /* Skripta Palette - Fresh Green & Warm Orange */
+  --background: oklch(0.97 0.02 160);
+  --foreground: oklch(0.12 0.02 180);
 
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0.02 50);
+  --card-foreground: oklch(0.12 0.02 180);
 
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0.02 50);
+  --popover-foreground: oklch(0.12 0.02 180);
 
-  /* Primary - Deep Forest Green */
-  --primary: oklch(0.35 0.08 160);
-  --primary-foreground: oklch(0.98 0.01 160);
+  /* Primary - Fresh Green */
+  --primary: oklch(0.55 0.15 160);
+  --primary-foreground: oklch(1 0 0);
 
-  /* Secondary - Warm Terracotta */
-  --secondary: oklch(0.88 0.06 60);
-  --secondary-foreground: oklch(0.2 0.03 40);
+  /* Secondary - Warm Orange */
+  --secondary: oklch(0.7 0.12 45);
+  --secondary-foreground: oklch(0.1 0.02 40);
 
-  --muted: oklch(0.94 0.02 80);
-  --muted-foreground: oklch(0.45 0.02 60);
+  /* Muted - Soft Sage */
+  --muted: oklch(0.9 0.03 160);
+  --muted-foreground: oklch(0.45 0.04 160);
 
-  --accent: oklch(0.92 0.04 140);
-  --accent-foreground: oklch(0.2 0.04 150);
-
-  --destructive: oklch(0.55 0.15 25);
-  --destructive-foreground: oklch(0.98 0 0);
-
-  --border: oklch(0.88 0.02 70);
-  --input: oklch(0.94 0.02 80);
-  --ring: oklch(0.35 0.08 160);
-
-  --chart-1: oklch(0.35 0.08 160);
-  --chart-2: oklch(0.55 0.1 60);
-  --chart-3: oklch(0.45 0.08 200);
-  --chart-4: oklch(0.5 0.06 300);
-  --chart-5: oklch(0.6 0.08 40);
-
-  --sidebar: oklch(0.97 0.01 80);
-  --sidebar-foreground: oklch(0.15 0.02 50);
-  --sidebar-primary: oklch(0.35 0.08 160);
-  --sidebar-primary-foreground: oklch(0.98 0.01 160);
-  --sidebar-accent: oklch(0.92 0.04 140);
-  --sidebar-accent-foreground: oklch(0.2 0.04 150);
-  --sidebar-border: oklch(0.88 0.02 70);
-  --sidebar-ring: oklch(0.35 0.08 160);
-
-  --myBackground: #FAF8F5;
-  
-  /* Editorial-specific colors */
-  --warm-cream: oklch(0.98 0.01 80);
-  --deep-forest: oklch(0.35 0.08 160);
-  --warm-terracotta: oklch(0.55 0.1 60);
-  --pale-sage: oklch(0.92 0.04 140);
-  --warm-border: oklch(0.88 0.02 70);
-}
-
-/* Dark Theme - Editorial Dark with Forest Accent */
-.dark {
-  /* Deep charcoal background */
-  --background: oklch(0.12 0.01 250);
-  --foreground: oklch(0.92 0.01 80);
-
-  /* Cards - slightly lighter */
-  --card: oklch(0.15 0.01 250);
-  --card-foreground: oklch(0.92 0.01 80);
-
-  /* Popovers */
-  --popover: oklch(0.18 0.02 250);
-  --popover-foreground: oklch(0.92 0.01 80);
-
-  /* Primary - Brighter forest green */
-  --primary: oklch(0.55 0.12 160);
-  --primary-foreground: oklch(0.98 0.01 160);
-
-  /* Secondary - Warm terracotta accent */
-  --secondary: oklch(0.35 0.05 60);
-  --secondary-foreground: oklch(0.95 0.01 80);
-
-  /* Muted */
-  --muted: oklch(0.25 0.02 250);
-  --muted-foreground: oklch(0.6 0.02 80);
-
-  /* Accent */
-  --accent: oklch(0.3 0.04 140);
-  --accent-foreground: oklch(0.95 0.01 80);
+  /* Accent - Light Green */
+  --accent: oklch(0.85 0.06 160);
+  --accent-foreground: oklch(0.2 0.04 160);
 
   /* Destructive */
   --destructive: oklch(0.55 0.15 25);
-  --destructive-foreground: oklch(0.95 0 0);
+  --destructive-foreground: oklch(1 0 0);
 
-  /* Borders */
-  --border: oklch(0.25 0.02 250);
-  --input: oklch(0.22 0.02 250);
-  --ring: oklch(0.55 0.12 160);
+  /* Border */
+  --border: oklch(0.85 0.04 160);
+  --input: oklch(0.92 0.02 160);
+  --ring: oklch(0.55 0.15 160);
 
   /* Charts */
-  --chart-1: oklch(0.55 0.12 160);
-  --chart-2: oklch(0.65 0.1 60);
-  --chart-3: oklch(0.55 0.08 200);
-  --chart-4: oklch(0.6 0.06 300);
-  --chart-5: oklch(0.7 0.08 40);
+  --chart-1: oklch(0.55 0.15 160);
+  --chart-2: oklch(0.7 0.12 45);
+  --chart-3: oklch(0.65 0.1 180);
+  --chart-4: oklch(0.5 0.08 280);
+  --chart-5: oklch(0.6 0.08 40);
 
   /* Sidebar */
-  --sidebar: oklch(0.1 0.01 250);
-  --sidebar-foreground: oklch(0.92 0.01 80);
-  --sidebar-primary: oklch(0.55 0.12 160);
-  --sidebar-primary-foreground: oklch(0.98 0.01 160);
-  --sidebar-accent: oklch(0.28 0.04 140);
-  --sidebar-accent-foreground: oklch(0.95 0.01 80);
-  --sidebar-border: oklch(0.25 0.02 250);
-  --sidebar-ring: oklch(0.55 0.12 160);
+  --sidebar: oklch(0.96 0.02 160);
+  --sidebar-foreground: oklch(0.12 0.02 180);
+  --sidebar-primary: oklch(0.55 0.15 160);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.85 0.06 160);
+  --sidebar-accent-foreground: oklch(0.2 0.04 160);
+  --sidebar-border: oklch(0.85 0.04 160);
+  --sidebar-ring: oklch(0.55 0.15 160);
 
-  --myBackground: #1a1a1a;
-  
-  /* Editorial-specific colors for dark */
-  --warm-cream: oklch(0.12 0.01 250);
-  --deep-forest: oklch(0.55 0.12 160);
-  --warm-terracotta: oklch(0.65 0.1 60);
-  --pale-sage: oklch(0.3 0.04 140);
-  --warm-border: oklch(0.25 0.02 250);
+  /* Custom colors */
+  --myBackground: #F4FBF7;
+  --fresh-mint: oklch(0.97 0.02 160);
+  --light-sage: oklch(0.9 0.04 160);
+  --soft-sage: oklch(0.85 0.06 160);
+  --vibrant-green: oklch(0.65 0.12 160);
+  --deep-forest: oklch(0.55 0.15 160);
+  --warm-terracotta: oklch(0.7 0.12 45);
+  --sunset-orange: oklch(0.65 0.14 45);
+}
+
+/* Dark Theme */
+.dark {
+  --background: oklch(0.08 0.02 180);
+  --foreground: oklch(0.92 0.02 160);
+
+  --card: oklch(0.12 0.02 180);
+  --card-foreground: oklch(0.92 0.02 160);
+
+  --popover: oklch(0.15 0.02 180);
+  --popover-foreground: oklch(0.92 0.02 160);
+
+  /* Primary - Brighter green for dark mode */
+  --primary: oklch(0.7 0.18 160);
+  --primary-foreground: oklch(0.1 0.02 180);
+
+  /* Secondary - Warmer orange for dark mode */
+  --secondary: oklch(0.6 0.14 45);
+  --secondary-foreground: oklch(0.95 0.02 40);
+
+  --muted: oklch(0.2 0.03 180);
+  --muted-foreground: oklch(0.6 0.04 160);
+
+  --accent: oklch(0.25 0.05 160);
+  --accent-foreground: oklch(0.95 0.02 160);
+
+  --destructive: oklch(0.55 0.15 25);
+  --destructive-foreground: oklch(0.95 0 0);
+
+  --border: oklch(0.25 0.02 180);
+  --input: oklch(0.2 0.02 180);
+  --ring: oklch(0.7 0.18 160);
+
+  --chart-1: oklch(0.7 0.18 160);
+  --chart-2: oklch(0.6 0.14 45);
+  --chart-3: oklch(0.65 0.1 180);
+  --chart-4: oklch(0.5 0.08 280);
+  --chart-5: oklch(0.6 0.08 40);
+
+  --sidebar: oklch(0.08 0.02 180);
+  --sidebar-foreground: oklch(0.92 0.02 160);
+  --sidebar-primary: oklch(0.7 0.18 160);
+  --sidebar-primary-foreground: oklch(0.1 0.02 180);
+  --sidebar-accent: oklch(0.25 0.05 160);
+  --sidebar-accent-foreground: oklch(0.95 0.02 160);
+  --sidebar-border: oklch(0.25 0.02 180);
+  --sidebar-ring: oklch(0.7 0.18 160);
+
+  --myBackground: #0F2E2F;
+  --fresh-mint: oklch(0.12 0.02 180);
+  --light-sage: oklch(0.2 0.03 160);
+  --soft-sage: oklch(0.25 0.04 160);
+  --vibrant-green: oklch(0.45 0.1 160);
+  --deep-forest: oklch(0.7 0.18 160);
+  --warm-terracotta: oklch(0.6 0.14 45);
+  --sunset-orange: oklch(0.65 0.14 45);
 }
 
 @layer base {
@@ -183,9 +182,8 @@
   }
 }
 
-/* 🎨 Sticky Note Colors for Affinity Groups - Skripta Palette */
+/* Sticky Note Colors for Affinity Groups - Skripta Palette */
 :root {
-  /* Group accent colors - using new palette */
   --group-red: oklch(65% 0.15 25);
   --group-blue: oklch(65% 0.15 200);
   --group-purple: oklch(65% 0.15 280);
@@ -194,4 +192,110 @@
   --group-pink: oklch(65% 0.15 330);
   --group-cyan: oklch(65% 0.15 190);
   --group-orange: oklch(65% 0.15 35);
+}
+
+/* ============================================
+   🎬 ANIMATION PLACEHOLDERS - Skripta Landing
+   À implémenter avec Framer Motion
+   ============================================ */
+
+/* Hero Section Animations */
+.hero-title-enter {
+  /* TODO: Spring animation avec overshoot
+   * Type: text pop-in avec bounce
+   * Duration: ~0.6s
+   * Easing: spring avec high stiffness
+   */
+}
+
+.hero-sticky-note-bounce {
+  /* TODO: Post-it bounce animation
+   * Type: scale + rotation + translateY
+   * Chaque note arrive avec un delay différent
+   * Physics: deceleration type="spring"
+   */
+}
+
+.hero-floating-dots {
+  /* TODO: Enhanced floating dots
+   * Plus de mouvement, directions varied
+   * Ajouter subtle rotation aux dots
+   */
+}
+
+/* Features Section */
+.feature-card-tilt {
+  /* TODO: 3D tilt effect au hover
+   * Type: rotateX + rotateY sur mouse move
+   * Scale: 1.02-1.05
+   * Duration: 0.3s
+   */
+}
+
+.feature-card-press {
+  /* TODO: Press animation
+   * Type: scale down (0.98) au click
+   * + shadow reduction pour effet tactile
+   */
+}
+
+/* Pricing Cards */
+.pricing-card-pressable {
+  /* TODO: Tactile press effect
+   * Type: scale down (0.97) + shadow reduction
+   * Duration: 0.15s
+   * Simule bouton physique
+   */
+}
+
+.pricing-badge-pop {
+  /* TODO: Badge pop-in
+   * Type: scale from 0 avec spring
+   * Rotation: subtle spin
+   */
+}
+
+/* Testimonials */
+.testimonial-slide-whip {
+  /* TODO: Slide-in avec whip effect
+   * Type: translateX avec overshoot
+   * Easing: cubic-bezier avec overshoot
+   */
+}
+
+/* FAQ Accordion */
+.faq-answer-spring {
+  /* TODO: Accordion answer pop
+   * Type: spring animation
+   * Height transition avec bounce
+   */
+}
+
+/* Scroll Indicator */
+.scroll-indicator-bounce {
+  /* TODO: Plus marqués bounce
+   * Type: translateY avec + amplitude
+   * Duration: 1.5s (plus visible)
+   */
+}
+
+/* Buttons CTA */
+.cta-button-pulse {
+  /* TODO: Subtle pulse + scale sur hover
+   * Type: scale (1.02) + glow effect
+   * Duration: 0.2s
+   */
+}
+
+/* Micro-interactions (optionnel) */
+.micro-cursor-trail {
+  /* TODO: Cursor trail ou sparkle effects
+   * Sur les éléments interactifs
+   */
+}
+
+.link-hover-wiggle {
+  /* TODO: Subtle wiggle sur hover
+   * Pour les liens de navigation
+   */
 }

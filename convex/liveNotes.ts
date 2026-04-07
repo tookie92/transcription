@@ -25,7 +25,12 @@ export const create = mutation({
       v.literal("question"),
       v.literal("idea"),
       v.literal("important"),
-      v.literal("action")
+      v.literal("action"),
+      v.literal("pain-point"),
+      v.literal("quote"),
+      v.literal("insight"),
+      v.literal("follow-up"),
+      v.literal("custom")
     )),
   },
   handler: async (ctx, args) => {
@@ -52,7 +57,12 @@ export const update = mutation({
       v.literal("question"),
       v.literal("idea"),
       v.literal("important"),
-      v.literal("action")
+      v.literal("action"),
+      v.literal("pain-point"),
+      v.literal("quote"),
+      v.literal("insight"),
+      v.literal("follow-up"),
+      v.literal("custom")
     )),
   },
   handler: async (ctx, args) => {

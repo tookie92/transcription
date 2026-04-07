@@ -1,57 +1,62 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranscription } from '@/hooks/useTranscription';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { Id } from '@/convex/_generated/dataModel';
-import { toast } from "sonner"; 
+import { toast } from "sonner";
 import { useRouter, useParams } from 'next/navigation';
-import { 
-  Upload, 
-  Loader2, 
-  FolderOpen, 
-  FileText, 
-  Clock,
+import { useAuth, useUser } from '@clerk/nextjs';
+import { videoConverter } from '@/lib/videoConverter';
+import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
+import {
+  Upload,
+  Loader2,
   Mic,
-  Link,
-  ArrowRight,
+  Link as LinkIcon,
   ArrowLeft,
+  FileText,
+  Clock,
   X,
   Pause,
+  Play,
+  Check,
+  ChevronRight,
+  CloudUpload,
+  Radio,
+  Globe,
+  Sparkles,
+  AlertCircle,
   Film,
-  Music
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { videoConverter } from '@/lib/videoConverter';
-import { useAuth, useUser } from '@clerk/nextjs';
+
+type SourceType = 'upload' | 'record' | 'url' | null;
 
 export default function InterviewHome() {
   const params = useParams();
   const projectId = params?.projectId as string;
   const currentProjectId = projectId as Id<"projects">;
   const { user } = useUser();
-  const { transcribe, isTranscribing, transcript, setTranscript, error, conversionProgress } = useTranscription();
+  const { transcribe, isTranscribing, error } = useTranscription();
   const userEmail = user?.emailAddresses?.[0]?.emailAddress;
+  const router = useRouter();
+
+  const [selectedSource, setSelectedSource] = useState<SourceType>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isVideoFile, setIsVideoFile] = useState(false);
-  const [topic, setTopic] = useState('');
-  const [title, setTitle] = useState('');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [title, setTitle] = useState('');
+  const [topic, setTopic] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const [showTranscription, setShowTranscription] = useState(false);
-  const [activeTab, setActiveTab] = useState<'upload' | 'record' | 'url'>('upload');
-  const [audioUrlInput, setAudioUrlInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  
-  // State for transcribed but not yet saved interview
+  const [audioUrlInput, setAudioUrlInput] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [pendingInterview, setPendingInterview] = useState<{
     title: string;
     topic?: string;
@@ -61,62 +66,79 @@ export default function InterviewHome() {
     audioFile?: File;
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const urlInputRef = useRef<HTMLInputElement>(null);
-  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const router = useRouter();
+  const [isDragging, setIsDragging] = useState(false);
 
-  // Convex
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const createInterview = useMutation(api.interviews.createInterview);
   const projects = useQuery(api.projects.getUserProjects, { userEmail });
   const interviews = useQuery(api.interviews.getProjectInterviews, { projectId: currentProjectId });
 
   useEffect(() => {
     return () => {
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-      }
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-      }
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
     };
   }, [audioUrl]);
 
+  const handleSourceSelect = (source: SourceType) => {
+    setSelectedSource(source);
+    setSelectedFile(null);
+    setAudioUrl(null);
+    setShowPreview(false);
+    setPendingInterview(null);
+  };
+
   const handleFileSelect = (file: File) => {
     setSelectedFile(file);
-    setAudioUrl(URL.createObjectURL(file));
-    setShowTranscription(false);
-    
-    // Detect if it's a video file
+    const url = URL.createObjectURL(file);
+    setAudioUrl(url);
     const isVideo = videoConverter.isVideoFile(file) || videoConverter.isVideoExtension(file.name);
     setIsVideoFile(isVideo);
-    
     if (isVideo) {
-      toast.info(`Video detected (${(file.size / 1024 / 1024).toFixed(1)}MB). Will be converted to audio automatically.`);
+      toast.info(`Video detected (${(file.size / 1024 / 1024).toFixed(1)}MB). Will convert automatically.`);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      handleFileSelect(file);
-    }
+    if (file) handleFileSelect(file);
   };
 
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && (file.type.startsWith('audio/') || file.type.startsWith('video/'))) {
+      handleFileSelect(file);
+    } else {
+      toast.error('Please drop an audio or video file');
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
   const handleUrlSubmit = async () => {
-    if (!audioUrlInput || !currentProjectId) return;
-    
+    if (!audioUrlInput) return;
     setIsUploading(true);
     try {
       const response = await fetch(audioUrlInput);
       const blob = await response.blob();
-      const filename = audioUrlInput.split('/').pop() || 'audio from url';
+      const filename = audioUrlInput.split('/').pop() || 'audio';
       const file = new File([blob], filename, { type: blob.type });
       handleFileSelect(file);
       setAudioUrlInput('');
-    } catch (err) {
-      toast.error("Failed to fetch audio from URL");
+    } catch {
+      toast.error('Failed to fetch audio');
     } finally {
       setIsUploading(false);
     }
@@ -127,579 +149,473 @@ export default function InterviewHome() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       const chunks: Blob[] = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data);
-        }
-      };
-
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: 'audio/webm' });
-        const file = new File([blob], 'recording.webm', { type: 'audio/webm' });
-        handleFileSelect(file);
+        handleFileSelect(new File([blob], 'recording.webm', { type: 'audio/webm' }));
         stream.getTracks().forEach(track => track.stop());
       };
-
       recorder.start();
       setMediaRecorder(recorder);
       setIsRecording(true);
       setRecordingTime(0);
-
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
-    } catch (err) {
-      toast.error("Failed to start recording");
+      recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
+    } catch {
+      toast.error('Failed to start recording');
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      mediaRecorder.stop();
-    }
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-    }
+    if (mediaRecorder?.state !== 'inactive') mediaRecorder?.stop();
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
     setIsRecording(false);
   };
 
-  const formatRecordingTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  const formatTime = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
 
   const handleTranscribe = async () => {
     if (!selectedFile || !title.trim() || !topic.trim()) return;
-
-    const toastId = toast.loading(isVideoFile ? "Converting video..." : "Transcribing audio...");
-
+    setIsProcessing(true);
+    const toastId = toast.loading(isVideoFile ? 'Converting video...' : 'Transcribing...');
     try {
-      const interview = await transcribe(
-        selectedFile, 
-        title, 
-        topic,
-        (progress) => {
-          // Update toast with progress
-          toast.loading(progress.message, { id: toastId });
-        }
-      );
-      
-      const convexSegments = interview.segments.map(segment => ({
-        id: segment.id,
-        start: segment.start,
-        end: segment.end,
-        text: segment.text,
-        speaker: segment.speaker,
-      }));
-
-      // Store the transcribed data but don't save yet
+      const interview = await transcribe(selectedFile, title, topic);
       setPendingInterview({
         title: interview.title,
         topic: interview.topic,
         transcription: interview.transcription,
-        segments: convexSegments,
+        segments: interview.segments.map(s => ({ id: s.id, start: s.start, end: s.end, text: s.text, speaker: s.speaker })),
         duration: interview.duration,
-        audioFile: selectedFile || undefined,
+        audioFile: selectedFile,
       });
-      
-      setShowTranscription(true);
-      toast.success("Transcription ready! Review and save.", { 
-        id: toastId,
-      });
-
+      setShowPreview(true);
+      toast.success('Ready! Review and save.', { id: toastId });
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Transcription failed";
-      toast.error(`Transcription failed: ${errorMessage}`, { 
-        id: toastId,
-        duration: 4000,
-      });
-      console.error('Transcription failed:', err);
+      toast.error(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`, { id: toastId });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const handleSave = async () => {
-    if (!pendingInterview || !currentProjectId) {
-      console.log('Missing pendingInterview or currentProjectId', { pendingInterview, currentProjectId });
-      return;
-    }
-
-    const toastId = toast.loading("Saving interview to project...");
+    if (!pendingInterview || !currentProjectId) return;
     setIsSaving(true);
-
+    const toastId = toast.loading('Saving...');
     try {
-      console.log('Starting save process...', { 
-        hasAudioFile: !!pendingInterview.audioFile,
-        audioFileName: pendingInterview.audioFile?.name,
-        audioFileSize: pendingInterview.audioFile?.size 
-      });
-
       let audioUrl: string | undefined;
-
-      // Upload audio to R2 if we have the file
-      if (pendingInterview.audioFile && typeof window !== 'undefined') {
-        const uploadToastId = toast.loading("Uploading audio...");
-        try {
-          const formData = new FormData();
-          formData.append('file', pendingInterview.audioFile);
-          formData.append('interviewId', `temp-${Date.now()}`);
-
-          console.log('Starting audio upload...');
-
-          const uploadResponse = await fetch('/api/upload-audio', {
-            method: 'POST',
-            body: formData,
-          });
-
-          console.log('Upload response status:', uploadResponse.status);
-
-          if (!uploadResponse.ok) {
-            const errorText = await uploadResponse.text();
-            console.error('Upload failed:', errorText);
-            throw new Error('Failed to upload audio');
-          }
-
-          const uploadData = await uploadResponse.json();
-          audioUrl = uploadData.url;
-          console.log('Audio uploaded successfully:', audioUrl);
-          toast.success("Audio uploaded successfully", { id: uploadToastId });
-        } catch (uploadError) {
-          console.error('Audio upload failed:', uploadError);
-          toast.warning("Audio upload failed - continuing without audio", { id: uploadToastId });
-        }
+      if (pendingInterview.audioFile) {
+        const formData = new FormData();
+        formData.append('file', pendingInterview.audioFile);
+        formData.append('interviewId', `temp-${Date.now()}`);
+        const uploadRes = await fetch('/api/upload-audio', { method: 'POST', body: formData });
+        if (uploadRes.ok) audioUrl = (await uploadRes.json()).url;
       }
-
-      console.log('Creating interview with audioUrl:', audioUrl);
-      console.log('Creating interview in Convex...');
-      
-      let interviewId;
-      try {
-        interviewId = await createInterview({
-          projectId: currentProjectId,
-          title: pendingInterview.title,
-          topic: pendingInterview.topic,
-          transcription: pendingInterview.transcription,
-          segments: pendingInterview.segments,
-          duration: pendingInterview.duration,
-          audioUrl,
-        });
-      } catch (createError) {
-        console.error('Error creating interview:', createError);
-        throw createError;
-      }
-
-      console.log('Interview created with ID:', interviewId);
-
-      toast.success("Interview saved successfully!", { 
-        id: toastId,
+      const interviewId = await createInterview({
+        projectId: currentProjectId,
+        title: pendingInterview.title,
+        topic: pendingInterview.topic,
+        transcription: pendingInterview.transcription,
+        segments: pendingInterview.segments,
+        duration: pendingInterview.duration,
+        audioUrl,
       });
-
-      // Reset state
-      setPendingInterview(null);
-      setShowTranscription(false);
-      setSelectedFile(null);
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-      }
-      setAudioUrl(null);
-      setTitle('');
-      setTopic('');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-
-      // Redirect to interview detail page
+      toast.success('Saved!', { id: toastId });
       router.push(`/project/${currentProjectId}/interview/${interviewId}`);
-
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to save";
-      toast.error(`Failed to save: ${errorMessage}`, { 
-        id: toastId,
-        duration: 4000,
-      });
+      toast.error(`Failed: ${err instanceof Error ? err.message : 'Unknown'}`, { id: toastId });
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleReset = () => {
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
     setSelectedFile(null);
-    if (audioUrl) {
-      URL.revokeObjectURL(audioUrl);
-    }
     setAudioUrl(null);
     setTitle('');
     setTopic('');
-    setShowTranscription(false);
+    setShowPreview(false);
+    setPendingInterview(null);
+    setSelectedSource(null);
     setRecordingTime(0);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Si pas de projets, afficher un message
   if (projects && projects.length === 0) {
     return (
-      <div className="container max-w-5xl mx-auto p-6">
-        <Card className="bg-card rounded-2xl shadow-lg p-8">
-          <CardContent className="text-center py-12">
-            <FolderOpen className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold mb-2 text-foreground">No Projects Yet</h3>
-            <p className="text-muted-foreground mb-4">
-              Create a project first to start transcribing interviews
-            </p>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen flex items-center justify-center bg-[var(--warm-cream)]">
+        <div className="text-center max-w-md mx-auto px-6">
+          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-[var(--accent)] flex items-center justify-center">
+            <FileText className="w-8 h-8 text-[var(--muted-foreground)]" />
+          </div>
+          <h2 className="font-serif text-2xl mb-2">No Projects Yet</h2>
+          <p className="text-[var(--muted-foreground)] mb-6">Create a project first to start transcribing interviews</p>
+          <Link href="/project" className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg font-medium hover:opacity-90 transition-opacity">
+            Create Project
+            <ChevronRight className="w-4 h-4" />
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container max-w-5xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="mb-8">
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={() => router.push(`/project/${projectId}`)}
-          className="mb-4 -ml-2 text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="w-4 h-4 mr-1" />
-          Back to Project
-        </Button>
-        
-        <div className="flex items-center gap-3 mb-2">
-          <img 
-            src="/logomark.svg" 
-            alt="Skripta" 
-            className="w-10 h-10 object-contain"
-          />
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            New Interview
-          </h1>
-        </div>
-        <p className="mt-1 text-muted-foreground">Upload, record, or paste a URL to transcribe your interview</p>
-      </div>
+    <div className="min-h-screen bg-[var(--warm-cream)]">
+      <div className="max-w-5xl mx-auto px-6 py-8">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+          <Link href={`/project/${projectId}`} className="inline-flex items-center gap-2 text-sm text-[var(--muted-foreground)] hover:text-foreground transition-colors mb-8 group">
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            Back to Project
+          </Link>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Upload Card */}
-        <Card className="bg-card rounded-2xl shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Upload className="w-5 h-5" />
-              New Interview
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Source Selection Tabs */}
-            <div className="flex border-b">
-              <button
-                onClick={() => setActiveTab('upload')}
-                className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'upload' 
-                    ? 'border-primary text-primary' 
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Upload className="w-4 h-4 inline mr-1" />
-                Upload
-              </button>
-              <button
-                onClick={() => setActiveTab('record')}
-                className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'record' 
-                    ? 'border-primary text-primary' 
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Mic className="w-4 h-4 inline mr-1" />
-                Record
-              </button>
-              <button
-                onClick={() => setActiveTab('url')}
-                className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'url' 
-                    ? 'border-primary text-primary' 
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Link className="w-4 h-4 inline mr-1" />
-                From URL
-              </button>
-            </div>
+          <div className="mb-10">
+            <h1 className="font-serif text-4xl md:text-5xl mb-3 tracking-tight">Add New Interview</h1>
+            <p className="text-lg text-[var(--muted-foreground)]">Choose how you want to import your interview</p>
+          </div>
 
-            {/* Upload Section */}
-            {activeTab === 'upload' && (
-              <div className="py-4">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="audio/*,video/*"
-                  onChange={handleFileChange}
-                  className="hidden"
-                  id="file-upload"
-                />
-                <label
-                  htmlFor="file-upload"
-                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-accent transition-colors"
-                >
-                  <Upload className="w-8 h-8 text-muted-foreground mb-2" />
-                  <span className="text-sm text-foreground">Click to upload audio or video</span>
-                  <span className="text-xs text-muted-foreground mt-1">MP3, MP4, WAV, M4A, WebM, MOV • Video files will be converted automatically</span>
-                </label>
-              </div>
-            )}
-
-            {/* Record Section */}
-            {activeTab === 'record' && (
-              <div className="py-4 text-center space-y-4">
-                {isRecording ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-center gap-2 text-destructive">
-                      <span className="w-3 h-3 bg-destructive rounded-full animate-pulse"></span>
-                      Recording...
-                    </div>
-                    <div className="text-2xl font-mono">{formatRecordingTime(recordingTime)}</div>
-                    <Button onClick={stopRecording} variant="outline" className="gap-2">
-                      <Pause className="w-4 h-4" />
-                      Stop Recording
-                    </Button>
-                  </div>
-                ) : (
-                  <Button onClick={startRecording} className="gap-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-                    <Mic className="w-4 h-4" />
-                    Start Recording
-                  </Button>
-                )}
-              </div>
-            )}
-
-            {/* URL Section */}
-            {activeTab === 'url' && (
-              <div className="py-4 space-y-3">
-                <Input
-                  ref={urlInputRef}
-                  type="url"
-                  placeholder="https://example.com/audio.mp3"
-                  value={audioUrlInput}
-                  onChange={(e) => setAudioUrlInput(e.target.value)}
-                />
-                <Button 
-                  onClick={handleUrlSubmit} 
-                  disabled={!audioUrlInput || isUploading}
-                  className="w-full gap-2"
-                >
-                  {isUploading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Link className="w-4 h-4" />
-                  )}
-                  Load Audio
-                </Button>
-              </div>
-            )}
-
-            {/* File Preview & Form */}
-            {audioUrl && (
-              <div className="space-y-4 pt-4 border-t">
-                {/* Video/Audio indicator */}
-                {isVideoFile && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground bg-primary/10 p-2 rounded-lg">
-                    <Film className="w-4 h-4 text-primary" />
-                    <span>Video file will be converted to audio automatically</span>
-                  </div>
-                )}
-                
-                <div className="flex items-center gap-3">
-                  <audio controls className="flex-1" src={audioUrl}>
-                    Your browser does not support the audio element.
-                  </audio>
-                  <Button variant="ghost" size="icon" onClick={handleReset}>
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="title">
-                      Interview Title <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="title"
-                      type="text"
-                      placeholder="e.g., User Interview - Product Discovery"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      disabled={isTranscribing}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="topic">
-                      Interview Topic <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="topic"
-                      type="text"
-                      placeholder="e.g., Mobile app onboarding experience"
-                      value={topic}
-                      onChange={(e) => setTopic(e.target.value)}
-                      disabled={isTranscribing}
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">Helps AI extract better insights</p>
-                  </div>
-                </div>
-
-                {/* Two-step buttons: Transcribe and Save */}
-                <div className="flex gap-3">
-                  <Button 
-                    onClick={handleTranscribe}
-                    disabled={isTranscribing || !selectedFile || !title.trim() || !topic.trim()}
-                    className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
-                    variant={pendingInterview ? "outline" : "default"}
+          {!showPreview ? (
+            <>
+              <div className="grid md:grid-cols-3 gap-4 mb-8">
+                {[
+                  { id: 'upload', icon: CloudUpload, label: 'Upload File', desc: 'MP3, MP4, WAV, M4A' },
+                  { id: 'record', icon: Radio, label: 'Record', desc: 'Record directly in browser' },
+                  { id: 'url', icon: Globe, label: 'From URL', desc: 'Paste a link to audio/video' },
+                ].map((source, i) => (
+                  <motion.button
+                    key={source.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    onClick={() => handleSourceSelect(source.id as SourceType)}
+                    className={`relative p-6 rounded-2xl border-2 transition-all duration-200 text-left ${
+                      selectedSource === source.id
+                        ? 'border-[var(--primary)] bg-[var(--primary)]/5 shadow-lg shadow-[var(--primary)]/10'
+                        : 'border-[var(--warm-border)] bg-white hover:border-[var(--primary)]/50 hover:shadow-md'
+                    }`}
                   >
-                    {isTranscribing ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Transcribing...
-                      </>
-                    ) : pendingInterview ? (
-                      <>
-                        <Upload className="w-4 h-4 mr-2" />
-                        Re-transcribe
-                      </>
-                    ) : (
-                      <>
-                        Transcribe
-                        <ArrowRight className="w-4 h-4 ml-2" />
-                      </>
+                    <source.icon className={`w-8 h-8 mb-4 ${selectedSource === source.id ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`} />
+                    <h3 className="font-serif text-xl mb-1">{source.label}</h3>
+                    <p className="text-sm text-[var(--muted-foreground)]">{source.desc}</p>
+                    {selectedSource === source.id && (
+                      <motion.div layoutId="sourceIndicator" className="absolute top-4 right-4 w-6 h-6 rounded-full bg-[var(--primary)] flex items-center justify-center">
+                        <Check className="w-4 h-4 text-white" />
+                      </motion.div>
                     )}
-                  </Button>
-                  
-                  {pendingInterview && (
-                    <Button 
-                      onClick={handleSave}
-                      disabled={isSaving}
-                      className="flex-1"
-                    >
-                      {isSaving ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          Save
-                          <ArrowRight className="w-4 h-4 ml-2" />
-                        </>
+                  </motion.button>
+                ))}
+              </div>
+
+              <AnimatePresence mode="wait">
+                {selectedSource && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="bg-white rounded-2xl border border-[var(--warm-border)] p-8 mb-8">
+                      {selectedSource === 'upload' && (
+                        <div className="space-y-6">
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="audio/*,video/*"
+                            onChange={handleFileChange}
+                            className="hidden"
+                            id="file-upload"
+                          />
+                          <label
+                            htmlFor="file-upload"
+                            onDrop={handleDrop}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            className={`relative flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200 ${
+                              isDragging
+                                ? 'border-[var(--primary)] bg-[var(--primary)]/5'
+                                : 'border-[var(--warm-border)] hover:border-[var(--primary)]/50 hover:bg-[var(--accent)]'
+                            }`}
+                          >
+                            {isDragging && (
+                              <motion.div
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                className="absolute inset-0 flex items-center justify-center bg-[var(--primary)]/10 rounded-xl"
+                              >
+                                <span className="text-[var(--primary)] font-medium">Drop your file here</span>
+                              </motion.div>
+                            )}
+                            <CloudUpload className={`w-12 h-12 mb-4 transition-colors ${isDragging ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`} />
+                            <span className="text-foreground font-medium">Click or drag to upload</span>
+                            <span className="text-sm text-[var(--muted-foreground)] mt-1">Audio or video file • Video will convert automatically</span>
+                          </label>
+                        </div>
                       )}
-                    </Button>
-                  )}
+
+                      {selectedSource === 'record' && (
+                        <div className="text-center py-8">
+                          {isRecording ? (
+                            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="space-y-6">
+                              <div className="relative inline-flex items-center justify-center">
+                                <motion.div
+                                  animate={{ scale: [1, 1.2, 1] }}
+                                  transition={{ repeat: Infinity, duration: 1.5 }}
+                                  className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center"
+                                >
+                                  <div className="w-8 h-8 rounded-full bg-red-500" />
+                                </motion.div>
+                              </div>
+                              <div className="font-mono text-4xl">{formatTime(recordingTime)}</div>
+                              <p className="text-[var(--muted-foreground)]">Recording in progress...</p>
+                              <button
+                                onClick={stopRecording}
+                                className="inline-flex items-center gap-2 px-6 py-3 bg-red-500 text-white rounded-xl font-medium hover:bg-red-600 transition-colors"
+                              >
+                                <Square className="w-5 h-5" />
+                                Stop Recording
+                              </button>
+                            </motion.div>
+                          ) : (
+                            <div className="space-y-4">
+                              <div className="w-20 h-20 mx-auto rounded-full bg-[var(--accent)] flex items-center justify-center">
+                                <Mic className="w-10 h-10 text-[var(--primary)]" />
+                              </div>
+                              <p className="text-[var(--muted-foreground)]">Record audio directly from your microphone</p>
+                              <button
+                                onClick={startRecording}
+                                className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-xl font-medium hover:opacity-90 transition-opacity"
+                              >
+                                <Mic className="w-5 h-5" />
+                                Start Recording
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {selectedSource === 'url' && (
+                        <div className="space-y-4">
+                          <div className="flex gap-3">
+                            <input
+                              type="url"
+                              placeholder="https://example.com/audio.mp3"
+                              value={audioUrlInput}
+                              onChange={(e) => setAudioUrlInput(e.target.value)}
+                              className="flex-1 px-4 py-3 rounded-xl border border-[var(--warm-border)] bg-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
+                            />
+                            <button
+                              onClick={handleUrlSubmit}
+                              disabled={!audioUrlInput || isUploading}
+                              className="px-6 py-3 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                            >
+                              {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Load'}
+                            </button>
+                          </div>
+                          <p className="text-sm text-[var(--muted-foreground)]">Enter a direct link to an audio or video file</p>
+                        </div>
+                      )}
+
+                      {selectedFile && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mt-6 pt-6 border-t border-[var(--warm-border)]"
+                        >
+                          <div className="flex items-center justify-between p-4 bg-[var(--accent)] rounded-xl">
+                            <div className="flex items-center gap-4">
+                              {isVideoFile ? (
+                                <div className="w-12 h-12 rounded-lg bg-[var(--primary)]/10 flex items-center justify-center">
+                                  <Film className="w-6 h-6 text-[var(--primary)]" />
+                                </div>
+                              ) : (
+                                <div className="w-12 h-12 rounded-lg bg-[var(--primary)]/10 flex items-center justify-center">
+                                  <FileText className="w-6 h-6 text-[var(--primary)]" />
+                                </div>
+                              )}
+                              <div>
+                                <p className="font-medium">{selectedFile.name}</p>
+                                <p className="text-sm text-[var(--muted-foreground)]">
+                                  {(selectedFile.size / 1024 / 1024).toFixed(1)} MB
+                                  {isVideoFile && ' • Will be converted to audio'}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={handleReset}
+                              className="p-2 rounded-lg hover:bg-white transition-colors"
+                            >
+                              <X className="w-5 h-5 text-[var(--muted-foreground)]" />
+                            </button>
+                          </div>
+
+                          <div className="mt-6 space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium mb-2">
+                                Interview Title <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                placeholder="e.g., User Interview - Product Discovery"
+                                className="w-full px-4 py-3 rounded-xl border border-[var(--warm-border)] bg-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium mb-2">
+                                Interview Topic <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={topic}
+                                onChange={(e) => setTopic(e.target.value)}
+                                placeholder="e.g., Mobile app onboarding experience"
+                                className="w-full px-4 py-3 rounded-xl border border-[var(--warm-border)] bg-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
+                              />
+                              <p className="text-xs text-[var(--muted-foreground)] mt-2">Helps AI extract better insights</p>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={handleTranscribe}
+                            disabled={isProcessing || !title.trim() || !topic.trim()}
+                            className="mt-6 w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                          >
+                            {isProcessing ? (
+                              <>
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                {isVideoFile ? 'Converting & Transcribing...' : 'Transcribing...'}
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-5 h-5" />
+                                Transcribe
+                                <ChevronRight className="w-5 h-5" />
+                              </>
+                            )}
+                          </button>
+                        </motion.div>
+                      )}
+
+                      {error && (
+                        <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+                          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                          <p className="text-sm text-red-600">{error}</p>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {!selectedSource && interviews && interviews.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="mt-12"
+                >
+                  <h2 className="font-serif text-2xl mb-6">Recent Interviews</h2>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {interviews.slice(0, 4).map((interview, i) => (
+                      <motion.button
+                        key={interview._id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 + i * 0.1 }}
+                        onClick={() => router.push(`/project/${currentProjectId}/interview/${interview._id}`)}
+                        className="group p-5 bg-white rounded-xl border border-[var(--warm-border)] hover:border-[var(--primary)]/50 hover:shadow-lg transition-all duration-200 text-left"
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="w-10 h-10 rounded-lg bg-[var(--accent)] flex items-center justify-center">
+                            <FileText className="w-5 h-5 text-[var(--primary)]" />
+                          </div>
+                          <Badge variant="secondary" className="text-xs">{interview.status}</Badge>
+                        </div>
+                        <h3 className="font-medium mb-1 group-hover:text-[var(--primary)] transition-colors">{interview.title}</h3>
+                        <div className="flex items-center gap-4 text-sm text-[var(--muted-foreground)]">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-4 h-4" />
+                            {Math.floor(interview.duration / 60)}:{String(interview.duration % 60).padStart(2, '0')}
+                          </span>
+                          <span>{interview.segments?.length || 0} segments</span>
+                        </div>
+                      </motion.button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="bg-white rounded-2xl border border-[var(--warm-border)] p-8"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                  <Check className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <h2 className="font-serif text-2xl">Ready to Save</h2>
+                  <p className="text-sm text-[var(--muted-foreground)]">{pendingInterview?.segments.length} segments transcribed</p>
                 </div>
               </div>
-            )}
 
-            {error && (
-              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-                <p className="text-destructive text-sm">{error}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Right: Transcription Preview or Recent Interviews */}
-        <Card className="bg-card rounded-2xl shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5" />
-              {pendingInterview ? 'Preview - Ready to Save' : showTranscription ? 'Transcription' : 'Recent Interviews'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {pendingInterview ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 dark:bg-green-950 p-2 rounded-lg">
-                  <Clock className="w-4 h-4" />
-                  Ready to save - {pendingInterview.segments.length} segments
-                </div>
-                <div className="max-h-[400px] overflow-y-auto space-y-2">
-                  {pendingInterview.segments.map((segment, i) => (
-                    <div key={i} className="text-sm">
-                      <span className="text-xs text-muted-foreground">
+              <div className="max-h-[400px] overflow-y-auto space-y-2 mb-6">
+                {pendingInterview?.segments.map((segment, i) => (
+                  <div key={i} className="p-3 bg-[var(--muted)] rounded-lg">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-mono text-[var(--muted-foreground)]">
                         {Math.floor(segment.start / 60)}:{String(Math.floor(segment.start % 60)).padStart(2, '0')}
                       </span>
                       {segment.speaker && (
-                        <span className="ml-2 text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--primary)]/10 text-[var(--primary)]">
                           {segment.speaker}
                         </span>
                       )}
-                      <p className="text-foreground">{segment.text}</p>
                     </div>
-                  ))}
-                </div>
-              </div>
-            ) : showTranscription && transcript ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Clock className="w-4 h-4" />
-                  Processing...
-                </div>
-                <div className="max-h-[400px] overflow-y-auto space-y-2">
-                  {transcript.split('\n').map((line, i) => (
-                    <p key={i} className="text-sm text-foreground">{line}</p>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {interviews && interviews.length > 0 ? (
-                  interviews.slice(0, 5).map((interview) => (
-                    <div
-                      key={interview._id}
-                      onClick={() => router.push(`/project/${currentProjectId}/interview/${interview._id}`)}
-                      className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-accent cursor-pointer transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                          <FileText className="w-5 h-5 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-sm">{interview.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {Math.floor(interview.duration / 60)}:{String(Math.floor(interview.duration % 60)).padStart(2, '0')} min
-                          </p>
-                        </div>
-                      </div>
-                      <Badge variant="outline" className="text-xs">
-                        {interview.status}
-                      </Badge>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>No interviews yet</p>
-                    <p className="text-sm">Upload an audio file to get started</p>
+                    <p className="text-sm">{segment.text}</p>
                   </div>
-                )}
-                
-                {interviews && interviews.length > 5 && (
-                  <Button 
-                    variant="outline" 
-                    className="w-full mt-2"
-                    onClick={() => router.push(`/project/${currentProjectId}`)}
-                  >
-                    View all {interviews.length} interviews
-                  </Button>
-                )}
+                ))}
               </div>
-            )}
-          </CardContent>
-        </Card>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleReset}
+                  className="flex-1 px-6 py-3 border border-[var(--warm-border)] rounded-xl font-medium hover:bg-[var(--muted)] transition-colors"
+                >
+                  Start Over
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      Save Interview
+                      <ChevronRight className="w-5 h-5" />
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </motion.div>
       </div>
     </div>
+  );
+}
+
+function Square({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <rect x="6" y="6" width="12" height="12" rx="1" />
+    </svg>
   );
 }
