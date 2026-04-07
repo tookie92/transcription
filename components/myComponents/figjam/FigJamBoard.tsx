@@ -102,6 +102,8 @@ interface FigJamBoardProps {
   presenceUsers?: Array<{ userId: string; user?: { id: string; name: string; avatar?: string } }>;
   // Current user for displaying own vote name
   currentUser?: { userId: string; name: string };
+  // Callback to open persona panel
+  onOpenPersona?: () => void;
 }
 
 export function FigJamBoard({
@@ -123,6 +125,7 @@ export function FigJamBoard({
   onCanvasInsightIdsChange,
   presenceUsers = [],
   currentUser,
+  onOpenPersona,
 }: FigJamBoardProps) {
   const board = useFigJamBoard();
   const { state, setTool } = board;
@@ -1741,6 +1744,7 @@ export function FigJamBoard({
             });
           }
         }}
+        onOpenPersona={onOpenPersona}
       />
 
       {/* ── MiniMap ── */}

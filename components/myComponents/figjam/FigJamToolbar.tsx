@@ -5,7 +5,8 @@ import type { ToolType } from "@/types/figjam";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MousePointer2, Hand, ArrowLeft, Sparkles, MessageSquare, Presentation, DownloadCloud, Vote, Layers, Trophy, RotateCcw, Plus } from "lucide-react";
+import { MousePointer2, Hand, ArrowLeft, Sparkles, MessageSquare, Presentation, DownloadCloud, Vote, Layers, Trophy, RotateCcw, Plus, Settings, User } from "lucide-react";
+import { useAuth } from "@clerk/nextjs";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -55,7 +57,7 @@ interface FigJamToolbarProps {
   isVotingActive?: boolean;
   onCloseSidebar?: () => void;
   voting?: {
-    session: { isActive: boolean; votingPhase: string } | null;
+    session: { isActive: boolean; votingPhase: string; createdBy: string } | null;
     isVoting: boolean;
     isRevealed: boolean;
     myVotesCount: number;
@@ -75,6 +77,7 @@ interface FigJamToolbarProps {
   }>;
   totalVotes?: number;
   onCreateCluster?: (title: string) => void;
+  onOpenPersona?: () => void;
 }
 
 const PRESET_CONFIGS = [
@@ -109,6 +112,7 @@ export function FigJamToolbar({
   voteResults,
   totalVotes = 0,
   onCreateCluster,
+  onOpenPersona,
 }: FigJamToolbarProps) {
   const [showVotingConfig, setShowVotingConfig] = useState(false);
   const [showClusterDialog, setShowClusterDialog] = useState(false);
@@ -116,6 +120,9 @@ export function FigJamToolbar({
   const [dotsPerUser, setDotsPerUser] = useState(5);
   const [durationMinutes, setDurationMinutes] = useState<number | null>(null);
   const [prompt, setPrompt] = useState("Vote for priorities");
+
+  const { userId } = useAuth();
+  const isVotingCreator = voting?.session?.createdBy === userId;
 
   const handleClusterTool = () => {
     if (activeTool === "cluster") {
@@ -386,54 +393,102 @@ export function FigJamToolbar({
           </Tooltip>
 
           {/* ── Voting Progress Panel ── */}
-          {voting?.isVoting && (
+          {(voting?.isVoting || !voting?.session?.isActive) && (
             <div className="bg-primary/10 border border-primary/20 rounded-xl shadow-lg px-4 py-2 flex items-center gap-3">
-              <Vote className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium text-primary">Vote!</span>
-              <div className="flex items-center gap-1.5">
-                {Array.from({ length: voting.maxDotsPerUser }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      "w-4 h-4 rounded-full border-2 transition-all",
-                      i < voting.myVotesCount
-                        ? "border-transparent"
-                        : "border-primary/30 bg-transparent"
-                    )}
-                    style={{
-                      backgroundColor: i < voting.myVotesCount ? voting.userColor : "transparent",
-                    }}
-                  />
-                ))}
-              </div>
-              {voting.remainingTime !== null && voting.remainingTime > 0 && (
-                <div className="flex items-center gap-1 text-primary font-mono text-sm">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
-                  <span>{Math.floor(voting.remainingTime / 60000)}:{((voting.remainingTime % 60000) / 1000).toFixed(0).padStart(2, '0')}</span>
-                </div>
+              {/* During voting */}
+              {voting?.isVoting && (
+                <>
+                  <Vote className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-primary">Vote!</span>
+                  <div className="flex items-center gap-1.5">
+                    {Array.from({ length: voting.maxDotsPerUser }).map((_, i) => (
+                      <div
+                        key={i}
+                        className={cn(
+                          "w-4 h-4 rounded-full border-2 transition-all",
+                          i < voting.myVotesCount
+                            ? "border-transparent"
+                            : "border-primary/30 bg-transparent"
+                        )}
+                        style={{
+                          backgroundColor: i < voting.myVotesCount ? voting.userColor : "transparent",
+                        }}
+                      />
+                    ))}
+                  </div>
+                  {voting.remainingTime !== null && voting.remainingTime > 0 && (
+                    <div className="flex items-center gap-1 text-primary font-mono text-sm">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                      </svg>
+                      <span>{Math.floor(voting.remainingTime / 60000)}:{((voting.remainingTime % 60000) / 1000).toFixed(0).padStart(2, '0')}</span>
+                    </div>
+                  )}
+                </>
               )}
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setShowVotingConfig(true)}
-                className="ml-1 text-primary hover:text-primary/80 hover:bg-primary/10"
-                title="Settings"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                </svg>
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => voting.completeVoting()}
-                className="text-primary border-primary/30 hover:bg-primary/10"
-              >
-                Reveal
-              </Button>
+              
+              {/* After voting - Show Results / Generate Persona */}
+              {!voting?.isVoting && voting?.session && (
+                <>
+                  <Trophy className="w-4 h-4 text-amber-500" />
+                  <span className="text-sm font-medium text-amber-700">Results ready</span>
+                </>
+              )}
+
+              {/* Settings - visible ONLY to creator during voting */}
+              {isVotingCreator && voting?.isVoting && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowVotingConfig(true)}
+                  className="ml-1 text-muted-foreground hover:text-foreground"
+                  title="Settings"
+                >
+                  <Settings className="w-4 h-4" />
+                </Button>
+              )}
+
+              {/* End button - only for creator */}
+              {isVotingCreator && voting?.isVoting && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => voting.stopVoting()}
+                  className="text-red-600 border-red-300 hover:bg-red-50"
+                >
+                  End
+                </Button>
+              )}
+
+              {/* Leave button - for non-creators */}
+              {!isVotingCreator && voting?.isVoting && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => voting.stopVoting()}
+                  className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                >
+                  Leave
+                </Button>
+              )}
+
+              {/* Generate Persona - visible when voting is finished and there are results */}
+              {!voting?.isVoting && voteResults && voteResults.length > 0 && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (onOpenPersona) {
+                      onOpenPersona();
+                    } else {
+                      toast.info("Open Persona panel from toolbar to generate");
+                    }
+                  }}
+                  className="bg-[#4CA771] hover:bg-[#3F9A68] text-white"
+                >
+                  Generate Persona
+                </Button>
+              )}
             </div>
           )}
         </div>

@@ -22,6 +22,13 @@ interface CanvasSidePanelsProps {
   userId?: string;
   userName?: string;
 
+  dotVotingResults?: Array<{
+    sectionId: string;
+    title: string;
+    voteCount: number;
+    colors: string[];
+  }>;
+
   selectedTheme: DetectedTheme | null;
   setSelectedTheme: (theme: DetectedTheme) => void;
   onApplyRecommendation: (recommendation: ThemeRecommendation) => void;
@@ -45,6 +52,7 @@ export function CanvasSidePanels({
   projectId,
   projectInfo,
   mapId,
+  dotVotingResults,
   selectedTheme,
   setSelectedTheme,
   onApplyRecommendation,
@@ -139,6 +147,7 @@ export function CanvasSidePanels({
             projectContext={
               projectInfo ? `PROJECT: ${projectInfo.name}` : undefined
             }
+            dotVotingResults={dotVotingResults}
           />
         </motion.div>
       )}

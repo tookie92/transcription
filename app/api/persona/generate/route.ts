@@ -17,6 +17,11 @@ interface PersonaRequest {
     type: string;
   }>;
   projectContext?: string;
+  dotVotingResults?: Array<{
+    sectionId: string;
+    title: string;
+    voteCount: number;
+  }>;
 }
 
 interface UserPersonaResponse {
@@ -64,7 +69,7 @@ const CREATIVE_NAMES = {
 export async function POST(request: NextRequest) {
   try {
     const body: PersonaRequest = await request.json();
-    const { groups, insights, projectContext } = body;
+    const { groups, insights, projectContext, dotVotingResults } = body;
 
     if (!groups || groups.length === 0) {
       return NextResponse.json(
@@ -81,9 +86,22 @@ export async function POST(request: NextRequest) {
       `- ${insight.type.toUpperCase()}: ${insight.text}`
     ).join('\n');
 
-    const groupsText = groups.map(group => 
-      `- ${group.title}: ${group.insightIds.length} insights`
-    ).join('\n');
+    const groupsText = groups.map(group => {
+      const votingInfo = dotVotingResults?.find(r => r.title === group.title);
+      const voteCount = votingInfo?.voteCount || 0;
+      const priority = voteCount > 0 ? ` (${voteCount} votes - HIGH PRIORITY)` : '';
+      return `- ${group.title}: ${group.insightIds.length} insights${priority}`;
+    }).join('\n');
+
+    // Build priority context
+    const priorityGroups = dotVotingResults
+      ?.filter(r => r.voteCount > 0)
+      .sort((a, b) => b.voteCount - a.voteCount)
+      .map(r => r.title) || [];
+
+    const priorityContext = priorityGroups.length > 0 
+      ? `\n\nPRIORITY CONTEXT: The following clusters received the most votes during dot voting and should be given extra emphasis:\n${priorityGroups.map((title, i) => `${i + 1}. ${title}`).join('\n')}`
+      : '';
 
     const prompt = `You are a UX Research expert creating detailed user personas based on affinity mapping data.
 
@@ -94,6 +112,7 @@ ${groupsText}
 
 KEY INSIGHTS FROM USER RESEARCH:
 ${insightsText}
+${priorityContext}
 
 Based on these research insights, create a comprehensive user persona that represents the main user archetype.
 
@@ -122,7 +141,7 @@ Return a JSON object with this exact structure:
   }
 }
 
-Make the persona realistic, specific, and directly based on the research insights provided.`;
+Make the persona realistic, specific, and directly based on the research insights provided. Give special attention to the priority clusters if any are listed above.`;
 
     const completion = await groq.chat.completions.create({
       messages: [

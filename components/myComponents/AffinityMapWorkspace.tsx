@@ -4,7 +4,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import { AffinityCluster, Insight, ActivePanel, ThemeAnalysis, ThemeRecommendation } from "@/types";
 import { toast } from "sonner";
@@ -76,6 +76,24 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
 
   // ==================== VOTING (passed to FigJamBoard) ====================
   const voting = useVotingSync(affinityMap?._id, projectId as Id<"projects">);
+
+  // Compute vote results for persona generation
+  const dotVotingResults = useMemo(() => {
+    const labels = clusters;
+    if (!voting.session || voting.session.isActive) return [];
+    return labels
+      .map(label => {
+        const clusterVotes = voting.getClusterVotes(label.id);
+        return {
+          sectionId: label.id,
+          title: label.title,
+          voteCount: clusterVotes.length,
+          colors: clusterVotes.map((v: { color: string }) => v.color),
+        };
+      })
+      .filter(r => r.voteCount > 0)
+      .sort((a, b) => b.voteCount - a.voteCount);
+  }, [clusters, voting.session, voting]);
 
   // ==================== AUTO-CREATE MAP ====================
   const createAffinityMap = useMutation(api.affinityMaps.create);
@@ -404,6 +422,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           onCanvasInsightIdsChange={(ids) => setCanvasInsightIds(new Set(ids))}
           presenceUsers={otherUsers || []}
           currentUser={{ userId: userId || "", name: user?.fullName || user?.firstName || "You" }}
+          onOpenPersona={() => setActivePanel("persona")}
         />
       )}
 
@@ -418,6 +437,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         projectInfo={{ name: project.name, description: project.description }}
         mapId={affinityMap?._id || ""}
         userId={userId || undefined}
+        dotVotingResults={dotVotingResults}
         selectedTheme={null}
         setSelectedTheme={() => {}}
         onApplyRecommendation={handleApplyRecommendation}

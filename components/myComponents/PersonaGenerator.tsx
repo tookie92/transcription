@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -8,11 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles, User, Download, RefreshCw, Save, Eye, Edit2, Trash2, X, Check } from "lucide-react";
+import { Sparkles, User, Download, RefreshCw, Save, Eye, Edit2, Trash2, X, Check, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Id } from "@/convex/_generated/dataModel";
 import Image from "next/image";
 import { ScrollArea } from "../ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 interface PersonaGeneratorProps {
   projectId: string;
@@ -20,6 +21,12 @@ interface PersonaGeneratorProps {
   groups: Array<{ id: string; title: string; insightIds: string[] }>;
   insights: Array<{ id: string; text: string; type: string }>;
   projectContext?: string;
+  dotVotingResults?: Array<{
+    sectionId: string;
+    title: string;
+    voteCount: number;
+    colors: string[];
+  }>;
 }
 
 interface GeneratedPersona {
@@ -45,7 +52,7 @@ interface GeneratedPersona {
   };
 }
 
-export function PersonaGenerator({ projectId, mapId, groups, insights, projectContext }: PersonaGeneratorProps) {
+export function PersonaGenerator({ projectId, mapId, groups, insights, projectContext, dotVotingResults }: PersonaGeneratorProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedPersona, setGeneratedPersona] = useState<GeneratedPersona | null>(null);
   const [profileImage, setProfileImage] = useState<string>("");
@@ -55,6 +62,12 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedSavedPersona, setSelectedSavedPersona] = useState<GeneratedPersona | null>(null);
   const [imageError, setImageError] = useState(false);
+  const [selectedClusterIds, setSelectedClusterIds] = useState<Set<string>>(new Set());
+
+  const winningClusterIds = useMemo(() => {
+    if (!dotVotingResults || dotVotingResults.length === 0) return new Set<string>();
+    return new Set(dotVotingResults.map(r => r.sectionId));
+  }, [dotVotingResults]);
 
   const createPersona = useMutation(api.personas.createPersona);
   const updatePersona = useMutation(api.personas.updatePersona);
@@ -74,6 +87,23 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
       return;
     }
 
+    const selectedGroups = selectedClusterIds.size > 0
+      ? groups.filter(g => selectedClusterIds.has(g.id))
+      : (winningClusterIds.size > 0 
+          ? groups.filter(g => winningClusterIds.has(g.id))
+          : groups);
+
+    if (selectedGroups.length === 0) {
+      toast.error("No groups selected for persona generation");
+      return;
+    }
+
+    const selectedGroupIds = new Set(selectedGroups.map(g => g.id));
+    const filteredInsights = insights.filter(i => {
+      const parentGroup = groups.find(g => g.insightIds.includes(i.id));
+      return parentGroup && selectedGroupIds.has(parentGroup.id);
+    });
+
     setIsGenerating(true);
     setImageError(false);
     try {
@@ -81,16 +111,17 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          groups: groups.map((group) => ({
+          groups: selectedGroups.map((group) => ({
             title: group.title,
             insightIds: group.insightIds,
           })),
-          insights: insights.map((insight) => ({
+          insights: filteredInsights.map((insight) => ({
             id: insight.id,
             text: insight.text,
             type: insight.type,
           })),
           projectContext,
+          dotVotingResults: dotVotingResults?.filter(r => selectedGroupIds.has(r.sectionId)),
         }),
       });
 
@@ -277,6 +308,91 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
       </CardHeader>
 
       <CardContent className="flex-1 overflow-hidden flex flex-col">
+        {/* Dot Voting Info */}
+        {dotVotingResults && dotVotingResults.length > 0 && (
+          <div className="mb-3 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+            <div className="flex items-center gap-2 mb-2">
+              <Star className="w-4 h-4 text-amber-500" />
+              <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                {dotVotingResults.length} clusters prioritized by dot voting
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {dotVotingResults.slice(0, 5).map((result) => (
+                <Badge key={result.sectionId} variant="outline" className="text-xs bg-amber-100/50 dark:bg-amber-900/30">
+                  {result.title} ({result.voteCount} votes)
+                </Badge>
+              ))}
+              {dotVotingResults.length > 5 && (
+                <Badge variant="outline" className="text-xs">+{dotVotingResults.length - 5} more</Badge>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Cluster Selection */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium">Clusters to include:</span>
+            <div className="flex gap-1">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setSelectedClusterIds(new Set(groups.map(g => g.id)))}
+                className="text-xs h-6 px-2"
+              >
+                Select all
+              </Button>
+              {winningClusterIds.size > 0 && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setSelectedClusterIds(winningClusterIds)}
+                  className="text-xs h-6 px-2 text-amber-600"
+                >
+                  Use winners
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto p-2 bg-muted/50 rounded-lg">
+            {groups.map((group) => {
+              const isWinner = winningClusterIds.has(group.id);
+              const isSelected = selectedClusterIds.size === 0 || selectedClusterIds.has(group.id);
+              return (
+                <button
+                  key={group.id}
+                  onClick={() => {
+                    if (selectedClusterIds.size === 0) {
+                      const newSet = new Set(groups.map(g => g.id));
+                      newSet.delete(group.id);
+                      setSelectedClusterIds(newSet);
+                    } else {
+                      const newSet = new Set(selectedClusterIds);
+                      if (newSet.has(group.id)) {
+                        newSet.delete(group.id);
+                      } else {
+                        newSet.add(group.id);
+                      }
+                      setSelectedClusterIds(newSet);
+                    }
+                  }}
+                  className={cn(
+                    "px-2 py-1 text-xs rounded-md border transition-all",
+                    isWinner && "ring-2 ring-amber-400",
+                    isSelected 
+                      ? "bg-primary/10 border-primary text-primary" 
+                      : "bg-muted border-border text-muted-foreground opacity-50"
+                  )}
+                >
+                  {isWinner && <Star className="w-3 h-3 inline mr-1 text-amber-500" />}
+                  {group.title}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Actions Bar */}
         <div className="flex items-center justify-between p-4 bg-muted rounded-lg mb-4">
           <div className="text-sm">

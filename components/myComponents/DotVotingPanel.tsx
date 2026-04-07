@@ -6,7 +6,7 @@ import { useState, useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@clerk/nextjs";
-import { Vote, Target, Award, Users, Plus, Trash2, Play, Eye, Timer, Grid, EyeOff } from "lucide-react";
+import { Vote, Target, Award, Users, Plus, Trash2, Play, Eye, Timer, Grid, EyeOff, User2 } from "lucide-react";
 import { AffinityGroup, Insight } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -284,19 +284,34 @@ export function DotVotingPanel({ projectId, mapId, groups, insights }: DotVoting
               <div className="flex gap-2">
                 {currentSession.votingPhase === "voting" && (
                   <>
-                    <Button onClick={handleRevealVotes} size="sm" className="flex-1">
-                      <Eye size={14} className="mr-1" />
-                      Reveal Votes
-                    </Button>
                     <Button 
                       onClick={handleToggleSilentMode} 
                       size="sm" 
                       variant={currentSession.isSilentMode ? "default" : "outline"}
+                      className="flex-1"
                     >
-                      {currentSession.isSilentMode ? <Eye size={14} /> : <EyeOff size={14} />}
+                      {currentSession.isSilentMode ? <EyeOff size={14} className="mr-1" /> : <Eye size={14} className="mr-1" />}
+                      {currentSession.isSilentMode ? "Silent" : "Live"}
+                    </Button>
+                    <Button onClick={handleEndSession} size="sm" variant="destructive">
+                      <Trash2 size={14} className="mr-1" />
+                      End
                     </Button>
                   </>
                 )}
+                {currentSession.votingPhase === "revealed" && (
+                  <Button onClick={handleEndSession} size="sm" variant="destructive" className="flex-1">
+                    <Trash2 size={14} className="mr-1" />
+                    End Session
+                  </Button>
+                )}
+              </div>
+            )}
+            {currentSession.createdBy !== userId && (
+              <div className="flex justify-center">
+                <Button onClick={handleEndSession} size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
+                  Leave Session
+                </Button>
               </div>
             )}
 
@@ -394,6 +409,20 @@ export function DotVotingPanel({ projectId, mapId, groups, insights }: DotVoting
                   }
                 </div>
               </div>
+            )}
+
+            {/* BOUTON GÉNÉRER PERSONA */}
+            {stats && stats.groupResults && stats.groupResults.some(r => r.totalVotes > 0) && (
+              <Button 
+                onClick={() => {
+                  toast.info("Open Persona panel from toolbar to generate");
+                }} 
+                className="w-full mt-4 bg-[#4CA771] hover:bg-[#3F9A68]"
+                size="sm"
+              >
+                <User2 size={14} className="mr-2" />
+                Generate Persona from Top Clusters
+              </Button>
             )}
           </div>
         )}
