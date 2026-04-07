@@ -104,6 +104,8 @@ interface FigJamBoardProps {
   currentUser?: { userId: string; name: string };
   // Callback to open persona panel
   onOpenPersona?: () => void;
+  // Callback to receive cluster/label data for panels
+  onLabelDataChange?: (labels: Array<{ id: string; title: string; insightIds: string[] }>) => void;
 }
 
 export function FigJamBoard({
@@ -126,6 +128,7 @@ export function FigJamBoard({
   presenceUsers = [],
   currentUser,
   onOpenPersona,
+  onLabelDataChange,
 }: FigJamBoardProps) {
   const board = useFigJamBoard();
   const { state, setTool } = board;
@@ -1208,6 +1211,29 @@ export function FigJamBoard({
   const labels    = sorted.filter((el): el is ClusterLabelData     => el.type === "label");
   const stickies  = sorted.filter((el): el is StickyNoteData      => el.type === "sticky");
   const clusterElements = labels;
+
+  // Track previous label data to avoid unnecessary updates
+  const prevLabelDataRef = useRef<string>("");
+
+  // Compute label data for parent (memoized to avoid infinite loop)
+  const labelData = useMemo(() => {
+    return labels.map(label => ({
+      id: label.id,
+      title: label.text || "Untitled Cluster",
+      insightIds: stickies
+        .filter(s => s.clusterId === label.id || s.parentSectionId === label.id)
+        .map(s => s.id),
+    }));
+  }, [labels, stickies]);
+
+  // Notify parent of labels change only when data actually changes
+  useEffect(() => {
+    const newDataStr = JSON.stringify(labelData);
+    if (prevLabelDataRef.current !== newDataStr) {
+      prevLabelDataRef.current = newDataStr;
+      onLabelDataChange?.(labelData);
+    }
+  }, [labelData, onLabelDataChange]);
 
   // Explicit clusterId-based grouping - use clusterId from sticky directly
   // Also check parentSectionId for backwards compatibility with old data

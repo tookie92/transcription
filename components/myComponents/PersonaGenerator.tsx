@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles, User, Download, RefreshCw, Save, Eye, Edit2, Trash2, X, Check, Star } from "lucide-react";
+import { Sparkles, User, Download, RefreshCw, Save, Eye, Edit2, Trash2, X, Check, Star, Target, Frown, Activity, GraduationCap, Banknote, MapPin, Laptop, Quote } from "lucide-react";
 import { toast } from "sonner";
 import { Id } from "@/convex/_generated/dataModel";
 import Image from "next/image";
@@ -27,6 +27,7 @@ interface PersonaGeneratorProps {
     voteCount: number;
     colors: string[];
   }>;
+  onClose?: () => void;
 }
 
 interface GeneratedPersona {
@@ -52,7 +53,7 @@ interface GeneratedPersona {
   };
 }
 
-export function PersonaGenerator({ projectId, mapId, groups, insights, projectContext, dotVotingResults }: PersonaGeneratorProps) {
+export function PersonaGenerator({ projectId, mapId, groups, insights, projectContext, dotVotingResults, onClose }: PersonaGeneratorProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedPersona, setGeneratedPersona] = useState<GeneratedPersona | null>(null);
   const [profileImage, setProfileImage] = useState<string>("");
@@ -63,6 +64,17 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
   const [selectedSavedPersona, setSelectedSavedPersona] = useState<GeneratedPersona | null>(null);
   const [imageError, setImageError] = useState(false);
   const [selectedClusterIds, setSelectedClusterIds] = useState<Set<string>>(new Set());
+
+  // Handle ESC key to close panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && onClose) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   const winningClusterIds = useMemo(() => {
     if (!dotVotingResults || dotVotingResults.length === 0) return new Set<string>();
@@ -79,6 +91,43 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
   const getFallbackImageUrl = (personaName: string): string => {
     const seed = personaName.replace(/\s+/g, "");
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(personaName)}&background=0D8ABC&color=fff&size=400`;
+  };
+
+  const getRandomAvatar = (seed: string): string => {
+    // Try randomuser.me first, fallback to dicebear on error
+    const lowerSeed = seed.toLowerCase();
+    const malePatterns = ['son', 'ton', 'man', 'ley', 'ard', 'er', 'well', 'ford', 'ie'];
+    const femalePatterns = ['a', 'ie', 'ey', 'ine', 'elle', 'y', 'na', 'ra', 'ia', 'lyn', 'ley'];
+    
+    let gender: 'men' | 'women' = 'men';
+    if (femalePatterns.some(p => lowerSeed.endsWith(p)) && !malePatterns.some(p => lowerSeed.endsWith(p))) {
+      gender = 'women';
+    } else if (lowerSeed.endsWith('a') || lowerSeed.includes(' ')) {
+      gender = 'women';
+    }
+    
+    const seedNum = Math.abs(hashCode(seed + Date.now().toString()));
+    const id = (seedNum % 99) + 1;
+    return `https://randomuser.me/api/portraits/${gender}/${id}.jpg`;
+  };
+
+  const getFallbackAvatar = (seed: string): string => {
+    // DiceBear as fallback
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+  };
+
+  const hashCode = (str: string): number => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return hash;
+  };
+
+  const generateRandomAvatar = (personaName?: string): string => {
+    return getRandomAvatar(personaName || Math.random().toString(36).substring(7));
   };
 
   const generatePersona = async () => {
@@ -129,12 +178,26 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
 
       const data = await response.json();
       setGeneratedPersona(data.persona);
-      setProfileImage(data.profileImage);
+      setProfileImage(generateRandomAvatar(data.persona.name));
       setBasedOn(data.basedOn);
       setViewMode("new");
       setIsEditMode(false);
       setSelectedSavedPersona(null);
-      toast.success(`Persona "${data.persona.name}" generated!`);
+      
+      // Auto-save to database
+      try {
+        await createPersona({
+          projectId: projectId as Id<"projects">,
+          mapId: mapId as Id<"affinityMaps">,
+          ...data.persona,
+          profileImage: generateRandomAvatar(data.persona.name),
+          basedOn: data.basedOn,
+        });
+        toast.success(`Persona "${data.persona.name}" generated and saved!`);
+      } catch (saveError) {
+        console.error("Auto-save failed:", saveError);
+        toast.success(`Persona "${data.persona.name}" generated!`);
+      }
     } catch (error) {
       console.error("Persona generation error:", error);
       toast.error("Failed to generate persona");
@@ -303,11 +366,14 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
             {savedPersonas && savedPersonas.length > 0 && (
               <Badge variant="secondary">{savedPersonas.length} saved</Badge>
             )}
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="w-4 h-4" />
+            </Button>
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-hidden flex flex-col">
+      <CardContent className="flex-1 overflow-hidden flex flex-col min-h-0">
         {/* Dot Voting Info */}
         {dotVotingResults && dotVotingResults.length > 0 && (
           <div className="mb-3 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
@@ -432,8 +498,8 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
           </div>
         </div>
 
-        <ScrollArea className="flex-1">
-          <div className="space-y-4">
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="space-y-4 pb-8">
             {/* Saved Personas List */}
             {!isEditMode && savedPersonas && savedPersonas.length > 0 && (
               <div className="space-y-2">
@@ -442,7 +508,7 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
                   <div
                     key={persona._id}
                     className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                      selectedSavedPersonas?._id === persona._id ? "bg-primary/10 border-primary" : "hover:bg-accent"
+                      selectedSavedPersona?._id === persona._id ? "bg-primary/10 border-primary" : "hover:bg-accent"
                     }`}
                     onClick={() => {
                       setSelectedSavedPersona(persona);
@@ -462,17 +528,32 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
                       <p className="font-medium truncate">{persona.name}</p>
                       <p className="text-xs text-muted-foreground">{persona.occupation}</p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        startEditing(persona, false);
-                      }}
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 hover:text-rose-500"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm("Delete this persona?")) {
+                            deleteExistingPersona(persona._id as Id<"personas">);
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startEditing(persona, false);
+                        }}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -480,14 +561,15 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
 
             {/* Persona Display / Edit */}
             {currentPersona && (
-              <div className="border rounded-lg p-4 space-y-4">
-                {/* Header */}
-                <div className="flex items-start gap-4">
+              <div className="border rounded-lg p-4 space-y-4 flex-1 overflow-y-auto pb-16">
+                  {/* Header */}
+                  <div className="flex items-start gap-4">
                   <div className="relative w-20 h-20 shrink-0">
                     <Image
                       src={currentImageUrl}
                       alt={currentPersona.name}
                       fill
+                      unoptimized
                       className="rounded-full object-cover border-2 border-white shadow"
                     />
                   </div>
@@ -530,7 +612,10 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
 
                 {/* Quote */}
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Quote</label>
+                  <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Quote className="w-4 h-4" />
+                    Quote
+                  </label>
                   {isEditMode ? (
                     <Textarea
                       value={editingPersona?.quote || ""}
@@ -562,40 +647,45 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
 
                 {/* Goals, Frustrations, Behaviors */}
                 <div className="grid grid-cols-3 gap-4">
-                  {(["goals", "frustrations", "behaviors"] as const).map((field) => (
-                    <div key={field}>
-                      <label className="text-sm font-medium text-muted-foreground capitalize">{field}</label>
+                  {([
+                    { key: "goals" as const, label: "Goals", icon: Target },
+                    { key: "frustrations" as const, label: "Frustrations", icon: Frown },
+                    { key: "behaviors" as const, label: "Behaviors", icon: Activity }
+                  ] as const).map(({ key, label, icon: Icon }) => (
+                    <div key={key} className="p-3 rounded-lg bg-muted/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon className="w-4 h-4 text-primary" />
+                        <label className="text-sm font-medium text-muted-foreground">{label}</label>
+                      </div>
                       {isEditMode ? (
-                        <div className="space-y-1 mt-1">
-                          {(editingPersona?.[field] || []).map((item: string, i: number) => (
+                        <div className="space-y-1">
+                          {(editingPersona?.[key] || []).map((item: string, i: number) => (
                             <div key={i} className="flex gap-1">
                               <span className="flex-1 text-sm bg-muted px-2 py-1 rounded">{item}</span>
                               <button
-                                onClick={() => removeArrayItem(field, i)}
+                                onClick={() => removeArrayItem(key, i)}
                                 className="text-destructive hover:bg-destructive/10 px-1"
                               >
                                 <X className="w-4 h-4" />
                               </button>
                             </div>
                           ))}
-                          <div className="flex gap-1">
-                            <Input
-                              className="flex-1 h-8 text-sm"
-                              placeholder="Add..."
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" && e.currentTarget.value) {
-                                  updateArrayField(field, e.currentTarget.value);
-                                  e.currentTarget.value = "";
-                                }
-                              }}
-                            />
-                          </div>
+                          <Input
+                            className="flex-1 h-8 text-sm"
+                            placeholder="Add..."
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && e.currentTarget.value) {
+                                updateArrayField(key, e.currentTarget.value);
+                                e.currentTarget.value = "";
+                              }
+                            }}
+                          />
                         </div>
                       ) : (
-                        <ul className="text-sm mt-1 space-y-1">
-                          {currentPersona[field].map((item: string, i: number) => (
+                        <ul className="text-sm space-y-1">
+                          {(currentPersona[key] as string[]).map((item: string, i: number) => (
                             <li key={i} className="flex items-start gap-1">
-                              <span>•</span>
+                              <span className="text-primary">•</span>
                               <span>{item}</span>
                             </li>
                           ))}
@@ -606,18 +696,26 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
                 </div>
 
                 {/* Demographics */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Demographics</label>
-                  <div className="grid grid-cols-2 gap-2 mt-1">
-                    {["education", "income", "location", "techProficiency"].map((field) => (
-                      <div key={field} className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground capitalize w-20">{field}:</span>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    Demographics
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { field: "education", icon: GraduationCap },
+                      { field: "income", icon: Banknote },
+                      { field: "location", icon: MapPin },
+                      { field: "techProficiency", icon: Laptop }
+                    ].map(({ field, icon: Icon }) => (
+                      <div key={field} className="flex items-center gap-2 p-2 rounded bg-muted/30">
+                        <Icon className="w-4 h-4 text-muted-foreground" />
                         {isEditMode ? (
                           field === "techProficiency" ? (
                             <select
                               value={editingPersona?.demographics?.[field as keyof typeof editingPersona.demographics] || "intermediate"}
                               onChange={(e) => updateField(`demographics.${field}`, e.target.value)}
-                              className="flex-1 h-8 text-sm border rounded px-2"
+                              className="flex-1 h-6 text-sm bg-transparent border-0 focus:outline-none"
                             >
                               <option value="beginner">Beginner</option>
                               <option value="intermediate">Intermediate</option>
@@ -627,7 +725,8 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
                             <Input
                               value={(editingPersona?.demographics as Record<string, string>)?.[field] || ""}
                               onChange={(e) => updateField(`demographics.${field}`, e.target.value)}
-                              className="flex-1 h-8 text-sm"
+                              className="flex-1 h-6 text-sm bg-transparent border-0 p-0"
+                              placeholder={field}
                             />
                           )
                         ) : (
@@ -648,6 +747,7 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
                 <p className="text-sm mt-1">Generate a new persona or select a saved one</p>
               </div>
             )}
+             <div className="h-9"/>
           </div>
         </ScrollArea>
       </CardContent>

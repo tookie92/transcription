@@ -14,7 +14,10 @@ interface CanvasSidePanelsProps {
   activePanel: ActivePanel;
   setActivePanel: (panel: ActivePanel) => void;
 
+  // Legacy groups (with color/position) - for ThemeDiscovery, Analytics
   groups: AffinityGroupType[];
+  // Canvas-based groups (from FigJamBoard) - simpler, for PersonaGenerator
+  canvasGroups?: Array<{ id: string; title: string; insightIds: string[] }>;
   insights: Insight[];
   projectId: string;
   projectInfo?: { name: string; description?: string };
@@ -48,6 +51,7 @@ export function CanvasSidePanels({
   activePanel,
   setActivePanel,
   groups,
+  canvasGroups,
   insights,
   projectId,
   projectInfo,
@@ -142,12 +146,13 @@ export function CanvasSidePanels({
           <PersonaGenerator
             projectId={projectId}
             mapId={mapId}
-            groups={groups}
+            groups={canvasGroups || []}
             insights={insights}
             projectContext={
               projectInfo ? `PROJECT: ${projectInfo.name}` : undefined
             }
             dotVotingResults={dotVotingResults}
+            onClose={() => setActivePanel(null)}
           />
         </motion.div>
       )}

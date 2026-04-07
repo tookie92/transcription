@@ -68,6 +68,8 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [commentPanel, setCommentPanel] = useState<{groupId: string; rect: DOMRect; title?: string} | null>(null);
   const [canvasInsightIds, setCanvasInsightIds] = useState<Set<string>>(new Set());
+  // Clusters from FigJamBoard (canvas-based, not from affinityMap.clusters)
+  const [canvasClusters, setCanvasClusters] = useState<Array<{ id: string; title: string; insightIds: string[] }>>([]);
 
   // ==================== COMMENT HANDLER ====================
   const handleOpenComment = useCallback((elementId: string, rect: DOMRect, title?: string) => {
@@ -77,11 +79,16 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   // ==================== VOTING (passed to FigJamBoard) ====================
   const voting = useVotingSync(affinityMap?._id, projectId as Id<"projects">);
 
-  // Compute vote results for persona generation
+  // Reset canvas tool when panel opens or closes to prevent stuck state
+  useEffect(() => {
+    // Always reset cursor when panel state changes
+    document.body.style.cursor = "default";
+  }, [activePanel]);
+
+  // Compute vote results for persona generation (using canvas clusters from FigJamBoard)
   const dotVotingResults = useMemo(() => {
-    const labels = clusters;
     if (!voting.session || voting.session.isActive) return [];
-    return labels
+    return canvasClusters
       .map(label => {
         const clusterVotes = voting.getClusterVotes(label.id);
         return {
@@ -93,7 +100,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
       })
       .filter(r => r.voteCount > 0)
       .sort((a, b) => b.voteCount - a.voteCount);
-  }, [clusters, voting.session, voting]);
+  }, [canvasClusters, voting.session, voting]);
 
   // ==================== AUTO-CREATE MAP ====================
   const createAffinityMap = useMutation(api.affinityMaps.create);
@@ -423,6 +430,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           presenceUsers={otherUsers || []}
           currentUser={{ userId: userId || "", name: user?.fullName || user?.firstName || "You" }}
           onOpenPersona={() => setActivePanel("persona")}
+          onLabelDataChange={setCanvasClusters}
         />
       )}
 
@@ -432,6 +440,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         activePanel={activePanel}
         setActivePanel={setActivePanel}
         groups={clusters}
+        canvasGroups={canvasClusters}
         insights={insights}
         projectId={projectId}
         projectInfo={{ name: project.name, description: project.description }}
