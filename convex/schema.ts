@@ -52,6 +52,7 @@ export default defineSchema({
     projectId: v.id("projects"),
     title: v.string(),
     topic: v.optional(v.string()),
+    language: v.optional(v.string()), // Interview language (en, de, fr, etc.)
     transcription: v.string(),
     segments: v.array(v.object({
       id: v.number(),
@@ -69,11 +70,20 @@ export default defineSchema({
       v.literal("analyzing"),
       v.literal("ready")
     ),
-    summary: v.optional(v.object({ // 🆕 NOUVEAU CHAMP
+    summary: v.optional(v.object({
     executiveSummary: v.string(),
-    keyPoints: v.array(v.string()),
-    recommendations: v.array(v.string()),
-    mainThemes: v.array(v.string()),
+    keyPoints: v.array(v.union(v.string(), v.object({
+      point: v.string(),
+      quantitativeObservation: v.optional(v.string()),
+    }))),
+    recommendations: v.array(v.union(v.string(), v.object({
+      recommendation: v.string(),
+      priority: v.optional(v.string()),
+    }))),
+    mainThemes: v.array(v.union(v.string(), v.object({
+      theme: v.string(),
+      description: v.optional(v.string()),
+    }))),
     criticalIssues: v.array(v.union(v.string(), v.object({
       issue: v.string(),
       impact: v.optional(v.string()),

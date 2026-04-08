@@ -7,6 +7,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
+    const language = formData.get('language') as string | null;
 
     if (!file) {
       return NextResponse.json(
@@ -29,6 +30,9 @@ export async function POST(request: NextRequest) {
     formDataRequest.append('file', new Blob([buffer], { type: file.type || 'audio/wav' }), file.name || 'audio.wav');
     formDataRequest.append('model', 'whisper-large-v3');
     formDataRequest.append('response_format', 'verbose_json');
+    if (language) {
+      formDataRequest.append('language', language);
+    }
 
     const response = await fetch(GROQ_API_URL, {
       method: 'POST',

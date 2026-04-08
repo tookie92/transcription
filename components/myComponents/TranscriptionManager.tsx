@@ -86,6 +86,7 @@ export default function TranscriptionManager() {
         currentProjectId,
         currentInterview.transcription,
         currentInterview.topic,
+        currentInterview.language,
         currentInterview.segments
       );
       

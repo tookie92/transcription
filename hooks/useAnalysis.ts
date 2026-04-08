@@ -13,6 +13,7 @@ export function useAnalysis() {
     projectId: string,
     transcription: string,
     topic?: string,
+    language?: string,
     segments?: SimpleSegment[]
   ) => {
     try {
@@ -26,6 +27,7 @@ export function useAnalysis() {
         body: JSON.stringify({
           transcription,
           topic,
+          language,
           segments,
         }),
       });
@@ -69,6 +71,7 @@ export function useAnalysis() {
     projectId: string,
     transcription: string,
     topic?: string,
+    language?: string,
     insights?: Insight[]
   ) => {
     try {
@@ -82,6 +85,7 @@ export function useAnalysis() {
         body: JSON.stringify({
           transcription,
           topic,
+          language,
           insights: insights || [],
           projectContext: `Project ID: ${projectId}`,
         }),

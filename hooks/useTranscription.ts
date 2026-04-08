@@ -40,6 +40,7 @@ export function useTranscription() {
     file: File, 
     title?: string, 
     topic?: string,
+    language?: string,
     onProgress?: (progress: ConversionProgress) => void
   ): Promise<Interview> => {
     // Check GDPR consent first
@@ -133,6 +134,9 @@ export function useTranscription() {
 
       const formData = new FormData();
       formData.append('file', processedFile);
+      if (language && language !== 'auto') {
+        formData.append('language', language);
+      }
 
       const response = await fetch('/api/transcribe', {
         method: 'POST',

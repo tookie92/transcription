@@ -13,6 +13,7 @@ export interface Interview {
   id: string;
   title: string;
   topic?: string;
+  language?: string;
   transcription: string;
   segments: TranscriptionSegment[];
   duration: number;

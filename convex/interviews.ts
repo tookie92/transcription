@@ -8,6 +8,7 @@ export const createInterview = mutation({
     projectId: v.id("projects"),
     title: v.string(),
     topic: v.optional(v.string()),
+    language: v.optional(v.string()),
     transcription: v.string(),
     segments: v.array(v.object({
       id: v.number(),
@@ -168,10 +169,23 @@ export const updateSummary = mutation({
     interviewId: v.id("interviews"),
     summary: v.object({
       executiveSummary: v.string(),
-      keyPoints: v.array(v.string()),
-      recommendations: v.array(v.string()),
-      mainThemes: v.array(v.string()),
-      criticalIssues: v.array(v.string()),
+      keyPoints: v.array(v.union(v.string(), v.object({
+        point: v.string(),
+        quantitativeObservation: v.optional(v.string()),
+      }))),
+      recommendations: v.array(v.union(v.string(), v.object({
+        recommendation: v.string(),
+        priority: v.optional(v.string()),
+      }))),
+      mainThemes: v.array(v.union(v.string(), v.object({
+        theme: v.string(),
+        description: v.optional(v.string()),
+      }))),
+      criticalIssues: v.array(v.union(v.string(), v.object({
+        issue: v.string(),
+        impact: v.optional(v.string()),
+        urgency: v.optional(v.string()),
+      }))),
       generatedAt: v.number(),
     }),
   },

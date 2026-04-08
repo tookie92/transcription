@@ -116,7 +116,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
     try {
-      await analyzeInterview(interview._id, projectId, interview.transcription, interview.topic, interview.segments);
+      await analyzeInterview(interview._id, projectId, interview.transcription, interview.topic, interview.language, interview.segments);
       toast.success("Analysis complete");
       setActiveTab("insights");
     } catch {
@@ -130,7 +130,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
     setIsGeneratingSummary(true);
     try {
       await generateInterviewSummary(
-        interview._id, projectId, interview.transcription, interview.topic,
+        interview._id, projectId, interview.transcription, interview.topic, interview.language,
         insights?.map(i => ({ id: i._id, type: i.type, text: i.text, timestamp: i.timestamp, source: i.source, createdBy: i.createdBy, createdByName: i.createdByName, createdAt: new Date(i._creationTime).toISOString(), projectId: i.projectId, interviewId: i.interviewId })) || []
       );
       toast.success("Summary generated");
@@ -321,10 +321,10 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                       <div className="bg-white rounded-2xl border border-gray-200 p-6">
                         <h3 className="font-semibold text-gray-900 mb-4">Key Points</h3>
                         <ul className="space-y-3">
-                          {interview.summary.keyPoints.map((point: string, i: number) => (
+                          {interview.summary.keyPoints.map((point, i) => (
                             <li key={i} className="flex items-start gap-3 text-sm text-gray-700">
                               <span className="w-2 h-2 bg-[#4CA771] rounded-full mt-1.5 flex-shrink-0" />
-                              {point}
+                              {typeof point === 'string' ? point : point.point}
                             </li>
                           ))}
                         </ul>
@@ -332,19 +332,19 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                       <div className="bg-white rounded-2xl border border-gray-200 p-6">
                         <h3 className="font-semibold text-gray-900 mb-4">Recommendations</h3>
                         <ul className="space-y-3">
-                          {interview.summary.recommendations.map((rec: string, i: number) => (
+                          {interview.summary.recommendations.map((rec, i) => (
                             <li key={i} className="flex items-start gap-3 text-sm text-gray-700 p-3 bg-green-50 rounded-lg">
                               <span className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0" />
-                              {rec}
+                              {typeof rec === 'string' ? rec : rec.recommendation}
                             </li>
                           ))}
                         </ul>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {interview.summary.mainThemes.map((theme: string, i: number) => (
+                      {interview.summary.mainThemes.map((theme, i) => (
                         <Badge key={i} variant="secondary" className="px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200">
-                          {theme}
+                          {typeof theme === 'string' ? theme : theme.theme}
                         </Badge>
                       ))}
                     </div>

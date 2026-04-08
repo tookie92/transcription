@@ -10,7 +10,7 @@ const groq = new Groq({
 export async function POST(request: NextRequest) {
   try {
     const body: SummaryRequest = await request.json();
-    const { transcription, topic, insights, projectContext } = body;
+    const { transcription, topic, language, insights, projectContext } = body;
 
     if (!transcription) {
       return NextResponse.json(
@@ -19,13 +19,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let textToSummarize = transcription;
+
+    // Translate non-English transcripts to English
+    if (language && language !== 'en' && language !== 'auto') {
+      const translatePrompt = `Translate the following interview transcription to English. Preserve the speaker labels and line breaks. Provide only the translation, no explanations:
+
+${transcription}`;
+
+      const translationResponse = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: translatePrompt }],
+        temperature: 0.3,
+      });
+
+      textToSummarize = translationResponse.choices[0]?.message?.content || transcription;
+    }
+
     const prompt = `You are a senior UX research expert analyzing user interviews to provide actionable insights for product development.
 
 PROJECT CONTEXT: ${projectContext || 'General user research project'}
 ${topic ? `INTERVIEW TOPIC: ${topic}` : ''}
 
 INTERVIEW TRANSCRIPTION:
-${transcription}
+${textToSummarize}
 
 ${insights.length > 0 ? `KEY INSIGHTS IDENTIFIED:
 ${insights.map(insight => `- [${insight.type}] ${insight.text}`).join('\n')}` : ''}
@@ -35,24 +52,29 @@ Based on the interview, provide a comprehensive summary in the following JSON st
 {
   "executiveSummary": "2-3 paragraph overview of the interview highlighting the most important findings and their business impact",
   "keyPoints": [
-    "3-5 bullet points of the most critical findings",
-    "Focus on user behaviors, needs, and pain points",
-    "Include quantitative observations when possible"
+    {
+      "point": "Key finding description",
+      "quantitativeObservation": "Optional quantitative data or specific user quote"
+    }
   ],
   "recommendations": [
-    "3-5 actionable recommendations for product improvements",
-    "Prioritize based on impact and feasibility",
-    "Be specific and practical"
+    {
+      "recommendation": "Actionable recommendation text",
+      "priority": "High/Medium/Low"
+    }
   ],
   "mainThemes": [
-    "2-4 overarching themes that emerged",
-    "Group related insights together",
-    "Focus on patterns and trends"
+    {
+      "theme": "Theme name",
+      "description": "Brief description of this theme"
+    }
   ],
   "criticalIssues": [
-    "Urgent problems that need immediate attention",
-    "Potential blockers for user success",
-    "High-impact pain points"
+    {
+      "issue": "Brief description of the urgent problem",
+      "impact": "Impact on user experience or business",
+      "urgency": "High/Medium/Low"
+    }
   ]
 }
 

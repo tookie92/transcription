@@ -55,6 +55,7 @@ export interface Interview {
   projectId: string;
   title: string;
   topic?: string;
+  language?: string;
   transcription: string;
   segments: SimpleSegment[];
   duration: number;
@@ -122,6 +123,7 @@ export interface VerboseTranscription {
 export interface AnalysisRequest {
   transcription: string;
   topic?: string;
+  language?: string;
   segments?: SimpleSegment[];
 }
 
@@ -642,16 +644,17 @@ export type SilentSortingPhase = 'not-started' | 'sorting' | 'review' | 'complet
 // Dans types/index.ts - AJOUTER CES TYPES
 export interface InterviewSummary {
   executiveSummary: string;
-  keyPoints: string[];
-  recommendations: string[];
-  mainThemes: string[];
-  criticalIssues: string[];
+  keyPoints: (string | { point: string; quantitativeObservation?: string })[];
+  recommendations: (string | { recommendation: string; priority?: string })[];
+  mainThemes: (string | { theme: string; description?: string })[];
+  criticalIssues: (string | { issue: string; impact?: string; urgency?: string })[];
   generatedAt: number;
 }
 
 export interface SummaryRequest {
   transcription: string;
   topic?: string;
+  language?: string;
   insights: Insight[];
   projectContext?: string;
 }

@@ -11,8 +11,8 @@ export async function POST(request: NextRequest) {
     const body: AnalysisRequest = await request.json();
     const { 
       transcription,
-       topic, 
-      // segments 
+      topic, 
+      language,
     } = body;
 
     if (!transcription) {
@@ -22,12 +22,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let textToAnalyze = transcription;
+
+    // Translate non-English transcripts to English
+    if (language && language !== 'en' && language !== 'auto') {
+      const translatePrompt = `Translate the following interview transcription to English. Preserve the speaker labels and line breaks. Provide only the translation, no explanations:
+
+${transcription}`;
+
+      const translationResponse = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: translatePrompt }],
+        temperature: 0.3,
+      });
+
+      textToAnalyze = translationResponse.choices[0]?.message?.content || transcription;
+    }
+
     const prompt = `You are a UX research expert analyzing user interviews. 
 ${topic ? `The interview is about: ${topic}` : ''}
 
 Analyze the following interview transcription and extract key insights:
 
-${transcription}
+${textToAnalyze}
 
 Extract and categorize insights into these types:
 1. "pain-point" - User frustrations or problems they experience

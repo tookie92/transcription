@@ -72,6 +72,7 @@ export default function InterviewHome() {
   const [isSaving, setIsSaving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showGDPRConsent, setShowGDPRConsent] = useState(false);
+  const [interviewLanguage, setInterviewLanguage] = useState('en');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -228,7 +229,7 @@ export default function InterviewHome() {
     setIsProcessing(true);
     const toastId = toast.loading(isVideoFile ? 'Converting video...' : 'Transcribing...');
     try {
-      const interview = await transcribe(selectedFile, title, topic);
+      const interview = await transcribe(selectedFile, title, topic, interviewLanguage === 'auto' ? undefined : interviewLanguage);
       setPendingInterview({
         title: interview.title,
         topic: interview.topic,
@@ -263,6 +264,7 @@ export default function InterviewHome() {
         projectId: currentProjectId,
         title: pendingInterview.title,
         topic: pendingInterview.topic,
+        language: interviewLanguage === 'auto' ? undefined : interviewLanguage,
         transcription: pendingInterview.transcription,
         segments: pendingInterview.segments,
         duration: pendingInterview.duration,
@@ -567,6 +569,25 @@ export default function InterviewHome() {
                                 className="w-full px-4 py-3 rounded-xl border border-[var(--warm-border)] bg-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
                               />
                               <p className="text-xs text-[var(--muted-foreground)] mt-2">Helps AI extract better insights</p>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium mb-2">
+                                Interview Language
+                              </label>
+                              <select
+                                value={interviewLanguage}
+                                onChange={(e) => setInterviewLanguage(e.target.value)}
+                                className="w-full px-4 py-3 rounded-xl border border-[var(--warm-border)] bg-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
+                              >
+                                <option value="en">English</option>
+                                <option value="de">German (Deutsch)</option>
+                                <option value="fr">French (Français)</option>
+                                <option value="es">Spanish (Español)</option>
+                                <option value="it">Italian (Italiano)</option>
+                                <option value="nl">Dutch (Nederlands)</option>
+                                <option value="auto">Auto-detect</option>
+                              </select>
+                              <p className="text-xs text-[var(--muted-foreground)] mt-2">Transcript will be translated to English for insights</p>
                             </div>
                           </div>
 

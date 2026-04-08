@@ -480,7 +480,7 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
                             </h4>
                             <div className="flex flex-wrap gap-2">
                               {interview.summary.mainThemes.map((theme, i) => (
-                                <Badge key={i} variant="secondary">{theme}</Badge>
+                                <Badge key={i} variant="secondary">{typeof theme === 'string' ? theme : theme.theme}</Badge>
                               ))}
                             </div>
                           </div>
