@@ -16,7 +16,7 @@ import {
 import ButtonFooter from "../myComponents/ButtonFooter"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
-import { Folder, Users, Bell, MailPlus, Check, X, Loader2, Search, Plus, PanelLeftIcon, PanelLeftCloseIcon, Trash2 } from "lucide-react"
+import { Folder, Users,  MailPlus, Check, X, Loader2, Search,  Trash2 } from "lucide-react"
 import Link from "next/link"
 import { ModeToggle } from "../ModeToggle"
 import { Button } from "../ui/button"
@@ -29,8 +29,8 @@ import { Input } from "../ui/input"
 import Image from "next/image"
 
 export function AppSidebar() {
-  const { state, toggleSidebar, isMobile } = useSidebar()
-  const { isSignedIn, userId } = useAuth()
+  const { state,  } = useSidebar()
+  const {  userId } = useAuth()
   const { user } = useUser()
   const [searchQuery, setSearchQuery] = useState("")
   
