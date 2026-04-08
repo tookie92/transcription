@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Id } from "@/convex/_generated/dataModel";
 import Image from "next/image";
 import { ScrollArea } from "../ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 interface PersonaGeneratorProps {
@@ -338,13 +339,11 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
     });
   };
 
-  const selectedSavedPersonas = viewMode === "saved" && savedPersonas?.[0] ? savedPersonas[0] : null;
-  
   const currentPersona = isEditMode && editingPersona
     ? editingPersona
     : viewMode === "new" && generatedPersona
     ? generatedPersona
-    : selectedSavedPersonas;
+    : selectedSavedPersona;
 
   const currentImageUrl = profileImage || (currentPersona ? getFallbackImageUrl(currentPersona.name) : "");
 
@@ -512,6 +511,7 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
                     }`}
                     onClick={() => {
                       setSelectedSavedPersona(persona);
+                      setProfileImage(persona.profileImage || getFallbackImageUrl(persona.name));
                       setViewMode("saved");
                       setGeneratedPersona(null);
                     }}
@@ -559,183 +559,289 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
               </div>
             )}
 
-            {/* Persona Display / Edit */}
+            {/* Persona Display / Edit - Panel with Tabs */}
             {currentPersona && (
-              <div className="border rounded-lg p-4 space-y-4 flex-1 overflow-y-auto pb-16">
-                  {/* Header */}
-                  <div className="flex items-start gap-4">
-                  <div className="relative w-20 h-20 shrink-0">
-                    <Image
-                      src={currentImageUrl}
-                      alt={currentPersona.name}
-                      fill
-                      unoptimized
-                      className="rounded-full object-cover border-2 border-white shadow"
-                    />
-                  </div>
-
-                  <div className="flex-1 space-y-2">
-                    {isEditMode ? (
-                      <>
-                        <Input
-                          value={editingPersona?.name || ""}
-                          onChange={(e) => updateField("name", e.target.value)}
-                          className="text-xl font-bold"
-                          placeholder="Name"
-                        />
-                        <div className="flex gap-2">
-                          <Input
-                            type="number"
-                            value={editingPersona?.age || 0}
-                            onChange={(e) => updateField("age", parseInt(e.target.value))}
-                            className="w-20"
-                            placeholder="Age"
-                          />
-                          <Input
-                            value={editingPersona?.occupation || ""}
-                            onChange={(e) => updateField("occupation", e.target.value)}
-                            className="flex-1"
-                            placeholder="Occupation"
+              <div className="flex-1 flex flex-col min-h-0 border rounded-xl overflow-hidden">
+                <Tabs defaultValue="overview" className="flex-1 flex flex-col">
+                  <div className="border-b p-4 bg-muted/30">
+                    <div className="flex items-start gap-4">
+                      <div className="relative">
+                        <div className="w-20 h-20 rounded-full overflow-hidden shadow-lg ring-2 ring-primary/20">
+                          <Image
+                            src={currentImageUrl}
+                            alt={currentPersona.name}
+                            fill
+                            unoptimized
+                            className="object-cover"
                           />
                         </div>
-                      </>
-                    ) : (
-                      <>
-                        <h3 className="text-xl font-bold">{currentPersona.name}</h3>
-                        <p className="text-muted-foreground">
-                          {currentPersona.age} years • {currentPersona.occupation}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Quote */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Quote className="w-4 h-4" />
-                    Quote
-                  </label>
-                  {isEditMode ? (
-                    <Textarea
-                      value={editingPersona?.quote || ""}
-                      onChange={(e) => updateField("quote", e.target.value)}
-                      className="mt-1"
-                      rows={2}
-                    />
-                  ) : (
-                    <blockquote className="p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500 mt-1">
-                      <p className="text-sm italic text-blue-800">&ldquo;{currentPersona.quote}&rdquo;</p>
-                    </blockquote>
-                  )}
-                </div>
-
-                {/* Background */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Background</label>
-                  {isEditMode ? (
-                    <Textarea
-                      value={editingPersona?.background || ""}
-                      onChange={(e) => updateField("background", e.target.value)}
-                      className="mt-1"
-                      rows={3}
-                    />
-                  ) : (
-                    <p className="text-sm mt-1">{currentPersona.background}</p>
-                  )}
-                </div>
-
-                {/* Goals, Frustrations, Behaviors */}
-                <div className="grid grid-cols-3 gap-4">
-                  {([
-                    { key: "goals" as const, label: "Goals", icon: Target },
-                    { key: "frustrations" as const, label: "Frustrations", icon: Frown },
-                    { key: "behaviors" as const, label: "Behaviors", icon: Activity }
-                  ] as const).map(({ key, label, icon: Icon }) => (
-                    <div key={key} className="p-3 rounded-lg bg-muted/30">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Icon className="w-4 h-4 text-primary" />
-                        <label className="text-sm font-medium text-muted-foreground">{label}</label>
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          className="absolute -bottom-1 -right-1 rounded-full w-6 h-6"
+                          onClick={() => setProfileImage(generateRandomAvatar(currentPersona.name))}
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                        </Button>
                       </div>
-                      {isEditMode ? (
-                        <div className="space-y-1">
-                          {(editingPersona?.[key] || []).map((item: string, i: number) => (
-                            <div key={i} className="flex gap-1">
-                              <span className="flex-1 text-sm bg-muted px-2 py-1 rounded">{item}</span>
-                              <button
-                                onClick={() => removeArrayItem(key, i)}
-                                className="text-destructive hover:bg-destructive/10 px-1"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
-                          <Input
-                            className="flex-1 h-8 text-sm"
-                            placeholder="Add..."
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && e.currentTarget.value) {
-                                updateArrayField(key, e.currentTarget.value);
-                                e.currentTarget.value = "";
-                              }
-                            }}
-                          />
-                        </div>
-                      ) : (
-                        <ul className="text-sm space-y-1">
-                          {(currentPersona[key] as string[]).map((item: string, i: number) => (
-                            <li key={i} className="flex items-start gap-1">
-                              <span className="text-primary">•</span>
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Demographics */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <User className="w-4 h-4" />
-                    Demographics
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { field: "education", icon: GraduationCap },
-                      { field: "income", icon: Banknote },
-                      { field: "location", icon: MapPin },
-                      { field: "techProficiency", icon: Laptop }
-                    ].map(({ field, icon: Icon }) => (
-                      <div key={field} className="flex items-center gap-2 p-2 rounded bg-muted/30">
-                        <Icon className="w-4 h-4 text-muted-foreground" />
+                      <div className="flex-1">
                         {isEditMode ? (
-                          field === "techProficiency" ? (
-                            <select
-                              value={editingPersona?.demographics?.[field as keyof typeof editingPersona.demographics] || "intermediate"}
-                              onChange={(e) => updateField(`demographics.${field}`, e.target.value)}
-                              className="flex-1 h-6 text-sm bg-transparent border-0 focus:outline-none"
-                            >
-                              <option value="beginner">Beginner</option>
-                              <option value="intermediate">Intermediate</option>
-                              <option value="expert">Expert</option>
-                            </select>
-                          ) : (
+                          <div className="space-y-2">
                             <Input
-                              value={(editingPersona?.demographics as Record<string, string>)?.[field] || ""}
-                              onChange={(e) => updateField(`demographics.${field}`, e.target.value)}
-                              className="flex-1 h-6 text-sm bg-transparent border-0 p-0"
-                              placeholder={field}
+                              value={editingPersona?.name || ""}
+                              onChange={(e) => updateField("name", e.target.value)}
+                              className="text-xl font-bold h-8"
+                              placeholder="Name"
                             />
-                          )
+                            <div className="flex gap-2">
+                              <Input
+                                type="number"
+                                value={editingPersona?.age || 25}
+                                onChange={(e) => updateField("age", parseInt(e.target.value) || 25)}
+                                className="w-16 h-7"
+                                placeholder="Age"
+                              />
+                              <Input
+                                value={editingPersona?.occupation || ""}
+                                onChange={(e) => updateField("occupation", e.target.value)}
+                                className="flex-1 h-7"
+                                placeholder="Job"
+                              />
+                            </div>
+                          </div>
                         ) : (
-                          <span className="text-sm">{(currentPersona.demographics as Record<string, string>)[field]}</span>
+                          <>
+                            <h3 className="text-xl font-bold">{currentPersona.name}</h3>
+                            <p className="text-sm text-muted-foreground">{currentPersona.age} ans • {currentPersona.occupation}</p>
+                          </>
                         )}
                       </div>
-                    ))}
+                      <div className="flex gap-2">
+                        {isEditMode ? (
+                          <>
+                            <Button variant="outline" size="sm" onClick={cancelEditing}>Cancel</Button>
+                            <Button size="sm" onClick={selectedSavedPersona ? updateExistingPersona : savePersona}>
+                              <Save className="w-4 h-4 mr-1" />
+                              {selectedSavedPersona ? "Update" : "Save"}
+                            </Button>
+                          </>
+                        ) : (
+                          <Button variant="secondary" size="sm" onClick={() => startEditing(currentPersona, true)}>
+                            <Edit2 className="w-4 h-4 mr-1" />
+                            Edit
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                  
+                  <TabsList className="w-full justify-start px-4 pt-2 border-b rounded-none">
+                    <TabsTrigger value="overview">Overview</TabsTrigger>
+                    <TabsTrigger value="goals">Goals</TabsTrigger>
+                    <TabsTrigger value="frustrations">Frustrations</TabsTrigger>
+                    <TabsTrigger value="behaviors">Behaviors</TabsTrigger>
+                  </TabsList>
+                  
+                  <ScrollArea className="flex-1">
+                    <TabsContent value="overview" className="p-4 m-0 space-y-4">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div className="space-y-3">
+                          <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                            <Quote className="w-4 h-4" />
+                            Citation
+                          </label>
+                          {isEditMode ? (
+                            <Textarea
+                              value={editingPersona?.quote || ""}
+                              onChange={(e) => updateField("quote", e.target.value)}
+                              rows={2}
+                            />
+                          ) : (
+                            <blockquote className="p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
+                              <p className="text-sm italic">&ldquo;{currentPersona.quote}&rdquo;</p>
+                            </blockquote>
+                          )}
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                            <User className="w-4 h-4" />
+                            Background
+                          </label>
+                          {isEditMode ? (
+                            <Textarea
+                              value={editingPersona?.background || ""}
+                              onChange={(e) => updateField("background", e.target.value)}
+                              rows={4}
+                            />
+                          ) : (
+                            <div className="p-3 bg-muted/30 rounded-lg">
+                              <p className="text-sm">{currentPersona.background}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {[
+                          { field: "education", icon: GraduationCap },
+                          { field: "income", icon: Banknote },
+                          { field: "location", icon: MapPin },
+                          { field: "techProficiency", icon: Laptop }
+                        ].map(({ field, icon: Icon }) => (
+                          <div key={field} className="p-3 rounded-lg bg-muted/30">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Icon className="w-4 h-4 text-primary" />
+                              <span className="text-xs font-medium capitalize text-muted-foreground">{field}</span>
+                            </div>
+                            {isEditMode ? (
+                              field === "techProficiency" ? (
+                                <select
+                                  value={editingPersona?.demographics?.[field as keyof typeof editingPersona.demographics] || "intermediate"}
+                                  onChange={(e) => updateField(`demographics.${field}`, e.target.value)}
+                                  className="w-full text-sm border rounded px-2 py-1"
+                                >
+                                  <option value="beginner">Beginner</option>
+                                  <option value="intermediate">Intermediate</option>
+                                  <option value="expert">Expert</option>
+                                </select>
+                              ) : (
+                                <Input
+                                  value={(editingPersona?.demographics as Record<string, string>)?.[field] || ""}
+                                  onChange={(e) => updateField(`demographics.${field}`, e.target.value)}
+                                  className="h-7 text-sm"
+                                  placeholder={field}
+                                />
+                              )
+                            ) : (
+                              <span className="text-sm font-medium">{(currentPersona.demographics as Record<string, string>)[field]}</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </TabsContent>
+                    
+                    <TabsContent value="goals" className="p-4 m-0">
+                      <div className="p-4 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/50">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Target className="w-5 h-5 text-emerald-600" />
+                          <span className="font-semibold">Goals</span>
+                        </div>
+                        {isEditMode ? (
+                          <div className="space-y-2">
+                            {(editingPersona?.goals || []).map((item: string, i: number) => (
+                              <div key={i} className="flex gap-2">
+                                <span className="flex-1 text-sm bg-muted px-3 py-2 rounded-md">{item}</span>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeArrayItem("goals", i)}>
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ))}
+                            <Input
+                              placeholder="Add goal..."
+                              className="h-8"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && e.currentTarget.value) {
+                                  updateArrayField("goals", e.currentTarget.value);
+                                  e.currentTarget.value = "";
+                                }
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <ul className="space-y-2">
+                            {(currentPersona.goals as string[]).map((item: string, i: number) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                                <span className="text-sm">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </TabsContent>
+                    
+                    <TabsContent value="frustrations" className="p-4 m-0">
+                      <div className="p-4 rounded-xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200/50">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Frown className="w-5 h-5 text-rose-600" />
+                          <span className="font-semibold">Frustrations</span>
+                        </div>
+                        {isEditMode ? (
+                          <div className="space-y-2">
+                            {(editingPersona?.frustrations || []).map((item: string, i: number) => (
+                              <div key={i} className="flex gap-2">
+                                <span className="flex-1 text-sm bg-muted px-3 py-2 rounded-md">{item}</span>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeArrayItem("frustrations", i)}>
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ))}
+                            <Input
+                              placeholder="Add frustration..."
+                              className="h-8"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && e.currentTarget.value) {
+                                  updateArrayField("frustrations", e.currentTarget.value);
+                                  e.currentTarget.value = "";
+                                }
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <ul className="space-y-2">
+                            {(currentPersona.frustrations as string[]).map((item: string, i: number) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <span className="w-2 h-2 rounded-full bg-rose-500 mt-1.5 shrink-0" />
+                                <span className="text-sm">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </TabsContent>
+                    
+                    <TabsContent value="behaviors" className="p-4 m-0">
+                      <div className="p-4 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/50">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Activity className="w-5 h-5 text-blue-600" />
+                          <span className="font-semibold">Behaviors</span>
+                        </div>
+                        {isEditMode ? (
+                          <div className="space-y-2">
+                            {(editingPersona?.behaviors || []).map((item: string, i: number) => (
+                              <div key={i} className="flex gap-2">
+                                <span className="flex-1 text-sm bg-muted px-3 py-2 rounded-md">{item}</span>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeArrayItem("behaviors", i)}>
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ))}
+                            <Input
+                              placeholder="Add behavior..."
+                              className="h-8"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && e.currentTarget.value) {
+                                  updateArrayField("behaviors", e.currentTarget.value);
+                                  e.currentTarget.value = "";
+                                }
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <ul className="space-y-2">
+                            {(currentPersona.behaviors as string[]).map((item: string, i: number) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <span className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                                <span className="text-sm">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </TabsContent>
+                  </ScrollArea>
+                </Tabs>
               </div>
             )}
 
@@ -747,7 +853,8 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
                 <p className="text-sm mt-1">Generate a new persona or select a saved one</p>
               </div>
             )}
-             <div className="h-9"/>
+
+            <div className="h-4"/>
           </div>
         </ScrollArea>
       </CardContent>

@@ -37,6 +37,8 @@ export default defineSchema({
         showTranscriptExcerpts: v.boolean(),
         maxExcerpts: v.number(), // max transcript excerpts per interview
       })),
+      personaIds: v.optional(v.array(v.id("personas"))),
+      includeAffinityMap: v.boolean(),
     }),
     // Template info (if saved as template)
     isTemplate: v.boolean(),
@@ -326,7 +328,8 @@ commentViews: defineTable({
       v.literal("insight_removed"),
       v.literal("comment_added"),
       v.literal("user_mentioned"),
-      v.literal("invite_accepted")
+      v.literal("invite_accepted"),
+      v.literal("invite_received")
     ),
     title: v.string(), // Titre court de la notification
     message: v.string(), // Message détaillé

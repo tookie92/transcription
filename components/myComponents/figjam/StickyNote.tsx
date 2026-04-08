@@ -113,7 +113,7 @@ export function StickyNote({
   isFiltered = false,
 }: StickyNoteProps) {
   const colors = STICKY_COLORS[note.color];
-  const stickySize = note.size ?? { width: 180, height: 160 };
+  const stickySize = note.size ?? { width: 220, height: 200 };
   const [isEditing, setIsEditing] = useState(false);
   const [editingContent, setEditingContent] = useState(note.content);
   const [showMenu, setShowMenu] = useState(false);

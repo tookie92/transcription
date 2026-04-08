@@ -59,11 +59,13 @@ function InsightTypeBadge({ type }: { type: string }) {
   );
 }
 
-const CARD_WIDTH = 160;
-const CARD_GAP = 10;
+const CARD_WIDTH = 220;
+const CARD_GAP = 20;
 const MAX_COLS = 4;
 const HEADER_OFFSET = 40;
 const CLUSTER_PADDING = 12;
+const MIN_CLUSTER_WIDTH = 300;
+const MIN_CLUSTER_HEIGHT = 200;
 
 function RealStickyCard({ 
   sticky, 
@@ -205,6 +207,7 @@ interface ClusterLabelProps {
   onDrop?: (stickyId: string) => void;
   onContextMenu?: (e: React.MouseEvent, clusterId: string) => void;
   onResize?: (clusterId: string, newHeight: number) => void;
+  onWidthChange?: (clusterId: string, newWidth: number) => void;
   onClusterClick?: (clusterId: string) => void;
   onAutoFit?: (clusterId: string) => void;
   triggerEdit?: boolean;
@@ -236,6 +239,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   onDrop,
   onContextMenu,
   onResize,
+  onWidthChange,
   onClusterClick,
   onAutoFit,
   triggerEdit,
@@ -246,6 +250,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   const [isEditing, setIsEditing] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [needsAutoFit, setNeedsAutoFit] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [aiPopoverOpen, setAiPopoverOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const clusterRef = useRef<HTMLDivElement>(null);
@@ -255,7 +260,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   const hasInsights = memberStickies.length > 0;
 
   // Calculate grid dimensions based on actual sticky content
-  const CLUSTER_WIDTH = cluster.width ?? 400;
+  const CLUSTER_WIDTH = cluster.width ?? 500;
   const COLS = Math.min(MAX_COLS, Math.max(1, Math.floor((CLUSTER_WIDTH - CLUSTER_PADDING * 2) / (CARD_WIDTH + CARD_GAP))));
   const rows = Math.ceil(memberStickies.length / COLS) || 1;
   
@@ -311,6 +316,34 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       autoFitHandledRef.current = false;
     }
   }, [triggerAutoFit, cluster.id, onResize]);
+
+  // Handle width resize from right edge
+  const handleResizeStart = useCallback((e: React.PointerEvent) => {
+    if (!canInteract) return;
+    e.stopPropagation();
+    e.preventDefault();
+    setIsResizing(true);
+    
+    const startX = e.clientX;
+    const startWidth = CLUSTER_WIDTH;
+    
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const newWidth = Math.max(MIN_CLUSTER_WIDTH, startWidth + dx);
+      if (onWidthChange) {
+        onWidthChange(cluster.id, newWidth);
+      }
+    };
+    
+    const handlePointerUp = () => {
+      setIsResizing(false);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+    
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }, [canInteract, cluster.id, CLUSTER_WIDTH, onWidthChange]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -748,6 +781,96 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
             Drop insights here
           </p>
         </div>
+      )}
+
+      {/* Resize handles - visible on hover */}
+      {isHovered && !isVotingActive && (
+        <>
+          {/* Right edge handle */}
+          <div
+            className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize"
+            onPointerDown={handleResizeStart}
+            style={{ zIndex: 10 }}
+          >
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-primary rounded-full opacity-80" />
+          </div>
+          
+          {/* Bottom edge handle */}
+          <div
+            className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize"
+            onPointerDown={(e) => {
+              if (!canInteract) return;
+              e.stopPropagation();
+              e.preventDefault();
+              setIsResizing(true);
+              
+              const startY = e.clientY;
+              const startHeight = AUTO_HEIGHT;
+              
+              const handlePointerMove = (moveEvent: PointerEvent) => {
+                const dy = moveEvent.clientY - startY;
+                const newHeight = Math.max(MIN_CLUSTER_HEIGHT, startHeight + dy);
+                if (onResize) {
+                  onResize(cluster.id, newHeight);
+                }
+              };
+              
+              const handlePointerUp = () => {
+                setIsResizing(false);
+                window.removeEventListener("pointermove", handlePointerMove);
+                window.removeEventListener("pointerup", handlePointerUp);
+              };
+              
+              window.addEventListener("pointermove", handlePointerMove);
+              window.addEventListener("pointerup", handlePointerUp);
+            }}
+            style={{ zIndex: 10 }}
+          >
+            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-6 h-1.5 bg-primary rounded-full opacity-80" />
+          </div>
+          
+          {/* Bottom-right corner handle */}
+          <div
+            className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize z-20"
+            onPointerDown={(e) => {
+              if (!canInteract) return;
+              e.stopPropagation();
+              e.preventDefault();
+              setIsResizing(true);
+              
+              const startX = e.clientX;
+              const startY = e.clientY;
+              const startWidth = CLUSTER_WIDTH;
+              const startHeight = AUTO_HEIGHT;
+              
+              const handlePointerMove = (moveEvent: PointerEvent) => {
+                const dx = moveEvent.clientX - startX;
+                const dy = moveEvent.clientY - startY;
+                const newWidth = Math.max(MIN_CLUSTER_WIDTH, startWidth + dx);
+                const newHeight = Math.max(MIN_CLUSTER_HEIGHT, startHeight + dy);
+                if (onWidthChange) {
+                  onWidthChange(cluster.id, newWidth);
+                }
+                if (onResize) {
+                  onResize(cluster.id, newHeight);
+                }
+              };
+              
+              const handlePointerUp = () => {
+                setIsResizing(false);
+                window.removeEventListener("pointermove", handlePointerMove);
+                window.removeEventListener("pointerup", handlePointerUp);
+              };
+              
+              window.addEventListener("pointermove", handlePointerMove);
+              window.addEventListener("pointerup", handlePointerUp);
+            }}
+          >
+            <svg className="w-3 h-3 absolute bottom-0 right-0 text-primary" viewBox="0 0 12 12" fill="none">
+              <path d="M10 2 L10 10 L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </div>
+        </>
       )}
     </div>
   );

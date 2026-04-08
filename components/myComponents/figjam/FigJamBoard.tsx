@@ -218,8 +218,8 @@ export function FigJamBoard({
     for (const label of clusterLabels) {
       const clusterX = label.position.x;
       const clusterY = label.position.y;
-      const clusterWidth = label.width ?? 400;
-      const clusterHeight = label.height ?? 300;
+      const clusterWidth = label.width ?? 500;
+      const clusterHeight = label.height ?? 350;
       
       if (
         centerX >= clusterX &&
@@ -886,8 +886,8 @@ export function FigJamBoard({
       if (state.activeTool === "cluster") {
         const pos = screenToCanvas(e.clientX, e.clientY);
         const clusterId = board.addClusterLabel(
-          { x: pos.x - 200, y: pos.y - 100 },
-          { width: 400, height: 200 }
+          { x: pos.x - 250, y: pos.y - 120 },
+          { width: 500, height: 300 }
         );
         board.updateElement(clusterId, { text: "New Cluster" });
         board.setTool("select");
@@ -1261,7 +1261,7 @@ export function FigJamBoard({
     position: Position
   ) => {
     // Create cluster with default size
-    const clusterId = board.addClusterLabel(position, { width: 400, height: 300 });
+    const clusterId = board.addClusterLabel(position, { width: 500, height: 400 });
     
     // Update the cluster title
     board.updateElement(clusterId, { text: title });
@@ -1413,8 +1413,8 @@ export function FigJamBoard({
               for (const label of labels) {
                 const clusterX = label.position.x;
                 const clusterY = label.position.y;
-                const clusterWidth = label.width ?? 400;
-                const clusterHeight = label.height ?? 300;
+                const clusterWidth = label.width ?? 500;
+                const clusterHeight = label.height ?? 350;
                 
                 if (
                   pos.x >= clusterX &&
@@ -1502,8 +1502,8 @@ export function FigJamBoard({
           {labels.map((el) => {
             const isClusterDragging = draggingClusterRef.current === el.id;
             
-            const clusterWidth = el.width ?? 400;
-            const clusterHeight = el.height ?? 300;
+            const clusterWidth = el.width ?? 500;
+            const clusterHeight = el.height ?? 350;
             
             const stickiesInThisCluster = stickies.filter(s => 
               s.clusterId === el.id || s.parentSectionId === el.id
@@ -1631,6 +1631,9 @@ export function FigJamBoard({
                 onResize={(clusterId, newHeight) => {
                   board.updateElement(clusterId, { height: newHeight });
                 }}
+                onWidthChange={(clusterId, newWidth) => {
+                  board.updateElement(clusterId, { width: newWidth });
+                }}
                 onOpenAIRename={(clusterId) => {
                   setSelectedClusterForRename(clusterId);
                   setShowAIRenameDialog(true);
@@ -1664,7 +1667,7 @@ export function FigJamBoard({
               setAutoFitSectionId(clusterContextMenu.clusterId);
               toast.success("Cluster resized to fit content");
               setClusterContextMenu(null);
-              setTimeout(() => setAutoFitSectionId(null), 100);
+              setTimeout(() => setAutoFitSectionId(null), 500);
             }}
             onDelete={() => {
               const clusterId = clusterContextMenu.clusterId;
@@ -1759,7 +1762,7 @@ export function FigJamBoard({
             x: -state.pan.x + 400 + Math.random() * 100,
             y: -state.pan.y + 300 + Math.random() * 100,
           };
-          const clusterId = board.addClusterLabel(position, { width: 400, height: 200 });
+          const clusterId = board.addClusterLabel(position, { width: 500, height: 350 });
           board.updateElement(clusterId, { text: title });
           
           // Save to Convex

@@ -82,10 +82,10 @@ export default function SimpleAffinityMap() {
       const colorIndex = clusters.length % CLUSTER_COLORS.length;
       setClusters((prev) => [...prev, {
         id,
-        x: x - 200,
+        x: x - 250,
         y: y - 150,
-        width: 400,
-        height: 300,
+        width: 500,
+        height: 350,
         title: "New Group",
         color: CLUSTER_COLORS[colorIndex],
       }]);

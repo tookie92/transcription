@@ -25,6 +25,8 @@ export const createProjectShareLink = mutation({
     expiresInDays: v.optional(v.number()),
     saveAsTemplate: v.optional(v.boolean()),
     templateName: v.optional(v.string()),
+    personaIds: v.optional(v.array(v.id("personas"))),
+    includeAffinityMap: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
@@ -69,6 +71,8 @@ export const createProjectShareLink = mutation({
         interviewIds: args.interviewIds,
         includeCrossThemes: args.includeCrossThemes,
         interviewConfig: defaultInterviewConfig,
+        personaIds: args.personaIds ?? [],
+        includeAffinityMap: args.includeAffinityMap ?? false,
       },
       isTemplate: args.saveAsTemplate || false,
       templateName: args.templateName,
@@ -151,10 +155,37 @@ export const getProjectShareData = query({
         .flatMap((i) => i?.insights || []);
 
       if (allInsights.length >= 3) {
-        // We'll generate cross themes client-side with Groq
         crossThemes = {
           totalInsights: allInsights.length,
           interviewCount: interviews.filter(Boolean).length,
+        };
+      }
+    }
+
+    // Get personas if configured
+    let personas = null;
+    if (link.config.personaIds && link.config.personaIds.length > 0) {
+      personas = await Promise.all(
+        link.config.personaIds.map(async (personaId) => {
+          const persona = await ctx.db.get(personaId);
+          return persona;
+        })
+      ).then(results => results.filter(Boolean));
+    }
+
+    // Get affinity map if configured
+    let affinityMap = null;
+    if (link.config.includeAffinityMap) {
+      const maps = await ctx.db
+        .query("affinityMaps")
+        .filter(q => q.eq(q.field("projectId"), link.projectId))
+        .collect();
+      
+      const currentMap = maps.find(m => m.isCurrent);
+      if (currentMap) {
+        affinityMap = {
+          name: currentMap.name,
+          clusters: currentMap.clusters,
         };
       }
     }
@@ -167,6 +198,8 @@ export const getProjectShareData = query({
       interviews: interviews.filter(Boolean),
       crossThemes,
       config: link.config,
+      personas,
+      affinityMap,
     };
   },
 });

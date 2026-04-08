@@ -673,7 +673,7 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
         text: "New Cluster",
         color: "#B8B4FF",
         fontSize: 13,
-        width: size?.width ?? 400,
+        width: size?.width ?? 500,
         height: size?.height ?? 300,
         zIndex: 1,
         createdAt: now(),

@@ -50,6 +50,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
       case "user_mentioned": 
         return <AtSign size={16} className="text-pink-500" />;
       case "invite_accepted": 
+      case "invite_received":
         return <Users size={16} className="text-teal-500" />;
       default: 
         return <Bell size={16} className="text-gray-500" />;

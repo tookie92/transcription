@@ -605,7 +605,7 @@ export function AffinityCanvas({ initialElements, onChange }: AffinityCanvasProp
             type: "cluster",
             title: "New Cluster",
             position: { x, y },
-            size: { width: 400, height: 320 },
+            size: { width: 500, height: 350 },
             color: CLUSTER_COLORS[colorIndex],
           },
         }));

@@ -27,8 +27,10 @@ import {
   ArrowRight,
   Users,
   FileBarChart,
+  CircuitBoard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PersonaCard } from "./share/PersonaCard";
 
 interface ProjectShareViewProps {
   token: string;
@@ -64,7 +66,7 @@ const insightTypeConfig = {
 
 interface Slide {
   id: string;
-  type: "title" | "summary" | "themes" | "cross-themes" | "insights" | "quotes" | "end";
+  type: "title" | "summary" | "themes" | "cross-themes" | "insights" | "quotes" | "persona" | "end";
   interviewIndex: number;
   interviewTitle: string;
 }
@@ -85,6 +87,7 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
   });
 
   const interviews = data && !("error" in data) ? data.interviews : [];
+  const personas = data && !("error" in data) && Array.isArray(data.personas) ? data.personas : [];
   const hasMultipleInterviews = interviews.length > 1;
 
   // Calculate project stats
@@ -150,9 +153,26 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
 
   // Generate slides when data changes
   useEffect(() => {
-    if (!data || "error" in data || interviews.length === 0) return;
+    if (!data || "error" in data) return;
+    
+    const hasInterviews = interviews.length > 0;
+    const hasPersonas = Array.isArray(personas) && personas.length > 0;
+    
+    if (!hasInterviews && !hasPersonas) {
+      return;
+    }
 
     const newSlides: Slide[] = [];
+
+    // Add project intro slide if we have personas but no interviews
+    if (!hasInterviews && hasPersonas) {
+      newSlides.push({
+        id: "project-intro",
+        type: "title",
+        interviewIndex: -1,
+        interviewTitle: project.name,
+      });
+    }
 
     // Cross-themes slide (if multiple interviews)
     if (hasMultipleInterviews) {
@@ -205,20 +225,20 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
           });
         }
       }
-
-      if (interview.transcriptExcerpts && interview.transcriptExcerpts.length > 0) {
-        // Use notable segments instead of all excerpts
-        const notableSegments = getNotableSegments(interview);
-        const excerptCount = Math.min(notableSegments.length, MAX_ITEMS_PER_SLIDE);
-        
-        newSlides.push({
-          id: `quotes-${interviewIndex}`,
-          type: "quotes",
-          interviewIndex,
-          interviewTitle: interview.title,
-        });
-      }
+      // (Quotes slide removed - not useful)
     });
+
+    // Add separate persona slides - one per persona
+    if (Array.isArray(personas) && personas.length > 0) {
+      personas.forEach((persona: any, index: number) => {
+        newSlides.push({
+          id: `persona-${index}`,
+          type: "persona",
+          interviewIndex: -1,
+          interviewTitle: persona.name || `Persona ${index + 1}`,
+        });
+      });
+    }
 
     newSlides.push({
       id: "end",
@@ -228,7 +248,7 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
     });
 
     setSlides(newSlides);
-  }, [data, interviews, hasMultipleInterviews]);
+  }, [data, interviews, hasMultipleInterviews, personas]);
 
   useEffect(() => {
     if (data && !("error" in data) && hasMultipleInterviews && crossThemes.length === 0) {
@@ -497,6 +517,39 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
               );
             })}
           </div>
+
+          {/* Personas Section */}
+          {personas && personas.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-primary" />
+                  User Personas
+                  <Badge variant="secondary" className="ml-auto">{personas.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {personas.map((persona: any, i: number) => (
+                    <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
+                      <img 
+                        src={persona.profileImage} 
+                        alt={persona.name}
+                        className="w-12 h-12 rounded-full object-cover"
+                      />
+                      <div>
+                        <h4 className="font-medium">{persona.name}</h4>
+                        <p className="text-xs text-muted-foreground">{persona.age} • {persona.occupation}</p>
+                        {persona.quote && (
+                          <p className="text-xs italic text-muted-foreground mt-1 line-clamp-2">&ldquo;{persona.quote}&rdquo;</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </main>
       </div>
     );
@@ -622,12 +675,12 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
       case "themes":
         return interview?.summary?.mainThemes?.length ? (
           <div className="flex-1 flex flex-col">
-            <h2 className="text-3xl font-bold mb-8 flex items-center gap-3">
+            <h2 className="text-3xl font-bold mb-8 flex items-center justify-center gap-3">
               <Sparkles className="w-8 h-8 text-primary" />
               Main Themes
             </h2>
-            <div className="flex-1 flex items-center">
-              <div className="flex flex-wrap gap-4 justify-center">
+            <div className="flex-1 flex items-center justify-center">
+              <div className="flex flex-wrap gap-3 justify-center max-w-4xl">
                 {interview.summary.mainThemes.map((theme: string, i: number) => (
                   <Badge key={i} variant="secondary" className="text-lg px-6 py-3">{theme}</Badge>
                 ))}
@@ -705,6 +758,16 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
                 </Card>
               ))}
             </div>
+          </div>
+        ) : null;
+      }
+
+      case "persona": {
+        const personaIndex = parseInt(slide.id.replace("persona-", ""));
+        const persona = personas[personaIndex];
+        return persona ? (
+          <div className="flex-1 flex items-start justify-center p-2 md:p-4 overflow-hidden">
+            <PersonaCard persona={persona} />
           </div>
         ) : null;
       }

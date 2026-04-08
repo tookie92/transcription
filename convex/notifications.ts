@@ -17,7 +17,8 @@ export const createNotification = mutation({
       v.literal("insight_removed"),
       v.literal("comment_added"),
       v.literal("user_mentioned"),
-      v.literal("invite_accepted")
+      v.literal("invite_accepted"),
+      v.literal("invite_received")
     ),
     title: v.string(),
     message: v.string(),

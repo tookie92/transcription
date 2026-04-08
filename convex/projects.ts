@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { api } from "./_generated/api";
 
 
 
@@ -300,6 +301,25 @@ export const inviteUser = mutation({
       members: updatedMembers,
       updatedAt: Date.now(),
     });
+
+    // Create notification for the invited user
+    try {
+      await ctx.scheduler.runAt(
+        Date.now() + 1000, // Small delay to ensure the patch is completed
+        api.notifications.createNotification,
+        {
+          userId: args.email,
+          type: "invite_received",
+          title: "New Project Invitation",
+          message: `You have been invited to join "${project.name}" as a ${args.role}. Click to view the project.`,
+          relatedId: args.projectId,
+          relatedType: "project",
+          actionUrl: `/project/${args.projectId}`,
+        }
+      );
+    } catch (notificationError) {
+      console.log("Note: Notification could not be sent (user may not have an account yet)", notificationError);
+    }
 
     console.log("✅ Invitation completed successfully");
     return { success: true };

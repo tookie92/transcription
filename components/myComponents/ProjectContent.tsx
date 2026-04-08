@@ -5,7 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Plus, Users, ArrowLeft, CircuitBoard, Lightbulb, ArrowRight, CheckCircle2, Circle, Clock, Trash2, ChevronRight, MoreHorizontal, Share2, Mic, Sparkles, BarChart3 } from "lucide-react";
+import { FileText, Plus, Users, ArrowLeft, CircuitBoard, Lightbulb, ArrowRight, CheckCircle2, Circle, Clock, Trash2, ChevronRight, MoreHorizontal, Share2, Mic, Sparkles, BarChart3, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
@@ -13,7 +13,10 @@ import { useEffect, useState } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { DialogTitle } from "@radix-ui/react-dialog";
+import { DialogHeader, DialogTrigger } from "@/components/ui/dialog";
 import { motion } from "framer-motion";
+import { ShareProjectModal } from "./ShareProjectModal";
+import { TeamDialog } from "./TeamDialog";
 
 interface ProjectContentProps {
   projectId: Id<"projects">;
@@ -27,7 +30,9 @@ function StatCard({
   color,
   progress,
   progressLabel,
-  delay 
+  delay,
+  actionIcon: ActionIcon,
+  onActionClick 
 }: { 
   icon: React.ElementType; 
   label: string; 
@@ -37,6 +42,8 @@ function StatCard({
   progress?: number;
   progressLabel?: string;
   delay?: number;
+  actionIcon?: React.ElementType;
+  onActionClick?: () => void;
 }) {
   return (
     <motion.div
@@ -53,9 +60,19 @@ function StatCard({
         >
           <Icon className="w-5 h-5" style={{ color }} />
         </div>
-        <span className="text-3xl font-semibold" style={{ fontFamily: "var(--font-serif), Georgia, serif" }}>
-          {value}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-3xl font-semibold" style={{ fontFamily: "var(--font-serif), Georgia, serif" }}>
+            {value}
+          </span>
+          {ActionIcon && onActionClick && (
+            <button 
+              onClick={onActionClick}
+              className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors cursor-pointer"
+            >
+              <ActionIcon className="w-4 h-4 text-muted-foreground hover:text-primary" />
+            </button>
+          )}
+        </div>
       </div>
       
       <p className="font-medium text-sm mb-1">{label}</p>
@@ -279,6 +296,7 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
   
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [interviewToDelete, setInterviewToDelete] = useState<{ id: Id<"interviews">; title: string } | null>(null);
+  const [teamDialogOpen, setTeamDialogOpen] = useState(false);
 
   // Calculate stats
   const totalInsights = insights?.length || 0;
@@ -387,6 +405,7 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
         
         {/* Actions */}
         <div className="flex items-center gap-3">
+          <ShareProjectModal projectId={projectId} projectName={project.name} />
           <Button
             variant="outline"
             onClick={() => router.push(`/project/${projectId}/affinity/`)}
@@ -454,7 +473,7 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
         />
         <StatCard
           icon={CircuitBoard}
-          label="Groups"
+          label="Clusters"
           value={totalClusters}
           subtext={`${groupedInsights} insights grouped`}
           color="#22C55E"
@@ -469,8 +488,17 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
           subtext={project.ownerId === userId ? "you are owner" : "collaborators"}
           color="#F97316"
           delay={0.25}
+          actionIcon={project.ownerId === userId ? UserPlus : undefined}
+          onActionClick={project.ownerId === userId ? () => setTeamDialogOpen(true) : undefined}
         />
       </div>
+
+      {/* Invite Dialog */}
+      <TeamDialog 
+        projectId={projectId} 
+        open={teamDialogOpen} 
+        onOpenChange={setTeamDialogOpen} 
+      />
 
       {/* Interviews Section */}
       <motion.div

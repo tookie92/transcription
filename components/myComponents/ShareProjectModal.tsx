@@ -33,6 +33,7 @@ import {
   Lightbulb,
   Sparkles,
   BookmarkPlus,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -65,9 +66,13 @@ export function ShareProjectModal({ projectId, projectName }: ShareProjectModalP
   const [selectedInterviews, setSelectedInterviews] = useState<Set<Id<"interviews">>>(new Set());
   const [interviewConfigs, setInterviewConfigs] = useState<Record<string, InterviewConfig>>({});
 
+  // Content selection
+  const [selectedPersonas, setSelectedPersonas] = useState<Set<string>>(new Set());
+
   const interviews = useQuery(api.interviews.getProjectInterviews, { projectId });
   const shareStatus = useQuery(api.projectSharing.getProjectShareStatus, { projectId });
   const templates = useQuery(api.projectSharing.getShareTemplates, { projectId });
+  const personas = useQuery(api.personas.getPersonasByProject, { projectId });
   const createLink = useMutation(api.projectSharing.createProjectShareLink);
   const revokeLink = useMutation(api.projectSharing.revokeProjectShareLink);
 
@@ -94,8 +99,8 @@ export function ShareProjectModal({ projectId, projectName }: ShareProjectModalP
   }, [interviews]);
 
   const handleCreateLink = async () => {
-    if (selectedInterviews.size === 0) {
-      toast.error("Select at least one interview");
+    if (selectedInterviews.size === 0 && selectedPersonas.size === 0) {
+      toast.error("Select at least one content to share");
       return;
     }
 
@@ -109,10 +114,10 @@ export function ShareProjectModal({ projectId, projectName }: ShareProjectModalP
         password: usePassword ? password : undefined,
         saveAsTemplate: saveAsTemplate && templateName ? true : undefined,
         templateName: templateName || undefined,
+        personaIds: selectedPersonas.size > 0 ? Array.from(selectedPersonas) as any : undefined,
       });
       toast.success("Shareable link created!");
       setIsOpen(false);
-      // Refresh status
     } catch (error) {
       toast.error("Failed to create link");
     } finally {
@@ -440,6 +445,66 @@ export function ShareProjectModal({ projectId, projectName }: ShareProjectModalP
               )}
             </CardContent>
           </Card>
+
+          {/* Personas Selection */}
+          {personas && personas.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    Personas
+                    <Badge variant="secondary">{selectedPersonas.size} selected</Badge>
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedPersonas(new Set(personas.map(p => p._id)))} className="text-xs">
+                      Select All
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedPersonas(new Set())} className="text-xs">
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2 max-h-[150px] overflow-y-auto">
+                {personas.map((persona) => (
+                  <div
+                    key={persona._id}
+                    className={cn(
+                      "flex items-center gap-3 p-2 rounded-lg transition-colors",
+                      selectedPersonas.has(persona._id)
+                        ? "bg-primary/10 border border-primary/20"
+                        : "hover:bg-muted/50"
+                    )}
+                  >
+                    <Checkbox
+                      checked={selectedPersonas.has(persona._id)}
+                      onCheckedChange={() => {
+                        setSelectedPersonas(prev => {
+                          const next = new Set(prev);
+                          if (next.has(persona._id)) {
+                            next.delete(persona._id);
+                          } else {
+                            next.add(persona._id);
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                    <img
+                      src={persona.profileImage}
+                      alt={persona.name}
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{persona.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{persona.occupation}</p>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 pt-4 border-t">
@@ -448,7 +513,7 @@ export function ShareProjectModal({ projectId, projectName }: ShareProjectModalP
           </Button>
           <Button
             onClick={handleCreateLink}
-            disabled={selectedInterviews.size === 0 || isCreating}
+            disabled={(selectedInterviews.size === 0 && selectedPersonas.size === 0) || isCreating}
             className="gap-2"
           >
             {isCreating ? (
