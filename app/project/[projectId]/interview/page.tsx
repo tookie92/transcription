@@ -5,6 +5,7 @@ import { useTranscription } from '@/hooks/useTranscription';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { Id } from '@/convex/_generated/dataModel';
+import { GDPRConsent } from '@/components/myComponents/GDPRConsent';
 import { toast } from "sonner";
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth, useUser } from '@clerk/nextjs';
@@ -30,10 +31,12 @@ import {
   Sparkles,
   AlertCircle,
   Film,
+  Monitor,
+  Computer,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
-type SourceType = 'upload' | 'record' | 'url' | null;
+type SourceType = 'upload' | 'record' | 'recordSystem' | 'url' | null;
 
 export default function InterviewHome() {
   const params = useParams();
@@ -52,6 +55,7 @@ export default function InterviewHome() {
   const [topic, setTopic] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isRecordingSystem, setIsRecordingSystem] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [audioUrlInput, setAudioUrlInput] = useState('');
@@ -67,6 +71,7 @@ export default function InterviewHome() {
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [showGDPRConsent, setShowGDPRConsent] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -171,6 +176,51 @@ export default function InterviewHome() {
     setIsRecording(false);
   };
 
+  const startSystemRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      });
+      
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length === 0) {
+        toast.error('No audio track found in the screen share');
+        stream.getTracks().forEach(t => t.stop());
+        return;
+      }
+
+      const audioOnlyStream = new MediaStream(audioTracks);
+      const recorder = new MediaRecorder(audioOnlyStream, { mimeType: 'audio/webm' });
+      const chunks: Blob[] = [];
+      
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        handleFileSelect(new File([blob], 'system-recording.webm', { type: 'audio/webm' }));
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecordingSystem(true);
+      setRecordingTime(0);
+      recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
+      
+      stream.getVideoTracks()[0].onended = () => {
+        stopSystemRecording();
+      };
+    } catch {
+      toast.error('Failed to start system recording. Make sure screen share permissions are granted.');
+    }
+  };
+
+  const stopSystemRecording = () => {
+    if (mediaRecorder?.state !== 'inactive') mediaRecorder?.stop();
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    setIsRecordingSystem(false);
+  };
+
   const formatTime = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
 
   const handleTranscribe = async () => {
@@ -219,7 +269,7 @@ export default function InterviewHome() {
         audioUrl,
       });
       toast.success('Saved!', { id: toastId });
-      router.push(`/project/${currentProjectId}/interview/${interviewId}`);
+      router.push(`/project/${currentProjectId}`);
     } catch (err) {
       toast.error(`Failed: ${err instanceof Error ? err.message : 'Unknown'}`, { id: toastId });
     } finally {
@@ -274,10 +324,11 @@ export default function InterviewHome() {
 
           {!showPreview ? (
             <>
-              <div className="grid md:grid-cols-3 gap-4 mb-8">
+              <div className="grid md:grid-cols-4 gap-4 mb-8">
                 {[
                   { id: 'upload', icon: CloudUpload, label: 'Upload File', desc: 'MP3, MP4, WAV, M4A' },
-                  { id: 'record', icon: Radio, label: 'Record', desc: 'Record directly in browser' },
+                  { id: 'record', icon: Mic, label: 'Record Mic', desc: 'Record from microphone' },
+                  { id: 'recordSystem', icon: Monitor, label: 'Record System', desc: 'Record system audio' },
                   { id: 'url', icon: Globe, label: 'From URL', desc: 'Paste a link to audio/video' },
                 ].map((source, i) => (
                   <motion.button
@@ -392,6 +443,50 @@ export default function InterviewHome() {
                         </div>
                       )}
 
+                      {selectedSource === 'recordSystem' && (
+                        <div className="text-center py-8">
+                          {isRecordingSystem ? (
+                            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="space-y-6">
+                              <div className="relative inline-flex items-center justify-center">
+                                <motion.div
+                                  animate={{ scale: [1, 1.2, 1] }}
+                                  transition={{ repeat: Infinity, duration: 1.5 }}
+                                  className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center"
+                                >
+                                  <div className="w-8 h-8 rounded-full bg-red-500" />
+                                </motion.div>
+                              </div>
+                              <div className="font-mono text-4xl">{formatTime(recordingTime)}</div>
+                              <p className="text-[var(--muted-foreground)]">Recording system audio...</p>
+                              <button
+                                onClick={stopSystemRecording}
+                                className="inline-flex items-center gap-2 px-6 py-3 bg-red-500 text-white rounded-xl font-medium hover:bg-red-600 transition-colors"
+                              >
+                                <Square className="w-5 h-5" />
+                                Stop Recording
+                              </button>
+                            </motion.div>
+                          ) : (
+                            <div className="space-y-4">
+                              <div className="w-20 h-20 mx-auto rounded-full bg-[var(--accent)] flex items-center justify-center">
+                                <Monitor className="w-10 h-10 text-[var(--primary)]" />
+                              </div>
+                              <p className="text-[var(--muted-foreground)]">Record audio from your system (screen share)</p>
+                              <button
+                                onClick={startSystemRecording}
+                                className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-xl font-medium hover:opacity-90 transition-opacity"
+                              >
+                                <Monitor className="w-5 h-5" />
+                                Start Recording
+                              </button>
+                              <p className="text-xs text-[var(--muted-foreground)]">
+                                Select a screen/window to share and enable audio
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {selectedSource === 'url' && (
                         <div className="space-y-4">
                           <div className="flex gap-3">
@@ -499,7 +594,7 @@ export default function InterviewHome() {
                       {error && (
                         <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
                           <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                          <p className="text-sm text-red-600">{error}</p>
+                          <p className="text-sm text-red-600">{typeof error === 'string' ? error : 'Transcription failed. Please try again.'}</p>
                         </div>
                       )}
                     </div>
@@ -608,6 +703,13 @@ export default function InterviewHome() {
           )}
         </motion.div>
       </div>
+      <GDPRConsent 
+        operation="transcription" 
+        onConsent={() => {
+          setShowGDPRConsent(false);
+          handleTranscribe();
+        }}
+      />
     </div>
   );
 }

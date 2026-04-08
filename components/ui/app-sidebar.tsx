@@ -26,6 +26,7 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAuth, useUser } from "@clerk/nextjs"
 import { Input } from "../ui/input"
+import Image from "next/image"
 
 export function AppSidebar() {
   const { state, toggleSidebar, isMobile } = useSidebar()
@@ -118,7 +119,7 @@ export function AppSidebar() {
           {!isCollapsed && (
             <div className="flex items-center gap-3">
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                <img src="/logomark.svg" alt="Skripta" className="size-4" />
+                <Image width={50} height={50} src="/logomark.svg" alt="Skripta" className="size-4" />
               </div>
               <h2 className="text-lg font-semibold">Projects</h2>
             </div>

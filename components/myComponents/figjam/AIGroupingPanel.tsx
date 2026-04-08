@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import type { StickyNoteData, ClusterLabelData } from "@/types/figjam";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 interface GroupingSuggestion {
   id: string;
@@ -44,6 +46,7 @@ interface AIGroupingPanelProps {
   existingClusters: ClusterLabelData[];
   projectContext?: string;
   onCreateCluster: (stickyIds: string[], title: string, position: { x: number; y: number }) => void;
+  onNeedConsent?: () => void;
 }
 
 const INSIGHT_TYPE_COLORS: Record<string, string> = {
@@ -63,6 +66,7 @@ export function AIGroupingPanel({
   existingClusters,
   projectContext,
   onCreateCluster,
+  onNeedConsent,
 }: AIGroupingPanelProps) {
   const [suggestions, setSuggestions] = useState<GroupingSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -72,9 +76,44 @@ export function AIGroupingPanel({
   const cachedSuggestionsRef = useRef<GroupingSuggestion[]>([]);
   const lastFetchTimeRef = useRef<number>(0);
 
+  // Credits & GDPR
+  const userCredits = useQuery(api.credits.getUserCredits);
+  const userConsent = useQuery(api.credits.getConsent);
+  const deductCredits = useMutation(api.credits.deductCredits);
+  const initializeCredits = useMutation(api.credits.initializeCredits);
+
   // Filter out applied and dismissed suggestions
   const visibleSuggestions = suggestions.filter(s => !s.isApplied && !s.isDismissed);
   const hasValidCache = suggestions.length > 0 && !fromCache;
+
+  const checkCredits = async () => {
+    // Check GDPR consent first
+    if (!userConsent) {
+      onNeedConsent?.();
+      return false;
+    }
+
+    try {
+      await initializeCredits({});
+    } catch {
+      // Ignore init errors
+    }
+
+    const creditsData = userCredits || { credits: 150, costs: { transcription: 20, aiGrouping: 10, aiRename: 5 } };
+    
+    if (creditsData.credits < creditsData.costs.aiGrouping) {
+      toast.error(`Not enough credits for AI grouping. You need ${creditsData.costs.aiGrouping} credits but have ${creditsData.credits}.`);
+      return false;
+    }
+
+    try {
+      await deductCredits({ operation: "aiGrouping" });
+      return true;
+    } catch (e) {
+      toast.error(`Not enough credits for AI grouping.`);
+      return false;
+    }
+  };
 
   const toggleSuggestion = (index: number) => {
     setSelectedSuggestions((prev) => {
@@ -122,6 +161,10 @@ export function AIGroupingPanel({
   }, [isOpen]);
 
   const fetchSuggestions = async (forceRefresh = false) => {
+    // Check credits before making API call
+    const hasCredits = await checkCredits();
+    if (!hasCredits) return;
+
     // Check cache first (unless forcing refresh)
     if (!forceRefresh && cachedSuggestionsRef.current.length > 0) {
       const cacheAge = Date.now() - lastFetchTimeRef.current;

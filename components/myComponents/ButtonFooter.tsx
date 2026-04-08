@@ -1,16 +1,24 @@
 "use client"
 import { SignInButton, SignUpButton ,SignedIn,SignedOut, UserButton, useClerk, useUser } from '@clerk/nextjs'
-// import { Unauthenticated } from 'convex/react'
 import React from 'react'
 import { Button } from '../ui/button'
 import Image from 'next/image'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu'
 import { CreateProjectDialog } from './CreatProjectDialog'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
+import { Coins } from 'lucide-react'
 
 
 const ButtonFooter = () => {
     const {user} = useUser()
     const {signOut, openUserProfile} = useClerk()
+    
+    // Get user credits
+    const userCredits = useQuery(api.credits.getUserCredits)
+
+    const credits = userCredits?.credits ?? 150
+    const costs = userCredits?.costs ?? { transcription: 20, aiGrouping: 10, aiRename: 5 }
 
      const handleSignOut = async () => {
     try {
@@ -67,6 +75,12 @@ const ButtonFooter = () => {
                     <DropdownMenuContent className="w-56" align="end">
                         <DropdownMenuLabel>My Account</DropdownMenuLabel>
                         <DropdownMenuSeparator />
+                        <DropdownMenuItem className="flex items-center gap-2">
+                            <Coins className="w-4 h-4 text-yellow-500" />
+                            <span className="flex-1">Credits</span>
+                            <span className="font-medium text-primary">{credits}</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => openUserProfile()}>
                             Manage Account
                         </DropdownMenuItem>
@@ -75,6 +89,17 @@ const ButtonFooter = () => {
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
+                
+                {/* Credits info */}
+                <div className="px-2 py-2 rounded-lg bg-sidebar-accent/50">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Coins className="w-3 h-3 text-yellow-500" />
+                        <span>{credits} credits left</span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground/70 mt-1">
+                        Transcribe: {costs.transcription} • AI Grouping: {costs.aiGrouping} • AI Rename: {costs.aiRename}
+                    </div>
+                </div>
             </div>
         </SignedIn>
     </div>

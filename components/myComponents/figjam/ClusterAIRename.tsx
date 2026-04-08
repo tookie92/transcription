@@ -11,6 +11,8 @@ import {
 import { Sparkles, Loader2, Check, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 interface ClusterAIRenameProps {
   isOpen: boolean;
@@ -19,6 +21,7 @@ interface ClusterAIRenameProps {
   clusterTitle: string;
   stickyTexts: string[];
   onRename: (clusterId: string, newName: string) => void;
+  onNeedConsent?: () => void;
 }
 
 interface Suggestion {
@@ -34,11 +37,47 @@ export function ClusterAIRename({
   clusterTitle,
   stickyTexts,
   onRename,
+  onNeedConsent,
 }: ClusterAIRenameProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [customName, setCustomName] = useState("");
+
+  // Credits & GDPR
+  const userCredits = useQuery(api.credits.getUserCredits);
+  const userConsent = useQuery(api.credits.getConsent);
+  const deductCredits = useMutation(api.credits.deductCredits);
+  const initializeCredits = useMutation(api.credits.initializeCredits);
+
+  const checkCredits = async () => {
+    // Check GDPR consent first
+    if (!userConsent) {
+      onNeedConsent?.();
+      return false;
+    }
+
+    try {
+      await initializeCredits({});
+    } catch {
+      // Ignore init errors
+    }
+
+    const creditsData = userCredits || { credits: 150, costs: { transcription: 20, aiGrouping: 10, aiRename: 5 } };
+    
+    if (creditsData.credits < creditsData.costs.aiRename) {
+      toast.error(`Not enough credits for AI rename. You need ${creditsData.costs.aiRename} credits but have ${creditsData.credits}.`);
+      return false;
+    }
+
+    try {
+      await deductCredits({ operation: "aiRename" });
+      return true;
+    } catch (e) {
+      toast.error(`Not enough credits for AI rename.`);
+      return false;
+    }
+  };
 
   useEffect(() => {
     if (isOpen && stickyTexts.length > 0) {
@@ -59,6 +98,14 @@ export function ClusterAIRename({
   }, [isOpen]);
 
   const fetchSuggestions = useCallback(async () => {
+    // Check credits first
+    const hasCredits = await checkCredits();
+    if (!hasCredits) {
+      setIsLoading(false);
+      generateFallback();
+      return;
+    }
+
     setIsLoading(true);
     console.log("AI Rename: Fetching for cluster:", clusterId);
 

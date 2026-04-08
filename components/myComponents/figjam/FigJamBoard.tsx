@@ -13,6 +13,7 @@ import { ClusterAIRename } from "./ClusterAIRename";
 import { CommentBubblesLayer } from "./CommentBubble";
 import { PresentationMode } from "./PresentationMode";
 import { InsightsSidebar } from "./InsightsSidebar";
+import { GDPRConsent } from "../GDPRConsent";
 import type { FigJamElement, Position, Size, StickyColor, StickyNoteData, DotData, ClusterLabelData, SectionData, TextData } from "@/types/figjam";
 import type { Insight } from "@/types";
 
@@ -170,6 +171,7 @@ export function FigJamBoard({
   const [showStickyPicker, setShowStickyPicker] = useState(false);
   const [pendingStickyPosition, setPendingStickyPosition] = useState<Position | null>(null);
   const [showAIGroupingPanel, setShowAIGroupingPanel] = useState(false);
+  const [showGDPRConsent, setShowGDPRConsent] = useState(false);
   const [showInsightsSidebar, setShowInsightsSidebar] = useState(true);
   const [contextMenu, setContextMenu] = useState<{
     position: { x: number; y: number };
@@ -1441,6 +1443,7 @@ export function FigJamBoard({
         existingClusters={labels}
         projectContext={projectName ? `PROJECT NAME: ${projectName}` : undefined}
         onCreateCluster={handleCreateClusterFromAI}
+        onNeedConsent={() => setShowGDPRConsent(true)}
       />
 
       {/* ── Canvas ── */}
@@ -1796,6 +1799,7 @@ export function FigJamBoard({
               setShowAIRenameDialog(false);
               setSelectedClusterForRename(null);
             }}
+            onNeedConsent={() => setShowGDPRConsent(true)}
           />
         );
       })()}
@@ -2030,6 +2034,15 @@ export function FigJamBoard({
       {/* ── Mention Toasts ── */}
       <MentionToastProvider
         setBouncingBubbleId={setBouncingBubbleId}
+      />
+
+      {/* ── GDPR Consent Dialog ── */}
+      <GDPRConsent
+        operation="aiGrouping"
+        onConsent={() => {
+          setShowGDPRConsent(false);
+          setShowAIGroupingPanel(true);
+        }}
       />
 
     </div>

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useTranscriptionStore, Interview, TranscriptionSegment } from '@/stores/transcriptionStore';
 import { videoConverter } from '@/lib/videoConverter';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '@/convex/_generated/api';
 
 interface TranscriptionResult {
   text: string;
@@ -28,12 +30,36 @@ export function useTranscription() {
 
   const [conversionProgress, setConversionProgress] = useState<ConversionProgress | null>(null);
 
+  // Credits & GDPR Consent
+  const userCredits = useQuery(api.credits.getUserCredits);
+  const userConsent = useQuery(api.credits.getConsent);
+  const deductCredits = useMutation(api.credits.deductCredits);
+  const initializeCredits = useMutation(api.credits.initializeCredits);
+
   const transcribe = async (
     file: File, 
     title?: string, 
     topic?: string,
     onProgress?: (progress: ConversionProgress) => void
   ): Promise<Interview> => {
+    // Check GDPR consent first
+    if (!userConsent) {
+      throw new Error("Please accept GDPR consent to use transcription.");
+    }
+
+    // Check and initialize credits before starting
+    try {
+      await initializeCredits({});
+    } catch {
+      // Ignore init errors
+    }
+
+    const creditsData = userCredits || { credits: 150, costs: { transcription: 20, aiGrouping: 10, aiRename: 5 } };
+    
+    if (creditsData.credits < creditsData.costs.transcription) {
+      throw new Error(`Not enough credits. You need ${creditsData.costs.transcription} credits for transcription, but you only have ${creditsData.credits}.`);
+    }
+
     setIsTranscribing(true);
     setTranscriptionError(null);
     setConversionProgress(null);
@@ -42,6 +68,13 @@ export function useTranscription() {
     let wasVideo = false;
 
     try {
+      // Deduct credits before starting transcription
+      try {
+        await deductCredits({ operation: "transcription" });
+      } catch (e) {
+        throw new Error(`Not enough credits for transcription.`);
+      }
+
       // Step 1: Check if video and convert if needed
       const isVideo = videoConverter.isVideoFile(file) || videoConverter.isVideoExtension(file.name);
 

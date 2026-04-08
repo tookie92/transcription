@@ -503,7 +503,21 @@ silentSortingSessions: defineTable({
     updatedAt: v.number(),
   })
   .index("by_map", ["mapId"])
-  .index("by_target", ["targetId"])
+  .index("by_target", ["targetId"]),
+
+  // User credits for usage limits
+  userCredits: defineTable({
+    clerkId: v.string(), // Clerk user ID
+    credits: v.number(), // Current available credits
+    totalCredits: v.number(), // Total credits received
+    monthlyCredits: v.number(), // Credits this month period
+    lastResetAt: v.number(), // Last monthly reset timestamp
+    gdprConsent: v.optional(v.boolean()), // GDPR consent status
+    gdprConsentDate: v.optional(v.number()), // GDPR consent date
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+  .index("by_clerk", ["clerkId"]),
 
 });
 
