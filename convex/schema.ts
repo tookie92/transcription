@@ -176,7 +176,9 @@ export default defineSchema({
     createdBy: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_current", ["projectId", "isCurrent"]),
 
   // pour le dot voting
   // 🆕 Table Dot Voting Sessions

@@ -14,14 +14,13 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import ButtonFooter from "../myComponents/ButtonFooter"
-import { useQuery } from "convex/react"
+import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
-import { Folder, Users, Bell, MailPlus, Check, X, Loader2, Search, Plus, PanelLeftIcon, PanelLeftCloseIcon } from "lucide-react"
+import { Folder, Users, Bell, MailPlus, Check, X, Loader2, Search, Plus, PanelLeftIcon, PanelLeftCloseIcon, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { ModeToggle } from "../ModeToggle"
 import { Button } from "../ui/button"
 import { useState } from "react"
-import { useMutation } from "convex/react"
 import { Id } from "@/convex/_generated/dataModel"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
@@ -62,6 +61,8 @@ export function AppSidebar() {
 
   const acceptInvite = useMutation(api.projects.claimInvite)
   const declineInvite = useMutation(api.projects.declineInvite)
+  const deleteProject = useMutation(api.projects.deleteProject)
+  const [deleteStates, setDeleteStates] = useState<Record<string, "deleting" | null>>({})
 
   const handleAccept = async (invite: { projectId: string; email: string }) => {
     setInviteStates(prev => ({ ...prev, [invite.projectId]: "accepting" }))
@@ -90,6 +91,21 @@ export function AppSidebar() {
       toast.error("Failed to decline invitation")
     } finally {
       setInviteStates(prev => ({ ...prev, [invite.projectId]: null }))
+    }
+  }
+
+  const handleDeleteProject = async (projectId: string) => {
+    if (!confirm("Are you sure you want to delete this project? This action cannot be undone.")) {
+      return
+    }
+    setDeleteStates(prev => ({ ...prev, [projectId]: "deleting" }))
+    try {
+      await deleteProject({ projectId: projectId as Id<"projects"> })
+      toast.success("Project deleted")
+    } catch (error) {
+      toast.error("Failed to delete project")
+    } finally {
+      setDeleteStates(prev => ({ ...prev, [projectId]: null }))
     }
   }
 
@@ -169,10 +185,11 @@ export function AppSidebar() {
                           animate={{ opacity: 1, x: 0 }}
                           exit={{ opacity: 0, x: 20 }}
                           transition={{ delay: index * 0.05 }}
+                          className="mx-2"
                         >
-                          <div className="p-3 mx-2 my-1 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-xl">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="w-8 h-8 bg-orange-200 dark:bg-orange-900/50 rounded-full flex items-center justify-center">
+                          <div className="p-3 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-xl space-y-2">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-orange-200 dark:bg-orange-900/50 rounded-full flex items-center justify-center flex-shrink-0">
                                 <Users className="w-4 h-4 text-orange-700 dark:text-orange-300" />
                               </div>
                               <div className="flex-1 min-w-0">
@@ -183,12 +200,12 @@ export function AppSidebar() {
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
-                                className="flex-1 h-8 bg-green-600 hover:bg-green-700"
+                                className="flex-1 h-7 text-xs bg-green-600 hover:bg-green-700"
                                 onClick={() => handleAccept(invite)}
                                 disabled={inviteStates[invite.projectId] === "accepting"}
                               >
                                 {inviteStates[invite.projectId] === "accepting" ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <Loader2 className="w-3 h-3 animate-spin" />
                                 ) : (
                                   <>
                                     <Check className="w-3 h-3 mr-1" />
@@ -199,12 +216,12 @@ export function AppSidebar() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="flex-1 h-8"
+                                className="flex-1 h-7 text-xs"
                                 onClick={() => handleDecline(invite)}
                                 disabled={inviteStates[invite.projectId] === "declining"}
                               >
                                 {inviteStates[invite.projectId] === "declining" ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <Loader2 className="w-3 h-3 animate-spin" />
                                 ) : (
                                   <>
                                     <X className="w-3 h-3 mr-1" />
@@ -212,6 +229,22 @@ export function AppSidebar() {
                                   </>
                                 )}
                               </Button>
+                              {/* <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 h-7 text-xs"
+                                onClick={() => handleDecline(invite)}
+                                disabled={inviteStates[invite.projectId] === "declining"}
+                              >
+                                {inviteStates[invite.projectId] === "declining" ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <>
+                                    <X className="w-3 h-3 mr-1" />
+                                    Decline
+                                  </>
+                                )}
+                              </Button> */}
                             </div>
                           </div>
                         </motion.div>
@@ -238,28 +271,54 @@ export function AppSidebar() {
                   <SidebarMenuItem className={isCollapsed ? "flex justify-center" : "mb-1"}>
                     <SidebarMenuButton asChild>
                       {isCollapsed ? (
-                        <Link 
-                          href={`/project/${project._id}`}
-                          className="w-10 h-10 bg-sidebar-primary/10 rounded-lg flex items-center justify-center hover:bg-sidebar-primary/20 transition-colors"
-                          title={project.name}
-                        >
-                          <Folder className="w-5 h-5 text-sidebar-primary" />
-                        </Link>
+                        <div className="relative group">
+                          <Link 
+                            href={`/project/${project._id}`}
+                            className="w-10 h-10 bg-sidebar-primary/10 rounded-lg flex items-center justify-center hover:bg-sidebar-primary/20 transition-colors"
+                            title={project.name}
+                          >
+                            <Folder className="w-5 h-5 text-sidebar-primary" />
+                          </Link>
+                          {project.ownerId === userId && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault()
+                                handleDeleteProject(project._id)
+                              }}
+                              className="absolute -top-1 -right-1 w-4 h-4 bg-destructive rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Delete project"
+                            >
+                              <Trash2 className="w-2.5 h-2.5 text-destructive-foreground" />
+                            </button>
+                          )}
+                        </div>
                       ) : (
-                        <Link 
-                          href={`/project/${project._id}`} 
-                          className="flex items-center gap-2 group"
-                        >
+                        <div className="flex items-center gap-2 group w-full">
                           <div className="w-8 h-8 bg-sidebar-primary/10 rounded-lg flex items-center justify-center group-hover:bg-sidebar-primary/20 transition-colors">
                             <Folder className="w-4 h-4 text-sidebar-primary" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <span className="truncate block font-medium">{project.name}</span>
-                            <span className="text-xs text-muted-foreground truncate block">
+                            <span className="text-xs text-muted-foreground truncate block flex items-center gap-1">
                               {project.members.length} member{project.members.length !== 1 ? 's' : ''}
+                              {project.members.some(m => m.userId.includes('@')) && (
+                                <span className="text-orange-500">• {project.members.filter(m => m.userId.includes('@')).length} pending</span>
+                              )}
                             </span>
                           </div>
-                        </Link>
+                          {project.ownerId === userId && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault()
+                                handleDeleteProject(project._id)
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
+                              title="Delete project"
+                            >
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </button>
+                          )}
+                        </div>
                       )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>

@@ -706,9 +706,18 @@ export function FigJamBoard({
           position: movement.position,
         });
       } else if (movement.action === "resize" && movement.size) {
-        board.updateElement(movement.elementId, {
-          size: movement.size,
-        });
+        // Handle both sticky (size object) and label/cluster (width/height directly)
+        const element = state.elements[movement.elementId];
+        if (element?.type === "label") {
+          board.updateElement(movement.elementId, {
+            width: movement.size.width,
+            height: movement.size.height,
+          });
+        } else {
+          board.updateElement(movement.elementId, {
+            size: movement.size,
+          });
+        }
       } else if (movement.action === "update" && movement.patch) {
         board.updateElement(movement.elementId, movement.patch);
       }
@@ -737,6 +746,22 @@ export function FigJamBoard({
     }
   }, [state.selectedIds, elementLocks, hasMapId, userId]);
 
+  // Unlock all elements when user leaves the page
+  useEffect(() => {
+    return () => {
+      if (hasMapId && userId && elementLocks) {
+        const ourLocks = elementLocks.filter(l => l.userId === userId);
+        for (const lock of ourLocks) {
+          unlockElement({
+            mapId: mapId as Id<"affinityMaps">,
+            elementId: lock.elementId,
+            userId,
+          });
+        }
+      }
+    };
+  }, [hasMapId, userId, elementLocks]);
+
   // ── Context menu event handlers ─────────────────────────────────────
   useEffect(() => {
     const handleRenameSection = (e: Event) => {
@@ -761,6 +786,10 @@ export function FigJamBoard({
   // ── Derived state ───────────────────────────────────────────────────
   const allStickies = Object.values(state.elements).filter(
     (el): el is StickyNoteData => el.type === "sticky"
+  );
+
+  const allClusters = Object.values(state.elements).filter(
+    (el): el is ClusterLabelData => el.type === "label"
   );
 
   // ── Space key for pan ────────────────────────────────────────────────────
@@ -1088,11 +1117,18 @@ export function FigJamBoard({
         return;
       }
 
-      // Select all (Ctrl+A)
+      // Select all - Ctrl+A selects clusters, Ctrl+Shift+A selects stickies
       if ((e.ctrlKey || e.metaKey) && e.key === "a") {
         e.preventDefault();
-        const allStickyIds = allStickies.map((s) => s.id);
-        allStickyIds.forEach((id, i) => board.selectElement(id, i > 0));
+        if (e.shiftKey) {
+          // Ctrl+Shift+A: select all stickies
+          const allStickyIds = allStickies.map((s) => s.id);
+          allStickyIds.forEach((id, i) => board.selectElement(id, i > 0));
+        } else {
+          // Ctrl+A: select all clusters
+          const allClusterIds = allClusters.map((c) => c.id);
+          allClusterIds.forEach((id, i) => board.selectElement(id, i > 0));
+        }
         return;
       }
 
@@ -1190,7 +1226,31 @@ export function FigJamBoard({
                   console.error("Failed to log activity:", err);
                 }
               }
-              board.deleteElement(id);
+
+              if (element.type === "sticky") {
+                // Move sticky to "discard" area instead of deleting
+                // Find a position below the canvas (or to the side)
+                const ungroupedAreaY = 50;
+                const ungroupedAreaX = 50 + Math.random() * 200;
+                board.updateElement(id, { 
+                  clusterId: null, 
+                  parentSectionId: null,
+                  position: { x: ungroupedAreaX, y: ungroupedAreaY }
+                });
+              } else if (element.type === "label") {
+                // When deleting a cluster, release all stickies back to ungrouped area
+                const clusterId = id;
+                const stickiesInCluster = allStickies.filter(s => s.clusterId === clusterId || s.parentSectionId === clusterId);
+                stickiesInCluster.forEach(sticky => {
+                  const ungroupedY = 50 + Math.random() * 200;
+                  board.updateElement(sticky.id, { 
+                    clusterId: null, 
+                    parentSectionId: null,
+                    position: { ...sticky.position, y: ungroupedY }
+                  });
+                });
+                board.deleteElement(id);
+              }
             }
           });
           break;
@@ -1201,7 +1261,7 @@ export function FigJamBoard({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [board, state.selectedIds, state.zoom, state.elements, allStickies]);
+  }, [board, state.selectedIds, state.zoom, state.elements, allStickies, allClusters]);
 
   useEffect(() => { onChange?.(state.elements); }, [state.elements, onChange]);
 
@@ -1352,6 +1412,8 @@ export function FigJamBoard({
             setDraggingStickyId(sticky.id);
           }}
           draggingStickyId={draggingStickyId}
+          getLockInfo={getLockInfo}
+          selectedIds={state.selectedIds}
         />
       )}
 
@@ -1540,6 +1602,7 @@ export function FigJamBoard({
                 isDragging={isClusterDragging}
                 isDropTarget={draggingStickyId !== null}
                 isLocked={getLockInfo(el.id).isLocked}
+                isSelected={state.selectedIds.includes(el.id)}
                 isVotingActive={isVotingActive}
                 isVotingRevealed={isVotingRevealed}
                 voteCount={clusterVotes.length}
@@ -1630,9 +1693,23 @@ export function FigJamBoard({
                 }}
                 onResize={(clusterId, newHeight) => {
                   board.updateElement(clusterId, { height: newHeight });
+                  if (hasMapId) {
+                    const clusterEl = state.elements[clusterId] as ClusterLabelData;
+                    throttledBroadcast(clusterId, "label", "resize", undefined, { 
+                      width: clusterEl?.width ?? 500, 
+                      height: newHeight 
+                    });
+                  }
                 }}
                 onWidthChange={(clusterId, newWidth) => {
                   board.updateElement(clusterId, { width: newWidth });
+                  if (hasMapId) {
+                    const clusterEl = state.elements[clusterId] as ClusterLabelData;
+                    throttledBroadcast(clusterId, "label", "resize", undefined, { 
+                      width: newWidth, 
+                      height: clusterEl?.height ?? 350 
+                    });
+                  }
                 }}
                 onOpenAIRename={(clusterId) => {
                   setSelectedClusterForRename(clusterId);
@@ -1674,9 +1751,12 @@ export function FigJamBoard({
               
               stickies.forEach(sticky => {
                 if (sticky.clusterId === clusterId || sticky.parentSectionId === clusterId) {
+                  // Move stickies to ungrouped area instead of deleting
+                  const ungroupedY = 50 + Math.random() * 200;
                   board.updateElement(sticky.id, { 
                     clusterId: null, 
-                    parentSectionId: null 
+                    parentSectionId: null,
+                    position: { ...sticky.position, y: ungroupedY }
                   });
                   if (hasMapId) {
                     throttledBroadcast(sticky.id, "sticky", "update", undefined, undefined, { 

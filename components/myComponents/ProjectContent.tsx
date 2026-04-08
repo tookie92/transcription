@@ -298,24 +298,44 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
   const [interviewToDelete, setInterviewToDelete] = useState<{ id: Id<"interviews">; title: string } | null>(null);
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
 
-  // Calculate stats
-  const totalInsights = insights?.length || 0;
+  const currentMap = affinityMaps?.find(m => m.isCurrent);
+  const mapId = currentMap?._id;
+  const figJamElements = useQuery(
+    api.affinityMaps.getFigJamElements,
+    mapId ? { mapId } : "skip"
+  );
+  
+  // Calculate stats - use figJamElements when available, otherwise fallback to insights
+  const totalInsights = mapId && figJamElements
+    ? Object.values(figJamElements).filter((el: any) => el.type === "sticky").length
+    : (insights?.length || 0);
   const analyzedInterviews = interviews?.filter(i => i.status === "completed").length || 0;
   const totalInterviews = interviews?.length || 0;
   const progressPercent = totalInterviews > 0 ? Math.round((analyzedInterviews / totalInterviews) * 100) : 0;
   
-  const currentMap = affinityMaps?.find(m => m.isCurrent);
-  const totalClusters = currentMap?.clusters.length || 0;
-  const groupedInsights = currentMap?.clusters.reduce((sum: number, g) => sum + g.insightIds.length, 0) || 0;
+  const totalClusters = mapId && figJamElements 
+    ? Object.values(figJamElements).filter((el: any) => el.type === "label").length 
+    : 0;
+  const groupedInsights = mapId && figJamElements
+    ? Object.values(figJamElements).filter((el: any) => el.type === "sticky" && (el.clusterId || el.parentSectionId)).length
+    : 0;
   const groupingProgress = totalInsights > 0 ? Math.round((groupedInsights / totalInsights) * 100) : 0;
 
   useEffect(() => {
     if (!project || !userId || !user?.emailAddresses?.[0]?.emailAddress) return;
     
     const userEmail = user.emailAddresses[0].emailAddress;
+    const isOwner = project.ownerId === userId;
     const isMember = project.members.some((m: any) => m.userId === userId);
-    const isInvitedByEmail = project.members.some((m: any) => m.userId === userEmail);
+    const isInvitedByEmail = project.members.some((m: any) => m.email === userEmail);
 
+    // User was removed from project - redirect to projects page
+    if (!isOwner && !isMember) {
+      router.push("/project");
+      return;
+    }
+
+    // User was invited by email but hasn't accepted yet
     if (isInvitedByEmail && !isMember) {
       router.push(`/invite/${projectId}?email=${encodeURIComponent(userEmail)}`);
     }

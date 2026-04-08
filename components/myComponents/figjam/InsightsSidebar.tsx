@@ -48,29 +48,52 @@ interface InsightCardProps {
   sticky: StickyNoteData;
   onDragStart: (sticky: StickyNoteData) => void;
   isDragging?: boolean;
+  isLocked?: boolean;
+  isSelected?: boolean;
+  lockedByName?: string;
 }
 
-function InsightCard({ sticky, onDragStart, isDragging }: InsightCardProps) {
+function InsightCard({ sticky, onDragStart, isDragging, isLocked, isSelected, lockedByName }: InsightCardProps) {
   const colors = STICKY_COLORS[sticky.color] || STICKY_COLORS.insight;
+  const canDrag = !isLocked;
   
   return (
     <div
       className={cn(
-        "relative rounded-xl cursor-grab active:cursor-grabbing transition-all duration-150",
+        "relative rounded-xl transition-all duration-150",
         "hover:shadow-md group",
-        isDragging && "opacity-50 scale-95"
+        isDragging && "opacity-50 scale-95",
+        isLocked ? "opacity-60 cursor-not-allowed" : "cursor-grab active:cursor-grabbing"
       )}
       style={{
         backgroundColor: colors.bg,
-        boxShadow: "0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)",
+        boxShadow: isSelected 
+          ? `0 0 0 2px ${colors.accent}` 
+          : "0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)",
       }}
-      draggable
+      draggable={canDrag}
       onDragStart={(e) => {
-        e.dataTransfer.setData("application/sticky-id", sticky.id);
-        e.dataTransfer.effectAllowed = "move";
-        onDragStart(sticky);
+        if (canDrag) {
+          e.dataTransfer.setData("application/sticky-id", sticky.id);
+          e.dataTransfer.effectAllowed = "move";
+          onDragStart(sticky);
+        }
       }}
     >
+      {/* Lock indicator */}
+      {isLocked && lockedByName && (
+        <div className="absolute top-1 right-1 z-10 flex items-center gap-1 px-1.5 py-0.5 bg-red-500/80 text-white text-[8px] rounded-full">
+          <svg className="w-2 h-2" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+          </svg>
+          {lockedByName}
+        </div>
+      )}
+      
+      {/* Selection indicator */}
+      {isSelected && !isLocked && (
+        <div className="absolute top-1 right-1 z-10 w-2 h-2 bg-blue-500 rounded-full" />
+      )}
       <div className="flex items-start p-2.5 gap-2">
         <div className="shrink-0 mt-0.5 opacity-0 group-hover:opacity-40 transition-opacity">
           <GripVertical className="w-3.5 h-3.5" style={{ color: colors.text }} />
@@ -187,6 +210,8 @@ interface InsightsSidebarProps {
   onCreateSticky: (content: string, color: StickyColor) => string;
   onDragStart: (sticky: StickyNoteData) => void;
   draggingStickyId: string | null;
+  getLockInfo?: (elementId: string) => { isLocked: boolean; lockedByName?: string };
+  selectedIds?: string[];
 }
 
 const SIDEBAR_HEIGHT = 520;
@@ -196,6 +221,8 @@ export function InsightsSidebar({
   onCreateSticky,
   onDragStart,
   draggingStickyId,
+  getLockInfo,
+  selectedIds,
 }: InsightsSidebarProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
@@ -426,14 +453,20 @@ export function InsightsSidebar({
                 )}
               </div>
             ) : (
-              filteredStickies.map((sticky) => (
-                <InsightCard
-                  key={sticky.id}
-                  sticky={sticky}
-                  onDragStart={onDragStart}
-                  isDragging={draggingStickyId === sticky.id}
-                />
-              ))
+              filteredStickies.map((sticky) => {
+                const lockInfo = getLockInfo?.(sticky.id);
+                return (
+                  <InsightCard
+                    key={sticky.id}
+                    sticky={sticky}
+                    onDragStart={onDragStart}
+                    isDragging={draggingStickyId === sticky.id}
+                    isLocked={lockInfo?.isLocked}
+                    isSelected={selectedIds?.includes(sticky.id)}
+                    lockedByName={lockInfo?.lockedByName}
+                  />
+                );
+              })
             )}
           </div>
         </ScrollArea>

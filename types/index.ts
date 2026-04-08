@@ -398,7 +398,8 @@ export type NotificationType =
   | "comment_added"
   | "user_mentioned"
   | "invite_accepted"
-  | "invite_received";
+  | "invite_received"
+  | "invite_declined";
 
 export interface Notification {
   _id: Id<"notifications">;

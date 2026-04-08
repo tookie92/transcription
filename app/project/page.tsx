@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Bell, RefreshCcwIcon, Plus, Users, Folder, ArrowRight, Clock, Mic, Sparkles, FileText, Crown, UserPlus, X } from "lucide-react";
+import { Bell, RefreshCcwIcon, Plus, Users, Folder, ArrowRight, Clock, Mic, Sparkles, FileText, Crown, UserPlus, X, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Id } from "@/convex/_generated/dataModel";
@@ -78,6 +78,7 @@ const ProjectPage = () => {
   };
 
   const acceptInvite = useMutation(api.projects.claimInvite);
+  const deleteProject = useMutation(api.projects.deleteProject);
 
   const handleAcceptInvite = async (invite: { projectId: string; email: string }) => {
     try {
@@ -88,6 +89,18 @@ const ProjectPage = () => {
       toast.success("You joined the project!");
     } catch (error) {
       toast.error("Failed to join project");
+    }
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
+    if (!confirm("Are you sure you want to delete this project? This action cannot be undone.")) {
+      return;
+    }
+    try {
+      await deleteProject({ projectId: projectId as Id<"projects"> });
+      toast.success("Project deleted");
+    } catch (error) {
+      toast.error("Failed to delete project");
     }
   };
 
@@ -308,7 +321,19 @@ const ProjectPage = () => {
                           <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
                             <Folder className="w-6 h-6 text-primary" />
                           </div>
-                          <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteProject(project._id);
+                              }}
+                              className="p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-destructive/10 transition-all"
+                              title="Delete project"
+                            >
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </button>
+                            <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                          </div>
                         </div>
                         
                         <h3 className="font-semibold text-lg mb-2 truncate group-hover:text-primary transition-colors">

@@ -188,6 +188,7 @@ interface ClusterLabelProps {
   memberStickies: StickyNoteData[];
   isDragging: boolean;
   isLocked?: boolean;
+  isSelected?: boolean;
   isDropTarget?: boolean;
   isVotingActive?: boolean;
   isVotingRevealed?: boolean;
@@ -220,6 +221,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   memberStickies,
   isDragging,
   isLocked = false,
+  isSelected = false,
   isDropTarget = false,
   isVotingActive = false,
   isVotingRevealed = false,
@@ -468,6 +470,11 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   const borderColor = isDragOver ? "#22c55e" : isDraggingActive || isHovered ? HOVER_BORDER_COLOR : DEFAULT_BORDER_COLOR;
   const bgColor = isDragOver ? "rgba(34, 197, 94, 0.1)" : isDraggingActive || isHovered ? HOVER_BG_COLOR : DEFAULT_BG_COLOR;
   const labelColor = isDraggingActive ? LABEL_COLOR_DRAGGING : LABEL_COLOR_NORMAL;
+  
+  // Selection and lock styling
+  const isSolidBorder = isSelected || isLocked;
+  const selectionBorderColor = isLocked ? "#ef4444" : "#3b82f6"; // Red if locked, blue if selected
+  const selectionBorderStyle = isSolidBorder ? "2px solid" : "2px dashed";
 
   return (
     <div
@@ -493,11 +500,28 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       <div
         className="absolute inset-0 rounded-xl transition-all duration-150"
         style={{
-          border: `2px dashed ${borderColor}`,
-          backgroundColor: bgColor,
+          border: isLocked 
+            ? `2px solid ${selectionBorderColor}` 
+            : isSelected 
+              ? `2px solid ${selectionBorderColor}` 
+              : `2px dashed ${borderColor}`,
+          backgroundColor: isLocked ? "rgba(239, 68, 68, 0.1)" : bgColor,
           borderRadius: 12,
+          opacity: isLocked ? 0.7 : 1,
         }}
       />
+      
+      {/* Lock indicator */}
+      {isLocked && (
+        <div 
+          className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-1 bg-red-500 text-white text-xs rounded-full font-medium"
+        >
+          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+          </svg>
+          Locked
+        </div>
+      )}
 
       {/* Header with title and AI button */}
       <div

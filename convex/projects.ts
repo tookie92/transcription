@@ -12,27 +12,14 @@ export const claimInvite = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
-    console.log("🔐 Claiming invite:", {
-      projectId: args.projectId,
-      email: args.email,
-      userId: identity.subject
-    });
-
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
 
-    console.log("📋 Project members:", project.members);
-
-    // Chercher l'invitation par email
     const invited = project.members.find(m => m.userId === args.email);
     if (!invited) {
-      console.log("❌ No invitation found for email:", args.email);
       throw new Error("You were not invited with this email");
     }
 
-    console.log("✅ Invitation found, replacing with userId:", identity.subject);
-
-    // Remplacer l'email par le vrai userId Clerk mais garder le nom
     await ctx.db.patch(args.projectId, {
       members: project.members.map(m =>
         m.userId === args.email ? { 
@@ -81,80 +68,46 @@ export const createProject = mutation({
   },
 });
 
-// Récupérer les projets de l'utilisateur
-// export const getUserProjects = query({
-//   handler: async (ctx) => {
-//     const identity = await ctx.auth.getUserIdentity();
-//     if (!identity) {
-//       console.log("🚫 No user identity - returning empty array");
-//       return [];
-//     }
-
-//     console.log("🔐 User authenticated:", identity.subject);
-
-//     // Récupérer tous les projets où l'user est membre
-//     const projects = await ctx.db
-//       .query("projects")
-//       .filter(q => 
-//         q.or(
-//           q.eq(q.field("ownerId"), identity.subject), // Propriétaire
-//           q.eq(q.field("isPublic"), true), // Ou projet public
-//           // Ou membre du projet - on vérifie manuellement
-//         )
-//       )
-//       .collect();
-
-//     // Filtrer manuellement pour les membres
-//     const userProjects = projects.filter(project => 
-//       project.ownerId === identity.subject || 
-//       project.isPublic ||
-//       project.members.some(member => member.userId === identity.subject)
-//     );
-
-//     console.log("📁 User projects found:", userProjects.length);
-//     return userProjects;
-//   },
-// });
 export const getUserProjects = query({
   args: { userEmail: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      console.log("🚫 No user identity - returning empty array");
       return [];
     }
 
-    console.log("🔐 User authenticated:", identity.subject);
-
-    // Récupérer TOUS les projets
     const allProjects = await ctx.db
       .query("projects")
       .collect();
 
-    // Filtrer pour trouver les projets de l'utilisateur (incluant invitations par email)
     const userEmail = args.userEmail || identity.email;
     const userProjects = allProjects.filter(project => 
       project.ownerId === identity.subject || 
       project.isPublic ||
       project.members.some(member => 
         member.userId === identity.subject ||
-        (userEmail && member.userId === userEmail) // Inclure les invitations par email
+        (userEmail && member.userId === userEmail)
       )
     );
 
-    console.log("📁 User projects found:", userProjects.length);
     return userProjects;
   },
 });
 
+export const getProjectForInvite = query({
+  args: {
+    projectId: v.id("projects"),
+  },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    return project;
+  },
+});
 
-
-
-// convex/projects.ts
 export const getByIdWithEmail = query({
   args: {
     projectId: v.id("projects"),
-    userEmail: v.string(), // ← email de l’utilisateur connecté
+    userEmail: v.string(),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -165,7 +118,7 @@ export const getByIdWithEmail = query({
 
     const hasAccess =
       project.members.some((m) => m.userId === identity.subject) ||
-      project.members.some((m) => m.userId === args.userEmail) || // ✅ email invité
+      project.members.some((m) => m.userId === args.userEmail) ||
       project.isPublic ||
       project.ownerId === identity.subject;
 
@@ -173,12 +126,10 @@ export const getByIdWithEmail = query({
   },
 });
 
-// Récupérer un projet par son ID
-// convex/projects.ts
 export const getById = query({
   args: {
     projectId: v.id("projects"),
-    withNames: v.optional(v.boolean()), // ← nouveau flag
+    withNames: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -194,11 +145,9 @@ export const getById = query({
 
     if (!hasAccess) return null;
 
-    // Si on veut les noms, on les récupère via Clerk
     if (args.withNames) {
       const membersWithNames = await Promise.all(
         project.members.map(async (m) => {
-          // Retourner les infos stockées (nom et email)
           return {
             ...m,
             name: m.name || m.userId,
@@ -213,43 +162,6 @@ export const getById = query({
   },
 });
 
-// Dans la mutation d'invitation
-export const inviteToProject = mutation({
-  args: {
-    projectId: v.id("projects"),
-    email: v.string(),
-    role: v.union(v.literal("editor"), v.literal("viewer")),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
-    
-    // Seul le owner peut inviter
-    if (project.ownerId !== identity.subject) {
-      throw new Error("Only project owner can invite users");
-    }
-
-    // Ajouter l'user aux membres
-    // ...
-  },
-});
-
-// Dans projects.ts - AJOUTER cette query
-export const getProjectForInvite = query({
-  args: {
-    projectId: v.id("projects"),
-  },
-  handler: async (ctx, args) => {
-    // Retourner le projet même si l'utilisateur n'a pas accès
-    const project = await ctx.db.get(args.projectId);
-    return project;
-  },
-});
-
-// Dans projects.ts - AJOUTER des logs
 export const inviteUser = mutation({
   args: {
     projectId: v.id("projects"),
@@ -261,12 +173,6 @@ export const inviteUser = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
-    console.log("🎯 Starting invitation process:", { 
-      inviter: identity.subject, 
-      invitee: args.email,
-      projectId: args.projectId 
-    });
-
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
 
@@ -274,20 +180,15 @@ export const inviteUser = mutation({
       throw new Error("Only the project owner can invite users");
     }
 
-    // Vérifier si déjà membre
     const alreadyMember = project.members.some(m => m.userId === args.email);
-    console.log("📋 Current members:", project.members);
-    console.log("❓ Already member?", alreadyMember);
-
     if (alreadyMember) {
       throw new Error("User already a member");
     }
 
-    // Ajouter l'utilisateur
     const updatedMembers = [
       ...project.members,
       {
-        userId: args.email, // ← C'EST ICI LE PROBLÈME POTENTIEL
+        userId: args.email,
         role: args.role,
         joinedAt: Date.now(),
         name: args.name,
@@ -295,17 +196,14 @@ export const inviteUser = mutation({
       },
     ];
 
-    console.log("➕ Updated members will be:", updatedMembers);
-
     await ctx.db.patch(args.projectId, {
       members: updatedMembers,
       updatedAt: Date.now(),
     });
 
-    // Create notification for the invited user
     try {
       await ctx.scheduler.runAt(
-        Date.now() + 1000, // Small delay to ensure the patch is completed
+        Date.now() + 1000,
         api.notifications.createNotification,
         {
           userId: args.email,
@@ -318,16 +216,13 @@ export const inviteUser = mutation({
         }
       );
     } catch (notificationError) {
-      console.log("Note: Notification could not be sent (user may not have an account yet)", notificationError);
+      console.log("Note: Notification could not be sent", notificationError);
     }
 
-    console.log("✅ Invitation completed successfully");
     return { success: true };
   },
 });
 
-
-// convex/projects.ts
 export const updateMemberRole = mutation({
   args: { projectId: v.id("projects"), userId: v.string(), newRole: v.union(v.literal("owner"), v.literal("editor"), v.literal("viewer")) },
   handler: async (ctx, args) => {
@@ -357,14 +252,15 @@ export const removeMember = mutation({
     if (!proj) throw new Error("Project not found");
     if (proj.ownerId !== identity.subject) throw new Error("Only owner can remove members");
 
+    const updatedMembers = proj.members.filter(m => m.email !== args.userId);
+
     await ctx.db.patch(args.projectId, {
-      members: proj.members.filter(m => m.userId !== args.userId),
+      members: updatedMembers,
       updatedAt: Date.now(),
     });
   },
 });
 
-// Decline an invitation
 export const declineInvite = mutation({
   args: { projectId: v.id("projects"), email: v.string() },
   handler: async (ctx, args) => {
@@ -374,17 +270,36 @@ export const declineInvite = mutation({
     const proj = await ctx.db.get(args.projectId);
     if (!proj) throw new Error("Project not found");
 
-    // Remove the pending invitation
+    const invitedMember = proj.members.find(m => m.userId === args.email);
+    const inviterName = invitedMember?.name || "Someone";
+
     await ctx.db.patch(args.projectId, {
       members: proj.members.filter(m => m.userId !== args.email),
       updatedAt: Date.now(),
     });
 
+    try {
+      await ctx.scheduler.runAt(
+        Date.now() + 500,
+        api.notifications.createNotification,
+        {
+          userId: proj.ownerId,
+          type: "invite_declined",
+          title: "Invitation Declined",
+          message: `${inviterName} (${args.email}) declined the invitation to join "${proj.name}".`,
+          relatedId: args.projectId,
+          relatedType: "project",
+          actionUrl: `/project/${args.projectId}`,
+        }
+      );
+    } catch (notificationError) {
+      console.log("Note: Notification could not be sent", notificationError);
+    }
+
     return { success: true };
   },
 });
 
-// Migration: Fix existing members without name/email
 export const migrateMembersInfo = mutation({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -396,11 +311,9 @@ export const migrateMembersInfo = mutation({
     for (const project of allProjects) {
       let needsUpdate = false;
       const updatedMembers = project.members.map(m => {
-        // Skip if already has name that doesn't look like a userId
         if (m.name && !m.name.includes('@') && m.name !== m.userId) return m;
         
         needsUpdate = true;
-        // Try to extract name from userId if it looks like an email
         const extractedName = m.userId.includes('@') 
           ? m.userId.split('@')[0] 
           : m.userId;
@@ -425,7 +338,6 @@ export const migrateMembersInfo = mutation({
   },
 });
 
-// Fix current user's member info in a project using Clerk identity
 export const fixCurrentUserMember = mutation({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
@@ -451,6 +363,26 @@ export const fixCurrentUserMember = mutation({
       updatedAt: Date.now(),
     });
     
+    return { success: true };
+  },
+});
+
+// Delete a project (only owner can delete)
+export const deleteProject = mutation({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new Error("Project not found");
+
+    if (project.ownerId !== identity.subject) {
+      throw new Error("Only project owner can delete the project");
+    }
+
+    await ctx.db.delete(args.projectId);
+
     return { success: true };
   },
 });

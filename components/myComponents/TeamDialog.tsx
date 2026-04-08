@@ -6,11 +6,10 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { UserPlus, Crown, User, MoreHorizontal, Trash2, Shield } from "lucide-react";
+import { UserPlus, Crown, User, Trash2, Shield } from "lucide-react";
+import { useAuth } from "@clerk/nextjs";
 
 interface TeamDialogProps {
   projectId: Id<"projects">;
@@ -28,6 +27,7 @@ interface Member {
 }
 
 export function TeamDialog({ projectId, trigger, open, onOpenChange }: TeamDialogProps) {
+  const { userId } = useAuth();
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = open !== undefined;
   const isOpen = isControlled ? open : internalOpen;
@@ -39,7 +39,8 @@ export function TeamDialog({ projectId, trigger, open, onOpenChange }: TeamDialo
   
   const project = useQuery(api.projects.getProjectForInvite, { projectId });
   const inviteUser = useMutation(api.projects.inviteUser);
-  const isOwner = project?.ownerId;
+  const removeMember = useMutation(api.projects.removeMember);
+  const isOwner = project?.ownerId === userId;
 
   const handleInvite = async () => {
     if (!newName || !newEmail) {
@@ -62,6 +63,18 @@ export function TeamDialog({ projectId, trigger, open, onOpenChange }: TeamDialo
       toast.error(error instanceof Error ? error.message : "Failed to invite");
     } finally {
       setIsAdding(false);
+    }
+  };
+
+  const handleRemoveMember = async (memberEmail: string) => {
+    try {
+      await removeMember({
+        projectId,
+        userId: memberEmail,
+      });
+      toast.success("Member removed");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to remove member");
     }
   };
 
@@ -128,7 +141,12 @@ export function TeamDialog({ projectId, trigger, open, onOpenChange }: TeamDialo
                       <p className="text-xs text-muted-foreground">{member.email}</p>
                     </div>
                     {isOwner && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleRemoveMember(member.email!)}
+                      >
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     )}
@@ -155,6 +173,16 @@ export function TeamDialog({ projectId, trigger, open, onOpenChange }: TeamDialo
                       <p className="font-medium">{member.name}</p>
                       <p className="text-xs text-muted-foreground">{member.email}</p>
                     </div>
+                    {isOwner && (
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleRemoveMember(member.email!)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>

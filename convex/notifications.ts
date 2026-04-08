@@ -18,7 +18,8 @@ export const createNotification = mutation({
       v.literal("comment_added"),
       v.literal("user_mentioned"),
       v.literal("invite_accepted"),
-      v.literal("invite_received")
+      v.literal("invite_received"),
+      v.literal("invite_declined")
     ),
     title: v.string(),
     message: v.string(),
@@ -32,11 +33,8 @@ export const createNotification = mutation({
     actionUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-
-    // Vérifier que l'utilisateur a le droit de créer des notifications
-    // (seulement pour les actions qu'il a lui-même effectuées)
+    // Note: This can be called by scheduler without user context
+    // The userId parameter specifies who receives the notification
     
     await ctx.db.insert("notifications", {
       userId: args.userId,
