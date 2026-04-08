@@ -319,19 +319,20 @@ commentViews: defineTable({
 
 // 🎯 TABLE NOTIFICATIONS (pour plus tard)
   notifications: defineTable({
-    userId: v.string(), // User qui reçoit la notification
+    userId: v.string(),
     type: v.union(
       v.literal("group_created"),
       v.literal("group_moved"),
       v.literal("group_renamed"),
       v.literal("group_deleted"),
       v.literal("insight_added"),
-      v.literal("insight_moved"),
       v.literal("insight_removed"),
+      v.literal("insight_moved"),
       v.literal("comment_added"),
       v.literal("user_mentioned"),
       v.literal("invite_accepted"),
-      v.literal("invite_received")
+      v.literal("invite_received"),
+      v.literal("invite_declined")
     ),
     title: v.string(), // Titre court de la notification
     message: v.string(), // Message détaillé
