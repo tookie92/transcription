@@ -211,7 +211,7 @@ export function useTranscription() {
         insights: [],
         isAnalyzing: false,
         createdAt: new Date().toISOString(),
-        audioUrl: URL.createObjectURL(processedFile),
+        audioUrl: audioUrl, // Use the UploadThing URL (persistant)
       };
 
       // Set current transcript for display
@@ -219,11 +219,6 @@ export function useTranscription() {
 
       // Add to store
       addInterview(interview);
-
-      // Cleanup conversion blob URL if needed
-      if (wasVideo && interview.audioUrl) {
-        videoConverter.cleanup(interview.audioUrl);
-      }
 
       return interview;
     } catch (err) {
