@@ -171,7 +171,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 hover:bg-accent"
               onClick={toggleMute}
             >
               {isMuted || volume === 0 ? (
@@ -197,7 +197,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 hover:bg-accent"
               onClick={() => skip(-5)}
             >
               <SkipBack className="w-4 h-4" />
@@ -221,7 +221,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 hover:bg-accent"
               onClick={() => skip(5)}
             >
               <SkipForward className="w-4 h-4" />

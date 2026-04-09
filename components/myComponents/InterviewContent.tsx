@@ -223,8 +223,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
               </div>
             </div>
             {interview.audioUrl && (
-              <div className="mb-3 bg-gray-50 rounded-xl px-4 py-2.5 border border-gray-100">
-                <div className="text-xs text-red-500 mb-1">DEBUG: audioUrl = {interview.audioUrl}</div>
+              <div className="mb-3 bg-card rounded-xl px-4 py-2.5 border border-border">
                 <AudioPlayer ref={audioPlayerRef} src={interview.audioUrl} onTimeUpdate={setCurrentTime} />
               </div>
             )}
@@ -435,7 +434,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
             </div>
           </div>
           {interview.audioUrl && (
-            <div className="mb-4 bg-gradient-to-r from-slate-50 to-white rounded-xl px-4 py-3 border border-slate-200 shadow-sm">
+            <div className="mb-4 bg-card rounded-xl px-4 py-3 border border-border shadow-sm">
               <AudioPlayer ref={audioPlayerRef} src={interview.audioUrl} onTimeUpdate={setCurrentTime} />
             </div>
           )}
