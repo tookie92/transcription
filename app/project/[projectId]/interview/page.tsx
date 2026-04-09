@@ -647,7 +647,7 @@ export default function InterviewHome() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.4 + i * 0.1 }}
                         onClick={() => router.push(`/project/${currentProjectId}/interview/${interview._id}`)}
-                        className="group p-5 bg-white rounded-xl border border-[var(--warm-border)] hover:border-[var(--primary)]/50 hover:shadow-lg transition-all duration-200 text-left"
+                        className="group p-5  bg-primary/5 rounded-xl border  hover:shadow-lg transition-all duration-200 text-left"
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="w-10 h-10 rounded-lg bg-[var(--accent)] flex items-center justify-center">
@@ -673,7 +673,7 @@ export default function InterviewHome() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-white rounded-2xl border border-[var(--warm-border)] p-8"
+              className="bg-background rounded-2xl border border-[var(--warm-border)] p-8"
             >
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
