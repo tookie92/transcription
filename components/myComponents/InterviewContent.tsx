@@ -195,6 +195,7 @@ if (activeTab !== "transcription") {
       <div className="min-h-screen flex flex-col bg-background">
         <header className="sticky top-0 z-40 bg-background border-b border-border">
           <div className="max-w-4xl mx-auto px-6 py-3">
+            {/* Row 1: Back + Navigation + Export */}
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
                 <Button variant="ghost" size="icon" asChild className="hover:bg-accent -ml-2">
@@ -213,18 +214,26 @@ if (activeTab !== "transcription") {
                 </div>
               </div>
               <ExportDialog interview={interviewForExport} trigger={<Button variant="outline" size="sm" className="h-8 text-xs border-border text-foreground"><Download className="w-3 h-3 mr-1" />Export</Button>} />
+            </div>
+            
+            {/* Row 2: Title + Duration + Segments */}
+            <div className="mb-3">
               <h1 className="text-xl font-bold text-foreground">{interview.title}</h1>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
                 <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{Math.floor(interview.duration / 60)}:{String(interview.duration % 60).padStart(2, '0')}</span>
                 <span>•</span>
                 <span>{interview.segments.length} segments</span>
               </div>
             </div>
+            
+            {/* Audio Player Row - always visible if exists */}
             {interview.audioUrl && (
               <div className="mb-3 bg-card rounded-xl px-4 py-2.5 border border-border">
                 <AudioPlayer ref={audioPlayerRef} src={interview.audioUrl} onTimeUpdate={setCurrentTime} />
               </div>
             )}
+            
+            {/* Tabs Row */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full -ml-2">
               <TabsList className="bg-transparent border-b-0 rounded-none h-9 p-0 gap-1">
                 <TabsTrigger value="transcription" className="rounded-md data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-all">
@@ -393,37 +402,37 @@ if (activeTab !== "transcription") {
 
   return (
     <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
-      {/* Header fixe */}
+      {/* Header fixe with light/dark mode */}
       <header className="shrink-0 h-auto bg-background border-b border-border shadow-sm w-full">
         <div className="max-w-4xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" asChild className="hover:bg-[#4CA771]/10 hover:text-[#4CA771] -ml-2">
+              <Button variant="ghost" size="icon" asChild className="hover:bg-accent -ml-2">
                 <Link href={`/project/${projectId}`}>
                   <ArrowLeft className="w-5 h-5" />
                 </Link>
               </Button>
-              <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+              <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
                 <Button variant="ghost" size="icon" className="h-6 w-6" disabled={currentIndex === 0} onClick={() => router.push(`/project/${projectId}/interview/${projectInterviews?.[currentIndex - 1]?._id}`)}>
                   <ChevronLeft className="w-3 h-3" />
                 </Button>
-                <span className="text-xs text-slate-500 px-1 min-w-[30px] text-center">{currentIndex + 1}/{projectInterviews?.length}</span>
+                <span className="text-xs text-muted-foreground px-1 min-w-[30px] text-center">{currentIndex + 1}/{projectInterviews?.length}</span>
                 <Button variant="ghost" size="icon" className="h-6 w-6" disabled={currentIndex >= (projectInterviews?.length || 0) - 1} onClick={() => router.push(`/project/${projectId}/interview/${projectInterviews?.[currentIndex + 1]?._id}`)}>
                   <ChevronRight className="w-3 h-3" />
                 </Button>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => router.push(`/project/${projectId}/interview/${interviewId}/mode`)} className="h-8 text-xs border-slate-200 text-slate-600 hover:bg-[#4CA771]/5 hover:border-[#4CA771]/30 hover:text-[#4CA771]">
+              <Button variant="outline" size="sm" onClick={() => router.push(`/project/${projectId}/interview/${interviewId}/mode`)} className="h-8 text-xs border-border text-foreground hover:bg-accent">
                 <PenLine className="w-3 h-3 mr-1" />
                 Focus Mode
               </Button>
-              <ExportDialog interview={interviewForExport} trigger={<Button variant="outline" size="sm" className="h-8 text-xs border-slate-200 text-slate-600 hover:bg-[#4CA771]/5 hover:border-[#4CA771]/30 hover:text-[#4CA771]"><Download className="w-3 h-3 mr-1" />Export</Button>} />
+              <ExportDialog interview={interviewForExport} trigger={<Button variant="outline" size="sm" className="h-8 text-xs border-border text-foreground hover:bg-accent"><Download className="w-3 h-3 mr-1" />Export</Button>} />
             </div>
           </div>
           <div className="mb-4">
-            <h1 className="text-2xl font-bold text-slate-900">{interview.title}</h1>
-            <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+            <h1 className="text-2xl font-bold text-foreground">{interview.title}</h1>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
               <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{Math.floor(interview.duration / 60)}:{String(interview.duration % 60).padStart(2, '0')}</span>
               <span>•</span>
               <span>{interview.segments.length} segments</span>
@@ -436,16 +445,16 @@ if (activeTab !== "transcription") {
           )}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full -ml-2">
             <TabsList className="bg-transparent border-b-0 rounded-none h-10 p-0 gap-2">
-              <TabsTrigger value="transcription" className="rounded-lg data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-4 py-2 text-sm text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-all font-medium">
+              <TabsTrigger value="transcription" className="rounded-lg data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-all font-medium">
                 <FileSpreadsheet className="w-4 h-4 mr-2" />
                 Transcription
               </TabsTrigger>
-              <TabsTrigger value="insights" className="rounded-lg data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-4 py-2 text-sm text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-all font-medium">
+              <TabsTrigger value="insights" className="rounded-lg data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-all font-medium">
                 <Lightbulb className="w-4 h-4 mr-2" />
                 Insights
                 {insights && insights.length > 0 && <span className="ml-2 text-xs bg-white/20 px-1.5 py-0.5 rounded-full">{insights.length}</span>}
               </TabsTrigger>
-              <TabsTrigger value="summary" className="rounded-lg data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-4 py-2 text-sm text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-all font-medium">
+              <TabsTrigger value="summary" className="rounded-lg data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-all font-medium">
                 <Sparkles className="w-4 h-4 mr-2" />
                 Summary
                 {interview.summary && <CheckCircle2 className="w-4 h-4 ml-2 text-green-400" />}
@@ -455,12 +464,12 @@ if (activeTab !== "transcription") {
         </div>
       </header>
 
-      {/* Transcription Tab - Simple scrollable list */}
+      {/* Transcription Tab - improved readability with theme-aware classes */}
       {activeTab === "transcription" && (
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-4xl mx-auto px-6 py-6">
             <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input 
                 placeholder="Search in transcript..." 
                 value={searchQuery} 
@@ -477,10 +486,10 @@ if (activeTab !== "transcription") {
                     initial={{ opacity: 0, y: 5 }} 
                     animate={{ opacity: 1, y: 0 }} 
                     onClick={() => { audioPlayerRef.current?.setCurrentTime(segment.start); audioPlayerRef.current?.play(); }} 
-                    className={`p-4 rounded-2xl cursor-pointer transition-all border-2 ${isActive ? 'bg-[#4CA771]/10 border-[#4CA771]/30 shadow-md' : 'hover:bg-slate-50 border-transparent hover:border-slate-200 hover:shadow-sm'}`}
+                    className={`p-4 rounded-2xl cursor-pointer transition-all border-2 ${isActive ? 'bg-[#4CA771]/10 border-[#4CA771]/30 shadow-md' : 'hover:bg-accent border-transparent hover:border-border hover:shadow-sm'}`}
                   >
                     <div className="flex items-center gap-3 mb-2">
-                      <span className={`text-xs font-mono font-semibold px-2.5 py-1 rounded-lg ${isActive ? 'bg-[#4CA771] text-white shadow-sm' : 'bg-slate-100 text-slate-600'}`}>
+                      <span className={`text-xs font-mono font-semibold px-2.5 py-1 rounded-lg ${isActive ? 'bg-[#4CA771] text-white shadow-sm' : 'bg-muted text-muted-foreground'}`}>
                         {Math.floor(segment.start / 60)}:{String(Math.floor(segment.start % 60)).padStart(2, '0')}
                       </span>
                       {segment.speaker && (
