@@ -1,18 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const runtime = 'nodejs';
+export const maxDuration = 300; // 5 minutes max pour gros fichiers
+
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 export async function POST(request: NextRequest) {
+  console.log('Transcription request started');
+  
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     const language = formData.get('language') as string | null;
 
+    console.log('File:', file?.name, 'Size:', file?.size);
+
     if (!file) {
       return NextResponse.json(
         { error: 'No audio file provided' },
         { status: 400 }
+      );
+    }
+
+    const fileSize = file.size;
+    const maxSize = 25 * 1024 * 1024; // 25MB
+    
+    if (fileSize > maxSize) {
+      return NextResponse.json(
+        { error: `File too large (${Math.round(fileSize / 1024 / 1024)}MB). Maximum is 25MB.` },
+        { status: 413 }
       );
     }
 
@@ -24,10 +41,12 @@ export async function POST(request: NextRequest) {
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // Use Uint8Array instead of Buffer for serverless compatibility
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const blob = new Blob([uint8Array], { type: file.type || 'audio/wav' });
 
     const formDataRequest = new FormData();
-    formDataRequest.append('file', new Blob([buffer], { type: file.type || 'audio/wav' }), file.name || 'audio.wav');
+    formDataRequest.append('file', blob, file.name || 'audio.wav');
     formDataRequest.append('model', 'whisper-large-v3');
     formDataRequest.append('response_format', 'verbose_json');
     if (language) {
@@ -42,16 +61,44 @@ export async function POST(request: NextRequest) {
       body: formDataRequest,
     });
 
+    console.log('Groq response status:', response.status);
+    
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Groq API error:', response.status, errorText);
+      console.error('Groq API error:', response.status, errorText.substring(0, 200));
+      
+      // Check for common issues
+      if (response.status === 413) {
+        return NextResponse.json(
+          { error: 'File too large. Maximum size is 25MB.' },
+          { status: 413 }
+        );
+      }
+      
+      if (response.status === 401 || response.status === 403) {
+        return NextResponse.json(
+          { error: 'API key invalid or missing.' },
+          { status: response.status }
+        );
+      }
+      
       return NextResponse.json(
-        { error: `Groq API error: ${response.status} - ${errorText}` },
+        { error: `Groq API error: ${response.status} - ${errorText.substring(0, 100)}` },
         { status: response.status }
       );
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      const text = await response.text();
+      console.error('Failed to parse Groq response:', text.substring(0, 200));
+      return NextResponse.json(
+        { error: 'Invalid response from transcription service.' },
+        { status: 500 }
+      );
+    }
 
     console.log('Groq response:', JSON.stringify(data).slice(0, 500));
 
