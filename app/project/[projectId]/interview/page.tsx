@@ -302,14 +302,14 @@ export default function InterviewHome() {
 
   if (projects && projects.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--warm-cream)]">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center max-w-md mx-auto px-6">
-          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-[var(--accent)] flex items-center justify-center">
-            <FileText className="w-8 h-8 text-[var(--muted-foreground)]" />
+          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-accent flex items-center justify-center">
+            <FileText className="w-8 h-8 text-muted-foreground" />
           </div>
           <h2 className="font-serif text-2xl mb-2">No Projects Yet</h2>
-          <p className="text-[var(--muted-foreground)] mb-6">Create a project first to start transcribing interviews</p>
-          <Link href="/project" className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg font-medium hover:opacity-90 transition-opacity">
+          <p className="text-muted-foreground mb-6">Create a project first to start transcribing interviews</p>
+          <Link href="/project" className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 transition-opacity">
             Create Project
             <ChevronRight className="w-4 h-4" />
           </Link>
@@ -319,17 +319,17 @@ export default function InterviewHome() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--warm-cream)]">
+    <div className="min-h-screen bg-background">
       <div className="max-w-5xl mx-auto px-6 py-8">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          <Link href={`/project/${projectId}`} className="inline-flex items-center gap-2 text-sm text-[var(--muted-foreground)] hover:text-foreground transition-colors mb-8 group">
+          <Link href={`/project/${projectId}`} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-8 group">
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
             Back to Project
           </Link>
 
           <div className="mb-10">
-            <h1 className="font-serif text-4xl md:text-5xl mb-3 tracking-tight">Add New Interview</h1>
-            <p className="text-lg text-[var(--muted-foreground)]">Choose how you want to import your interview</p>
+            <h1 className="font-serif text-4xl md:text-5xl mb-3 tracking-tight text-foreground">Add New Interview</h1>
+            <p className="text-lg text-muted-foreground">Choose how you want to import your interview</p>
           </div>
 
           {!showPreview ? (
@@ -349,15 +349,15 @@ export default function InterviewHome() {
                     onClick={() => handleSourceSelect(source.id as SourceType)}
                     className={`relative p-6 rounded-2xl border-2 transition-all duration-200 text-left ${
                       selectedSource === source.id
-                        ? 'border-[var(--primary)] bg-[var(--primary)]/5 shadow-lg shadow-[var(--primary)]/10'
-                        : 'border-[var(--warm-border)] bg-white hover:border-[var(--primary)]/50 hover:shadow-md'
+                        ? 'border-primary bg-primary/5 shadow-lg shadow-primary/10'
+                        : 'border-border bg-card hover:border-primary/50 hover:shadow-md'
                     }`}
                   >
-                    <source.icon className={`w-8 h-8 mb-4 ${selectedSource === source.id ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`} />
-                    <h3 className="font-serif text-xl mb-1">{source.label}</h3>
-                    <p className="text-sm text-[var(--muted-foreground)]">{source.desc}</p>
+                    <source.icon className={`w-8 h-8 mb-4 ${selectedSource === source.id ? 'text-primary' : 'text-muted-foreground'}`} />
+                    <h3 className="font-serif text-xl mb-1 text-foreground">{source.label}</h3>
+                    <p className="text-sm text-muted-foreground">{source.desc}</p>
                     {selectedSource === source.id && (
-                      <motion.div layoutId="sourceIndicator" className="absolute top-4 right-4 w-6 h-6 rounded-full bg-[var(--primary)] flex items-center justify-center">
+                      <motion.div layoutId="sourceIndicator" className="absolute top-4 right-4 w-6 h-6 rounded-full bg-primary flex items-center justify-center">
                         <Check className="w-4 h-4 text-white" />
                       </motion.div>
                     )}
@@ -374,7 +374,7 @@ export default function InterviewHome() {
                     transition={{ duration: 0.3 }}
                     className="overflow-hidden"
                   >
-                    <div className="bg-white rounded-2xl border border-[var(--warm-border)] p-8 mb-8">
+                    <div className="bg-card rounded-2xl border border-border p-8 mb-8">
                       {selectedSource === 'upload' && (
                         <div className="space-y-6">
                           <input
@@ -392,8 +392,8 @@ export default function InterviewHome() {
                             onDragLeave={handleDragLeave}
                             className={`relative flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200 ${
                               isDragging
-                                ? 'border-[var(--primary)] bg-[var(--primary)]/5'
-                                : 'border-[var(--warm-border)] hover:border-[var(--primary)]/50 hover:bg-[var(--accent)]'
+                                ? 'border-primary bg-primary/10'
+                                : 'border-border hover:border-primary/50 hover:bg-accent'
                             }`}
                           >
                             {isDragging && (
