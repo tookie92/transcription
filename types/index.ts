@@ -182,6 +182,7 @@ export interface ConvexInterview {
   segments: SimpleSegment[];
   duration: number;
   status: 'uploading' | 'transcribing' | 'completed' | 'analyzing' | 'ready';
+  summary?: InterviewSummary;
   createdAt: number;
 }
 

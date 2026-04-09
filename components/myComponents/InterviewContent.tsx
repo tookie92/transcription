@@ -113,16 +113,28 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
     );
   }
 
-  const handleAnalyze = async () => {
+  const handleAnalyzeAndSummary = async () => {
     setIsAnalyzing(true);
+    setIsGeneratingSummary(true);
     try {
+      // Step 1: Analyze to generate AI insights
       await analyzeInterview(interview._id, projectId, interview.transcription, interview.topic, interview.language, interview.segments);
       toast.success("Analysis complete");
       setActiveTab("insights");
-    } catch {
-      toast.error("Analysis failed");
+      
+      // Step 2: Generate summary from all insights (manual + AI)
+      await generateInterviewSummary(
+        interview._id, projectId, interview.transcription, interview.topic, interview.language,
+        insights?.map(i => ({ id: i._id, type: i.type, text: i.text, timestamp: i.timestamp, source: i.source, createdBy: i.createdBy, createdByName: i.createdByName, createdAt: new Date(i._creationTime).toISOString(), projectId: i.projectId, interviewId: i.interviewId })) || []
+      );
+      toast.success("Summary generated");
+      setActiveTab("summary");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to analyze or generate summary");
     } finally {
       setIsAnalyzing(false);
+      setIsGeneratingSummary(false);
     }
   };
 
@@ -274,8 +286,8 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                     <Lightbulb className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                     <h3 className="font-semibold text-gray-900 mb-2">No insights yet</h3>
                     <p className="text-sm text-gray-500 mb-6">Extract insights automatically with AI</p>
-                    <Button onClick={handleAnalyze} disabled={isAnalyzing} className="bg-[#4CA771] hover:bg-[#3F9A68]">
-                      {isAnalyzing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Analyzing...</> : <><Sparkles className="w-4 h-4 mr-2" />Analyze</>}
+                    <Button onClick={handleAnalyzeAndSummary} disabled={isAnalyzing || isGeneratingSummary} className="bg-[#4CA771] hover:bg-[#3F9A68]">
+                      {isAnalyzing || isGeneratingSummary ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing...</> : <><Sparkles className="w-4 h-4 mr-2" />Analyze & Summary</>}
                     </Button>
                   </div>
                 ) : (
@@ -367,15 +379,11 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                   <div className="text-center py-16 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
                     <FileSpreadsheet className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                     <h3 className="font-semibold text-gray-900 mb-2">No summary yet</h3>
-                    {!insights || insights.length === 0 ? (
-                      <p className="text-sm text-gray-500 mb-6">Analyze the interview first to generate insights</p>
-                    ) : (
-                      <>
-                        <p className="text-sm text-gray-500 mb-6">Generate a summary with key findings</p>
-                        <Button onClick={handleGenerateSummary} disabled={isGeneratingSummary} className="bg-[#4CA771] hover:bg-[#3F9A68]">
-                          {isGeneratingSummary ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Generating...</> : <><Sparkles className="w-4 h-4 mr-2" />Generate Summary</>}
-                        </Button>
-                      </>
+                    <p className="text-sm text-gray-500 mb-6">Analyze interview and generate insights & summary in one click</p>
+                    {!(interview as any).summary?.executiveSummary && (
+                      <Button onClick={handleAnalyzeAndSummary} disabled={isAnalyzing || isGeneratingSummary} className="bg-[#4CA771] hover:bg-[#3F9A68]">
+                        {isAnalyzing || isGeneratingSummary ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing...</> : <><Sparkles className="w-4 h-4 mr-2" />Analyze & Summary</>}
+                      </Button>
                     )}
                   </div>
                 )}
