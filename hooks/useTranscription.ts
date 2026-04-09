@@ -3,6 +3,7 @@ import { useTranscriptionStore, Interview, TranscriptionSegment } from '@/stores
 import { videoConverter } from '@/lib/videoConverter';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
+import { uploadFiles } from '@/lib/ut-client';
 
 interface TranscriptionResult {
   text: string;
@@ -147,7 +148,7 @@ export function useTranscription() {
         }
       }
 
-      // Step 2: Upload audio to uploadthing first (to avoid Vercel body limit)
+      // Upload audio directly to UploadThing (bypasses Vercel body limit)
       setConversionProgress({ 
         stage: 'transcribing', 
         progress: 0, 
@@ -159,20 +160,12 @@ export function useTranscription() {
         message: wasVideo ? 'Uploading audio...' : 'Uploading...' 
       });
 
-      const uploadFormData = new FormData();
-      uploadFormData.append('file', processedFile);
-
-      const uploadResponse = await fetch('/api/upload-audio', {
-        method: 'POST',
-        body: uploadFormData,
+      // Use client-side UploadThing to bypass Vercel body limit
+      const uploadResult = await uploadFiles("audioUploader", {
+        files: [processedFile],
       });
 
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload audio file');
-      }
-
-      const uploadData = await uploadResponse.json();
-      const audioUrl = uploadData.url;
+      const audioUrl = uploadResult[0].ufsUrl;
 
       // Step 3: Send URL to transcription (Groq supports 100MB via URL)
       setConversionProgress({ 
