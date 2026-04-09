@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AudioPlayer, AudioPlayerHandle } from "./AudioPlayer";
 import { 
-  ArrowLeft,
   ArrowRight,
   Loader2,
   AlertTriangle,
@@ -41,11 +40,11 @@ interface InterviewModeProps {
 type InsightTag = "pain-point" | "quote" | "insight" | "follow-up" | "custom";
 
 const insightTypeConfig: Record<InsightTag, { label: string; color: string; bg: string; icon: React.ComponentType<{ className?: string }> }> = {
-  "pain-point": { label: "Pain Point", color: "text-red-600", bg: "bg-red-50", icon: AlertTriangle },
+  "pain-point": { label: "Pain Point", color: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950", icon: AlertTriangle },
   "quote": { label: "Quote", color: "text-[#4CA771]", bg: "bg-[#4CA771]/10", icon: Quote },
-  "insight": { label: "Insight", color: "text-amber-600", bg: "bg-amber-50", icon: Lightbulb },
-  "follow-up": { label: "Follow-up", color: "text-green-600", bg: "bg-green-50", icon: ListChecks },
-  "custom": { label: "Custom", color: "text-violet-600", bg: "bg-violet-50", icon: Sparkles },
+  "insight": { label: "Insight", color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950", icon: Lightbulb },
+  "follow-up": { label: "Follow-up", color: "text-green-600 dark:text-green-400", bg: "bg-green-50 dark:bg-green-950", icon: ListChecks },
+  "custom": { label: "Custom", color: "text-violet-600 dark:text-violet-400", bg: "bg-violet-50 dark:bg-violet-950", icon: Sparkles },
 };
 
 const defaultUserName = "Researcher";
@@ -81,22 +80,18 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
   // Auto-focus input
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  // Keyboard shortcuts - only when NOT in input field
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip if typing in input/textarea or dialog is open
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || showEndDialog) return;
       
       const key = e.key.toUpperCase();
       
-      // Type shortcuts (1-5)
       if (key === "1") { e.preventDefault(); setSelectedTag("insight"); inputRef.current?.focus(); }
       else if (key === "2") { e.preventDefault(); setSelectedTag("pain-point"); inputRef.current?.focus(); }
       else if (key === "3") { e.preventDefault(); setSelectedTag("quote"); inputRef.current?.focus(); }
       else if (key === "4") { e.preventDefault(); setSelectedTag("follow-up"); inputRef.current?.focus(); }
       else if (key === "5") { e.preventDefault(); setSelectedTag("custom"); inputRef.current?.focus(); }
-      
-      // Play/Pause with space (only when not in input)
       else if (e.code === "Space") {
         e.preventDefault();
         if (audioPlayerRef.current?.getCurrentTime() === 0 || audioPlayerRef.current?.getCurrentTime() === undefined) {
@@ -154,38 +149,32 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
     } catch { toast.error("Failed to complete interview"); }
   };
 
-  // Get notes for a specific segment
   const getSegmentNotes = (segmentStart: number, segmentEnd: number) => {
     return notes?.filter((n) => n.timestamp >= segmentStart && n.timestamp < segmentEnd) || [];
   };
 
   if (!interview) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-[#4CA771]" />
+      <div className="h-screen w-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-slate-50 overflow-hidden">
-      {/* Header */}
-      <header className="shrink-0 bg-white border-b border-slate-200 shadow-sm">
+    <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
+      <header className="shrink-0 bg-background border-b border-border shadow-sm">
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.push(`/project/${projectId}/interview/${interviewId}`)} className="hover:bg-[#4CA771]/10 hover:text-[#4CA771]">
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div>
-              <h1 className="text-lg font-bold text-slate-900">{interview.title}</h1>
-              <p className="text-xs text-slate-500">Focus Mode • {notes?.length || 0} notes</p>
-            </div>
+          <div>
+            <h1 className="text-lg font-bold text-foreground">{interview.title}</h1>
+            <p className="text-xs text-muted-foreground">Focus Mode • {notes?.length || 0} notes</p>
           </div>
-            <Button onClick={() => setShowEndDialog(true)} size="sm" className="bg-[#4CA771] hover:bg-[#3F9A68]">End</Button>
+          <Button variant="outline" size="sm" onClick={() => router.push(`/project/${projectId}/interview/${interviewId}`)}>
+            Exit Focus Mode
+          </Button>
         </div>
       </header>
 
-      {/* Player */}
       {interview.audioUrl && (
         <div className="bg-card border-b border-border px-6 py-3 shadow-sm">
           <div className="max-w-6xl mx-auto">
@@ -194,8 +183,7 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
         </div>
       )}
 
-      {/* Note Input - Fixed */}
-      <div className="bg-white border-b border-slate-200 px-6 py-3 shadow-sm shrink-0">
+      <div className="bg-card border-b border-border px-6 py-3 shadow-sm shrink-0">
         <div className="max-w-6xl mx-auto space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -205,7 +193,7 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
                   onClick={() => setSelectedTag(key as InsightTag)}
                   className={cn(
                     "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
-                    selectedTag === key ? `${config.bg} ${config.color} ring-2 ring-offset-1` : "bg-slate-50 text-slate-400 hover:bg-slate-100"
+                    selectedTag === key ? `${config.bg} ${config.color} ring-2 ring-offset-1` : "bg-muted text-muted-foreground hover:bg-accent"
                   )}
                 >
                   {index + 1}. {config.label}
@@ -221,7 +209,7 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleCreateNote(); }}
               disabled={isCreating}
-              className="h-10 bg-slate-50 border-slate-200 focus:bg-white focus:border-[#4CA771] focus:ring-2 focus:ring-[#4CA771]/20"
+              className="h-10 bg-background border-input focus:bg-background focus:border-[#4CA771] focus:ring-2 focus:ring-[#4CA771]/20"
             />
             <Button onClick={handleCreateNote} disabled={!content.trim() || isCreating} size="icon" className="h-10 w-10 bg-[#4CA771] hover:bg-[#3F9A68]">
               {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
@@ -230,17 +218,15 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
         </div>
       </div>
 
-      {/* Split View */}
-      <div className="flex-1 flex overflow-hidden px-[181px]">
-        {/* Left: Notes List */}
-        <div className="flex-1 border-r border-slate-200 flex flex-col overflow-hidden">
-          <div className="px-6 py-3 bg-slate-50 border-b border-slate-100 shrink-0">
-            <h2 className="text-sm font-semibold text-slate-700">Notes ({notes?.length || 0})</h2>
+      <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 border-r border-border flex flex-col overflow-hidden">
+          <div className="px-6 py-3 bg-muted border-b border-border shrink-0">
+            <h2 className="text-sm font-semibold text-foreground">Notes ({notes?.length || 0})</h2>
           </div>
           <div className="flex-1 overflow-y-auto p-6 space-y-2">
             {!notes || notes.length === 0 ? (
-              <div className="text-center py-12 text-slate-400">
-                <div className="w-12 h-12 mx-auto mb-3 bg-slate-100 rounded-xl flex items-center justify-center">
+              <div className="text-center py-12 text-muted-foreground">
+                <div className="w-12 h-12 mx-auto mb-3 bg-muted rounded-xl flex items-center justify-center">
                   <Lightbulb className="w-6 h-6 opacity-40" />
                 </div>
                 <p className="text-sm">No notes yet</p>
@@ -255,17 +241,17 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
                     key={note._id}
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="group flex items-start gap-2 p-3 bg-white rounded-xl border border-slate-100 hover:border-[#4CA771]/30 hover:shadow-sm transition-all cursor-pointer"
+                    className="group flex items-start gap-2 p-3 bg-card rounded-xl border border-border hover:border-[#4CA771]/30 hover:shadow-sm transition-all cursor-pointer"
                     onClick={() => { audioPlayerRef.current?.setCurrentTime(note.timestamp); audioPlayerRef.current?.play(); }}
                   >
-                    <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0", config?.bg || "bg-slate-50")}>
-                      <Icon className={cn("w-4 h-4", config?.color || "text-slate-500")} />
+                    <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0", config?.bg || "bg-muted")}>
+                      <Icon className={cn("w-4 h-4", config?.color || "text-muted-foreground")} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <span className={cn("text-[10px] font-bold uppercase tracking-wide", config?.color || "text-slate-500")}>{config?.label || "Note"}</span>
+                        <span className={cn("text-[10px] font-bold uppercase tracking-wide", config?.color || "text-muted-foreground")}>{config?.label || "Note"}</span>
                         <div className="flex items-center gap-1">
-                          <span className="text-[10px] font-mono text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">{formatTime(note.timestamp)}</span>
+                          <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{formatTime(note.timestamp)}</span>
                           {!note.insightId && (
                             <Button variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); handleDeleteNote(note._id); }}>
                               <X className="w-3 h-3 text-red-500" />
@@ -274,7 +260,7 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
                           {note.insightId && <Check className="w-3 h-3 text-green-500" />}
                         </div>
                       </div>
-                      <p className="text-xs text-slate-600 leading-relaxed mt-1 line-clamp-2">{note.content}</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed mt-1 line-clamp-2">{note.content}</p>
                     </div>
                   </motion.div>
                 );
@@ -283,13 +269,12 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
           </div>
         </div>
 
-        {/* Right: Transcript with Note Indicators */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="px-6 py-3 bg-slate-50 border-b border-slate-100 shrink-0">
-            <h2 className="text-sm font-semibold text-slate-700">Transcript</h2>
+          <div className="px-6 py-3 bg-muted border-b border-border shrink-0">
+            <h2 className="text-sm font-semibold text-foreground">Transcript</h2>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
-            {interview.segments.map((segment) => {
+            {interview.segments.map((segment: any) => {
               const isActive = currentTime >= segment.start && currentTime < segment.end;
               const segmentNotes = getSegmentNotes(segment.start, segment.end);
               const hasNotes = segmentNotes.length > 0;
@@ -299,22 +284,22 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
                   onClick={() => { audioPlayerRef.current?.setCurrentTime(segment.start); audioPlayerRef.current?.play(); }}
                   className={cn(
                     "p-2.5 rounded-lg cursor-pointer transition-all",
-                    isActive ? "bg-[#4CA771]/10 border border-[#4CA771]/30" : "hover:bg-slate-50 border border-transparent"
+                    isActive ? "bg-[#4CA771]/10 border border-[#4CA771]/30" : "hover:bg-muted border border-transparent"
                   )}
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <span className={cn("text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded", isActive ? "bg-[#4CA771] text-white" : "bg-slate-100 text-slate-500")}>
+                    <span className={cn("text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded", isActive ? "bg-[#4CA771] text-white" : "bg-muted text-muted-foreground")}>
                       {formatTime(segment.start)}
                     </span>
                     {hasNotes && (
                       <div className="flex gap-0.5">
-                        {segmentNotes.slice(0, 5).map((note) => (
+                        {segmentNotes.slice(0, 5).map((note: any) => (
                           <div key={note._id} className="w-2 h-2 rounded-full bg-orange-500" />
                         ))}
                       </div>
                     )}
                   </div>
-                  <p className={cn("text-xs leading-relaxed", isActive ? "text-slate-800" : "text-slate-600")}>{segment.text}</p>
+                  <p className={cn("text-xs leading-relaxed", isActive ? "text-foreground" : "text-muted-foreground")}>{segment.text}</p>
                 </div>
               );
             })}
@@ -322,7 +307,6 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
         </div>
       </div>
 
-      {/* End Dialog */}
       <Dialog open={showEndDialog} onOpenChange={setShowEndDialog}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -330,11 +314,11 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
             <DialogDescription>{notes?.filter((n) => !n.insightId).length || 0} notes will be converted to insights.</DialogDescription>
           </DialogHeader>
           <div className="py-3 space-y-2">
-            <div className="flex justify-between text-sm"><span className="text-slate-500">Duration</span><span className="font-mono">{formatTime(sessionTime)}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-slate-500">Notes</span><span className="font-medium">{notes?.length || 0}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-muted-foreground">Duration</span><span className="font-mono">{formatTime(sessionTime)}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-muted-foreground">Notes</span><span className="font-medium">{notes?.length || 0}</span></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEndDialog(false)} className="border-slate-200">Continue</Button>
+            <Button variant="outline" onClick={() => setShowEndDialog(false)} className="border-border">Continue</Button>
             <Button onClick={handleEndInterview} className="bg-[#4CA771] hover:bg-[#3F9A68]">End & Convert</Button>
           </DialogFooter>
         </DialogContent>
