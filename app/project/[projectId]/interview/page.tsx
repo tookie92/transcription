@@ -226,6 +226,14 @@ export default function InterviewHome() {
 
   const handleTranscribe = async () => {
     if (!selectedFile || !title.trim() || !topic.trim()) return;
+    
+    // Check file size before sending (max 25MB for Groq free tier)
+    const maxSize = 25 * 1024 * 1024; // 25MB
+    if (selectedFile.size > maxSize) {
+      toast.error(`File too large (${Math.round(selectedFile.size / 1024 / 1024)}MB). Maximum is 25MB. Compress or reduce the file size.`);
+      return;
+    }
+    
     setIsProcessing(true);
     const toastId = toast.loading(isVideoFile ? 'Converting video...' : 'Transcribing...');
     try {

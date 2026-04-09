@@ -1,53 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
-export const maxDuration = 300; // 5 minutes max pour gros fichiers
+export const dynamic = 'force-dynamic';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 export async function POST(request: NextRequest) {
-  console.log('Transcription request started');
-  
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     const language = formData.get('language') as string | null;
 
-    console.log('File:', file?.name, 'Size:', file?.size);
-
     if (!file) {
-      return NextResponse.json(
-        { error: 'No audio file provided' },
-        { status: 400 }
-      );
-    }
-
-    const fileSize = file.size;
-    const maxSize = 25 * 1024 * 1024; // 25MB
-    
-    if (fileSize > maxSize) {
-      return NextResponse.json(
-        { error: `File too large (${Math.round(fileSize / 1024 / 1024)}MB). Maximum is 25MB.` },
-        { status: 413 }
-      );
+      return NextResponse.json({ error: 'No audio file provided' }, { status: 400 });
     }
 
     if (!GROQ_API_KEY) {
-      return NextResponse.json(
-        { error: 'GROQ_API_KEY not configured' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'GROQ_API_KEY not configured' }, { status: 500 });
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    // Use Uint8Array instead of Buffer for serverless compatibility
-    const uint8Array = new Uint8Array(arrayBuffer);
-    const blob = new Blob([uint8Array], { type: file.type || 'audio/wav' });
+    // Create blob directly from file
+    const blob = new Blob([await file.arrayBuffer()], { type: file.type || 'audio/wav' });
 
     const formDataRequest = new FormData();
     formDataRequest.append('file', blob, file.name || 'audio.wav');
-    formDataRequest.append('model', 'whisper-large-v3');
+    formDataRequest.append('model', 'whisper-large-v3-turbo');
     formDataRequest.append('response_format', 'verbose_json');
     if (language) {
       formDataRequest.append('language', language);
@@ -55,13 +32,9 @@ export async function POST(request: NextRequest) {
 
     const response = await fetch(GROQ_API_URL, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
-      },
+      headers: { 'Authorization': `Bearer ${GROQ_API_KEY}` },
       body: formDataRequest,
     });
-
-    console.log('Groq response status:', response.status);
     
     if (!response.ok) {
       const errorText = await response.text();
