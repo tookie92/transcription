@@ -311,7 +311,7 @@ export default function Home() {
               <h3 className="text-3xl font-bold mb-3" style={{ fontFamily: "var(--font-display), sans-serif" }}>Pro</h3>
               <p className="text-white/70 mb-8 text-lg">For growing teams</p>
               <div className="mb-10">
-                <span className="text-6xl font-bold" style={{ fontFamily: "var(--font-display), sans-serif" }}>$49</span>
+                <span className="text-6xl font-bold" style={{ fontFamily: "var(--font-display), sans-serif" }}>$20</span>
                 <span className="text-white/70 text-lg ml-2">/month</span>
               </div>
               <ul className="space-y-5 mb-10">
