@@ -224,6 +224,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
             </div>
             {interview.audioUrl && (
               <div className="mb-3 bg-gray-50 rounded-xl px-4 py-2.5 border border-gray-100">
+                <div className="text-xs text-red-500 mb-1">DEBUG: audioUrl = {interview.audioUrl}</div>
                 <AudioPlayer ref={audioPlayerRef} src={interview.audioUrl} onTimeUpdate={setCurrentTime} />
               </div>
             )}

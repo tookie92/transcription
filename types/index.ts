@@ -62,6 +62,7 @@ export interface Interview {
   insights: Insight[];
   isAnalyzing?: boolean;
   createdAt: string;
+  audioUrl?: string;
   status: 'uploading' | 'transcribing' | 'completed' | 'analyzing' | 'ready';
 }
 
@@ -181,6 +182,7 @@ export interface ConvexInterview {
   transcription: string;
   segments: SimpleSegment[];
   duration: number;
+  audioUrl?: string;
   status: 'uploading' | 'transcribing' | 'completed' | 'analyzing' | 'ready';
   summary?: InterviewSummary;
   createdAt: number;
