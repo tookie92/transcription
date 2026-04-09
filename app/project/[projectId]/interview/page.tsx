@@ -239,6 +239,11 @@ export default function InterviewHome() {
     const toastId = toast.loading(isVideoFile ? 'Converting video...' : 'Transcribing...');
     try {
       const interview = await transcribe(selectedFile, title, topic, interviewLanguage === 'auto' ? undefined : interviewLanguage);
+      
+      // Get audioUrl from transcription result - this is the UploadThing URL
+      // It will only be persisted to Convex when user clicks Save
+      const audioUrl = (interview as any).audioUrl;
+      
       setPendingInterview({
         title: interview.title,
         topic: interview.topic,
@@ -246,7 +251,7 @@ export default function InterviewHome() {
         segments: interview.segments.map(s => ({ id: s.id, start: s.start, end: s.end, text: s.text, speaker: s.speaker })),
         duration: interview.duration,
         audioFile: selectedFile,
-        audioUrl: (interview as any).audioUrl,
+        audioUrl: audioUrl,
       });
       setShowPreview(true);
       toast.success('Ready! Review and save.', { id: toastId });
