@@ -226,7 +226,7 @@ if (activeTab !== "transcription") {
             <div className="mb-3">
               <h1 className="text-xl font-bold text-foreground">{interview.title}</h1>
               <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{Math.floor(interview.duration / 60)}:{String(interview.duration % 60).padStart(2, '0')}</span>
+<span className="flex items-center gap-1"><Clock className="w-3 h-3" />{Math.floor(interview.duration / 60)}:{Math.round(interview.duration % 60).toString().padStart(2, '0')}</span>
                 <span>•</span>
                 <span>{interview.segments.length} segments</span>
               </div>
@@ -322,7 +322,7 @@ if (activeTab !== "transcription") {
                                     <Trash className="w-3.5 h-3.5 text-red-500" />
                                   </Button>
                                 )}
-                                <span className="text-xs text-muted-foreground font-mono">{Math.floor(insight.timestamp / 60)}:{String(Math.floor(insight.timestamp % 60)).padStart(2, '0')}</span>
+                                <span className="text-xs text-muted-foreground font-mono">{Math.floor(insight.timestamp / 60)}:{Math.round(insight.timestamp % 60).toString().padStart(2, '0')}</span>
                               </div>
                             </div>
                             <p className="text-sm leading-relaxed text-foreground">{insight.text}</p>
@@ -496,7 +496,7 @@ if (activeTab !== "transcription") {
                   >
                     <div className="flex items-center gap-3 mb-2">
                       <span className={`text-xs font-mono font-semibold px-2.5 py-1 rounded-lg ${isActive ? 'bg-[#4CA771] text-white shadow-sm' : 'bg-muted text-muted-foreground'}`}>
-                        {Math.floor(segment.start / 60)}:{String(Math.floor(segment.start % 60)).padStart(2, '0')}
+                        {Math.floor(segment.start / 60)}:{Math.round(segment.start % 60).toString().padStart(2, '0')}
                       </span>
                       {segment.speaker && (
                         <span className={`text-xs px-2.5 py-1 rounded-lg font-medium ${getSpeakerClass(segment.speaker)}`}>

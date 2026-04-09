@@ -422,7 +422,7 @@ export function FigJamToolbar({
                         <circle cx="12" cy="12" r="10" />
                         <polyline points="12 6 12 12 16 14" />
                       </svg>
-                      <span>{Math.floor(voting.remainingTime / 60000)}:{((voting.remainingTime % 60000) / 1000).toFixed(0).padStart(2, '0')}</span>
+                      <span>{Math.floor(voting.remainingTime / 60000)}:{Math.round((voting.remainingTime % 60000) / 1000).toString().padStart(2, '0')}</span>
                     </div>
                   )}
                 </>

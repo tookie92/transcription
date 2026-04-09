@@ -46,9 +46,9 @@ export function CanvasStatusIndicators({
           }`}
         >
           {currentPhase === "group-sorting" &&
-            `🔇 Group Sorting - ${Math.floor(groupTimeLeft / 60)}:${(groupTimeLeft % 60).toString().padStart(2, "0")}`}
+            `Group Sorting - ${Math.floor(groupTimeLeft / 60)}:${Math.round(groupTimeLeft % 60).toString().padStart(2, "0")}`}
           {currentPhase === "personal-review" &&
-            `✏️ Personal Review - ${Math.floor(personalTimeLeft / 60)}:${(personalTimeLeft % 60).toString().padStart(2, "0")}`}
+            `Personal Review - ${Math.floor(personalTimeLeft / 60)}:${Math.round(personalTimeLeft % 60).toString().padStart(2, "0")}`}
           {currentPhase === "discussion" &&
             `💬 Discussion Phase - Start talking!`}
         </div>

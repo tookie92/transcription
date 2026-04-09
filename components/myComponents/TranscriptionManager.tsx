@@ -203,7 +203,7 @@ export default function TranscriptionManager() {
               <p className="text-xs text-muted-foreground">
                 {currentInterview && (
                   <>
-                    {Math.floor(currentInterview.duration / 60)}:{String(Math.floor(currentInterview.duration % 60)).padStart(2, '0')} min
+                    {Math.floor(currentInterview.duration / 60)}:{Math.round(currentInterview.duration % 60).toString().padStart(2, '0')} min
                     {currentInterview.topic && <span className="ml-2 text-primary">• {currentInterview.topic}</span>}
                   </>
                 )}
@@ -335,7 +335,7 @@ export default function TranscriptionManager() {
                   >
                     <div className="flex gap-3">
                       <span className="text-xs text-primary font-mono mt-1 min-w-[50px]">
-                        {Math.floor(segment.start / 60)}:{String(Math.floor(segment.start % 60)).padStart(2, '0')}
+                        {Math.floor(segment.start / 60)}:{Math.round(segment.start % 60).toString().padStart(2, '0')}
                       </span>
                       <p className="text-sm leading-relaxed flex-1">
                         {segment.text}
@@ -399,7 +399,7 @@ export default function TranscriptionManager() {
                         {insight.type}
                       </span>
                       <span className="text-xs text-muted-foreground font-mono">
-                        {Math.floor(insight.timestamp / 60)}:{String(Math.floor(insight.timestamp % 60)).padStart(2, '0')}
+                        {Math.floor(insight.timestamp / 60)}:{Math.round(insight.timestamp % 60).toString().padStart(2, '0')}
                       </span>
                     </div>
                     <p className="text-sm leading-relaxed">{insight.text}</p>

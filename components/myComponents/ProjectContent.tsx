@@ -129,7 +129,7 @@ function InterviewCard({
     ready: "bg-cyan-50 dark:bg-cyan-950/30 border-cyan-200 dark:border-cyan-900",
   };
 
-  const duration = interview.duration ? `${Math.floor(interview.duration / 60)}:${String(Math.floor(interview.duration % 60)).padStart(2, '0')}` : "0:00";
+  const duration = interview.duration ? `${Math.floor(interview.duration / 60)}:${Math.round(interview.duration % 60).toString().padStart(2, '0')}` : "0:00";
 
   return (
     <motion.div

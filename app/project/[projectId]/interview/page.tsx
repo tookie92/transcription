@@ -222,7 +222,7 @@ export default function InterviewHome() {
     setIsRecordingSystem(false);
   };
 
-  const formatTime = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
+  const formatTime = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.round(seconds % 60).toString().padStart(2, '0')}`;
 
   const handleTranscribe = async () => {
     if (!selectedFile || !title.trim() || !topic.trim()) return;
@@ -690,7 +690,7 @@ export default function InterviewHome() {
                   <div key={i} className="p-3 bg-[var(--muted)] rounded-lg">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs font-mono text-[var(--muted-foreground)]">
-                        {Math.floor(segment.start / 60)}:{String(Math.floor(segment.start % 60)).padStart(2, '0')}
+                        {Math.floor(segment.start / 60)}:{Math.round(segment.start % 60).toString().padStart(2, '0')}
                       </span>
                       {segment.speaker && (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--primary)]/10 text-[var(--primary)]">
