@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-pyannote.audio>=3.0.0
-python-multipart
-huggingface-hub>=0.21.0
-torch>=2.1.0
-torchaudio>=2.1.0
