@@ -126,6 +126,18 @@ export const videoConverter = {
       };
     }
 
+    // ... rest of existing code
+    return videoConverter.compressAudio(file, onProgress);
+  },
+
+  /**
+   * Compress/re-encode audio file (forces re-encode regardless of input format)
+   */
+  compressAudio: async (
+    file: File,
+    onProgress?: (progress: ConversionProgress) => void
+  ): Promise<ConversionResult> => {
+
     // Load FFmpeg if not already loaded
     const loaded = await videoConverter.load(onProgress);
     if (!loaded || !ffmpeg) {
@@ -150,7 +162,7 @@ const inputData = await fetchFile(file);
         "-i", inputName,
         "-vn", // No video
         "-acodec", "libmp3lame",
-        "-b:a", "32k", // 32k bitrate - significantly smaller
+        "-b:a", "16k", // 16k bitrate - minimal quality for Whisper
         "-ar", "16000", // 16kHz - optimal for Whisper
         "-ac", "1", // Mono
         "-y", outputName,

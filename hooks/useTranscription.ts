@@ -121,8 +121,8 @@ export function useTranscription() {
         console.log(`[VideoConverter] Converted: ${(file.size / 1024 / 1024).toFixed(2)}MB -> ${(processedFile.size / 1024 / 1024).toFixed(2)}MB`);
       }
 
-// Compress if file too large (stay under Vercel body limit)
-      const maxSize = 8 * 1024 * 1024; // 8MB safety margin
+// Compress if file too large (stay under client upload limit)
+      const maxSize = 5 * 1024 * 1024; // 5MB safety margin
       if (processedFile.size > maxSize) {
         setConversionProgress({ stage: 'converting', progress: 80, message: 'Compressing audio...' });
         onProgress?.({ stage: 'converting', progress: 80, message: 'Compressing audio...' });
@@ -131,7 +131,8 @@ export function useTranscription() {
           await videoConverter.load();
         }
         
-        const result = await videoConverter.convertToAudio(processedFile);
+        // Use compressAudio (forces re-encode even for existing audio files)
+        const result = await videoConverter.compressAudio(processedFile);
         if (result.success && result.audioBlob) {
           const compressedFile = new File(
             [result.audioBlob],
