@@ -75,6 +75,7 @@ const handleTranscribe = async () => {
       transcription: interview.transcription,
       segments: convexSegments,
       duration: interview.duration,
+      audioUrl: interview.audioUrl || undefined,
     });
 
     // 🎯 MAINTENANT utiliser l'ID Convex valide pour la redirection
