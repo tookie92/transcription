@@ -213,7 +213,13 @@ if (activeTab !== "transcription") {
                   </Button>
                 </div>
               </div>
-              <ExportDialog interview={interviewForExport} trigger={<Button variant="outline" size="sm" className="h-8 text-xs border-border text-foreground"><Download className="w-3 h-3 mr-1" />Export</Button>} />
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => router.push(`/project/${projectId}/interview/${interviewId}/mode`)} className="h-8 text-xs border-border text-foreground hover:bg-accent">
+                  <PenLine className="w-3 h-3 mr-1" />
+                  Focus Mode
+                </Button>
+                <ExportDialog interview={interviewForExport} trigger={<Button variant="outline" size="sm" className="h-8 text-xs border-border text-foreground hover:bg-accent"><Download className="w-3 h-3 mr-1" />Export</Button>} />
+              </div>
             </div>
             
             {/* Row 2: Title + Duration + Segments */}
