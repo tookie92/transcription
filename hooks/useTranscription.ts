@@ -120,7 +120,33 @@ export function useTranscription() {
         console.log(`[VideoConverter] Converted: ${(file.size / 1024 / 1024).toFixed(2)}MB -> ${(processedFile.size / 1024 / 1024).toFixed(2)}MB`);
       }
 
-<<<<<<< HEAD
+// Compress if file too large (stay under Vercel body limit)
+      const maxSize = 8 * 1024 * 1024; // 8MB safety margin
+      if (processedFile.size > maxSize) {
+        setConversionProgress({ stage: 'converting', progress: 80, message: 'Compressing audio...' });
+        onProgress?.({ stage: 'converting', progress: 80, message: 'Compressing audio...' });
+        
+        if (!videoConverter.isReady()) {
+          await videoConverter.load();
+        }
+        
+        const result = await videoConverter.convertToAudio(processedFile);
+        if (result.success && result.audioBlob) {
+          const compressedFile = new File(
+            [result.audioBlob],
+            processedFile.name.replace(/\.[^.]+$/, '.mp3'),
+            { type: 'audio/mp3' }
+          );
+          console.log(`[useTranscription] Compressed: ${(processedFile.size / 1024 / 1024).toFixed(2)}MB -> ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`);
+          
+          if (compressedFile.size > maxSize) {
+            throw new Error(`File still too large after compression. Please use a shorter recording.`);
+          }
+          
+          processedFile = compressedFile;
+        }
+      }
+
       // Step 2: Upload audio to uploadthing first (to avoid Vercel body limit)
       setConversionProgress({ 
         stage: 'transcribing', 
@@ -149,35 +175,6 @@ export function useTranscription() {
       const audioUrl = uploadData.url;
 
       // Step 3: Send URL to transcription (Groq supports 100MB via URL)
-=======
-      // Compress if file too large (stay under Vercel 10MB limit)
-      const maxSize = 8 * 1024 * 1024; // 8MB safety margin
-      if (processedFile.size > maxSize) {
-        setConversionProgress({ stage: 'converting', progress: 80, message: 'Compressing audio...' });
-        
-        if (!videoConverter.isReady()) {
-          await videoConverter.load();
-        }
-        
-        const result = await videoConverter.convertToAudio(processedFile);
-        if (result.success && result.audioBlob) {
-          const compressedFile = new File(
-            [result.audioBlob],
-            processedFile.name.replace(/\.[^.]+$/, '.mp3'),
-            { type: 'audio/mp3' }
-          );
-          console.log(`[useTranscription] Compressed: ${(processedFile.size / 1024 / 1024).toFixed(2)}MB -> ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`);
-          
-          if (compressedFile.size > maxSize) {
-            throw new Error(`File still too large after compression. Please use a shorter recording.`);
-          }
-          
-          processedFile = compressedFile;
-        }
-      }
-
-      // Step 2: Send audio to transcription
->>>>>>> vercel
       setConversionProgress({ 
         stage: 'transcribing', 
         progress: 0, 
