@@ -190,53 +190,53 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
     return speakerColors[(num - 1) % speakerColors.length];
   };
 
-  if (activeTab !== "transcription") {
+if (activeTab !== "transcription") {
     return (
-      <div className="min-h-screen flex flex-col bg-slate-50">
-        <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
+      <div className="min-h-screen flex flex-col bg-background">
+        <header className="sticky top-0 z-40 bg-background border-b border-border">
           <div className="max-w-4xl mx-auto px-6 py-3">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
-                <Button variant="ghost" size="icon" asChild className="hover:bg-slate-100 -ml-2">
+                <Button variant="ghost" size="icon" asChild className="hover:bg-accent -ml-2">
                   <Link href={`/project/${projectId}`}>
                     <ArrowLeft className="w-5 h-5" />
                   </Link>
                 </Button>
-                <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+                <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
                   <Button variant="ghost" size="icon" className="h-6 w-6" disabled={currentIndex === 0} onClick={() => router.push(`/project/${projectId}/interview/${projectInterviews?.[currentIndex - 1]?._id}`)}>
                     <ChevronLeft className="w-3 h-3" />
                   </Button>
-                  <span className="text-xs text-slate-500 px-1 min-w-[30px] text-center">{currentIndex + 1}/{projectInterviews?.length}</span>
+                  <span className="text-xs text-muted-foreground px-1 min-w-[30px] text-center">{currentIndex + 1}/{projectInterviews?.length}</span>
                   <Button variant="ghost" size="icon" className="h-6 w-6" disabled={currentIndex >= (projectInterviews?.length || 0) - 1} onClick={() => router.push(`/project/${projectId}/interview/${projectInterviews?.[currentIndex + 1]?._id}`)}>
                     <ChevronRight className="w-3 h-3" />
                   </Button>
                 </div>
               </div>
-<ExportDialog interview={interviewForExport} trigger={<Button variant="outline" size="sm" className="h-8 text-xs border-slate-200 text-slate-600"><Download className="w-3 h-3 mr-1" />Export</Button>} />
-                <h1 className="text-xl font-bold text-slate-900">{interview.title}</h1>
-                <div className="flex items-center gap-2 text-xs text-slate-500">
+              <ExportDialog interview={interviewForExport} trigger={<Button variant="outline" size="sm" className="h-8 text-xs border-border text-foreground"><Download className="w-3 h-3 mr-1" />Export</Button>} />
+              <h1 className="text-xl font-bold text-foreground">{interview.title}</h1>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{Math.floor(interview.duration / 60)}:{String(interview.duration % 60).padStart(2, '0')}</span>
                 <span>•</span>
                 <span>{interview.segments.length} segments</span>
               </div>
             </div>
             {interview.audioUrl && (
-              <div className="mb-3 bg-white rounded-xl px-4 py-2.5 border border-slate-200">
+              <div className="mb-3 bg-card rounded-xl px-4 py-2.5 border border-border">
                 <AudioPlayer ref={audioPlayerRef} src={interview.audioUrl} onTimeUpdate={setCurrentTime} />
               </div>
             )}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full -ml-2">
               <TabsList className="bg-transparent border-b-0 rounded-none h-9 p-0 gap-1">
-                <TabsTrigger value="transcription" className="rounded-md data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-3 py-1.5 text-sm text-slate-500 hover:text-slate-900 transition-all">
+                <TabsTrigger value="transcription" className="rounded-md data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-all">
                   <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />
                   Transcription
                 </TabsTrigger>
-                <TabsTrigger value="insights" className="rounded-md data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-3 py-1.5 text-sm text-slate-500 hover:text-slate-900 transition-all">
+                <TabsTrigger value="insights" className="rounded-md data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-all">
                   <Lightbulb className="w-3.5 h-3.5 mr-1.5" />
                   Insights
                   {insights && insights.length > 0 && <span className="ml-1.5 text-xs bg-white/20 px-1 rounded">{insights.length}</span>}
                 </TabsTrigger>
-                <TabsTrigger value="summary" className="rounded-md data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-3 py-1.5 text-sm text-slate-500 hover:text-slate-900 transition-all">
+                <TabsTrigger value="summary" className="rounded-md data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-all">
                   <Sparkles className="w-3.5 h-3.5 mr-1.5" />
                   Summary
                   {interview.summary && <CheckCircle2 className="w-3 h-3 ml-1.5 text-green-400" />}
@@ -465,7 +465,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                 placeholder="Search in transcript..." 
                 value={searchQuery} 
                 onChange={e => setSearchQuery(e.target.value)} 
-                className="pl-9 h-10 bg-white border-slate-200 shadow-sm" 
+                className="pl-9 h-10 bg-background border-input shadow-sm" 
               />
             </div>
             <div className="space-y-3">
@@ -489,7 +489,7 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
                         </span>
                       )}
                     </div>
-                    <p className="text-sm leading-relaxed text-slate-700">{segment.text}</p>
+                    <p className="text-sm leading-relaxed text-foreground">{segment.text}</p>
                   </motion.div>
                 );
               })}
