@@ -68,6 +68,7 @@ export default function InterviewHome() {
     segments: { id: number; start: number; end: number; text: string; speaker?: string }[];
     duration: number;
     audioFile?: File;
+    audioUrl?: string;
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -245,6 +246,7 @@ export default function InterviewHome() {
         segments: interview.segments.map(s => ({ id: s.id, start: s.start, end: s.end, text: s.text, speaker: s.speaker })),
         duration: interview.duration,
         audioFile: selectedFile,
+        audioUrl: (interview as any).audioUrl,
       });
       setShowPreview(true);
       toast.success('Ready! Review and save.', { id: toastId });
@@ -260,14 +262,9 @@ export default function InterviewHome() {
     setIsSaving(true);
     const toastId = toast.loading('Saving...');
     try {
-      let audioUrl: string | undefined;
-      if (pendingInterview.audioFile) {
-        const formData = new FormData();
-        formData.append('file', pendingInterview.audioFile);
-        formData.append('interviewId', `temp-${Date.now()}`);
-        const uploadRes = await fetch('/api/upload-audio', { method: 'POST', body: formData });
-        if (uploadRes.ok) audioUrl = (await uploadRes.json()).url;
-      }
+      // Use the audioUrl already uploaded during transcription (no re-upload needed)
+      const audioUrl = pendingInterview.audioUrl;
+      
       const interviewId = await createInterview({
         projectId: currentProjectId,
         title: pendingInterview.title,
