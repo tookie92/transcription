@@ -9,24 +9,33 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
+    const url = formData.get('url') as string | null;
     const language = formData.get('language') as string | null;
 
-    if (!file) {
-      return NextResponse.json({ error: 'No audio file provided' }, { status: 400 });
+    if (!file && !url) {
+      return NextResponse.json({ error: 'No audio file or URL provided' }, { status: 400 });
     }
 
     if (!GROQ_API_KEY) {
       return NextResponse.json({ error: 'GROQ_API_KEY not configured' }, { status: 500 });
     }
 
-    // Create blob directly from file
-    const blob = new Blob([await file.arrayBuffer()], { type: file.type || 'audio/wav' });
-
+    // Use URL if provided (uploaded via uploadthing), otherwise use file
+    const hasUrl = url && url.startsWith('http');
+    
     const formDataRequest = new FormData();
-    formDataRequest.append('file', blob, file.name || 'audio.wav');
+    
+    if (hasUrl) {
+      // Pass URL to Groq - supports files up to 100MB via URL
+      formDataRequest.append('url', url);
+    } else if (file) {
+      const blob = new Blob([await file.arrayBuffer()], { type: file.type || 'audio/wav' });
+      formDataRequest.append('file', blob, file.name || 'audio.wav');
+    }
+    
     formDataRequest.append('model', 'whisper-large-v3-turbo');
     formDataRequest.append('response_format', 'verbose_json');
-    if (language) {
+    if (language && !hasUrl) { // Language not supported with URL param
       formDataRequest.append('language', language);
     }
 

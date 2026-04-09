@@ -120,7 +120,34 @@ export function useTranscription() {
         console.log(`[VideoConverter] Converted: ${(file.size / 1024 / 1024).toFixed(2)}MB -> ${(processedFile.size / 1024 / 1024).toFixed(2)}MB`);
       }
 
-      // Step 2: Send audio to transcription
+      // Step 2: Upload audio to uploadthing first (to avoid Vercel body limit)
+      setConversionProgress({ 
+        stage: 'transcribing', 
+        progress: 0, 
+        message: wasVideo ? 'Uploading audio...' : 'Uploading...' 
+      });
+      onProgress?.({ 
+        stage: 'transcribing', 
+        progress: 0, 
+        message: wasVideo ? 'Uploading audio...' : 'Uploading...' 
+      });
+
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', processedFile);
+
+      const uploadResponse = await fetch('/api/upload-audio', {
+        method: 'POST',
+        body: uploadFormData,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload audio file');
+      }
+
+      const uploadData = await uploadResponse.json();
+      const audioUrl = uploadData.url;
+
+      // Step 3: Send URL to transcription (Groq supports 100MB via URL)
       setConversionProgress({ 
         stage: 'transcribing', 
         progress: 0, 
@@ -133,7 +160,7 @@ export function useTranscription() {
       });
 
       const formData = new FormData();
-      formData.append('file', processedFile);
+      formData.append('url', audioUrl);
       if (language && language !== 'auto') {
         formData.append('language', language);
       }
