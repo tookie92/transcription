@@ -189,6 +189,7 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
       {interview.audioUrl && (
         <div className="bg-white border-b border-slate-100 px-6 py-3 shadow-sm">
           <div className="max-w-6xl mx-auto">
+            <div className="text-xs text-red-500 mb-1">DEBUG mode: audioUrl = {interview.audioUrl}</div>
             <AudioPlayer ref={audioPlayerRef} src={interview.audioUrl} onTimeUpdate={setCurrentTime} />
           </div>
         </div>
