@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { UserPlus, Crown, User, Trash2, Shield } from "lucide-react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 
 interface TeamDialogProps {
   projectId: Id<"projects">;
@@ -28,6 +28,7 @@ interface Member {
 
 export function TeamDialog({ projectId, trigger, open, onOpenChange }: TeamDialogProps) {
   const { userId } = useAuth();
+  const { user } = useUser();
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = open !== undefined;
   const isOpen = isControlled ? open : internalOpen;
@@ -50,10 +51,11 @@ export function TeamDialog({ projectId, trigger, open, onOpenChange }: TeamDialo
 
     setIsAdding(true);
     try {
+      const inviterName = user?.fullName || user?.firstName || user?.username || "Team member";
       await inviteUser({
         projectId,
         email: newEmail,
-        name: newName,
+        name: inviterName,
         role: "editor",
       });
       toast.success(`Invitation sent to ${newEmail}`);

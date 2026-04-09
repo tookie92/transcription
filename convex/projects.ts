@@ -185,6 +185,8 @@ export const inviteUser = mutation({
       throw new Error("User already a member");
     }
 
+    const inviterName = identity.name || identity.email?.split('@')[0] || "Team member";
+    
     const updatedMembers = [
       ...project.members,
       {
@@ -193,6 +195,7 @@ export const inviteUser = mutation({
         joinedAt: Date.now(),
         name: args.name,
         email: args.email,
+        invitedBy: inviterName,
       },
     ];
 

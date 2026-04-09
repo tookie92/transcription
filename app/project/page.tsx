@@ -52,7 +52,7 @@ const ProjectPage = () => {
         projectName: project.name,
         email: m.userId,
         role: m.role,
-        name: m.name
+        invitedBy: m.invitedBy
       }))
   ) || [];
 
@@ -78,6 +78,7 @@ const ProjectPage = () => {
   };
 
   const acceptInvite = useMutation(api.projects.claimInvite);
+  const declineInvite = useMutation(api.projects.declineInvite);
   const deleteProject = useMutation(api.projects.deleteProject);
 
   const handleAcceptInvite = async (invite: { projectId: string; email: string }) => {
@@ -89,6 +90,18 @@ const ProjectPage = () => {
       toast.success("You joined the project!");
     } catch (error) {
       toast.error("Failed to join project");
+    }
+  };
+
+  const handleDeclineInvite = async (invite: { projectId: string; email: string }) => {
+    try {
+      await declineInvite({ 
+        projectId: invite.projectId as Id<"projects">, 
+        email: invite.email 
+      });
+      toast.success("Invitation declined");
+    } catch (error) {
+      toast.error("Failed to decline invitation");
     }
   };
 
@@ -265,7 +278,7 @@ const ProjectPage = () => {
                         </div>
                         <div>
                           <p className="font-medium">{invite.projectName}</p>
-                          <p className="text-sm text-muted-foreground">Invited by {invite.name}</p>
+                          <p className="text-sm text-muted-foreground">Invited by {invite.invitedBy}</p>
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -279,6 +292,7 @@ const ProjectPage = () => {
                         <Button
                           size="sm"
                           variant="outline"
+                          onClick={() => handleDeclineInvite(invite)}
                         >
                           Decline
                         </Button>
