@@ -289,7 +289,20 @@ export default function InterviewHome() {
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    // Delete uploaded file from UploadThing if it exists
+    if (pendingInterview?.audioUrl && pendingInterview.audioUrl.includes('ufs.sh')) {
+      try {
+        await fetch('/api/delete-audio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileUrl: pendingInterview.audioUrl }),
+        });
+      } catch (e) {
+        console.error('Failed to delete uploaded file:', e);
+      }
+    }
+    
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     setSelectedFile(null);
     setAudioUrl(null);
