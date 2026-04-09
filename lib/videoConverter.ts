@@ -145,15 +145,20 @@ export const videoConverter = {
       const inputData = await fetchFile(file);
       await ffmpeg.writeFile(inputName, inputData);
 
-      // Run FFmpeg command to extract audio
+      // Run FFmpeg command to extract and compress audio
+      // Use lower bitrate to reduce file size - stays under Vercel 10MB limit
       await ffmpeg.exec([
         "-i",
         inputName,
         "-vn", // No video
         "-acodec",
         "libmp3lame", // MP3 codec
-        "-q:a",
-        "2", // Quality (0-10, lower is better)
+        "-b:a", 
+        "32k", // Lower bitrate = smaller file (32k instead of default ~128k)
+        "-ar",
+        "16000", // Lower sample rate (optimal for Whisper, reduces size further)
+        "-ac",
+        "1", // Mono channel
         "-y", // Overwrite output
         outputName,
       ]);

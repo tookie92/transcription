@@ -1,8 +1,0 @@
-{
-  "functions": {
-    "api/**/*.ts": {
-      "maxDuration": 300,
-      "bodySizeLimit": "50mb"
-    }
-  }
-}
