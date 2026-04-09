@@ -142,20 +142,18 @@ export const videoConverter = {
       const outputName = `output_${Date.now()}.mp3`;
 
       // Write input file to FFmpeg filesystem
-      const inputData = await fetchFile(file);
+const inputData = await fetchFile(file);
       await ffmpeg.writeFile(inputName, inputData);
 
-      // Run FFmpeg command to extract audio
+      // Run FFmpeg command - COMPRESS for smaller file (stays under Vercel 10MB limit)
       await ffmpeg.exec([
-        "-i",
-        inputName,
+        "-i", inputName,
         "-vn", // No video
-        "-acodec",
-        "libmp3lame", // MP3 codec
-        "-q:a",
-        "2", // Quality (0-10, lower is better)
-        "-y", // Overwrite output
-        outputName,
+        "-acodec", "libmp3lame",
+        "-b:a", "32k", // 32k bitrate - significantly smaller
+        "-ar", "16000", // 16kHz - optimal for Whisper
+        "-ac", "1", // Mono
+        "-y", outputName,
       ]);
 
       // Read the output file
