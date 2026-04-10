@@ -34,9 +34,11 @@ export function useDragToCreate(options: UseDragToCreateOptions = {}): UseDragTo
   const [isCreating, setIsCreating] = useState(false);
   const [creationRect, setCreationRect] = useState<Rect | null>(null);
   const startPointRef = useRef<Point | null>(null);
+  const hasCalledCreateRef = useRef(false);
 
   const startCreating = useCallback((point: Point) => {
     setIsCreating(true);
+    hasCalledCreateRef.current = false;
     startPointRef.current = point;
     setCreationRect({
       x: point.x,
@@ -59,7 +61,8 @@ export function useDragToCreate(options: UseDragToCreateOptions = {}): UseDragTo
   }, [isCreating]);
 
   const endCreating = useCallback(() => {
-    if (creationRect && creationRect.width >= minWidth && creationRect.height >= minHeight) {
+    if (!hasCalledCreateRef.current && creationRect && creationRect.width >= minWidth && creationRect.height >= minHeight) {
+      hasCalledCreateRef.current = true;
       onCreate?.(creationRect);
     }
     setIsCreating(false);
@@ -71,6 +74,7 @@ export function useDragToCreate(options: UseDragToCreateOptions = {}): UseDragTo
     setIsCreating(false);
     setCreationRect(null);
     startPointRef.current = null;
+    hasCalledCreateRef.current = false;
   }, []);
 
   return {
