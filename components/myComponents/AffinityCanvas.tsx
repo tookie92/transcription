@@ -169,6 +169,22 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
     else if (selectedGroups.size === 1) setLastSelectedGroup(Array.from(selectedGroups)[0]);
   }, [selectedGroups]);
 
+  // Clear selection when groups change (e.g., after deletion)
+  useEffect(() => {
+    const groupIds = new Set(groups.map(g => g.id));
+    const staleSelections = Array.from(selectedGroups).filter(id => !groupIds.has(id));
+    if (staleSelections.length > 0) {
+      setSelectedGroups(new Set());
+      setLastSelectedGroup(null);
+    }
+  }, [groups]);
+
+  // Clear selection on initial load
+  useEffect(() => {
+    setSelectedGroups(new Set());
+    setLastSelectedGroup(null);
+  }, []);
+
   useEffect(() => {
     setOptimisticPositions(new Map());
   }, [groups]);
