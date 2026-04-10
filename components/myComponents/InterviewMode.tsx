@@ -169,7 +169,13 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
             <h1 className="text-lg font-bold text-foreground">{interview.title}</h1>
             <p className="text-xs text-muted-foreground">Focus Mode • {notes?.length || 0} notes</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => router.push(`/project/${projectId}/interview/${interviewId}`)}>
+          <Button variant="outline" size="sm" onClick={() => {
+            if ((notes?.length || 0) > 0) {
+              setShowEndDialog(true);
+            } else {
+              router.push(`/project/${projectId}/interview/${interviewId}`);
+            }
+          }}>
             Exit Focus Mode
           </Button>
         </div>
