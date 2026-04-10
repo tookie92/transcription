@@ -173,6 +173,11 @@ export function FigJamBoard({
   const [showAIGroupingPanel, setShowAIGroupingPanel] = useState(false);
   const [showGDPRConsent, setShowGDPRConsent] = useState(false);
   const [showInsightsSidebar, setShowInsightsSidebar] = useState(true);
+  
+  // Guard to prevent duplicate cluster creation on single click
+  const clusterCreationGuardRef = useRef<{ timestamp: number; position: { x: number; y: number } } | null>(null);
+  // Guard to prevent duplicate sticky creation on single click
+  const stickyCreationGuardRef = useRef<{ timestamp: number; position: { x: number; y: number } } | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     position: { x: number; y: number };
     ids: string[];
@@ -881,7 +886,6 @@ export function FigJamBoard({
       const isHandTool = state.activeTool === "hand";
       const isSpacePan = isSpacePressed;
 
-      // Pan with space + click or middle mouse or hand tool
       if (isMiddle || isHandTool || isSpacePan) {
         isPanning.current = true;
         panStart.current  = { x: e.clientX, y: e.clientY };
@@ -894,28 +898,27 @@ export function FigJamBoard({
         return;
       }
 
-      // Start lasso selection on canvas click
-      // Block in silent mode during voting
       const target = e.target as HTMLElement;
-      if (target === canvasRef.current || target.closest(".lasso-area")) {
-        const pos = screenToCanvas(e.clientX, e.clientY);
-        setLassoStart(pos);
-        setLassoEnd(pos);
-        e.currentTarget.setPointerCapture(e.pointerId);
-        if (!e.ctrlKey && !e.metaKey) {
-          board.clearSelection();
-        }
-      }
+      const isCanvasClick = target === canvasRef.current || target.closest(".lasso-area");
+      if (!isCanvasClick) return;
 
-      if (state.activeTool === "label") {
-        const pos = screenToCanvas(e.clientX, e.clientY);
-        const labelId = board.addClusterLabel({ x: pos.x, y: pos.y });
-        board.setTool("select");
-      }
-
-      // Cluster tool - create cluster at click position
+      // Cluster tool - create ONE cluster
       if (state.activeTool === "cluster") {
         const pos = screenToCanvas(e.clientX, e.clientY);
+        
+        // Guard: prevent duplicate creation within 500ms at same position
+        const now = Date.now();
+        const guard = clusterCreationGuardRef.current;
+        if (guard && 
+            now - guard.timestamp < 500 && 
+            Math.abs(guard.position.x - pos.x) < 10 && 
+            Math.abs(guard.position.y - pos.y) < 10) {
+          console.log("Blocked duplicate cluster creation");
+          return;
+        }
+        clusterCreationGuardRef.current = { timestamp: now, position: pos };
+        
+        console.log("Creating single cluster...");
         const clusterId = board.addClusterLabel(
           { x: pos.x - 250, y: pos.y - 120 },
           { width: 500, height: 300 }
@@ -932,20 +935,38 @@ export function FigJamBoard({
         return;
       }
 
-      // Sticky notes - disabled during voting
+      // Label tool
+      if (state.activeTool === "label") {
+        const pos = screenToCanvas(e.clientX, e.clientY);
+        const labelId = board.addClusterLabel({ x: pos.x, y: pos.y });
+        board.setTool("select");
+        return;
+      }
+
+      // Sticky tool
       if (state.activeTool === "sticky" && !voting.isVoting) {
         const pos = screenToCanvas(e.clientX, e.clientY);
+        
+        // Guard: prevent duplicate creation within 500ms at same position
+        const now = Date.now();
+        const guard = stickyCreationGuardRef.current;
+        if (guard && 
+            now - guard.timestamp < 500 && 
+            Math.abs(guard.position.x - pos.x) < 10 && 
+            Math.abs(guard.position.y - pos.y) < 10) {
+          return;
+        }
+        stickyCreationGuardRef.current = { timestamp: now, position: pos };
+        
         const stickyColor: StickyColor = "insight";
         const size = { width: 200, height: 200 };
         const stickyPos = { x: pos.x - 100, y: pos.y - 100 };
         
-        // Auto-assign to cluster if created inside one - compute labels from state.elements
         const currentLabels = Object.values(state.elements).filter((el): el is ClusterLabelData => el.type === "label");
         const clusterId = findClusterAtPositionHelper(stickyPos.x, stickyPos.y, size.width, size.height, currentLabels);
         
         const stickyId = board.addStickyNote(stickyPos, stickyColor, size, currentUserName);
         
-        // Update with clusterId if inside a cluster
         if (clusterId) {
           board.updateElement(stickyId, { clusterId });
         }
@@ -975,41 +996,20 @@ export function FigJamBoard({
           });
           throttledBroadcast(stickyId, "sticky", "update", stickyPos, size, { 
             clusterId,
-            content: "",
             color: stickyColor,
-            author: userId || "local-user",
-            authorName: currentUserName,
-            source: stickyColor,
-            parentSectionId: null,
+            content: "",
           });
-          try {
-            logActivity({
-              mapId: mapId as Id<"affinityMaps">,
-              action: "sticky_created",
-              targetId: stickyId,
-              targetName: stickyColor,
-              details: { color: stickyColor },
-            });
-          } catch (err) {
-            console.error("Failed to log activity:", err);
-          }
         }
-        board.selectElement(stickyId);
-        board.setTool("select");
+        return;
       }
 
-      if (isCommentToolActive) {
-        const pos = screenToCanvas(e.clientX, e.clientY);
-        if (mapId) {
-          createBubbleMutation({
-            mapId: mapId as Id<"affinityMaps">,
-            position: pos,
-            targetType: "canvas",
-            createdBy: userId || "",
-            createdByName: currentUserName,
-          }).catch(console.error);
-        }
-        setIsCommentToolActive(false);
+      // Lasso for select/lasso tools
+      const pos = screenToCanvas(e.clientX, e.clientY);
+      setLassoStart(pos);
+      setLassoEnd(pos);
+      e.currentTarget.setPointerCapture(e.pointerId);
+      if (!e.ctrlKey && !e.metaKey) {
+        board.clearSelection();
       }
     },
     [state.activeTool, state.pan, state.elements, board, screenToCanvas, isSpacePressed, currentUserName, hasMapId, mapId, logActivity, createBubbleMutation, userId]
@@ -1053,28 +1053,14 @@ export function FigJamBoard({
         const minY = Math.min(lassoStart.y, lassoEnd.y);
         const maxY = Math.max(lassoStart.y, lassoEnd.y);
         
-        // Select all stickies within lasso
-        allStickies.forEach((sticky) => {
-          const sRight = sticky.position.x + 200;
-          const sBottom = sticky.position.y + 200;
-          
-          const intersects = !(sRight < minX || sticky.position.x > maxX || sBottom < minY || sticky.position.y > maxY);
-          
-          if (intersects) {
-            board.selectElement(sticky.id, true);
-          }
-        });
-        
-        // Select all cluster labels within lasso (compute from state.elements)
+        // Only select cluster labels (no stickies)
         const allLabels = Object.values(state.elements).filter(
           (el): el is ClusterLabelData => el.type === "label"
         );
         allLabels.forEach((label) => {
           const labelX = label.position.x;
           const labelY = label.position.y;
-          
-          // Check if label center is within lasso (expand lasso to include label area)
-          const lassoPadding = 100; // Account for label size
+          const lassoPadding = 100;
           const intersects = 
             labelX >= minX - lassoPadding && 
             labelX <= maxX + lassoPadding &&
@@ -1091,7 +1077,7 @@ export function FigJamBoard({
       setLassoEnd(null);
       isPanning.current = false;
     },
-    [isLassoing, lassoStart, lassoEnd, allStickies, state.elements, board]
+    [isLassoing, lassoStart, lassoEnd, state.elements, board]
   );
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────

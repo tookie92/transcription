@@ -125,10 +125,11 @@ export function FigJamToolbar({
   const isVotingCreator = voting?.session?.createdBy === userId;
 
   const handleClusterTool = () => {
+    // Toggle between cluster tool and select
     if (activeTool === "cluster") {
       onToolChange("select");
     } else {
-      setShowClusterDialog(true);
+      onToolChange("cluster");
     }
   };
 
