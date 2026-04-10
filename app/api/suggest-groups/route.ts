@@ -34,48 +34,109 @@ interface GroupSuggestionResponse {
   newGroupDescription?: string;
 }
 
-// 🎯 FONCTIONS HELPER POUR LE FALLBACK
-function generateFallbackTitle(projectContext: string): string {
-  if (!projectContext) return "Key User Feedback Themes";
+// Analyze content to generate specific group names
+function analyzeContentForGroupName(insights: InsightRequest[]): string {
+  const allText = insights.map(i => i.text.toLowerCase()).join(' ');
   
-  if (projectContext.includes('Mobile')) return "Mobile Experience Feedback";
-  if (projectContext.includes('E-commerce') || projectContext.includes('Ecommerce')) return "Shopping Journey Insights";
-  if (projectContext.includes('Healthcare') || projectContext.includes('Medical')) return "Patient Experience Topics";
-  if (projectContext.includes('Finance') || projectContext.includes('Banking')) return "Financial Service Pain Points";
-  if (projectContext.includes('Education') || projectContext.includes('Learning')) return "Learning Experience Themes";
-  
-  // Extraire le nom du projet du contexte
-  const projectNameMatch = projectContext.match(/PROJECT NAME: (.+)/);
-  if (projectNameMatch && projectNameMatch[1]) {
-    return `${projectNameMatch[1].trim()} User Insights`;
+  // Detect common themes and generate specific names
+  const themes: { keywords: string[], name: string }[] = [
+    { keywords: ['ui', 'interface', 'design', 'button', 'color', 'layout', 'visual'], name: 'UI/UX Issues' },
+    { keywords: ['performance', 'slow', 'loading', 'speed', 'crash', 'bug', 'error'], name: 'Performance Problems' },
+    { keywords: ['feature', 'functionality', 'missing', 'add', 'would like', 'need'], name: 'Feature Requests' },
+    { keywords: ['navigation', 'menu', 'find', 'search', 'confusing'], name: 'Navigation Challenges' },
+    { keywords: ['onboarding', 'learn', 'understand', 'documentation', 'help'], name: 'Onboarding friction' },
+    { keywords: ['mobile', 'responsive', 'screen', 'mobile'], name: 'Mobile Experience' },
+    { keywords: ['price', 'cost', 'expensive', 'cheap', 'value', 'payment'], name: 'Pricing Concerns' },
+    { keywords: ['support', 'customer service', 'response', 'help'], name: 'Support Experience' },
+    { keywords: ['login', 'password', 'sign in', 'account', 'register'], name: 'Authentication Issues' },
+    { keywords: ['integration', 'api', 'connect', 'third-party', 'tool'], name: 'Integration Needs' },
+  ];
+
+  // Find matching theme
+  for (const theme of themes) {
+    const matches = theme.keywords.filter(kw => allText.includes(kw)).length;
+    if (matches >= 2) {
+      return theme.name;
+    }
+  }
+
+  // If no specific theme, analyze types for a better name
+  const types = insights.map(i => i.type);
+  if (types.includes('pain-point') && types.includes('quote')) {
+    return 'Pain Points & Quotes';
+  }
+  if (types.every(t => t === 'quote')) {
+    return 'Key User Quotes';
+  }
+  if (types.every(t => t === 'insight')) {
+    return 'Key Insights';
   }
   
-  return "Key User Feedback Themes";
+  return 'User Feedback';
 }
 
-function generateFallbackReason(projectContext: string, insights: InsightRequest[]): string {
-  const painPointCount = insights.filter(i => i.type === 'pain-point').length;
-  const quoteCount = insights.filter(i => i.type === 'quote').length;
-  const insightCount = insights.filter(i => i.type === 'insight').length;
+// Generate coherent groups from insights
+function generateCoherentGroups(insights: InsightRequest[]): GroupSuggestionResponse[] {
+  if (insights.length === 0) return [];
   
-  let reason = `These ${insights.length} insights include `;
-  const parts: string[] = [];
+  // Group by content similarity (simple clustering)
+  const groups: Map<string, InsightRequest[]> = new Map();
   
-  if (painPointCount > 0) parts.push(`${painPointCount} pain points`);
-  if (quoteCount > 0) parts.push(`${quoteCount} user quotes`);
-  if (insightCount > 0) parts.push(`${insightCount} research insights`);
+  insights.forEach(insight => {
+    // Extract key words from insight text
+    const words = insight.text.toLowerCase()
+      .replace(/[^a-z\s]/g, '')
+      .split(/\s+/)
+      .filter(w => w.length > 3);
+    
+    // Find a representative word to group by
+    const keyWord = words.find(w => 
+      !['that', 'this', 'with', 'from', 'have', 'been', 'would', 'could', 'should', 'were', 'their'].includes(w)
+    ) || 'general';
+    
+    const groupKey = keyWord.substring(0, 10);
+    
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, []);
+    }
+    groups.get(groupKey)!.push(insight);
+  });
   
-  reason += parts.join(', ') + ' that reveal important patterns';
+  // Convert to suggestions (only groups with 2+ insights)
+  const suggestions: GroupSuggestionResponse[] = [];
   
-  if (projectContext && projectContext.includes('PROJECT NAME:')) {
-    reason += ' for this project';
+  groups.forEach((groupInsights, key) => {
+    if (groupInsights.length >= 2) {
+      suggestions.push({
+        action: 'create_new',
+        confidence: 0.6 + (groupInsights.length * 0.1), // Higher confidence for larger groups
+        reason: `${groupInsights.length} related insights about "${key}"`,
+        insightIds: groupInsights.map(i => i.id),
+        newGroupTitle: analyzeContentForGroupName(groupInsights),
+        newGroupDescription: `Group of ${groupInsights.length} related insights`
+      });
+    }
+  });
+  
+  // Add remaining single insights as one group if significant
+  const groupedIds = new Set(suggestions.flatMap(s => s.insightIds));
+  const remaining = insights.filter(i => !groupedIds.has(i.id));
+  
+  if (remaining.length >= 2) {
+    suggestions.push({
+      action: 'create_new',
+      confidence: 0.5,
+      reason: `${remaining.length} additional insights`,
+      insightIds: remaining.map(i => i.id),
+      newGroupTitle: 'Additional Feedback',
+      newGroupDescription: 'Other relevant insights'
+    });
   }
   
-  return reason + '.';
+  return suggestions.slice(0, 5); // Limit to 5 suggestions
 }
 
 export async function POST(request: NextRequest) {
-  // 🎯 DÉCLARER LES VARIABLES EN DEHORS DU TRY
   let insights: InsightRequest[] = [];
   let projectContext: string = '';
 
@@ -90,8 +151,7 @@ export async function POST(request: NextRequest) {
 
     const body: GroupSuggestionRequest = await request.json();
     insights = body.insights;
-    projectContext = body.projectContext || ''; // 🎯 MAINTENANT projectContext EST ACCESSIBLE DANS LE CATCH
-
+    projectContext = body.projectContext || '';
     const { existingGroups } = body;
 
     if (!insights || insights.length === 0) {
@@ -102,53 +162,66 @@ export async function POST(request: NextRequest) {
     console.log('📊 Insights count:', insights.length);
     console.log('🏷️ Existing groups count:', existingGroups.length);
 
-// app/api/suggest-groups/route.ts - CORRIGER LE PROMPT
-const prompt = `
-You are a UX research assistant analyzing insights for an affinity diagram.
+    // Improved prompt for better grouping
+    const prompt = `
+You are a UX research expert analyzing interview insights to create meaningful groups.
 
 PROJECT CONTEXT:
 ${projectContext || 'General user research project'}
 
 EXISTING GROUPS (for reference):
-${existingGroups.map(group => `- "${group.title}" (${group.insightIds.length} insights)`).join('\n')}
+${existingGroups.map(group => `- "${group.title}" (${group.insightIds.length} insights)`).join('\n') || 'None'}
 
-UNGROUPED INSIGHTS TO ORGANIZE:
-${insights.map((insight, index) => `${index + 1}. ID:${insight.id} [${insight.type}] ${insight.text}`).join('\n')}
+UNGROUPED INSIGHTS (analyze content to find patterns):
+${insights.map((insight, index) => `${index + 1}. [${insight.type.toUpperCase()}] ID:${insight.id} - "${insight.text}"`).join('\n')}
 
-CRITICAL INSTRUCTIONS:
-1. Use the EXACT insight IDs provided above (like "kh70x315yeh67j4ctd52tbfrbx7t3czn")
-2. NEVER invent new IDs like "id1", "id2" - use the real IDs from the list
-3. Create group titles that are SPECIFIC to the project context
-4. Avoid generic titles like "UI Improvements"
+YOUR TASK:
+1. ANALYZE the content of each insight to find SEMANTIC SIMILARITY
+2. Group insights that discuss the SAME TOPIC or THEME together
+3. Give each group a SPECIFIC name based on the actual content (NOT generic names like "User Insights")
 
-For each suggestion, provide:
-- Use ONLY the real insight IDs from the list above
-- Specific, project-relevant group title
-- Clear reasoning that connects the insights to the project goals
-- Confidence level (0.1 to 0.9)
+Examples of GOOD group names:
+- "Navigation Problems" (if insights are about finding things)
+- "Mobile UX Issues" (if insights mention mobile)
+- "Pricing Concerns" (if insights mention cost)
+- "Feature Gaps" (if insights mention missing features)
 
-IMPORTANT: You MUST use the exact insight IDs provided in the "ID:" field.
+Examples of BAD group names:
+- "Project User Insights" (too generic)
+- "Group 1" (not descriptive)
+- "Theme" (not informative)
 
-Respond with valid JSON only:
+For each group, provide:
+- insightIds: EXACT IDs from the list above (2-5 insights per group ideally)
+- newGroupTitle: Specific name based on what the insights actually discuss
+- confidence: How coherent the group is (0.6-0.9)
+- reason: What pattern connects these insights
+
+Respond ONLY with valid JSON:
 {
   "suggestions": [
     {
       "action": "create_new",
-      "confidence": 0.85,
-      "reason": "Specific explanation tied to project context",
-      "insightIds": ["kh70x315yeh67j4ctd52tbfrbx7t3czn", "kh76p0tgk0jb534rx07yeqpbsd7t3z7p"],
-      "newGroupTitle": "Project-Specific Theme",
-      "newGroupDescription": "How this relates to project goals"
+      "confidence": 0.8,
+      "reason": "These insights all discuss navigation issues",
+      "insightIds": ["id1", "id2", "id3"],
+      "newGroupTitle": "Navigation Problems"
     }
   ]
 }
+
+IMPORTANT: 
+- Include 2-5 insights per group
+- Create 3-5 different groups covering different topics
+- Use the REAL insight IDs from above
+- Make titles specific to the content, not generic
 `;
 
     const completion = await groq.chat.completions.create({
       messages: [
         {
           role: "system",
-          content: "You are a UX research expert. Provide clear, actionable grouping suggestions in valid JSON format. Always return exactly the JSON structure requested."
+          content: "You are a UX research expert. Analyze insights semantically and create coherent groups with specific names. Always respond with valid JSON."
         },
         {
           role: "user",
@@ -156,82 +229,64 @@ Respond with valid JSON only:
         }
       ],
       model: "llama-3.1-8b-instant",
-      temperature: 0.2,
-      max_tokens: 2000
+      temperature: 0.3,
+      max_tokens: 2500
     });
 
     const content = completion.choices[0]?.message?.content;
     
-    console.log('📨 AI raw response:', content);
+    console.log('📨 AI raw response:', content?.substring(0, 500));
     
     if (!content) {
       throw new Error('No response from AI service');
     }
 
-    // Try to extract JSON from the response
+    // Parse response
     let parsedResponse: { suggestions?: GroupSuggestionResponse[] };
     try {
-      // Try direct parse first
       parsedResponse = JSON.parse(content);
     } catch {
-      // Try to extract JSON from response text
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         try {
           parsedResponse = JSON.parse(jsonMatch[0]);
-        } catch (e) {
-          console.error('❌ Failed to parse extracted JSON:', content);
-          // Don't throw - use fallback instead
-          throw new Error('Invalid JSON - using fallback');
+        } catch {
+          throw new Error('Invalid JSON');
         }
       } else {
-        console.error('❌ No JSON found in response:', content);
-        // Don't throw - use fallback instead
-        throw new Error('No JSON in response - using fallback');
+        throw new Error('No JSON found');
       }
     }
 
     if (!parsedResponse.suggestions || !Array.isArray(parsedResponse.suggestions)) {
-      console.error('❌ Invalid suggestions structure:', parsedResponse);
-      // Don't throw - use fallback instead
-      throw new Error('Invalid suggestions format - using fallback');
+      throw new Error('Invalid suggestions format');
     }
 
-    console.log('🤖 AI response received:', {
-      suggestionCount: parsedResponse.suggestions.length,
-      firstSuggestion: parsedResponse.suggestions[0]
-    });
+    // Validate: ensure insight IDs exist in our insights
+    const validIds = new Set(insights.map(i => i.id));
+    const validSuggestions = parsedResponse.suggestions.filter(s => 
+      s.insightIds.every(id => validIds.has(id)) && s.insightIds.length >= 2
+    );
+
+    console.log('🤖 AI response valid suggestions:', validSuggestions.length);
     
-    return NextResponse.json(parsedResponse);
+    if (validSuggestions.length === 0) {
+      // Use fallback
+      const fallback = generateCoherentGroups(insights);
+      return NextResponse.json({ suggestions: fallback });
+    }
+    
+    return NextResponse.json({ suggestions: validSuggestions });
 
   } catch (error) {
-    console.error('💥 Groq API error:', error);
+    console.error('💥 Error:', error);
     
-    // Use fallback with real insight IDs
+    // Use improved fallback with coherent grouping
     const fallbackResponse = {
-      suggestions: insights.slice(0, Math.min(5, insights.length)).map(insight => ({
-        action: "create_new" as const,
-        confidence: 0.7,
-        reason: `Related to: ${insight.text.substring(0, 50)}...`,
-        insightIds: [insight.id],
-        newGroupTitle: generateFallbackTitle(projectContext),
-        newGroupDescription: "User insights relevant to project goals"
-      }))
+      suggestions: generateCoherentGroups(insights)
     };
     
-    // If no insights, create one default suggestion
-    if (fallbackResponse.suggestions.length === 0) {
-      fallbackResponse.suggestions.push({
-        action: "create_new",
-        confidence: 0.6,
-        reason: generateFallbackReason(projectContext, insights),
-        insightIds: insights.slice(0, Math.min(3, insights.length)).map(i => i.id),
-        newGroupTitle: generateFallbackTitle(projectContext),
-        newGroupDescription: "User insights relevant to project goals"
-      });
-    }
-
-    console.log('🔄 Using fallback suggestions:', fallbackResponse);
+    console.log('🔄 Using coherent fallback:', fallbackResponse.suggestions.length, 'groups');
     
     return NextResponse.json(fallbackResponse);
   }
