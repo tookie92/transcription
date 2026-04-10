@@ -1,5 +1,5 @@
 "use client"
-import { SignInButton, SignUpButton ,SignedIn,SignedOut, UserButton, useClerk, useUser } from '@clerk/nextjs'
+import { SignInButton, SignUpButton, UserButton, useClerk, useUser, useAuth } from '@clerk/nextjs'
 import React from 'react'
 import { Button } from '../ui/button'
 import Image from 'next/image'
@@ -11,7 +11,8 @@ import { Coins } from 'lucide-react'
 
 
 const ButtonFooter = () => {
-    const {user} = useUser()
+    const { user } = useUser()
+    const { isSignedIn } = useAuth()
     const {signOut, openUserProfile} = useClerk()
     
     // Get user credits
@@ -30,19 +31,7 @@ const ButtonFooter = () => {
   };
   return (
     <div className=' flex-col items-start'>
-        <SignedOut>
-            <SignInButton mode="modal">
-                <Button variant="outline" className='w-full'>
-                    Sign In
-                </Button>
-            </SignInButton>
-            <SignUpButton mode="modal">
-                <Button variant="ghost" className='w-full mt-2'>
-                    Sign Up
-                </Button>
-            </SignUpButton>
-        </SignedOut>
-        <SignedIn >
+        {isSignedIn ? (
             <div className="w-full flex flex-col gap-2">
               <CreateProjectDialog/>  
                 <DropdownMenu>
@@ -101,7 +90,20 @@ const ButtonFooter = () => {
                     </div>
                 </div>
             </div>
-        </SignedIn>
+        ) : (
+            <>
+                <SignInButton mode="modal">
+                    <Button variant="outline" className='w-full'>
+                        Sign In
+                    </Button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                    <Button variant="ghost" className='w-full mt-2'>
+                        Sign Up
+                    </Button>
+                </SignUpButton>
+            </>
+        )}
     </div>
   )
 }

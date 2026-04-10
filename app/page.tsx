@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ClerkLoaded, SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import { ClerkLoaded, SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Mic, Sparkles, FileText, Check } from "lucide-react";
@@ -29,6 +29,7 @@ function SplitTextAnimation({ text, className }: { text: string; className?: str
 
 export default function Home() {
   const router = useRouter();
+  const { isSignedIn } = useAuth();
 
   return (
     <div className="min-h-screen bg-white overflow-hidden">
@@ -44,22 +45,25 @@ export default function Home() {
 
           <div className="flex items-center gap-4">
             <ClerkLoaded>
-              <SignedIn>
-                <Button variant="ghost" onClick={() => router.push("/project")} className="text-base font-medium text-gray-600 hover:text-gray-900">
-                  Dashboard
-                </Button>
-                <UserButton />
-              </SignedIn>
-              <SignedOut>
-                <SignInButton mode="redirect">
-                  <Button variant="ghost" size="sm" className="text-base font-medium text-gray-600">Sign In</Button>
-                </SignInButton>
-                <SignUpButton mode="redirect">
-                  <Button size="sm" className="bg-[#4CA771] hover:bg-[#3F9A68] text-white text-base font-medium px-6">
-                    Get Started
+              {isSignedIn ? (
+                <>
+                  <Button variant="ghost" onClick={() => router.push("/project")} className="text-base font-medium text-gray-600 hover:text-gray-900">
+                    Dashboard
                   </Button>
-                </SignUpButton>
-              </SignedOut>
+                  <UserButton />
+                </>
+              ) : (
+                <>
+                  <SignInButton mode="redirect">
+                    <Button variant="ghost" size="sm" className="text-base font-medium text-gray-600">Sign In</Button>
+                  </SignInButton>
+                  <SignUpButton mode="redirect">
+                    <Button size="sm" className="bg-[#4CA771] hover:bg-[#3F9A68] text-white text-base font-medium px-6">
+                      Get Started
+                    </Button>
+                  </SignUpButton>
+                </>
+              )}
             </ClerkLoaded>
           </div>
         </div>
@@ -99,20 +103,19 @@ export default function Home() {
             transition={{ duration: 0.6, delay: 0.8 }}
           >
             <ClerkLoaded>
-              <SignedIn>
+              {isSignedIn ? (
                 <Button size="lg" onClick={() => router.push("/project")} className="bg-[#4CA771] hover:bg-[#3F9A68] text-white h-14 px-8 text-lg font-medium">
                   Go to Dashboard
                   <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
-              </SignedIn>
-              <SignedOut>
+              ) : (
                 <SignUpButton mode="redirect">
                   <Button size="lg" className="bg-[#4CA771] hover:bg-[#3F9A68] text-white h-14 px-8 text-lg font-medium">
                     Start Free Trial
                     <ArrowRight className="ml-2 w-5 h-5" />
                   </Button>
                 </SignUpButton>
-              </SignedOut>
+              )}
             </ClerkLoaded>
           </motion.div>
 
@@ -288,14 +291,13 @@ export default function Home() {
                 ))}
               </ul>
               <ClerkLoaded>
-                <SignedOut>
+                {isSignedIn ? (
+                  <Button variant="outline" className="w-full h-14 border-2 border-gray-300 text-lg font-medium" disabled>Current Plan</Button>
+                ) : (
                   <SignUpButton mode="modal">
                     <Button variant="outline" className="w-full h-14 border-2 border-gray-300 text-gray-900 text-lg font-medium">Get Started</Button>
                   </SignUpButton>
-                </SignedOut>
-                <SignedIn>
-                  <Button variant="outline" className="w-full h-14 border-2 border-gray-300 text-lg font-medium" disabled>Current Plan</Button>
-                </SignedIn>
+                )}
               </ClerkLoaded>
             </motion.div>
 
@@ -323,20 +325,19 @@ export default function Home() {
                 ))}
               </ul>
               <ClerkLoaded>
-                <SignedOut>
+                {isSignedIn ? (
+                  <Button className="w-full h-14 bg-white text-[#4CA771] font-bold text-lg">
+                    Upgrade
+                    <ArrowRight className="ml-2 w-5 h-5" />
+                  </Button>
+                ) : (
                   <SignUpButton mode="modal">
                     <Button className="w-full h-14 bg-white text-[#4CA771] font-bold text-lg">
                       Start Trial
                       <ArrowRight className="ml-2 w-5 h-5" />
                     </Button>
                   </SignUpButton>
-                </SignedOut>
-                <SignedIn>
-                  <Button className="w-full h-14 bg-white text-[#4CA771] font-bold text-lg">
-                    Upgrade
-                    <ArrowRight className="ml-2 w-5 h-5" />
-                  </Button>
-                </SignedIn>
+                )}
               </ClerkLoaded>
             </motion.div>
           </div>
@@ -358,20 +359,19 @@ export default function Home() {
             <p className="text-xl text-white/80 mb-12">Join thousands of researchers who save hours every week.</p>
 
             <ClerkLoaded>
-              <SignedIn>
+              {isSignedIn ? (
                 <Button size="lg" onClick={() => router.push("/project")} className="bg-white text-[#4CA771] hover:bg-white/90 h-16 px-12 text-xl font-medium">
                   Go to Dashboard
                   <ArrowRight className="ml-3 w-6 h-6" />
                 </Button>
-              </SignedIn>
-              <SignedOut>
+              ) : (
                 <SignUpButton mode="modal">
                   <Button size="lg" className="bg-white text-[#4CA771] hover:bg-white/90 h-16 px-12 text-xl font-medium">
                     Start Free Trial
                     <ArrowRight className="ml-3 w-6 h-6" />
                   </Button>
                 </SignUpButton>
-              </SignedOut>
+              )}
             </ClerkLoaded>
           </motion.div>
         </div>

@@ -90,10 +90,10 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
         >
-          <ClerkProvider
-             appearance={{
-                baseTheme: shadcn,
-              }}
+<ClerkProvider
+            appearance={{
+              baseTheme: shadcn,
+            }}
           >
             <TooltipProvider>
               <ConvexClientProvider>
