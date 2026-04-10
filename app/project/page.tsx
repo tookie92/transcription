@@ -114,6 +114,7 @@ const ProjectPage = () => {
     try {
       await deleteProject({ projectId: projectId as Id<"projects"> });
       toast.success("Project deleted");
+      router.push("/project");
     } catch (error) {
       toast.error("Failed to delete project");
     }
