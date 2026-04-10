@@ -63,7 +63,6 @@ const speakerColors = [
 export function InterviewContent({ projectId, interviewId }: InterviewContentProps) {
   const router = useRouter();
   const { analyzeInterview, generateInterviewSummary } = useAnalysis();
-  const createManualInsight = useMutation(api.insights.createManualInsight);
   const deleteInsight = useMutation(api.insights.deleteInsight);
   
   const [activeTab, setActiveTab] = useState<string>("transcription");
@@ -71,9 +70,6 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showAddInsight, setShowAddInsight] = useState(false);
-  const [newInsightText, setNewInsightText] = useState("");
-  const [newInsightType, setNewInsightType] = useState<Insight['type']>('insight');
   
   const audioPlayerRef = useRef<AudioPlayerHandle>(null);
 
@@ -150,18 +146,6 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
       toast.error("Generation failed");
     } finally {
       setIsGeneratingSummary(false);
-    }
-  };
-
-  const handleCreateInsight = async () => {
-    if (!newInsightText.trim()) return;
-    try {
-      const timestamp = audioPlayerRef.current?.getCurrentTime() ?? 0;
-      await createManualInsight({ interviewId, projectId, type: newInsightType, text: newInsightText.trim(), timestamp });
-      toast.success("Note added");
-      setNewInsightText("");
-    } catch {
-      toast.error("Failed to add");
     }
   };
 
@@ -266,35 +250,17 @@ if (activeTab !== "transcription") {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">{filteredInsights.length} insights</span>
-                  <div className="flex items-center gap-2">
-                    <Input placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-48 h-9 bg-background border-input focus:bg-background focus:border-[#4CA771]" />
-                    <Dialog open={showAddInsight} onOpenChange={setShowAddInsight}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" className="bg-[#4CA771] hover:bg-[#3F9A68]"><Plus className="w-4 h-4 mr-1" />Add</Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-md">
-                        <DialogHeader>
-                          <DialogTitle className="text-xl">Add Insight</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div className="flex gap-2 flex-wrap">
-                            {Object.entries(insightTypeConfig).map(([key, config]) => (
-                              <button key={key} onClick={() => setNewInsightType(key as Insight['type'])} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${newInsightType === key ? `${config.bg} ${config.color} ring-2 ring-offset-2 ring-current` : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-                                {config.label}
-                              </button>
-                            ))}
-                          </div>
-                          <textarea value={newInsightText} onChange={e => setNewInsightText(e.target.value)} placeholder="Type your insight..." className="w-full px-3 py-2 text-sm border border-input rounded-lg resize-none min-h-[100px] focus:border-[#4CA771] focus:ring-1 focus:ring-[#4CA771]" />
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" onClick={() => setShowAddInsight(false)} className="border-border">Cancel</Button>
-                            <Button onClick={handleCreateInsight} disabled={!newInsightText.trim()} className="bg-[#4CA771] hover:bg-[#3F9A68]">Add</Button>
-                          </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
+                  <Button 
+                    size="sm" 
+                    onClick={handleAnalyzeAndSummary} 
+                    disabled={isAnalyzing || isGeneratingSummary || !!interview.summary}
+                    className="bg-[#4CA771] hover:bg-[#3F9A68] disabled:opacity-50"
+                  >
+                    {isAnalyzing || isGeneratingSummary ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />}
+                    {interview.summary ? 'Generated' : 'Analyze & Summary'}
+                  </Button>
                 </div>
-                {!insights || insights.length === 0 ? (
+                {(!insights || insights.length === 0) && !interview.summary ? (
                   <div className="text-center py-16 bg-muted rounded-2xl border-2 border-dashed border-border">
                     <Lightbulb className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                     <h3 className="font-semibold text-foreground mb-2">No insights yet</h3>
