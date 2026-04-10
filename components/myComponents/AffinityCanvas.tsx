@@ -98,8 +98,6 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
   const canvas = useInfiniteCanvas();
   const canvasRef = useRef<HTMLDivElement>(null);
   const canvasWrapperRef = useRef<HTMLDivElement>(null);
-  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const clickCountRef = useRef(0);
   const cursorPositionRef = useRef({ x: 0, y: 0 });
 
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
@@ -127,6 +125,7 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
     minHeight: 80,
     onCreate: (rect) => {
       onGroupCreate({ x: rect.x, y: rect.y });
+      setToolMode("select");
       toast.success("Cluster created");
     },
   });
@@ -192,12 +191,6 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
   useEffect(() => {
     setRenderKey((k) => k + 1);
   }, [optimisticPositions]);
-
-  useEffect(() => {
-    return () => {
-      if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
-    };
-  }, []);
 
   const handleGroupResize = useCallback(
     (groupId: string, size: { width: number; height: number }) => {
@@ -545,6 +538,7 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
         const x = (e.clientX - rect.left - canvas.x) / canvas.scale;
         const y = (e.clientY - rect.top - canvas.y) / canvas.scale;
         onGroupCreate({ x, y });
+        setToolMode("select");
         toast.success("Cluster created");
       }
     },
@@ -556,28 +550,8 @@ export default function AffinityCanvas(props: AffinityCanvasProps) {
       if (selectedGroups.size > 0 && e.target === canvasRef.current) {
         setSelectedGroups(new Set());
       }
-
-      if (e.target === canvasRef.current) {
-        clickCountRef.current++;
-        if (clickCountRef.current === 1) {
-          clickTimeoutRef.current = setTimeout(() => {
-            clickCountRef.current = 0;
-          }, 300);
-        } else if (clickCountRef.current === 2) {
-          if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
-          const rect = canvasRef.current!.getBoundingClientRect();
-          const x = (e.clientX - rect.left - canvas.x) / canvas.scale;
-          const y = (e.clientY - rect.top - canvas.y) / canvas.scale;
-          onGroupCreate({ x, y });
-          toast.success("Cluster created");
-          clickCountRef.current = 0;
-        }
-      } else {
-        if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
-        clickCountRef.current = 0;
-      }
     },
-    [canvas, selectedGroups, onGroupCreate]
+    [selectedGroups]
   );
 
   return (
