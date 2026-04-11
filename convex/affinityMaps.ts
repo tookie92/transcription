@@ -972,3 +972,160 @@ export const startNewVoteRound = mutation({
     return true;
   },
 });
+
+// ============================================
+// AI Grouping Suggestions - Shared Cache
+// ============================================
+
+interface AISuggestionInput {
+  suggestionId: string;
+  action: "create_new" | "add_to_existing";
+  confidence: number;
+  reason: string;
+  insightIds: string[];
+  newGroupTitle?: string;
+  newGroupDescription?: string;
+}
+
+export const getAISuggestions = query({
+  args: {
+    mapId: v.id("affinityMaps"),
+  },
+  handler: async (ctx, args) => {
+    const suggestions = await ctx.db
+      .query("aiGroupingSuggestions")
+      .withIndex("by_map", q => q.eq("mapId", args.mapId))
+      .collect();
+
+    return suggestions.filter(s => !s.isDismissed).map(s => ({
+      id: s.suggestionId,
+      action: s.action,
+      confidence: s.confidence,
+      reason: s.reason,
+      insightIds: s.insightIds,
+      newGroupTitle: s.newGroupTitle,
+      newGroupDescription: s.newGroupDescription,
+      isApplied: s.isApplied,
+      isDismissed: s.isDismissed,
+      generatedBy: s.generatedBy,
+      generatedAt: s.generatedAt,
+    }));
+  },
+});
+
+export const saveAISuggestions = mutation({
+  args: {
+    mapId: v.id("affinityMaps"),
+    userId: v.string(),
+    suggestions: v.array(v.object({
+      suggestionId: v.string(),
+      action: v.union(v.literal("create_new"), v.literal("add_to_existing")),
+      confidence: v.number(),
+      reason: v.string(),
+      insightIds: v.array(v.string()),
+      newGroupTitle: v.optional(v.string()),
+      newGroupDescription: v.optional(v.string()),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const existingIds = new Set<string>();
+
+    const existing = await ctx.db
+      .query("aiGroupingSuggestions")
+      .withIndex("by_map", q => q.eq("mapId", args.mapId))
+      .collect();
+
+    for (const s of existing) {
+      existingIds.add(s.suggestionId);
+    }
+
+    for (const sugg of args.suggestions) {
+      if (existingIds.has(sugg.suggestionId)) {
+        continue;
+      }
+
+      await ctx.db.insert("aiGroupingSuggestions", {
+        mapId: args.mapId,
+        suggestionId: sugg.suggestionId,
+        action: sugg.action,
+        confidence: sugg.confidence,
+        reason: sugg.reason,
+        insightIds: sugg.insightIds,
+        newGroupTitle: sugg.newGroupTitle,
+        newGroupDescription: sugg.newGroupDescription,
+        generatedBy: args.userId,
+        generatedAt: now,
+        isApplied: false,
+        isDismissed: false,
+      });
+    }
+
+    return { saved: args.suggestions.length };
+  },
+});
+
+export const markSuggestionApplied = mutation({
+  args: {
+    mapId: v.id("affinityMaps"),
+    suggestionId: v.string(),
+    userId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const suggestions = await ctx.db
+      .query("aiGroupingSuggestions")
+      .withIndex("by_map", q => q.eq("mapId", args.mapId))
+      .collect();
+
+    const suggestion = suggestions.find(s => s.suggestionId === args.suggestionId);
+    if (suggestion) {
+      await ctx.db.patch(suggestion._id, {
+        isApplied: true,
+        appliedBy: args.userId,
+        appliedAt: Date.now(),
+      });
+    }
+
+    return true;
+  },
+});
+
+export const markSuggestionDismissed = mutation({
+  args: {
+    mapId: v.id("affinityMaps"),
+    suggestionId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const suggestions = await ctx.db
+      .query("aiGroupingSuggestions")
+      .withIndex("by_map", q => q.eq("mapId", args.mapId))
+      .collect();
+
+    const suggestion = suggestions.find(s => s.suggestionId === args.suggestionId);
+    if (suggestion) {
+      await ctx.db.patch(suggestion._id, {
+        isDismissed: true,
+      });
+    }
+
+    return true;
+  },
+});
+
+export const clearAISuggestions = mutation({
+  args: {
+    mapId: v.id("affinityMaps"),
+  },
+  handler: async (ctx, args) => {
+    const suggestions = await ctx.db
+      .query("aiGroupingSuggestions")
+      .withIndex("by_map", q => q.eq("mapId", args.mapId))
+      .collect();
+
+    for (const s of suggestions) {
+      await ctx.db.delete(s._id);
+    }
+
+    return { cleared: suggestions.length };
+  },
+});

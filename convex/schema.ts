@@ -463,6 +463,26 @@ personas: defineTable({
 .index("by_project", ["projectId"])
 .index("by_map", ["mapId"]),
 
+// 🆕 Table for shared AI Grouping Suggestions
+aiGroupingSuggestions: defineTable({
+  mapId: v.id("affinityMaps"),
+  suggestionId: v.string(),
+  action: v.union(v.literal("create_new"), v.literal("add_to_existing")),
+  confidence: v.number(),
+  reason: v.string(),
+  insightIds: v.array(v.string()),
+  newGroupTitle: v.optional(v.string()),
+  newGroupDescription: v.optional(v.string()),
+  generatedBy: v.string(), // userId who generated this suggestion
+  generatedAt: v.number(),
+  isApplied: v.boolean(),
+  isDismissed: v.boolean(),
+  appliedBy: v.optional(v.string()),
+  appliedAt: v.optional(v.number()),
+})
+  .index("by_map", ["mapId"])
+  .index("by_suggestion_id", ["mapId", "suggestionId"]),
+
 // convex/schema.ts - AJOUTER CETTE TABLE
 silentSortingSessions: defineTable({
   mapId: v.id("affinityMaps"),

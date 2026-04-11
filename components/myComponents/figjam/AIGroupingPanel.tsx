@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import type { StickyNoteData, ClusterLabelData } from "@/types/figjam";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 
 interface GroupingSuggestion {
   id: string;
@@ -47,6 +48,8 @@ interface AIGroupingPanelProps {
   projectContext?: string;
   onCreateCluster: (stickyIds: string[], title: string, position: { x: number; y: number }) => void;
   onNeedConsent?: () => void;
+  mapId: string;
+  userId: string;
 }
 
 const INSIGHT_TYPE_COLORS: Record<string, string> = {
@@ -67,6 +70,8 @@ export function AIGroupingPanel({
   projectContext,
   onCreateCluster,
   onNeedConsent,
+  mapId,
+  userId,
 }: AIGroupingPanelProps) {
   const [suggestions, setSuggestions] = useState<GroupingSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -81,6 +86,37 @@ export function AIGroupingPanel({
   const userConsent = useQuery(api.credits.getConsent);
   const deductCredits = useMutation(api.credits.deductCredits);
   const initializeCredits = useMutation(api.credits.initializeCredits);
+
+  // Shared cache - Convex queries
+  const sharedSuggestions = useQuery(
+    api.affinityMaps.getAISuggestions,
+    mapId ? { mapId: mapId as Id<"affinityMaps"> } : "skip"
+  );
+  const saveAISuggestions = useMutation(api.affinityMaps.saveAISuggestions);
+  const markApplied = useMutation(api.affinityMaps.markSuggestionApplied);
+  const markDismissed = useMutation(api.affinityMaps.markSuggestionDismissed);
+  const clearSuggestions = useMutation(api.affinityMaps.clearAISuggestions);
+
+  // Sync shared suggestions to local state
+  useEffect(() => {
+    if (sharedSuggestions && sharedSuggestions.length > 0) {
+      const mapped: GroupingSuggestion[] = sharedSuggestions.map(s => ({
+        id: s.id,
+        action: s.action,
+        confidence: s.confidence,
+        reason: s.reason,
+        insightIds: s.insightIds,
+        newGroupTitle: s.newGroupTitle,
+        newGroupDescription: s.newGroupDescription,
+        isApplied: s.isApplied,
+        isDismissed: s.isDismissed,
+      }));
+      cachedSuggestionsRef.current = mapped;
+      setSuggestions(mapped);
+      setFromCache(true);
+      lastFetchTimeRef.current = Date.now();
+    }
+  }, [sharedSuggestions]);
 
   // Filter out applied and dismissed suggestions
   const visibleSuggestions = suggestions.filter(s => !s.isApplied && !s.isDismissed);
@@ -128,60 +164,86 @@ export function AIGroupingPanel({
   };
 
   const dismissSuggestion = (index: number) => {
+    const suggestionToDismiss = visibleSuggestions[index];
+    if (!suggestionToDismiss || !mapId) return;
+
+    markDismissed({ 
+      mapId: mapId as Id<"affinityMaps">, 
+      suggestionId: suggestionToDismiss.id 
+    });
+
     setSuggestions(prev => {
-      const updated = [...prev];
-      // Find the actual index in the full suggestions array
-      let realIndex = 0;
-      for (let i = 0; i < updated.length; i++) {
-        if (!updated[i].isApplied && !updated[i].isDismissed) {
-          if (realIndex === index) {
-            updated[i] = { ...updated[i], isDismissed: true };
-            break;
-          }
-          realIndex++;
-        }
-      }
+      const updated = prev.map(s => 
+        s.id === suggestionToDismiss.id ? { ...s, isDismissed: true } : s
+      );
       cachedSuggestionsRef.current = updated;
       return updated;
     });
     toast.info("Suggestion dismissed");
   };
 
-  // Auto-load cached suggestions when panel opens
+  // Auto-load shared cache when panel opens
   useEffect(() => {
-    if (isOpen && cachedSuggestionsRef.current.length > 0) {
-      const cacheAge = Date.now() - lastFetchTimeRef.current;
-      if (cacheAge < CACHE_DURATION) {
-        // Use cached suggestions
-        setSuggestions(cachedSuggestionsRef.current);
-        setFromCache(true);
-        setSelectedSuggestions(new Set());
+    if (isOpen && sharedSuggestions && sharedSuggestions.length > 0) {
+      const mapped: GroupingSuggestion[] = sharedSuggestions.map(s => ({
+        id: s.id,
+        action: s.action,
+        confidence: s.confidence,
+        reason: s.reason,
+        insightIds: s.insightIds,
+        newGroupTitle: s.newGroupTitle,
+        newGroupDescription: s.newGroupDescription,
+        isApplied: s.isApplied,
+        isDismissed: s.isDismissed,
+      }));
+      cachedSuggestionsRef.current = mapped;
+      setSuggestions(mapped);
+      setFromCache(true);
+      lastFetchTimeRef.current = Date.now();
+    }
+  }, [isOpen, sharedSuggestions]);
+
+  // Get stickies NOT covered by any existing suggestion
+  const getUncoveredStickies = (): StickyNoteData[] => {
+    const coveredIds = new Set<string>();
+    
+    for (const sugg of suggestions) {
+      if (!sugg.isApplied && !sugg.isDismissed) {
+        for (const id of sugg.insightIds) {
+          coveredIds.add(id);
+        }
       }
     }
-  }, [isOpen]);
+    
+    return ungroupedStickies.filter(s => !coveredIds.has(s.id));
+  };
 
   const fetchSuggestions = async (forceRefresh = false) => {
+    // Check if we already have suggestions (from shared cache or previous fetch)
+    const existingVisible = suggestions.filter(s => !s.isApplied && !s.isDismissed);
+    
+    // If not forcing refresh and we have existing suggestions, just use them
+    if (!forceRefresh && existingVisible.length > 0) {
+      setFromCache(true);
+      setSelectedSuggestions(new Set());
+      toast.success(`Using ${existingVisible.length} existing suggestion(s)`);
+      return;
+    }
+
     // Check credits before making API call
     const hasCredits = await checkCredits();
     if (!hasCredits) return;
 
-    // Check cache first (unless forcing refresh)
-    if (!forceRefresh && cachedSuggestionsRef.current.length > 0) {
-      const cacheAge = Date.now() - lastFetchTimeRef.current;
-      if (cacheAge < CACHE_DURATION) {
-        // Use cached suggestions
-        setSuggestions(cachedSuggestionsRef.current);
-        setFromCache(true);
-        setSelectedSuggestions(new Set());
-        setLastStickyIds(ungroupedStickies.map(s => s.id));
-        toast.success("Loaded cached suggestions");
-        return;
-      }
+    // Get stickies that need suggestions
+    const uncoveredStickies = getUncoveredStickies();
+    
+    if (uncoveredStickies.length === 0 && forceRefresh) {
+      toast.info("All stickies are covered by suggestions");
+      return;
     }
 
     setIsLoading(true);
     setFromCache(false);
-    setSuggestions([]);
     setSelectedSuggestions(new Set());
 
     try {
@@ -189,7 +251,7 @@ export function AIGroupingPanel({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          insights: ungroupedStickies.map((s) => ({
+          insights: uncoveredStickies.map((s) => ({
             id: s.id,
             text: s.content,
             type: s.color,
@@ -208,7 +270,7 @@ export function AIGroupingPanel({
       }
 
       const data = await response.json();
-      const newSuggestions = (data.suggestions || []).map((s: GroupingSuggestion, idx: number) => ({
+      const newSuggestions: GroupingSuggestion[] = (data.suggestions || []).map((s: GroupingSuggestion, idx: number) => ({
         ...s,
         id: `suggestion-${Date.now()}-${idx}`,
         cachedAt: Date.now(),
@@ -216,17 +278,33 @@ export function AIGroupingPanel({
         isDismissed: false,
       }));
       
-      // Cache the suggestions
-      cachedSuggestionsRef.current = newSuggestions;
+      if (newSuggestions.length > 0 && mapId) {
+        await saveAISuggestions({
+          mapId: mapId as Id<"affinityMaps">,
+          userId: userId,
+          suggestions: newSuggestions.map(s => ({
+            suggestionId: s.id,
+            action: s.action,
+            confidence: s.confidence,
+            reason: s.reason,
+            insightIds: s.insightIds,
+            newGroupTitle: s.newGroupTitle,
+            newGroupDescription: s.newGroupDescription,
+          })),
+        });
+      }
+
+      // Add new suggestions to local state
+      const allSuggestions = [...suggestions, ...newSuggestions];
+      cachedSuggestionsRef.current = allSuggestions;
       lastFetchTimeRef.current = Date.now();
+      setSuggestions(allSuggestions);
       setLastStickyIds(ungroupedStickies.map(s => s.id));
-      
-      setSuggestions(newSuggestions);
 
       if (!newSuggestions.length) {
-        toast.info("No groupings could be suggested");
+        toast.info("No new groupings could be suggested");
       } else {
-        toast.success(`Got ${newSuggestions.length} suggestions`);
+        toast.success(`Generated ${newSuggestions.length} new suggestion(s)`);
       }
     } catch {
       toast.error("Failed to generate groupings");
@@ -240,6 +318,9 @@ export function AIGroupingPanel({
       toast.info("Select suggestions to create clusters");
       return;
     }
+
+    // Track which stickies have already been assigned to avoid duplicates
+    const assignedStickyIds = new Set<string>();
 
     // Mark selected suggestions as applied
     setSuggestions(prev => {
@@ -258,7 +339,7 @@ export function AIGroupingPanel({
     });
 
     const selectedList = Array.from(selectedSuggestions).map((i) => suggestions[i]);
-    
+
     // Calculate bounds of ungrouped stickies
     if (ungroupedStickies.length === 0) {
       toast.error("No stickies to group");
@@ -270,7 +351,7 @@ export function AIGroupingPanel({
       x: s.position.x + 100,
       y: s.position.y + 100
     }));
-    
+
     const avgX = stickyCenters.reduce((sum, c) => sum + c.x, 0) / stickyCenters.length;
     const avgY = stickyCenters.reduce((sum, c) => sum + c.y, 0) / stickyCenters.length;
 
@@ -323,25 +404,55 @@ export function AIGroupingPanel({
     const baseClusterX = avgX - (selectedList.length * SPACING_X) / 2;
     const baseClusterY = avgY + CLUSTER_LABEL_OFFSET_Y;
 
+    // Mark all selected suggestions as applied in Convex
+    selectedList.forEach((suggestion) => {
+      if (mapId) {
+        markApplied({ 
+          mapId: mapId as Id<"affinityMaps">, 
+          suggestionId: suggestion.id,
+          userId: userId 
+        });
+      }
+    });
+
     selectedList.forEach((suggestion, index) => {
+      // Filter out already assigned stickies to avoid conflicts
+      const uniqueInsightIds = suggestion.insightIds.filter(id => !assignedStickyIds.has(id));
+
+      // Mark these stickies as assigned
+      uniqueInsightIds.forEach(id => assignedStickyIds.add(id));
+
+      if (uniqueInsightIds.length === 0) {
+        console.log(`[AI GROUPING] Skipping suggestion ${index} - all stickies already assigned`);
+        return;
+      }
+
       const COLS_PER_ROW = Math.min(3, selectedList.length);
       const col = index % COLS_PER_ROW;
       const row = Math.floor(index / COLS_PER_ROW);
-      
+
       const targetX = baseClusterX + col * SPACING_X;
       const targetY = baseClusterY - row * SPACING_Y;
       const clusterPosition = findEmptySpot(targetX, targetY);
-      
+
+      console.log(`[AI GROUPING] Creating cluster ${index}:`, {
+        title: suggestion.newGroupTitle || "New Cluster",
+        stickies: uniqueInsightIds.length,
+        assignedCount: assignedStickyIds.size
+      });
+
       onCreateCluster(
-        suggestion.insightIds,
+        uniqueInsightIds,
         suggestion.newGroupTitle || "New Cluster",
         clusterPosition
       );
     });
-    
+
+    console.log(`[AI GROUPING] Total stickies assigned: ${assignedStickyIds.size}`);
+
     // Clear selection
     setSelectedSuggestions(new Set());
-    
+
     const remaining = visibleSuggestions.length - selectedList.length;
     if (remaining === 0) {
       toast.success(`Created ${selectedList.length} cluster(s). All done!`);
@@ -349,6 +460,8 @@ export function AIGroupingPanel({
     } else {
       toast.success(`Created ${selectedList.length} cluster(s). ${remaining} remaining.`);
     }
+
+    console.log(`[AI GROUPING] Completed - created ${selectedList.length} clusters, remaining: ${remaining}`);
   };
 
   // Get confidence color

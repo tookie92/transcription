@@ -173,6 +173,9 @@ export function FigJamBoard({
   const [showAIGroupingPanel, setShowAIGroupingPanel] = useState(false);
   const [showGDPRConsent, setShowGDPRConsent] = useState(false);
   const [showInsightsSidebar, setShowInsightsSidebar] = useState(true);
+
+  // Smart auto-fit state - track which clusters have auto-fit enabled
+  const [autoFitEnabledClusters, setAutoFitEnabledClusters] = useState<Set<string>>(new Set());
   
   // Guard to prevent duplicate cluster creation on single click
   const clusterCreationGuardRef = useRef<{ timestamp: number; position: { x: number; y: number } } | null>(null);
@@ -647,68 +650,29 @@ export function FigJamBoard({
     // Skip first sync run to avoid race conditions with initial load
     if (!hasSyncedOnceRef.current) {
       hasSyncedOnceRef.current = true;
-      // Mark initial element IDs after first load is complete
       initialElementIdsRef.current = new Set(Object.keys(state.elements));
-      console.log("[SYNC] First sync skipped, initial IDs captured:", initialElementIdsRef.current.size);
       lastSyncedElementsRef.current = JSON.stringify(savedElements);
       return;
     }
     
-    // Compare with last synced state to detect changes from other users
-    const newElementsStr = JSON.stringify(savedElements);
-    if (newElementsStr === lastSyncedElementsRef.current) return;
+    // Compare element counts and keys for change detection
+    const currentIds = new Set(Object.keys(state.elements));
+    const savedIds = new Set(Object.keys(savedElements));
 
-    // Compare current local IDs vs saved IDs from Convex
-    const currentElementIds = new Set(Object.keys(state.elements));
-    const savedElementIds = new Set(Object.keys(savedElements));
+    // Check if there are ANY new elements (clusters, stickies, etc.)
+    const newIds = Array.from(savedIds).filter(id => !currentIds.has(id));
+    const removedIds = Array.from(currentIds).filter(id => !savedIds.has(id));
 
-    // 1. Find elements to REMOVE (exist locally but NOT in saved)
-    const idsToRemove = Array.from(currentElementIds).filter(id =>
-      !savedElementIds.has(id) && !initialElementIdsRef.current?.has(id)
-    );
+    // Also check for count changes
+    const countChanged = currentIds.size !== savedIds.size;
 
-    // 2. Find elements to ADD (exist in saved but NOT locally)
-    const idsToAdd = Array.from(savedElementIds).filter(id =>
-      !currentElementIds.has(id) && !initialElementIdsRef.current?.has(id)
-    );
-
-    console.log("[SYNC] current:", currentElementIds.size, "saved:", savedElementIds.size, "to add:", idsToAdd.length, "to remove:", idsToRemove.length);
-
-    if (idsToAdd.length > 0 || idsToRemove.length > 0) {
-      // Merge changes - add new and remove deleted
-      const mergedElements = { ...state.elements };
-
-      // Handle removed clusters: move their stickies to ungrouped area
-      idsToRemove.forEach(id => {
-        const element = mergedElements[id];
-        if (element?.type === "label") {
-          // This is a cluster being deleted - move all its stickies to ungrouped area
-          const clusterId = id;
-          Object.values(mergedElements).forEach(el => {
-            if (el.type === "sticky" && (el.clusterId === clusterId || el.parentSectionId === clusterId)) {
-              const ungroupedY = 50 + Math.random() * 200;
-              const ungroupedX = 50 + Math.random() * 200;
-              el.clusterId = null;
-              el.parentSectionId = null;
-              el.position = { x: ungroupedX, y: ungroupedY };
-              console.log("[SYNC] Moving sticky", el.id, "to ungrouped area");
-            }
-          });
-        }
-        // Remove the element (cluster or anything else)
-        delete mergedElements[id];
-      });
-
-      // Add new elements
-      idsToAdd.forEach(id => {
-        mergedElements[id] = savedElements[id];
-      });
-
-      console.log("[SYNC] Adding:", idsToAdd, "Removing:", idsToRemove);
-      board.loadElements(mergedElements);
+    // SIMPLE APPROACH: If there are changes, do a FULL reload from Convex
+    // This is more reliable than trying to merge changes
+    if (newIds.length > 0 || removedIds.length > 0 || countChanged) {
+      console.log("[SYNC] Full reload from Convex - new:", newIds, "removed:", removedIds, "count changed:", countChanged);
+      board.loadElements(savedElements);
+      lastSyncedElementsRef.current = JSON.stringify(savedElements);
     }
-
-    lastSyncedElementsRef.current = newElementsStr;
   }, [savedElements, isLoaded, state.elements, board]);
 
   // ============================================
@@ -733,6 +697,7 @@ export function FigJamBoard({
     // Save to Convex (throttled) - only if there are elements
     if (Object.keys(state.elements).length > 0) {
       lastSavedElementsRef.current = currentElementsStr;
+      console.log("[SAVE] Saving", Object.keys(state.elements).length, "elements to Convex");
       throttledSave(state.elements);
     }
     
@@ -1362,48 +1327,59 @@ export function FigJamBoard({
   ) => {
     // Create cluster with default size
     const clusterId = board.addClusterLabel(position, { width: 500, height: 400 });
-    
-    // Update the cluster title
-    board.updateElement(clusterId, { text: title });
-    
-    // IMMEDIATE SAVE - critical for sync
-    if (hasMapId) {
-      saveToConvex({
-        mapId: mapId as Id<"affinityMaps">,
-        elements: state.elements,
-      });
-    }
-    
+
+    console.log(`[AI GROUPING] Creating cluster ${clusterId} with ${stickyIds.length} stickies`);
+
     // Position stickies within the cluster zone
     const STICKY_SPACING_X = 220;
     const STICKY_SPACING_Y = 160;
     const COLUMNS = 3;
     const CLUSTER_PADDING = 40;
-    
+
     stickyIds.forEach((stickyId, index) => {
       const col = index % COLUMNS;
       const row = Math.floor(index / COLUMNS);
-      
+
       const stickyPosition = {
         x: position.x + CLUSTER_PADDING + col * STICKY_SPACING_X,
         y: position.y + CLUSTER_PADDING + row * STICKY_SPACING_Y,
       };
-      
+
       const sticky = state.elements[stickyId];
-      const size = (sticky && sticky.type === "sticky") 
-        ? (sticky as StickyNoteData).size 
+      const size = (sticky && sticky.type === "sticky")
+        ? (sticky as StickyNoteData).size
         : { width: 200, height: 200 };
-      
+
       // Update sticky position AND assign to cluster
-      board.updateElement(stickyId, { 
-        position: stickyPosition, 
+      board.updateElement(stickyId, {
+        position: stickyPosition,
         size,
-        clusterId: clusterId 
+        clusterId: clusterId
       });
     });
-    
+
+    // Update cluster title AFTER all stickies are positioned
+    board.updateElement(clusterId, { text: title });
+
+    console.log(`[AI GROUPING] Cluster ${clusterId} created and positioned`);
+
     toast.success(`Created cluster "${title}" with ${stickyIds.length} stickies`);
   }, [board, state.elements]);
+
+  // Toggle auto-fit for a cluster
+  const handleToggleAutoFit = useCallback((clusterId: string, enabled: boolean) => {
+    setAutoFitEnabledClusters(prev => {
+      const next = new Set(prev);
+      if (enabled) {
+        next.add(clusterId);
+        toast.success("Auto-fit enabled for this cluster");
+      } else {
+        next.delete(clusterId);
+        toast.info("Auto-fit disabled - you can resize manually");
+      }
+      return next;
+    });
+  }, []);
 
   // Vote results for ranking display (using voting hook)
   const voteResults = useMemo(() => {
@@ -1482,6 +1458,8 @@ export function FigJamBoard({
         projectContext={projectName ? `PROJECT NAME: ${projectName}` : undefined}
         onCreateCluster={handleCreateClusterFromAI}
         onNeedConsent={() => setShowGDPRConsent(true)}
+        mapId={mapId || ""}
+        userId={userId || ""}
       />
 
       {/* ── Canvas ── */}
@@ -1652,6 +1630,8 @@ export function FigJamBoard({
                 currentUserColor={voting.userColor}
                 currentUserName={currentUser?.name || "You"}
                 hasUserVoted={hasUserVotedForCluster}
+                autoFitEnabled={autoFitEnabledClusters.has(el.id)}
+                onToggleAutoFit={handleToggleAutoFit}
                 onClusterClick={(clusterId) => {
                   // Simplified vote - just pass cluster ID
                   voting.toggleVote(clusterId, { x: 0, y: 0 });
@@ -1736,9 +1716,9 @@ export function FigJamBoard({
                   board.updateElement(clusterId, { height: newHeight });
                   if (hasMapId) {
                     const clusterEl = state.elements[clusterId] as ClusterLabelData;
-                    throttledBroadcast(clusterId, "label", "resize", undefined, { 
-                      width: clusterEl?.width ?? 500, 
-                      height: newHeight 
+                    throttledBroadcast(clusterId, "label", "resize", undefined, {
+                      width: clusterEl?.width ?? 500,
+                      height: newHeight
                     });
                   }
                 }}
@@ -1776,16 +1756,12 @@ export function FigJamBoard({
             clusterTitle={cluster?.text || "Untitled Cluster"}
             stickyTexts={[]}
             onClose={() => setClusterContextMenu(null)}
+            autoFitEnabled={autoFitEnabledClusters.has(clusterContextMenu.clusterId)}
+            onToggleAutoFit={handleToggleAutoFit}
             onRename={(newName) => {
               board.updateElement(clusterContextMenu.clusterId, { text: newName });
               toast.success(`Renamed to "${newName}"`);
               setClusterContextMenu(null);
-            }}
-            onAutoFit={() => {
-              setAutoFitSectionId(clusterContextMenu.clusterId);
-              toast.success("Cluster resized to fit content");
-              setClusterContextMenu(null);
-              setTimeout(() => setAutoFitSectionId(null), 500);
             }}
             onDelete={() => {
               const clusterId = clusterContextMenu.clusterId;

@@ -2,12 +2,12 @@
 
 import React, { useEffect, useRef, useCallback, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Group, 
-  Trash2, 
-  Copy, 
-  MessageSquare, 
-  Tag, 
+import {
+  Group,
+  Trash2,
+  Copy,
+  MessageSquare,
+  Tag,
   ArrowRight,
   ZoomIn,
   AlignLeft,
@@ -18,7 +18,8 @@ import {
   Move,
   Palette,
   Sparkles,
-  Loader2
+  Loader2,
+  Check
 } from "lucide-react";
 import { ClusterAIRename } from "./ClusterAIRename";
 
@@ -320,9 +321,10 @@ interface ClusterContextMenuProps {
   position: { x: number; y: number };
   onClose: () => void;
   onRename: (newName: string) => void;
-  onAutoFit: () => void;
   onDelete: () => void;
   isOpen: boolean;
+  autoFitEnabled?: boolean;
+  onToggleAutoFit?: (clusterId: string, enabled: boolean) => void;
 }
 
 export function ClusterContextMenu({
@@ -332,16 +334,18 @@ export function ClusterContextMenu({
   position,
   onClose,
   onRename,
-  onAutoFit,
   onDelete,
   isOpen,
+  autoFitEnabled = false,
+  onToggleAutoFit,
 }: ClusterContextMenuProps) {
   const actions: ContextMenuAction[] = [
     {
       id: "autofit",
-      label: "Auto-fit to content",
-      icon: <Maximize2 className="w-4 h-4" />,
-      onClick: onAutoFit,
+      label: autoFitEnabled ? "Disable auto-fit" : "Enable auto-fit",
+      icon: autoFitEnabled ? <Check className="w-4 h-4 text-primary" /> : <Maximize2 className="w-4 h-4" />,
+      variant: autoFitEnabled ? "primary" : "default",
+      onClick: () => onToggleAutoFit?.(clusterId, !autoFitEnabled),
     },
     {
       id: "delete",

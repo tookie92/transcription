@@ -3,7 +3,7 @@
 import React, { useCallback, useRef, useState, memo, useEffect } from "react";
 import { motion } from "framer-motion";
 import type { ClusterLabelData, StickyNoteData } from "@/types/figjam";
-import { MoreHorizontal, Sparkles } from "lucide-react";
+import { MoreHorizontal, Sparkles, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -214,6 +214,8 @@ interface ClusterLabelProps {
   triggerEdit?: boolean;
   triggerAutoFit?: boolean;
   onOpenAIRename?: (clusterId: string) => void;
+  autoFitEnabled?: boolean;
+  onToggleAutoFit?: (clusterId: string, enabled: boolean) => void;
 }
 
 export const ClusterLabel = memo(function ClusterLabelComponent({
@@ -247,6 +249,8 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   triggerEdit,
   triggerAutoFit,
   onOpenAIRename,
+  autoFitEnabled = false,
+  onToggleAutoFit,
 }: ClusterLabelProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -256,6 +260,10 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   const [aiPopoverOpen, setAiPopoverOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const clusterRef = useRef<HTMLDivElement>(null);
+
+  // Track previous stickies count for smart auto-resize
+  const prevStickiesCountRef = useRef(memberStickies.length);
+  const isAutoFittingRef = useRef(false);
 
   const isDraggingActive = isDragging;
   const canInteract = !isLocked && !isEditing;
@@ -295,6 +303,33 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       };
     }
   }, []);
+
+  // Smart auto-resize: automatically resize when stickies are added/removed
+  useEffect(() => {
+    const currentCount = memberStickies.length;
+    const prevCount = prevStickiesCountRef.current;
+
+    // Only auto-resize if enabled AND not currently resizing AND count changed
+    if (autoFitEnabled && !isResizing && !isAutoFittingRef.current && currentCount !== prevCount) {
+      isAutoFittingRef.current = true;
+      const newHeight = Math.max(MIN_CLUSTER_HEIGHT, calculatedHeight);
+
+      // Smooth resize with animation
+      if (onResize) {
+        onResize(cluster.id, newHeight);
+        console.log(`[AUTO-FIT] Cluster ${cluster.id} resized to ${newHeight}px (${currentCount} stickies)`);
+      }
+
+      // Reset the flag after animation completes
+      setTimeout(() => {
+        isAutoFittingRef.current = false;
+        prevStickiesCountRef.current = currentCount;
+      }, 300);
+    } else if (!autoFitEnabled) {
+      // When auto-fit is disabled, just track count
+      prevStickiesCountRef.current = currentCount;
+    }
+  }, [memberStickies.length, autoFitEnabled, isResizing, calculatedHeight, cluster.id, onResize]);
 
   // Handle external edit trigger
   useEffect(() => {
@@ -470,7 +505,11 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   const borderColor = isDragOver ? "#22c55e" : isDraggingActive || isHovered ? HOVER_BORDER_COLOR : DEFAULT_BORDER_COLOR;
   const bgColor = isDragOver ? "rgba(34, 197, 94, 0.1)" : isDraggingActive || isHovered ? HOVER_BG_COLOR : DEFAULT_BG_COLOR;
   const labelColor = isDraggingActive ? LABEL_COLOR_DRAGGING : LABEL_COLOR_NORMAL;
-  
+
+  // Auto-fit visual indicator - subtle glow when enabled
+  const autoFitBorderColor = autoFitEnabled ? "#a855f7" : borderColor;
+  const autoFitGlow = autoFitEnabled ? "0 0 20px rgba(168, 85, 247, 0.15)" : "none";
+
   // Selection and lock styling
   const isSolidBorder = isSelected || isLocked;
   const selectionBorderColor = isLocked ? "#ef4444" : "#3b82f6"; // Red if locked, blue if selected
@@ -498,16 +537,22 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       onDrop={handleDrop}
     >
       <div
-        className="absolute inset-0 rounded-xl transition-all duration-150"
+        className={cn(
+          "absolute inset-0 rounded-xl",
+          autoFitEnabled && "transition-all duration-300 ease-out"
+        )}
         style={{
-          border: isLocked 
-            ? `2px solid ${selectionBorderColor}` 
-            : isSelected 
-              ? `2px solid ${selectionBorderColor}` 
-              : `2px dashed ${borderColor}`,
+          border: isLocked
+            ? `2px solid ${selectionBorderColor}`
+            : isSelected
+              ? `2px solid ${selectionBorderColor}`
+              : autoFitEnabled
+                ? `2px solid ${autoFitBorderColor}`
+                : `2px dashed ${borderColor}`,
           backgroundColor: isLocked ? "rgba(239, 68, 68, 0.1)" : bgColor,
           borderRadius: 12,
           opacity: isLocked ? 0.7 : 1,
+          boxShadow: autoFitEnabled ? autoFitGlow : "none",
         }}
       />
       
@@ -685,20 +730,6 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
           >
             {memberStickies.length}
           </span>
-        )}
-
-        {/* Three dots menu - hidden during voting */}
-        {!isVotingActive && isHovered && !isEditing && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onContextMenu?.(e, cluster.id);
-            }}
-            className="w-5 h-5 flex items-center justify-center rounded hover:bg-black/10 transition-colors cursor-pointer"
-            style={{ color: labelColor }}
-          >
-            <MoreHorizontal className="w-3.5 h-3.5" />
-          </button>
         )}
       </div>
 
