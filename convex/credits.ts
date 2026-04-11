@@ -270,3 +270,42 @@ export const setConsent = mutation({
     return { success: true };
   },
 });
+
+// Admin: Clean up duplicate userCredits entries
+// Keeps only the most recent entry per clerkId
+export const cleanupDuplicateCredits = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    // Get all userCredits entries
+    const allCredits = await ctx.db
+      .query("userCredits")
+      .collect();
+
+    // Group by clerkId
+    const byClerkId = new Map<string, typeof allCredits>();
+    for (const entry of allCredits) {
+      const existing = byClerkId.get(entry.clerkId) || [];
+      existing.push(entry);
+      byClerkId.set(entry.clerkId, existing);
+    }
+
+    let deleted = 0;
+    for (const [clerkId, entries] of byClerkId) {
+      if (entries.length <= 1) continue;
+
+      // Sort by updatedAt descending, keep the first (most recent)
+      entries.sort((a, b) => b.updatedAt - a.updatedAt);
+
+      // Delete duplicates (keep the first)
+      for (let i = 1; i < entries.length; i++) {
+        await ctx.db.delete(entries[i]._id);
+        deleted++;
+      }
+    }
+
+    return { deleted, uniqueUsers: byClerkId.size };
+  },
+});

@@ -355,19 +355,20 @@ export function AIGroupingPanel({
     const avgX = stickyCenters.reduce((sum, c) => sum + c.x, 0) / stickyCenters.length;
     const avgY = stickyCenters.reduce((sum, c) => sum + c.y, 0) / stickyCenters.length;
 
-    const CLUSTER_LABEL_OFFSET_Y = -150;
-    const SPACING_X = 450;
-    const SPACING_Y = 500;
-    const CLUSTER_WIDTH = 400;
-    const CLUSTER_HEIGHT = 300;
+    // ROW-FIRST layout: max 2 clusters per row, more rows
+    const CLUSTERS_PER_ROW = 2;
+    const SPACING_X = 350; // Reduced spacing between clusters
+    const SPACING_Y = 400;
+    const APPROX_CLUSTER_WIDTH = 350;
+    const APPROX_CLUSTER_HEIGHT = 250;
 
     // Find a non-overlapping position for clusters
-    const findEmptySpot = (startX: number, startY: number): { x: number; y: number } => {
+    const findEmptySpot = (startX: number, startY: number, clusterWidth: number, clusterHeight: number): { x: number; y: number } => {
       const existingBounds = existingClusters.map(c => ({
         x: c.position.x,
         y: c.position.y,
-        width: c.width || CLUSTER_WIDTH,
-        height: c.height || CLUSTER_HEIGHT
+        width: c.width || APPROX_CLUSTER_WIDTH,
+        height: c.height || APPROX_CLUSTER_HEIGHT
       }));
 
       let bestX = startX;
@@ -379,17 +380,16 @@ export function AIGroupingPanel({
         found = true;
         for (const bounds of existingBounds) {
           const overlap = !(
-            bestX + CLUSTER_WIDTH < bounds.x - 50 ||
-            bestX > bounds.x + bounds.width + 50 ||
-            bestY + CLUSTER_HEIGHT < bounds.y - 50 ||
-            bestY > bounds.y + bounds.height + 50
+            bestX + clusterWidth < bounds.x - 30 ||
+            bestX > bounds.x + bounds.width + 30 ||
+            bestY + clusterHeight < bounds.y - 30 ||
+            bestY > bounds.y + bounds.height + 30
           );
           if (overlap) {
             found = false;
-            // Move to the right and down
+            // Move to the right
             bestX += SPACING_X;
-            bestY += SPACING_Y * 0.3;
-            if (bestX > window.innerWidth - 500) {
+            if (bestX > window.innerWidth - 400) {
               bestX = 100;
               bestY += SPACING_Y;
             }
@@ -401,8 +401,8 @@ export function AIGroupingPanel({
       return { x: bestX, y: bestY };
     };
 
-    const baseClusterX = avgX - (selectedList.length * SPACING_X) / 2;
-    const baseClusterY = avgY + CLUSTER_LABEL_OFFSET_Y;
+    const baseClusterX = avgX - (CLUSTERS_PER_ROW * SPACING_X) / 2 + 100;
+    const baseClusterY = avgY - 100;
 
     // Mark all selected suggestions as applied in Convex
     selectedList.forEach((suggestion) => {
@@ -427,13 +427,18 @@ export function AIGroupingPanel({
         return;
       }
 
-      const COLS_PER_ROW = Math.min(3, selectedList.length);
-      const col = index % COLS_PER_ROW;
-      const row = Math.floor(index / COLS_PER_ROW);
+      // ROW-FIRST: fill row left-to-right, then next row
+      const col = index % CLUSTERS_PER_ROW;
+      const row = Math.floor(index / CLUSTERS_PER_ROW);
+
+      // Calculate approximate cluster size based on sticky count
+      const clusterRows = Math.ceil(uniqueInsightIds.length / 2);
+      const clusterWidth = 25 * 2 + 2 * 180 + 20 + 25; // padding + 2 cols * sticky_width + spacing + padding
+      const clusterHeight = 60 + 25 + clusterRows * 140 + (clusterRows - 1) * 20 + 25;
 
       const targetX = baseClusterX + col * SPACING_X;
       const targetY = baseClusterY - row * SPACING_Y;
-      const clusterPosition = findEmptySpot(targetX, targetY);
+      const clusterPosition = findEmptySpot(targetX, targetY, clusterWidth, clusterHeight);
 
       console.log(`[AI GROUPING] Creating cluster ${index}:`, {
         title: suggestion.newGroupTitle || "New Cluster",

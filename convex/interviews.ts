@@ -245,6 +245,16 @@ export const deleteInterviewInternal = mutation({
       await ctx.db.delete(insight._id);
     }
 
+    // Supprimer les live notes liés à l'interview
+    const relatedLiveNotes = await ctx.db
+      .query("liveNotes")
+      .filter(q => q.eq(q.field("interviewId"), args.interviewId))
+      .collect();
+
+    for (const note of relatedLiveNotes) {
+      await ctx.db.delete(note._id);
+    }
+
     // Supprimer l'interview
     await ctx.db.delete(args.interviewId);
     return { success: true };

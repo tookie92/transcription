@@ -98,7 +98,8 @@ export default defineSchema({
     sharePassword: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
     createdAt: v.number(),
-  }),
+  })
+    .index("by_project", ["projectId"]),
 
   // Table Insights
   insights: defineTable({

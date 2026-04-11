@@ -2,8 +2,6 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 
-
-
 // convex/projects.ts
 // Dans projects.ts - AJOUTER des logs pour debug
 export const claimInvite = mutation({
@@ -370,7 +368,7 @@ export const fixCurrentUserMember = mutation({
   },
 });
 
-// Delete a project (only owner can delete)
+// Delete a project (only owner can delete) - WITH CASCADE
 export const deleteProject = mutation({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
@@ -384,6 +382,122 @@ export const deleteProject = mutation({
       throw new Error("Only project owner can delete the project");
     }
 
+    // 1. Get all interviews for this project
+    const interviews = await ctx.db
+      .query("interviews")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    // 2. For each interview, delete related data
+    for (const interview of interviews) {
+      const insights = await ctx.db
+        .query("insights")
+        .withIndex("by_interview", (q) => q.eq("interviewId", interview._id))
+        .collect();
+      for (const insight of insights) {
+        await ctx.db.delete(insight._id);
+      }
+
+      const liveNotes = await ctx.db
+        .query("liveNotes")
+        .withIndex("by_interview", (q) => q.eq("interviewId", interview._id))
+        .collect();
+      for (const note of liveNotes) {
+        await ctx.db.delete(note._id);
+      }
+    }
+
+    // 3. Delete all interviews
+    for (const interview of interviews) {
+      await ctx.db.delete(interview._id);
+    }
+
+    // 4. Get all affinity maps for this project
+    const maps = await ctx.db
+      .query("affinityMaps")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    // 5. For each map, delete related data
+    for (const map of maps) {
+      const presence = await ctx.db
+        .query("presence")
+        .withIndex("by_map", (q) => q.eq("mapId", map._id))
+        .collect();
+      for (const p of presence) await ctx.db.delete(p._id);
+
+      const movements = await ctx.db
+        .query("elementMovements")
+        .withIndex("by_map", (q) => q.eq("mapId", map._id))
+        .collect();
+      for (const m of movements) await ctx.db.delete(m._id);
+
+      const locks = await ctx.db
+        .query("elementLocks")
+        .withIndex("by_map", (q) => q.eq("mapId", map._id))
+        .collect();
+      for (const l of locks) await ctx.db.delete(l._id);
+
+      const activities = await ctx.db
+        .query("activityLog")
+        .withIndex("by_map", (q) => q.eq("mapId", map._id))
+        .collect();
+      for (const a of activities) await ctx.db.delete(a._id);
+
+      const comments = await ctx.db
+        .query("comments")
+        .withIndex("by_map", (q) => q.eq("mapId", map._id))
+        .collect();
+      for (const c of comments) await ctx.db.delete(c._id);
+
+      const votingSessions = await ctx.db
+        .query("dotVotingSessions")
+        .withIndex("by_map", (q) => q.eq("mapId", map._id))
+        .collect();
+      for (const session of votingSessions) {
+        const votes = await ctx.db
+          .query("votes")
+          .withIndex("by_session", (q) => q.eq("sessionId", session._id))
+          .collect();
+        for (const v of votes) await ctx.db.delete(v._id);
+
+        const history = await ctx.db
+          .query("votingHistory")
+          .withIndex("by_session", (q) => q.eq("sessionId", session._id))
+          .collect();
+        for (const h of history) await ctx.db.delete(h._id);
+
+        await ctx.db.delete(session._id);
+      }
+
+      const typing = await ctx.db
+        .query("typingIndicators")
+        .withIndex("by_map_group", (q) => q.eq("mapId", map._id))
+        .collect();
+      for (const t of typing) await ctx.db.delete(t._id);
+
+      const suggestions = await ctx.db
+        .query("aiGroupingSuggestions")
+        .withIndex("by_map", (q) => q.eq("mapId", map._id))
+        .collect();
+      for (const s of suggestions) await ctx.db.delete(s._id);
+    }
+
+    // 6. Delete all affinity maps
+    for (const map of maps) {
+      await ctx.db.delete(map._id);
+    }
+
+    // 7. Delete project share links
+    const allShareLinks = await ctx.db
+      .query("projectShareLinks")
+      .collect();
+    const projectShareLinks = allShareLinks.filter(l => l.projectId === args.projectId);
+    for (const link of projectShareLinks) {
+      await ctx.db.delete(link._id);
+    }
+
+    // 8. Delete the project
     await ctx.db.delete(args.projectId);
 
     return { success: true };

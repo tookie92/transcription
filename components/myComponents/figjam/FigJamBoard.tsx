@@ -1325,30 +1325,38 @@ export function FigJamBoard({
     title: string,
     position: Position
   ) => {
-    // Create cluster with default size
-    const clusterId = board.addClusterLabel(position, { width: 500, height: 400 });
+    // Calculate optimal layout - ROW-FIRST (2 columns max, more rows)
+    const COLUMNS = 2;
+    const STICKY_WIDTH = 180;
+    const STICKY_HEIGHT = 140;
+    const STICKY_SPACING_X = 20;
+    const STICKY_SPACING_Y = 20;
+    const CLUSTER_PADDING = 25;
+    const HEADER_HEIGHT = 60;
 
-    console.log(`[AI GROUPING] Creating cluster ${clusterId} with ${stickyIds.length} stickies`);
+    const rows = Math.ceil(stickyIds.length / COLUMNS);
+    const clusterWidth = CLUSTER_PADDING * 2 + COLUMNS * STICKY_WIDTH + (COLUMNS - 1) * STICKY_SPACING_X;
+    const clusterHeight = HEADER_HEIGHT + CLUSTER_PADDING + rows * STICKY_HEIGHT + (rows - 1) * STICKY_SPACING_Y + CLUSTER_PADDING;
 
-    // Position stickies within the cluster zone
-    const STICKY_SPACING_X = 220;
-    const STICKY_SPACING_Y = 160;
-    const COLUMNS = 3;
-    const CLUSTER_PADDING = 40;
+    // Create cluster with calculated size
+    const clusterId = board.addClusterLabel(position, { width: clusterWidth, height: clusterHeight });
+
+    console.log(`[AI GROUPING] Creating cluster ${clusterId} with ${stickyIds.length} stickies (${COLUMNS}x${rows})`);
 
     stickyIds.forEach((stickyId, index) => {
+      // ROW-FIRST: fill row left-to-right, then next row
       const col = index % COLUMNS;
       const row = Math.floor(index / COLUMNS);
 
       const stickyPosition = {
-        x: position.x + CLUSTER_PADDING + col * STICKY_SPACING_X,
-        y: position.y + CLUSTER_PADDING + row * STICKY_SPACING_Y,
+        x: position.x + CLUSTER_PADDING + col * (STICKY_WIDTH + STICKY_SPACING_X),
+        y: position.y + HEADER_HEIGHT + CLUSTER_PADDING + row * (STICKY_HEIGHT + STICKY_SPACING_Y),
       };
 
       const sticky = state.elements[stickyId];
       const size = (sticky && sticky.type === "sticky")
         ? (sticky as StickyNoteData).size
-        : { width: 200, height: 200 };
+        : { width: STICKY_WIDTH, height: STICKY_HEIGHT };
 
       // Update sticky position AND assign to cluster
       board.updateElement(stickyId, {
@@ -1361,7 +1369,7 @@ export function FigJamBoard({
     // Update cluster title AFTER all stickies are positioned
     board.updateElement(clusterId, { text: title });
 
-    console.log(`[AI GROUPING] Cluster ${clusterId} created and positioned`);
+    console.log(`[AI GROUPING] Cluster ${clusterId} created and positioned (${clusterWidth}x${clusterHeight})`);
 
     toast.success(`Created cluster "${title}" with ${stickyIds.length} stickies`);
   }, [board, state.elements]);
