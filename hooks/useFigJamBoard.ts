@@ -71,6 +71,7 @@ function cloneElements(elements: Record<string, FigJamElement>): Record<string, 
 function reducer(state: BoardState, action: Action): BoardState {
   switch (action.type) {
     case "ADD_ELEMENT": {
+      console.log("[REDUCER] ADD_ELEMENT called, element type:", action.element.type, "id:", action.element.id);
       const elements = { ...state.elements, [action.element.id]: action.element };
       return { ...state, elements, selectedIds: [action.element.id] };
     }

@@ -633,33 +633,81 @@ export function FigJamBoard({
   // REAL-TIME SYNC: Sync with Convex when data changes from other users
   // ============================================
   const lastSyncedElementsRef = useRef<string>("");
-  
+  // Track initial element IDs to avoid importing ghost elements from Convex
+  const initialElementIdsRef = useRef<Set<string> | null>(null);
+  // Skip first sync run since initial load is handled separately
+  const hasSyncedOnceRef = useRef(false);
+
   useEffect(() => {
     if (!isLoaded || !savedElements) return;
-    
+
     // Skip if this is the initial load (handled above)
     if (!hasLoadedInitialRef.current) return;
+
+    // Skip first sync run to avoid race conditions with initial load
+    if (!hasSyncedOnceRef.current) {
+      hasSyncedOnceRef.current = true;
+      // Mark initial element IDs after first load is complete
+      initialElementIdsRef.current = new Set(Object.keys(state.elements));
+      console.log("[SYNC] First sync skipped, initial IDs captured:", initialElementIdsRef.current.size);
+      lastSyncedElementsRef.current = JSON.stringify(savedElements);
+      return;
+    }
     
     // Compare with last synced state to detect changes from other users
     const newElementsStr = JSON.stringify(savedElements);
     if (newElementsStr === lastSyncedElementsRef.current) return;
-    
-    // Check if there are new elements (clusters) that we don't have
+
+    // Compare current local IDs vs saved IDs from Convex
     const currentElementIds = new Set(Object.keys(state.elements));
-    const newElementIds = new Set(Object.keys(savedElements));
-    
-    // Find new elements that we don't have
-    const newIds = Array.from(newElementIds).filter(id => !currentElementIds.has(id));
-    
-    if (newIds.length > 0) {
-      // There are new elements - merge them into the board
+    const savedElementIds = new Set(Object.keys(savedElements));
+
+    // 1. Find elements to REMOVE (exist locally but NOT in saved)
+    const idsToRemove = Array.from(currentElementIds).filter(id =>
+      !savedElementIds.has(id) && !initialElementIdsRef.current?.has(id)
+    );
+
+    // 2. Find elements to ADD (exist in saved but NOT locally)
+    const idsToAdd = Array.from(savedElementIds).filter(id =>
+      !currentElementIds.has(id) && !initialElementIdsRef.current?.has(id)
+    );
+
+    console.log("[SYNC] current:", currentElementIds.size, "saved:", savedElementIds.size, "to add:", idsToAdd.length, "to remove:", idsToRemove.length);
+
+    if (idsToAdd.length > 0 || idsToRemove.length > 0) {
+      // Merge changes - add new and remove deleted
       const mergedElements = { ...state.elements };
-      newIds.forEach(id => {
+
+      // Handle removed clusters: move their stickies to ungrouped area
+      idsToRemove.forEach(id => {
+        const element = mergedElements[id];
+        if (element?.type === "label") {
+          // This is a cluster being deleted - move all its stickies to ungrouped area
+          const clusterId = id;
+          Object.values(mergedElements).forEach(el => {
+            if (el.type === "sticky" && (el.clusterId === clusterId || el.parentSectionId === clusterId)) {
+              const ungroupedY = 50 + Math.random() * 200;
+              const ungroupedX = 50 + Math.random() * 200;
+              el.clusterId = null;
+              el.parentSectionId = null;
+              el.position = { x: ungroupedX, y: ungroupedY };
+              console.log("[SYNC] Moving sticky", el.id, "to ungrouped area");
+            }
+          });
+        }
+        // Remove the element (cluster or anything else)
+        delete mergedElements[id];
+      });
+
+      // Add new elements
+      idsToAdd.forEach(id => {
         mergedElements[id] = savedElements[id];
       });
+
+      console.log("[SYNC] Adding:", idsToAdd, "Removing:", idsToRemove);
       board.loadElements(mergedElements);
     }
-    
+
     lastSyncedElementsRef.current = newElementsStr;
   }, [savedElements, isLoaded, state.elements, board]);
 
@@ -904,7 +952,9 @@ export function FigJamBoard({
 
       // Cluster tool - create ONE cluster
       if (state.activeTool === "cluster") {
+        console.log("[DEBUG] Cluster click detected, activeTool:", state.activeTool);
         const pos = screenToCanvas(e.clientX, e.clientY);
+        console.log("[DEBUG] Canvas position:", pos);
         
         // Guard: prevent duplicate creation within 500ms at same position
         const now = Date.now();
@@ -913,16 +963,17 @@ export function FigJamBoard({
             now - guard.timestamp < 500 && 
             Math.abs(guard.position.x - pos.x) < 10 && 
             Math.abs(guard.position.y - pos.y) < 10) {
-          console.log("Blocked duplicate cluster creation");
+          console.log("[DEBUG] Blocked duplicate cluster creation");
           return;
         }
         clusterCreationGuardRef.current = { timestamp: now, position: pos };
         
-        console.log("Creating single cluster...");
+        console.log("[DEBUG] Calling addClusterLabel...");
         const clusterId = board.addClusterLabel(
           { x: pos.x - 250, y: pos.y - 120 },
           { width: 500, height: 300 }
         );
+        console.log("[DEBUG] Created cluster:", clusterId);
         board.updateElement(clusterId, { text: "New Cluster" });
         board.setTool("select");
         
@@ -932,6 +983,7 @@ export function FigJamBoard({
             elements: state.elements,
           });
         }
+        console.log("[DEBUG] Cluster creation complete");
         return;
       }
 
