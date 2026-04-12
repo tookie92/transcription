@@ -1,0 +1,167 @@
+SKRIPTA - AI-Powered User Research Platform
+=============================================
+VERSION: Client Presentations (10-15 min)
+USE CASE: In-person demos, sales calls, detailed walkthroughs
+
+HOOK (0:00-0:20)
+-----------------
+"Transform hours of qualitative research into clear, actionable insights... in minutes. This is Skripta."
+
+
+PART 1: LANDING PAGE (0:20-1:00)
+----------------------------------
+Camera: Screen recording of landing page
+"Start on our landing page. Clean, professional, focused on user research."
+
+Actions:
+- Scroll through features
+- Highlight key benefits
+
+"Skripta helps teams conduct, analyze, and share user research. Transcription, affinity mapping, AI-powered insights - all in one place."
+
+
+PART 2: PROJECT SETUP (1:00-1:45)
+------------------------------------
+"Let's create a new project for mobile app UX research."
+
+Actions:
+- Click "Get Started" / Sign in
+- Create new project: "Mobile App UX Research Q1"
+- Add team members
+
+"Projects keep everything organized. Invite your team with role-based permissions - editors can contribute, viewers can only see."
+
+
+PART 3: INTERVIEWS & TRANSCRIPTION (1:45-3:30)
+--------------------------------------------------
+"Now let's add our interview data. Upload audio or paste transcripts directly."
+
+Actions:
+- Click "Add Interview"
+- Upload/paste transcript
+- Show auto-transcription & diarization
+
+"Our AI automatically transcribes and identifies different speakers. Every word is timestamped."
+
+
+PART 4: EXTRACTING INSIGHTS (3:30-5:00)
+------------------------------------------
+"Time to extract insights. Highlight key moments from the transcript."
+
+Actions:
+- Select text
+- Classify as Pain Point, Quote, Insight, or Follow-up
+
+"Classify insights by type. Our AI helps identify the most impactful moments automatically. See that sparkle? That's AI suggesting notable segments."
+
+
+PART 5: AFFINITY MAPPING (5:00-7:30)
+---------------------------------------
+"Now comes the magic - let's organize these insights on an affinity map."
+
+Actions:
+- Open Affinity Map workspace
+- Show stickies appearing
+
+"Every insight becomes a sticky note. Drag, group, organize. But here's where AI shines..."
+
+AI Grouping:
+- Open AI Features panel
+- Show "Grouping" tab
+"Our AI analyzes patterns and suggests smart groupings. It found insights about onboarding and navigation - with confidence scores."
+
+- Select suggestions
+- Click "Create Clusters"
+
+"One click, and clusters are created with AI-generated titles. No more manual work."
+
+Similar Clusters:
+- Switch to "Similar" tab
+- Show detected similar clusters
+"AI also finds similar clusters that could be merged. Click merge, and it's done."
+
+Visual Undo Mode (Time Machine):
+- Open Timeline panel
+- Activate "Visual Undo Mode" toggle
+"Here's something powerful - our time machine feature. See every action that happened on this board."
+
+- Use the slider to navigate through history
+- Highlight different actions
+"You can scrub through time to see exactly what changed. Created, moved, edited, deleted - all tracked."
+
+- Click "Restore to this point"
+"And if you made a mistake? One click and you're back. It rewinds all changes step by step. No more 'who deleted that?'"
+
+
+PART 6: DOT VOTING (7:30-8:30)
+---------------------------------
+"Now let's prioritize. It's time for dot voting."
+
+Actions:
+- Show voting mode toolbar
+- Click on stickies to add dots
+
+"Each team member gets voting credits. Click on stickies to add dots. The most important insights rise to the top."
+
+Show results:
+"At a glance, you see which pain points matter most, which quotes resonate, which follow-ups are urgent."
+
+
+PART 7: REAL-TIME COLLABORATION (8:30-9:30)
+----------------------------------------------
+"Research is a team sport. Skripta has real-time collaboration built in."
+
+Actions:
+- Show presence indicators
+- Show live cursor movements
+
+"See who's online, watch them work in real-time. Every change syncs instantly. No conflicts, no version issues."
+
+
+PART 8: PERSONA GENERATION (9:30-10:30)
+-------------------------------------------
+"But wait - there's more. Watch this."
+
+Actions:
+- Click "Generate Persona"
+
+"Based on all the insights, our AI creates a user persona automatically. Behaviors, pain points, quotes - all synthesized into one comprehensive profile."
+
+
+PART 9: SHAREABLE RESEARCH DASHBOARD (10:30-11:30)
+----------------------------------------------------
+"When you're done, share your findings with stakeholders."
+
+Actions:
+- Click "Share" button
+- Generate shareable link
+
+"Share a beautiful, interactive research dashboard. Stakeholders get a presentation-style view with keyboard navigation. They can see insights, themes, personas - all without needing to sign in."
+
+Show presentation view:
+- Navigate through slides
+"It's a presentation-ready format. Executive summary, key themes, insights by category, personas - all beautifully laid out."
+
+Show overview mode:
+- Switch to overview mode for a dashboard view
+"Or switch to overview mode for a dashboard view. Stats, interviews, insights - everything at a glance."
+
+"Set password protection, expiration dates, control access. Share with confidence."
+
+
+CLOSING (11:30-12:00)
+-----------------------
+"Skripta turns qualitative research into clear insights... in minutes. Try it free at [your-url]."
+
+
+TIMING ESTIMATE: 10-15 minutes (can be shortened if needed)
+
+KEY SELLING POINTS TO HIGHLIGHT:
+1. AI-powered transcription & diarization
+2. Smart affinity mapping with AI grouping
+3. Dot voting for prioritization
+4. Visual undo mode (time machine) for mistakes
+5. Real-time team collaboration
+6. Auto-generated personas
+7. Beautiful shareable dashboards
+8. Credit-based AI usage (not unlimited, but controlled)

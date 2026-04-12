@@ -252,6 +252,15 @@ export function FigJamToolbar({
                         results={voteResults}
                         totalVotes={totalVotes}
                         onNewRound={() => voting.startNewRound()}
+                        onNewRoundWithConfig={() => {
+                          // Pre-fill with previous session settings
+                          if (voting.session) {
+                            setDotsPerUser(voting.maxDotsPerUser);
+                            setDurationMinutes(null); // Default no timer for new round
+                            setPrompt("Vote for priorities");
+                          }
+                          setShowVotingConfig(true);
+                        }}
                         onClose={() => voting.stopVoting()}
                       />
                     ) : voting.isVoting ? (
@@ -396,7 +405,7 @@ export function FigJamToolbar({
           </Tooltip>
 
           {/* ── Voting Progress Panel ── */}
-          {(voting?.isVoting || !voting?.session?.isActive) && (
+          {(voting?.isVoting || (!voting?.isVoting && voting?.session && (voting.isRevealed || (voteResults && voteResults.length > 0)))) && (
             <div className="bg-primary/10 border border-primary/20 rounded-xl shadow-lg px-4 py-2 flex items-center gap-3">
               {/* During voting */}
               {voting?.isVoting && (
@@ -732,10 +741,11 @@ interface VoteResultsContentProps {
   }>;
   totalVotes: number;
   onNewRound: () => void;
+  onNewRoundWithConfig: () => void;
   onClose: () => void;
 }
 
-function VoteResultsContent({ results, totalVotes, onNewRound, onClose }: VoteResultsContentProps) {
+function VoteResultsContent({ results, totalVotes, onNewRound, onNewRoundWithConfig, onClose }: VoteResultsContentProps) {
   const topThree = results.slice(0, 3);
   
   return (
@@ -826,7 +836,7 @@ function VoteResultsContent({ results, totalVotes, onNewRound, onClose }: VoteRe
         </Button>
         <Button
           size="sm"
-          onClick={onNewRound}
+          onClick={onNewRoundWithConfig}
           className="gap-1.5 text-xs"
         >
           <RotateCcw className="w-3 h-3" />

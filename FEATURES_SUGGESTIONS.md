@@ -45,12 +45,12 @@
 - Afficher une suggestion: "Cluster A et Cluster B parlent du même sujet"
 - Bouton "Merge" pour fusionner automatiquement
 
-**Step 2: Analyse de sentiments par cluster**
+**Step 2: Analyse de sentiments par cluster** ⚠️ SKIPPED (trop de credits AI)
 - Analyser le ton des stickies dans chaque cluster
 - Badge: "Mostly positive 😃" / "Mixed emotions 😐" / "Critical concerns 😟"
 - Couleur du cluster basée sur le sentiment dominant
 
-**Step 3: Suggestions proactives**
+**Step 3: Suggestions proactives** ⚠️ SKIPPED (trop de credits AI)
 - Quand l'utilisateur crée beaucoup de stickies non groupés → suggérer de les organiser
 - Quand 2+ clusters ont des stickies similaires → suggérer un merge
 - Quand un cluster a peu de stickies → suggérer de l'archiver ou fusionner

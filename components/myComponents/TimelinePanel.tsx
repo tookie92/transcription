@@ -48,6 +48,46 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+
+// Actions that are easily undoable via the board's undo system
+const UNDOABLE_ACTIONS: ActivityAction[] = [
+  "sticky_created",
+  "sticky_moved",
+  "sticky_resized",
+  "sticky_updated",
+  "sticky_deleted",
+  "sticky_duplicated",
+  "section_created",
+  "section_moved",
+  "section_resized",
+  "section_renamed",
+  "section_deleted",
+  "group_created",
+  "group_moved",
+  "group_renamed",
+  "group_deleted",
+  "insight_added",
+  "insight_removed",
+  "insight_moved",
+  "comment_added",
+];
+
+// Actions that may have limited undo support
+const LIMITED_UNDO_ACTIONS: ActivityAction[] = [
+  "elements_grouped",
+  "ai_cluster_created",
+  "ai_suggestions_generated",
+  "ai_rename_applied",
+  "user_mentioned",
+];
+
+function isActionUndoable(action: ActivityAction): boolean {
+  return UNDOABLE_ACTIONS.includes(action);
+}
+
+function isActionLimitedUndo(action: ActivityAction): boolean {
+  return LIMITED_UNDO_ACTIONS.includes(action);
+}
 import { toast } from "sonner";
 
 interface TimelinePanelProps {
@@ -332,6 +372,39 @@ export function TimelinePanel({
     }
   }, [onRedo]);
 
+  // Handle restore to a specific point in the timeline
+  const handleRestoreToPoint = useCallback(() => {
+    if (!canUndo || !onUndo) return;
+    
+    const stepsToUndo = filteredActivities.length - 1 - undoIndex;
+    
+    if (stepsToUndo <= 0) return;
+    
+    // Check if any action in the range is limited undo
+    const actionsToUndo = filteredActivities.slice(undoIndex + 1);
+    const hasLimitedUndo = actionsToUndo.some(a => isActionLimitedUndo(a.action));
+    
+    if (hasLimitedUndo) {
+      toast.warning(
+        "Some actions may not be fully undone",
+        { description: "AI operations and grouping have limited undo support" }
+      );
+    }
+    
+    // Perform undo steps with a small delay between each
+    let undone = 0;
+    const undoInterval = setInterval(() => {
+      if (undone >= stepsToUndo) {
+        clearInterval(undoInterval);
+        toast.success(`Restored ${undone} step${undone > 1 ? "s" : ""}`);
+        setUndoMode(false);
+        return;
+      }
+      onUndo();
+      undone++;
+    }, 100);
+  }, [undoIndex, filteredActivities, canUndo, onUndo]);
+
   if (!isOpen) return null;
 
   return (
@@ -545,11 +618,44 @@ export function TimelinePanel({
           
           {filteredActivities[undoIndex] && (
             <div className="mt-2 p-2 bg-background rounded-lg border border-border">
-              <p className="text-xs text-muted-foreground mb-1">Preview:</p>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs text-muted-foreground">Preview:</p>
+                <Badge 
+                  variant={isActionUndoable(filteredActivities[undoIndex].action) ? "default" : "secondary"}
+                  className="text-[10px] h-5"
+                >
+                  {isActionUndoable(filteredActivities[undoIndex].action) ? "Undoable" : "Limited undo"}
+                </Badge>
+              </div>
               <p className="text-sm text-foreground">
                 {filteredActivities[undoIndex].userName} - {ACTION_LABELS[filteredActivities[undoIndex].action]}
               </p>
             </div>
+          )}
+
+          {/* Restore to this point button */}
+          {undoIndex < filteredActivities.length - 1 && (
+            <div className="mt-2 flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleRestoreToPoint}
+                disabled={!canUndo}
+                className="flex-1 gap-1.5 text-xs"
+              >
+                <RotateCcw size={12} />
+                Restore to this point
+              </Button>
+              <span className="text-[10px] text-muted-foreground">
+                ({filteredActivities.length - 1 - undoIndex} undos)
+              </span>
+            </div>
+          )}
+          
+          {undoIndex === filteredActivities.length - 1 && (
+            <p className="mt-2 text-xs text-center text-muted-foreground">
+              Already at the beginning
+            </p>
           )}
         </div>
       )}

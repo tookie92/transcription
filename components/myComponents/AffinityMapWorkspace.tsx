@@ -70,6 +70,9 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const [canvasInsightIds, setCanvasInsightIds] = useState<Set<string>>(new Set());
   // Clusters from FigJamBoard (canvas-based, not from affinityMap.clusters)
   const [canvasClusters, setCanvasClusters] = useState<Array<{ id: string; title: string; insightIds: string[] }>>([]);
+  
+  // Board controls for Timeline integration
+  const [boardControls, setBoardControls] = useState<{ undo: () => void; redo: () => void } | null>(null);
 
   // ==================== COMMENT HANDLER ====================
   const handleOpenComment = useCallback((elementId: string, rect: DOMRect, title?: string) => {
@@ -446,6 +449,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
             }
           }}
           hasPersonas={hasPersonas}
+          onBoardControlsReady={setBoardControls}
         />
       )}
 
@@ -493,10 +497,10 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           mapId={affinityMap._id}
           isOpen={showActivityPanel}
           onClose={() => setShowActivityPanel(false)}
-          onUndo={() => {/* TODO: implement undo */}}
-          onRedo={() => {/* TODO: implement redo */}}
-          canUndo={false}
-          canRedo={false}
+          onUndo={() => boardControls?.undo()}
+          onRedo={() => boardControls?.redo()}
+          canUndo={!!boardControls}
+          canRedo={!!boardControls}
         />
       )}
 

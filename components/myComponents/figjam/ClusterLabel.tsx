@@ -10,6 +10,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 
@@ -655,24 +660,47 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
                 <span className="text-[9px] font-bold text-white">?</span>
               </div>
             )}
-            {/* Show revealed dots */}
+            {/* Show revealed dots with tooltips */}
             {isVotingRevealed && voteUsers && voteUsers.length > 0 && (
               <>
                 {voteUsers.slice(0, 8).map((voter, i) => (
-                  <motion.div
-                    key={voter.userId}
-                    initial={{ scale: 0, y: -10 }}
-                    animate={{ scale: 1, y: 0 }}
-                    transition={{ delay: i * 0.03 }}
-                    className="w-5 h-5 rounded-full border-2 border-white shadow-md"
-                    style={{ backgroundColor: voter.color }}
-                    title={voter.name}
-                  />
+                  <Tooltip key={voter.userId} delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <motion.div
+                        initial={{ scale: 0, y: -10 }}
+                        animate={{ scale: 1, y: 0 }}
+                        transition={{ delay: i * 0.03 }}
+                        className="w-5 h-5 rounded-full border-2 border-white shadow-md cursor-default"
+                        style={{ backgroundColor: voter.color }}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      <p className="font-medium">{voter.name}</p>
+                    </TooltipContent>
+                  </Tooltip>
                 ))}
                 {voteUsers.length > 8 && (
-                  <div className="w-5 h-5 rounded-full bg-slate-700 border-2 border-white shadow-md flex items-center justify-center">
-                    <span className="text-[8px] font-bold text-white">+{voteUsers.length - 8}</span>
-                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="w-5 h-5 rounded-full bg-slate-700 border-2 border-white shadow-md flex items-center justify-center cursor-help">
+                        <span className="text-[8px] font-bold text-white">+{voteUsers.length - 8}</span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      <p className="font-medium mb-1">Also voted:</p>
+                      <div className="space-y-0.5">
+                        {voteUsers.slice(8).map(voter => (
+                          <p key={voter.userId} className="flex items-center gap-1.5">
+                            <span 
+                              className="w-2 h-2 rounded-full" 
+                              style={{ backgroundColor: voter.color }}
+                            />
+                            {voter.name}
+                          </p>
+                        ))}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
                 )}
               </>
             )}

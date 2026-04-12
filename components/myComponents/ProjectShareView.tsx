@@ -531,20 +531,7 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
               <CardContent>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {personas.map((persona: any, i: number) => (
-                    <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
-                      <img 
-                        src={persona.profileImage} 
-                        alt={persona.name}
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
-                      <div>
-                        <h4 className="font-medium">{persona.name}</h4>
-                        <p className="text-xs text-muted-foreground">{persona.age} • {persona.occupation}</p>
-                        {persona.quote && (
-                          <p className="text-xs italic text-muted-foreground mt-1 line-clamp-2">&ldquo;{persona.quote}&rdquo;</p>
-                        )}
-                      </div>
-                    </div>
+                    <PersonaCard key={i} persona={persona} isCompact />
                   ))}
                 </div>
               </CardContent>

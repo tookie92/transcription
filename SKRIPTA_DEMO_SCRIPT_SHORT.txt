@@ -1,0 +1,63 @@
+SKRIPTA - Quick Demo Script (3-5 min)
+========================================
+
+HOOK (0:00-0:15)
+-----------------
+"Research should be about insights, not paperwork. Let me show you how teams are cutting their research time from weeks to hours."
+
+
+PROBLEM/SOLUTION (0:15-0:30)
+------------------------------
+"We spend more time organizing research than actually learning from it. Skripta uses AI to automate the boring parts - transcription, grouping, prioritization."
+
+
+MAIN DEMO (0:30-2:30)
+----------------------
+[Screen: Open a project with interview data]
+
+"Upload your interviews... AI transcribes everything automatically."
+
+[Highlight transcript with speaker identification]
+
+"Extract insights with one click. AI surfaces the most important moments."
+
+[Show affinity map with stickies]
+
+"Drag insights to organize. But watch this..."
+
+[Open AI Grouping panel]
+
+"AI analyzes patterns and suggests groupings. Confidence scores show which clusters are strongest."
+
+[Create cluster from suggestion]
+
+"One click, and you have a perfectly organized affinity map. No more manual dragging for hours."
+
+
+DIFFERENTIATOR (2:30-3:30)
+----------------------------
+[Dot voting]
+
+"Prioritize with your team in real-time. Everyone votes, results appear instantly."
+
+[Share dashboard]
+
+"Share a beautiful presentation with stakeholders. No sign-up required for them."
+
+
+CTA (3:30-4:00)
+---------------
+"Turn weeks of research into hours of insight. Try Skripta free at [your-url]."
+
+"Questions? Let's talk."
+
+
+---
+
+TIMING: 3-4 minutes
+
+PLATFORM: YouTube, LinkedIn, Twitter, landing page
+
+AUDIENCE: Researchers, PMs, UX designers looking to save time
+
+TONE: Confident, fast-paced, show don't tell

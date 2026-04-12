@@ -111,6 +111,13 @@ interface FigJamBoardProps {
   onToggleVoting?: () => void;
   // Whether personas exist for showing "View Persona" vs "Generate Persona"
   hasPersonas?: boolean;
+  // Callbacks for undo/redo (for Timeline panel integration)
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  // Callback to expose board controls (undo/redo) to parent
+  onBoardControlsReady?: (controls: { undo: () => void; redo: () => void }) => void;
 }
 
 export function FigJamBoard({
@@ -136,9 +143,24 @@ export function FigJamBoard({
   onLabelDataChange,
   onToggleVoting,
   hasPersonas = false,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
+  onBoardControlsReady,
 }: FigJamBoardProps) {
   const board = useFigJamBoard();
   const { state, setTool } = board;
+
+  // Expose undo/redo controls to parent
+  useEffect(() => {
+    if (onBoardControlsReady) {
+      onBoardControlsReady({
+        undo: () => board.undo(),
+        redo: () => board.redo(),
+      });
+    }
+  }, [onBoardControlsReady]);
 
   const hasMapId = !!mapId && !!projectId;
   
@@ -179,6 +201,13 @@ export function FigJamBoard({
   const [showAIGroupingPanel, setShowAIGroupingPanel] = useState(false);
   const [showGDPRConsent, setShowGDPRConsent] = useState(false);
   const [showInsightsSidebar, setShowInsightsSidebar] = useState(true);
+
+  // Close sidebar when voting starts (avoid distraction)
+  useEffect(() => {
+    if (voting.isVoting) {
+      setShowInsightsSidebar(false);
+    }
+  }, [voting.isVoting]);
 
   // Smart auto-fit state - track which clusters have auto-fit enabled
   const [autoFitEnabledClusters, setAutoFitEnabledClusters] = useState<Set<string>>(new Set());
@@ -222,6 +251,7 @@ export function FigJamBoard({
   const [selectedBubbleId, setSelectedBubbleId] = useState<string | null>(null);
   const [isCommentToolActive, setIsCommentToolActive] = useState(false);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
+  const [isOverCluster, setIsOverCluster] = useState(false);
   const [newBubbleCount, setNewBubbleCount] = useState(0);
   const [isPresentationModeActive, setIsPresentationModeActive] = useState(false);
   const [bouncingBubbleId, setBouncingBubbleId] = useState<string | null>(null);
@@ -1065,7 +1095,7 @@ export function FigJamBoard({
 
   const handleCanvasPointerMove = useCallback(
     (e: React.PointerEvent) => {
-      if (isCommentToolActive) {
+      if (isCommentToolActive || voting.isVoting) {
         setCursorPos({ x: e.clientX, y: e.clientY });
         return;
       }
@@ -1138,11 +1168,13 @@ export function FigJamBoard({
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
         board.undo();
+        onUndo?.();
         return;
       }
       if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
         e.preventDefault();
         board.redo();
+        onRedo?.();
         return;
       }
 
@@ -1298,7 +1330,7 @@ export function FigJamBoard({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [board, state.selectedIds, state.zoom, state.elements, allStickies, allClusters]);
+  }, [board, state.selectedIds, state.zoom, state.elements, allStickies, allClusters, onUndo, onRedo]);
 
   useEffect(() => { onChange?.(state.elements); }, [state.elements, onChange]);
 
@@ -1331,6 +1363,36 @@ export function FigJamBoard({
       onLabelDataChange?.(labelData);
     }
   }, [labelData, onLabelDataChange]);
+
+  // Detect when cursor is hovering over a cluster (for voting cursor scale)
+  useEffect(() => {
+    if (!voting.isVoting || !cursorPos) {
+      setIsOverCluster(false);
+      return;
+    }
+
+    const canvasX = (cursorPos.x - state.pan.x) / state.zoom;
+    const canvasY = (cursorPos.y - state.pan.y) / state.zoom;
+
+    let overCluster = false;
+    for (const label of labels) {
+      const clusterX = label.position.x;
+      const clusterY = label.position.y;
+      const clusterWidth = label.width ?? 500;
+      const clusterHeight = label.height ?? 350;
+
+      if (
+        canvasX >= clusterX &&
+        canvasX <= clusterX + clusterWidth &&
+        canvasY >= clusterY &&
+        canvasY <= clusterY + clusterHeight
+      ) {
+        overCluster = true;
+        break;
+      }
+    }
+    setIsOverCluster(overCluster);
+  }, [cursorPos, voting.isVoting, labels, state.pan, state.zoom]);
 
   // Explicit clusterId-based grouping - use clusterId from sticky directly
   // Also check parentSectionId for backwards compatibility with old data
@@ -1439,8 +1501,9 @@ export function FigJamBoard({
       .sort((a, b) => b.voteCount - a.voteCount);
   }, [labels, voting.session, voting]);
 
-  const cursorStyle =
-    state.activeTool === "hand"    ? "cursor-grab"
+  const cursorStyle = voting.isVoting
+    ? "cursor-none"
+    : state.activeTool === "hand"    ? "cursor-grab"
     : state.activeTool === "sticky"  ? "cursor-crosshair"
     : state.activeTool === "section" ? "cursor-crosshair"
     : state.activeTool === "label"  ? "cursor-crosshair"
@@ -2031,6 +2094,33 @@ export function FigJamBoard({
             className="w-10 h-10 rounded-full bg-primary flex items-center justify-center shadow-lg ring-2 ring-primary/30"
           >
             <MessageSquare className="w-5 h-5 text-primary-foreground" />
+          </motion.div>
+        </div>
+      )}
+
+      {/* ── Voting Dot Cursor ── */}
+      {voting.isVoting && !voting.isRevealed && cursorPos && (
+        <div
+          className="fixed pointer-events-none z-[60]"
+          style={{
+            left: cursorPos.x,
+            top: cursorPos.y,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <motion.div
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ 
+              scale: isOverCluster ? 1.3 : 1, 
+              opacity: 1 
+            }}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            className="w-6 h-6 rounded-full shadow-lg ring-2 ring-white flex items-center justify-center"
+            style={{ backgroundColor: voting.userColor }}
+          >
+            <div 
+              className="w-2 h-2 rounded-full bg-white/40"
+            />
           </motion.div>
         </div>
       )}

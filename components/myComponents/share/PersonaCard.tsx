@@ -2,17 +2,17 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { 
   User, 
   DollarSign, 
   Monitor, 
   Target, 
-  Heart, 
   AlertCircle,
   MapPin,
-  Briefcase,
-  GraduationCap,
   TrendingUp,
+  MessageSquareQuote,
+  BookOpen,
 } from "lucide-react";
 
 interface PersonaCardProps {
@@ -38,7 +38,12 @@ interface PersonaCardProps {
   };
 }
 
-export function PersonaCard({ persona }: { persona: PersonaCardProps }) {
+interface PersonaCardComponentProps {
+  persona: PersonaCardProps;
+  isCompact?: boolean;
+}
+
+export function PersonaCard({ persona, isCompact = false }: PersonaCardComponentProps) {
   const initials = persona.name
     .split(" ")
     .map((n) => n[0])
@@ -46,148 +51,204 @@ export function PersonaCard({ persona }: { persona: PersonaCardProps }) {
     .toUpperCase()
     .slice(0, 2);
 
-  const techIcons: Record<string, string> = {
-    beginner: "🟢",
-    intermediate: "🟡",
-    expert: "🔴",
-  };
+  const techLevel = persona.demographics?.techProficiency;
+  const techLabel = techLevel ? techLevel.charAt(0).toUpperCase() + techLevel.slice(1) : null;
 
-  return (
-    <Card className="w-full max-w-5xl mx-auto overflow-hidden shadow-lg rounded-2xl">
-      <div className="flex flex-col md:flex-row max-h-[65vh]">
-        {/* Left Panel - Brand Color */}
-        <div className="md:w-1/3 bg-primary p-4 md:p-6 flex flex-col items-center justify-center text-primary-foreground min-w-0">
+  if (isCompact) {
+    return (
+      <Card className="overflow-hidden hover:shadow-md transition-shadow">
+        <div className="flex items-start gap-3 p-3">
+          {/* Avatar */}
           {persona.profileImage ? (
             <img
               src={persona.profileImage}
               alt={persona.name}
-              className="w-20 h-20 md:w-28 md:h-28 rounded-full object-cover border-4 border-primary-foreground/30 mb-3 flex-shrink-0"
+              className="w-12 h-12 rounded-full object-cover flex-shrink-0"
             />
           ) : (
-            <div className="w-20 h-20 md:w-28 md:h-28 rounded-full bg-primary-foreground/20 flex items-center justify-center mb-3 flex-shrink-0">
-              <span className="text-3xl font-bold text-primary-foreground">{initials}</span>
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <span className="text-sm font-bold text-primary">{initials}</span>
             </div>
           )}
           
-          <h2 className="text-xl md:text-2xl font-bold text-center mb-1 break-words">{persona.name}</h2>
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-sm truncate">{persona.name}</h3>
+            {persona.occupation && (
+              <p className="text-xs text-muted-foreground truncate">{persona.occupation}</p>
+            )}
+            {persona.quote && (
+              <p className="text-xs italic text-muted-foreground/70 line-clamp-1 mt-1">&ldquo;{persona.quote}&rdquo;</p>
+            )}
+            
+            {/* Quick stats */}
+            <div className="flex items-center gap-2 mt-2">
+              {persona.goals && persona.goals.length > 0 && (
+                <Badge variant="secondary" className="text-[10px] h-5 gap-1">
+                  <Target className="w-3 h-3" />
+                  {persona.goals.length} goals
+                </Badge>
+              )}
+              {persona.frustrations && persona.frustrations.length > 0 && (
+                <Badge variant="secondary" className="text-[10px] h-5 gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {persona.frustrations.length} pain points
+                </Badge>
+              )}
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="w-full max-w-5xl mx-auto overflow-hidden shadow-lg rounded-2xl">
+      {/* Header - Identity */}
+      <div className="flex flex-col md:flex-row">
+        {/* Left Panel - Identity */}
+        <div className="md:w-1/3 bg-primary py-8 px-6 flex flex-col items-center justify-center text-primary-foreground">
+          {persona.profileImage ? (
+            <img
+              src={persona.profileImage}
+              alt={persona.name}
+              className="w-24 h-24 md:w-32 md:h-32 rounded-full object-cover border-4 border-primary-foreground/20 mb-4"
+            />
+          ) : (
+            <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-primary-foreground/15 flex items-center justify-center mb-4">
+              <span className="text-4xl font-bold text-primary-foreground">{initials}</span>
+            </div>
+          )}
+          
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-1">{persona.name}</h2>
           {persona.occupation && (
-            <p className="text-primary-foreground/80 text-center text-xs md:text-sm mb-2 break-words">{persona.occupation}</p>
+            <p className="text-primary-foreground/90 text-center text-sm mb-3">{persona.occupation}</p>
           )}
           {persona.quote && (
-            <p className="text-primary-foreground/60 text-center italic text-xs px-2">&ldquo;{persona.quote}&rdquo;</p>
+            <div className="flex items-start gap-2 px-2">
+              <MessageSquareQuote className="w-4 h-4 text-primary-foreground/60 flex-shrink-0 mt-0.5" />
+              <p className="text-primary-foreground/95 text-sm font-medium text-center leading-relaxed">&ldquo;{persona.quote}&rdquo;</p>
+            </div>
           )}
         </div>
 
-        {/* Right Panel - White Background */}
-        <div className="md:w-2/3 bg-card p-4 overflow-y-auto min-w-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-            {/* About */}
-            <div>
-              <h3 className="text-sm font-semibold text-primary flex items-center gap-2 mb-2">
-                <User className="w-4 h-4 flex-shrink-0" />
-                About
-              </h3>
-              <div className="space-y-1 text-xs md:text-sm text-muted-foreground break-words">
-                {persona.age && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-primary">•</span>
-                    Age: {persona.age}
-                  </div>
-                )}
-                {persona.demographics?.location && (
-                  <div className="flex items-center gap-2">
+        {/* Right Panel - Content */}
+        <div className="md:w-2/3 bg-card p-6">
+          {/* Demographics - First */}
+          <div className="mb-5">
+            <div className="flex items-center gap-2 mb-3">
+              <User className="w-4 h-4 text-muted-foreground" />
+              <h3 className="font-semibold text-sm text-foreground">Demographics</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {persona.age && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="w-5 h-5 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                    <User className="w-3 h-3 text-muted-foreground" />
+                  </span>
+                  <span className="text-muted-foreground truncate">{persona.age} ans</span>
+                </div>
+              )}
+              {persona.demographics?.location && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="w-5 h-5 rounded bg-muted flex items-center justify-center flex-shrink-0">
                     <MapPin className="w-3 h-3 text-muted-foreground" />
-                    {persona.demographics.location}
-                  </div>
-                )}
-                {persona.demographics?.income && (
-                  <div className="flex items-center gap-2">
+                  </span>
+                  <span className="text-muted-foreground truncate">{persona.demographics.location}</span>
+                </div>
+              )}
+              {persona.demographics?.income && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="w-5 h-5 rounded bg-muted flex items-center justify-center flex-shrink-0">
                     <DollarSign className="w-3 h-3 text-muted-foreground" />
-                    {persona.demographics.income}
-                  </div>
-                )}
-                {persona.demographics?.techProficiency && (
-                  <div className="flex items-center gap-2">
+                  </span>
+                  <span className="text-muted-foreground truncate">{persona.demographics.income}</span>
+                </div>
+              )}
+              {techLabel && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="w-5 h-5 rounded bg-muted flex items-center justify-center flex-shrink-0">
                     <Monitor className="w-3 h-3 text-muted-foreground" />
-                    {persona.demographics.techProficiency.charAt(0).toUpperCase() + persona.demographics.techProficiency.slice(1)} tech user
-                  </div>
-                )}
+                  </span>
+                  <span className="text-muted-foreground truncate">{techLabel}</span>
+                </div>
+              )}
+              {persona.demographics?.education && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="w-5 h-5 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                    <BookOpen className="w-3 h-3 text-muted-foreground" />
+                  </span>
+                  <span className="text-muted-foreground truncate">{persona.demographics.education}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Story / Background - Second */}
+          {(persona.background || persona.psychographics?.motivations) && (
+            <div className="mb-5">
+              <div className="flex items-center gap-2 mb-2">
+                <BookOpen className="w-4 h-4 text-muted-foreground" />
+                <h3 className="font-semibold text-sm text-foreground">Background</h3>
               </div>
-            </div>
-
-            {/* Motivation */}
-            <div>
-              <h3 className="text-base font-semibold text-primary flex items-center gap-2 mb-3">
-                <Target className="w-4 h-4" />
-                Motivation
-              </h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {persona.psychographics?.motivations?.slice(0, 2).join(" ") || 
-                 "Looking for solutions that simplify their daily workflow and provide real value."}
-              </p>
-            </div>
-
-            {/* Story */}
-            <div>
-              <h3 className="text-base font-semibold text-primary flex items-center gap-2 mb-3">
-                <Briefcase className="w-4 h-4" />
-                Story
-              </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 {persona.background || 
-                 `${persona.name} is a ${persona.occupation || "professional"} looking to improve their productivity and achieve better results in their daily work.`}
+                 `${persona.name} is a ${persona.occupation || "professional"} looking to improve their productivity. ${persona.psychographics?.motivations?.[0] || ""}`}
               </p>
             </div>
+          )}
 
-            {/* Core Need */}
+          {/* Goals & Pain Points - Last, Two Columns */}
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Goals */}
             <div>
-              <h3 className="text-base font-semibold text-primary flex items-center gap-2 mb-3">
-                <Heart className="w-4 h-4" />
-                Core Need
-              </h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {persona.goals?.slice(0, 2).join(" ") || 
-                 "Needs an intuitive, reliable solution that saves time and reduces friction in their workflow."}
-              </p>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                  <Target className="w-4 h-4 text-green-600 dark:text-green-400" />
+                </div>
+                <h3 className="font-semibold text-foreground">Goals</h3>
+                {persona.goals && persona.goals.length > 0 && (
+                  <Badge variant="secondary" className="ml-auto text-xs">{persona.goals.length}</Badge>
+                )}
+              </div>
+              <div className="space-y-2">
+                {persona.goals && persona.goals.length > 0 ? (
+                  persona.goals.slice(0, 4).map((goal, idx) => (
+                    <div key={idx} className="flex items-start gap-2">
+                      <TrendingUp className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      <span className="text-sm text-muted-foreground">{goal}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground/70 italic">No specific goals identified</p>
+                )}
+              </div>
             </div>
 
             {/* Pain Points */}
-            <div className="md:col-span-2">
-              <h3 className="text-base font-semibold text-primary flex items-center gap-2 mb-3">
-                <AlertCircle className="w-4 h-4" />
-                Pain Points
-              </h3>
-              <div className="flex flex-wrap gap-2">
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="font-semibold text-foreground">Pain Points</h3>
+                {persona.frustrations && persona.frustrations.length > 0 && (
+                  <Badge variant="secondary" className="ml-auto text-xs">{persona.frustrations.length}</Badge>
+                )}
+              </div>
+              <div className="space-y-2">
                 {persona.frustrations && persona.frustrations.length > 0 ? (
-                  persona.frustrations.slice(0, 3).map((frustration, idx) => (
-                    <Badge key={idx} variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                      {frustration}
-                    </Badge>
+                  persona.frustrations.slice(0, 4).map((frustration, idx) => (
+                    <div key={idx} className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                      <span className="text-sm text-muted-foreground">{frustration}</span>
+                    </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Frustrated with complex interfaces and time-consuming processes.
-                  </p>
+                  <p className="text-sm text-muted-foreground/70 italic">No specific pain points identified</p>
                 )}
               </div>
             </div>
-
-            {/* Goals */}
-            {persona.goals && persona.goals.length > 0 && (
-              <div className="md:col-span-2">
-                <h3 className="text-base font-semibold text-primary flex items-center gap-2 mb-3">
-                  <TrendingUp className="w-4 h-4" />
-                  Goals
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {persona.goals.slice(0, 3).map((goal, idx) => (
-                    <Badge key={idx} variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                      {goal}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
