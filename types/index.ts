@@ -349,7 +349,11 @@ export type ActivityAction =
   | "section_resized"
   | "section_renamed"
   | "section_deleted"
-  | "elements_grouped";
+  | "elements_grouped"
+  // AI Grouping actions
+  | "ai_cluster_created"
+  | "ai_suggestions_generated"
+  | "ai_rename_applied";
 
 export interface ActivityDetails {
   // 🎯 DÉTAILS SPÉCIFIQUES POUR CHAQUE ACTION

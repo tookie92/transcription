@@ -5,7 +5,7 @@ import type { ToolType } from "@/types/figjam";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MousePointer2, Hand, ArrowLeft, Sparkles, MessageSquare, Presentation, DownloadCloud, Vote, Layers, Trophy, RotateCcw, Plus, Settings, User } from "lucide-react";
+import { MousePointer2, Hand, ArrowLeft, Sparkles, MessageSquare, Presentation, DownloadCloud, Vote, Layers, Trophy, RotateCcw, Plus, Settings, User, Eye } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import {
   Dialog,
@@ -78,6 +78,7 @@ interface FigJamToolbarProps {
   totalVotes?: number;
   onCreateCluster?: (title: string) => void;
   onOpenPersona?: () => void;
+  hasPersonas?: boolean;
 }
 
 const PRESET_CONFIGS = [
@@ -113,6 +114,7 @@ export function FigJamToolbar({
   totalVotes = 0,
   onCreateCluster,
   onOpenPersona,
+  hasPersonas = false,
 }: FigJamToolbarProps) {
   const [showVotingConfig, setShowVotingConfig] = useState(false);
   const [showClusterDialog, setShowClusterDialog] = useState(false);
@@ -296,13 +298,13 @@ export function FigJamToolbar({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={`w-10 h-10 rounded-xl ${ungroupedCount > 0 ? "text-violet-600 hover:text-violet-700 hover:bg-violet-50" : ""}`}
+                  className={`w-10 h-10 rounded-xl ${ungroupedCount > 0 ? "text-primary hover:text-primary/80 hover:bg-primary/10" : ""}`}
                   onClick={onToggleAIGroupingPanel}
                 >
                   <div className="relative">
                     <Sparkles className="w-5 h-5" />
                     {ungroupedCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-violet-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-primary text-primary-foreground text-[9px] font-bold rounded-full flex items-center justify-center">
                         {ungroupedCount > 9 ? "9+" : ungroupedCount}
                       </span>
                     )}
@@ -474,7 +476,7 @@ export function FigJamToolbar({
                 </Button>
               )}
 
-              {/* Generate Persona - visible when voting is finished and there are results */}
+              {/* Generate/View Persona - visible when voting is finished and there are results */}
               {!voting?.isVoting && voteResults && voteResults.length > 0 && (
                 <Button
                   size="sm"
@@ -487,7 +489,17 @@ export function FigJamToolbar({
                   }}
                   className="bg-[#4CA771] hover:bg-[#3F9A68] text-white"
                 >
-                  Generate Persona
+                  {hasPersonas ? (
+                    <>
+                      <Eye className="w-4 h-4 mr-1" />
+                      View Persona
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-1" />
+                      Generate Persona
+                    </>
+                  )}
                 </Button>
               )}
             </div>

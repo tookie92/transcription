@@ -215,13 +215,16 @@ export const deleteInterview = action({
     const project = await ctx.runQuery(api.projects.getProjectForInvite, { projectId: interview.projectId });
     if (!project) throw new Error("Project not found");
 
-    const hasAccess = project.members.some((member: { userId: string }) => 
-      member.userId === identity.subject
-    ) || project.ownerId === identity.subject;
-
-    if (!hasAccess) throw new Error("No access to delete this interview");
-
-    const audioUrl = interview.audioUrl;
+    // Check if user is owner
+    const isOwner = project.ownerId === identity.subject;
+    
+    // Check if user is editor or owner
+    const member = project.members.find((m: { userId: string }) => m.userId === identity.subject);
+    const isEditorOrOwner = isOwner || member?.role === "editor";
+    
+    if (!isEditorOrOwner) {
+      throw new Error("Only owners and editors can delete interviews");
+    }
 
     await ctx.runMutation(api.interviews.deleteInterviewInternal, { interviewId: args.interviewId });
 

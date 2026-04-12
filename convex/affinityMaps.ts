@@ -550,6 +550,44 @@ export const saveFigJamElements = mutation({
 });
 
 /**
+ * Delete a sticky from FigJam board
+ * Only the creator can delete their own stickies
+ */
+export const deleteStickyFromCanvas = mutation({
+  args: {
+    mapId: v.id("affinityMaps"),
+    stickyId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const map = await ctx.db.get(args.mapId);
+    if (!map) throw new Error("Map not found");
+
+    const elements = map.figJamElements as Record<string, any> || {};
+    const sticky = elements[args.stickyId];
+
+    if (!sticky) throw new Error("Sticky not found");
+
+    // Only the creator can delete their own sticky
+    if (sticky.author !== identity.subject) {
+      throw new Error("You can only delete your own insights");
+    }
+
+    // Remove the sticky from elements
+    const { [args.stickyId]: removed, ...remainingElements } = elements;
+
+    await ctx.db.patch(args.mapId, {
+      figJamElements: remainingElements,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
  * Load FigJam board elements from Convex
  * Called when the board mounts
  */

@@ -5,6 +5,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { ActivePanel } from "@/types";
 import { NotificationBell } from "../NotificationBell";
 import { SilentSortingCommand } from "../SilentSortingCommand";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface WorkspaceHeaderProps {
   projectId: Id<"projects">;
@@ -53,6 +54,9 @@ export function WorkspaceHeader({
 
       {/* Toolbar */}
       <div className="flex items-center gap-3" data-tour="toolbar">
+        {/* Theme Toggle */}
+        <ThemeToggle />
+
         {/* Bell Notifications */}
         <NotificationBell />
 

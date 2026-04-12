@@ -107,6 +107,10 @@ interface FigJamBoardProps {
   onOpenPersona?: () => void;
   // Callback to receive cluster/label data for panels
   onLabelDataChange?: (labels: Array<{ id: string; title: string; insightIds: string[] }>) => void;
+  // Callback to toggle voting mode
+  onToggleVoting?: () => void;
+  // Whether personas exist for showing "View Persona" vs "Generate Persona"
+  hasPersonas?: boolean;
 }
 
 export function FigJamBoard({
@@ -130,6 +134,8 @@ export function FigJamBoard({
   currentUser,
   onOpenPersona,
   onLabelDataChange,
+  onToggleVoting,
+  hasPersonas = false,
 }: FigJamBoardProps) {
   const board = useFigJamBoard();
   const { state, setTool } = board;
@@ -367,21 +373,20 @@ export function FigJamBoard({
       const key = e.key.toLowerCase();
       
       // Tool shortcuts - deactivate comment tool when using other tools
-      if (key === "v") {
+      if (key === "s") {
         setTool("select");
         setIsCommentToolActive(false);
       } else if (key === "h") {
         setTool("hand");
         setIsCommentToolActive(false);
-      } else if (key === "s") {
-        setTool("sticky");
-        setShowStickyPicker(true);
-        setIsCommentToolActive(false);
-      } else if (key === "f") {
-        setTool("section");
-        setIsCommentToolActive(false);
       } else if (key === "c") {
         setTool("cluster");
+        setIsCommentToolActive(false);
+      } else if (key === "v") {
+        // Toggle voting mode
+        onToggleVoting?.();
+      } else if (key === "f") {
+        setTool("section");
         setIsCommentToolActive(false);
       } else if (key === "m") {
         setIsCommentToolActive(prev => !prev);
@@ -389,7 +394,7 @@ export function FigJamBoard({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [setTool, setIsCommentToolActive]);
+  }, [setTool, setIsCommentToolActive, onToggleVoting]);
 
   // ── Presence (cursors) ───────────────────────────────────────────────────
   const { userId } = useAuth();
@@ -520,6 +525,29 @@ export function FigJamBoard({
       });
     }
   }, 200);
+
+  // Helper function to log activity
+  const safeLogActivity = useCallback((
+    action: "sticky_created" | "sticky_updated" | "sticky_moved" | "sticky_deleted" |
+            "section_created" | "section_renamed" | "section_moved" | "section_deleted" |
+            "group_created" | "group_renamed" | "group_moved" | "group_deleted" |
+            "ai_cluster_created" | "ai_suggestions_generated" | "elements_grouped",
+    targetId: string,
+    targetName?: string
+  ) => {
+    if (hasMapId && mapId) {
+      try {
+        logActivity({
+          mapId: mapId as Id<"affinityMaps">,
+          action,
+          targetId,
+          targetName,
+        });
+      } catch (err) {
+        console.error("Failed to log activity:", err);
+      }
+    }
+  }, [hasMapId, mapId, logActivity]);
 
   // Helper to get lock info for an element
   const getLockInfo = (elementId: string) => {
@@ -940,6 +968,7 @@ export function FigJamBoard({
         );
         console.log("[DEBUG] Created cluster:", clusterId);
         board.updateElement(clusterId, { text: "New Cluster" });
+        safeLogActivity("section_created", clusterId, "New Cluster");
         board.setTool("select");
         
         if (hasMapId) {
@@ -956,6 +985,7 @@ export function FigJamBoard({
       if (state.activeTool === "label") {
         const pos = screenToCanvas(e.clientX, e.clientY);
         const labelId = board.addClusterLabel({ x: pos.x, y: pos.y });
+        safeLogActivity("section_created", labelId, "New Section");
         board.setTool("select");
         return;
       }
@@ -983,6 +1013,7 @@ export function FigJamBoard({
         const clusterId = findClusterAtPositionHelper(stickyPos.x, stickyPos.y, size.width, size.height, currentLabels);
         
         const stickyId = board.addStickyNote(stickyPos, stickyColor, size, currentUserName);
+        safeLogActivity("sticky_created", stickyId, stickyColor);
         
         if (clusterId) {
           board.updateElement(stickyId, { clusterId });
@@ -1186,11 +1217,12 @@ export function FigJamBoard({
       }
 
       switch (e.key) {
-        case "v": case "V": board.setTool("select"); break;
+        case "s": case "S": board.setTool("select"); break;
         case "h": case "H": board.setTool("hand");   break;
         case "t": case "T": board.setTool("text");   break;
         case "f": case "F": board.setTool("section"); break;
-        case "c": case "C": board.setTool("label"); break;
+        case "c": case "C": board.setTool("cluster"); break;
+        case "v": case "V": onToggleVoting?.(); break;
         case "F2":
           if (state.selectedIds.length === 1) {
             const selectedEl = state.elements[state.selectedIds[0]];
@@ -1368,6 +1400,7 @@ export function FigJamBoard({
 
     // Update cluster title AFTER all stickies are positioned
     board.updateElement(clusterId, { text: title });
+    safeLogActivity("ai_cluster_created", clusterId, title);
 
     console.log(`[AI GROUPING] Cluster ${clusterId} created and positioned (${clusterWidth}x${clusterHeight})`);
 
@@ -1429,6 +1462,7 @@ export function FigJamBoard({
             const position = { x: 100, y: 100 };
             const stickyId = board.addStickyNote(position, color, size, currentUserName);
             board.updateElement(stickyId, { content });
+            safeLogActivity("sticky_created", stickyId, color);
             board.selectElement(stickyId);
             return stickyId;
           }}
@@ -1438,6 +1472,17 @@ export function FigJamBoard({
           draggingStickyId={draggingStickyId}
           getLockInfo={getLockInfo}
           selectedIds={state.selectedIds}
+          currentUserId={userId || undefined}
+          onDeleteSticky={(stickyId) => {
+            board.deleteElement(stickyId);
+            safeLogActivity("sticky_deleted", stickyId);
+          }}
+          onCleanDrafts={(stickyIds) => {
+            stickyIds.forEach(id => {
+              board.deleteElement(id);
+            });
+            safeLogActivity("sticky_deleted", stickyIds.join(","));
+          }}
         />
       )}
 
@@ -1696,6 +1741,7 @@ export function FigJamBoard({
                 }}
                 onLabelChange={(newLabel) => {
                   board.updateElement(el.id, { text: newLabel });
+                  safeLogActivity("section_renamed", el.id, newLabel);
                   if (hasMapId) {
                     throttledBroadcast(el.id, "label", "update", el.position, undefined, { text: newLabel });
                   }
@@ -1712,6 +1758,7 @@ export function FigJamBoard({
                 }}
                 onDrop={(stickyId) => {
                   board.updateElement(stickyId, { clusterId: el.id, parentSectionId: el.id });
+                  safeLogActivity("sticky_moved", stickyId, `Moved to ${el.text || "cluster"}`);
                   if (hasMapId) {
                     throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, { clusterId: el.id, parentSectionId: el.id });
                   }
@@ -1870,6 +1917,7 @@ export function FigJamBoard({
           };
           const clusterId = board.addClusterLabel(position, { width: 500, height: 350 });
           board.updateElement(clusterId, { text: title });
+          safeLogActivity("section_created", clusterId, title);
           
           // Save to Convex
           if (hasMapId) {
@@ -1880,6 +1928,7 @@ export function FigJamBoard({
           }
         }}
         onOpenPersona={onOpenPersona}
+        hasPersonas={hasPersonas}
       />
 
       {/* ── MiniMap ── */}

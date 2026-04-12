@@ -48,6 +48,10 @@ export const logActivity = mutation({
       v.literal("section_renamed"),
       v.literal("section_deleted"),
       v.literal("elements_grouped"),
+      // AI Grouping actions
+      v.literal("ai_cluster_created"),
+      v.literal("ai_suggestions_generated"),
+      v.literal("ai_rename_applied"),
     ),
     targetId: v.string(),
     targetName: v.optional(v.string()),

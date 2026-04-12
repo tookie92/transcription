@@ -657,8 +657,8 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
                               rows={2}
                             />
                           ) : (
-                            <blockquote className="p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
-                              <p className="text-sm italic">&ldquo;{currentPersona.quote}&rdquo;</p>
+                            <blockquote className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border-l-4 border-blue-500 dark:border-blue-400 text-foreground">
+                              <p className="text-sm italic text-blue-900 dark:text-blue-100">&ldquo;{currentPersona.quote}&rdquo;</p>
                             </blockquote>
                           )}
                         </div>

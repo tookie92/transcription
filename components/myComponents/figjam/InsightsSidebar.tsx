@@ -18,7 +18,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { Plus, GripVertical, Search, X, Filter, Check } from "lucide-react";
+import { Plus, GripVertical, Search, X, Filter, Check, Trash2 } from "lucide-react";
 import type { StickyNoteData, StickyColor } from "@/types/figjam";
 
 const STICKY_COLORS: Record<string, { bg: string; header: string; text: string; accent: string }> = {
@@ -51,11 +51,14 @@ interface InsightCardProps {
   isLocked?: boolean;
   isSelected?: boolean;
   lockedByName?: string;
+  canDelete?: boolean;
+  onDelete?: (stickyId: string) => void;
 }
 
-function InsightCard({ sticky, onDragStart, isDragging, isLocked, isSelected, lockedByName }: InsightCardProps) {
+function InsightCard({ sticky, onDragStart, isDragging, isLocked, isSelected, lockedByName, canDelete = false, onDelete }: InsightCardProps) {
   const colors = STICKY_COLORS[sticky.color] || STICKY_COLORS.insight;
   const canDrag = !isLocked;
+  const isManualSource = sticky.source === "manual" || !sticky.source;
   
   return (
     <div
@@ -93,6 +96,18 @@ function InsightCard({ sticky, onDragStart, isDragging, isLocked, isSelected, lo
       {/* Selection indicator */}
       {isSelected && !isLocked && (
         <div className="absolute top-1 right-1 z-10 w-2 h-2 bg-blue-500 rounded-full" />
+      )}
+      {/* Delete button - only for manual insights user created */}
+      {canDelete && isManualSource && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete?.(sticky.id);
+          }}
+          className="absolute top-1 right-1 z-10 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <Trash2 className="w-3.5 h-3.5 text-red-500" />
+        </button>
       )}
       <div className="flex items-start p-2.5 gap-2">
         <div className="shrink-0 mt-0.5 opacity-0 group-hover:opacity-40 transition-opacity">
@@ -212,6 +227,9 @@ interface InsightsSidebarProps {
   draggingStickyId: string | null;
   getLockInfo?: (elementId: string) => { isLocked: boolean; lockedByName?: string };
   selectedIds?: string[];
+  currentUserId?: string;
+  onDeleteSticky?: (stickyId: string) => void;
+  onCleanDrafts?: (stickyIds: string[]) => void;
 }
 
 const SIDEBAR_HEIGHT = 520;
@@ -223,6 +241,9 @@ export function InsightsSidebar({
   draggingStickyId,
   getLockInfo,
   selectedIds,
+  currentUserId,
+  onDeleteSticky,
+  onCleanDrafts,
 }: InsightsSidebarProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
@@ -230,6 +251,12 @@ export function InsightsSidebar({
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [filterAuthor, setFilterAuthor] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Count empty/draft stickies
+  const draftStickies = useMemo(() => {
+    return ungroupedStickies.filter(s => !s.content?.trim());
+  }, [ungroupedStickies]);
+  const draftCount = draftStickies.length;
 
   // Get unique authors
   const authors = useMemo(() => {
@@ -296,17 +323,37 @@ export function InsightsSidebar({
             <div>
               <h3 className="font-semibold text-sm text-[#1d1d1b] dark:text-foreground">Insights</h3>
               <p className="text-[10px] text-muted-foreground">
-                {filteredStickies.length} / {ungroupedStickies.length}
+                {filteredStickies.length} insights
+                {draftCount > 0 && (
+                  <span className="ml-1 text-orange-500">({draftCount} drafts)</span>
+                )}
               </p>
             </div>
-            <Button
-              size="sm"
-              className="h-7 px-2.5 text-[11px] font-medium rounded-lg bg-[#1d1d1b] hover:bg-[#333] text-white dark:bg-primary dark:hover:bg-primary/90 dark:text-primary-foreground"
-              onClick={() => setShowCreateDialog(true)}
-            >
-              <Plus className="w-3 h-3 mr-1" />
-              Add
-            </Button>
+            <div className="flex items-center gap-1">
+              {draftCount > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-[10px] font-medium rounded-lg text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/30"
+                  onClick={() => {
+                    if (confirm(`Delete ${draftCount} empty draft${draftCount > 1 ? 's' : ''}?`)) {
+                      onCleanDrafts?.(draftStickies.map(s => s.id));
+                    }
+                  }}
+                >
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  Clean
+                </Button>
+              )}
+              <Button
+                size="sm"
+                className="h-7 px-2.5 text-[11px] font-medium rounded-lg bg-[#1d1d1b] hover:bg-[#333] text-white dark:bg-primary dark:hover:bg-primary/90 dark:text-primary-foreground"
+                onClick={() => setShowCreateDialog(true)}
+              >
+                <Plus className="w-3 h-3 mr-1" />
+                Add
+              </Button>
+            </div>
           </div>
         </div>
         
@@ -455,6 +502,8 @@ export function InsightsSidebar({
             ) : (
               filteredStickies.map((sticky) => {
                 const lockInfo = getLockInfo?.(sticky.id);
+                const canDeleteThis = !!(currentUserId && onDeleteSticky && 
+                  (sticky.author === currentUserId || sticky.authorName === currentUserId));
                 return (
                   <InsightCard
                     key={sticky.id}
@@ -464,6 +513,8 @@ export function InsightsSidebar({
                     isLocked={lockInfo?.isLocked}
                     isSelected={selectedIds?.includes(sticky.id)}
                     lockedByName={lockInfo?.lockedByName}
+                    canDelete={canDeleteThis}
+                    onDelete={onDeleteSticky}
                   />
                 );
               })

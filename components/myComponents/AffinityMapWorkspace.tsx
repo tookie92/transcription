@@ -23,7 +23,7 @@ import { useVotingSync } from "@/hooks/useVotingSync";
 // Activity
 import { useActivity } from "@/hooks/useActivity";
 import { useActivityNotifications } from "@/hooks/useActivityNotifications";
-import { ActivityPanel } from "./ActivityPanel";
+import { TimelinePanel } from "./TimelinePanel";
 import { CommentPanel } from "./CommentPanel";
 import { ActivityButtonWithBadge } from "./figjam/NotificationBadge";
 import { ArrowLeft } from "lucide-react";
@@ -78,6 +78,13 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
 
   // ==================== VOTING (passed to FigJamBoard) ====================
   const voting = useVotingSync(affinityMap?._id, projectId as Id<"projects">);
+
+  // ==================== PERSONAS ====================
+  const savedPersonas = useQuery(
+    api.personas.getPersonasByMap,
+    affinityMap?._id ? { mapId: affinityMap._id as Id<"affinityMaps"> } : "skip"
+  );
+  const hasPersonas = (savedPersonas?.length ?? 0) > 0;
 
   // Reset canvas tool when panel opens or closes to prevent stuck state
   useEffect(() => {
@@ -431,6 +438,14 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           currentUser={{ userId: userId || "", name: user?.fullName || user?.firstName || "You" }}
           onOpenPersona={() => setActivePanel("persona")}
           onLabelDataChange={setCanvasClusters}
+          onToggleVoting={() => {
+            if (voting.isVoting) {
+              voting.stopVoting();
+            } else {
+              voting.startVoting({ dotsPerUser: 5, durationMinutes: null, prompt: "Vote for priorities" });
+            }
+          }}
+          hasPersonas={hasPersonas}
         />
       )}
 
@@ -472,12 +487,16 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         }}
       />
 
-      {/* Activity Panel */}
+      {/* Timeline View */}
       {showActivityPanel && affinityMap && (
-        <ActivityPanel
+        <TimelinePanel
           mapId={affinityMap._id}
           isOpen={showActivityPanel}
           onClose={() => setShowActivityPanel(false)}
+          onUndo={() => {/* TODO: implement undo */}}
+          onRedo={() => {/* TODO: implement redo */}}
+          canUndo={false}
+          canRedo={false}
         />
       )}
 
