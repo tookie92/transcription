@@ -588,6 +588,89 @@ export const deleteStickyFromCanvas = mutation({
 });
 
 /**
+ * Merge two clusters into one
+ * Moves all stickies from source cluster to target cluster
+ * Deletes the source cluster
+ */
+export const mergeClusters = mutation({
+  args: {
+    mapId: v.id("affinityMaps"),
+    targetClusterId: v.string(), // Cluster to keep
+    sourceClusterId: v.string(), // Cluster to delete
+    mergedTitle: v.optional(v.string()), // Optional new title for target
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const map = await ctx.db.get(args.mapId);
+    if (!map) throw new Error("Map not found");
+
+    const elements = map.figJamElements as Record<string, any> || {};
+
+    const targetCluster = elements[args.targetClusterId];
+    const sourceCluster = elements[args.sourceClusterId];
+
+    if (!targetCluster || targetCluster.type !== "label") {
+      throw new Error("Target cluster not found");
+    }
+    if (!sourceCluster || sourceCluster.type !== "label") {
+      throw new Error("Source cluster not found");
+    }
+
+    // Update all stickies from source cluster to target cluster
+    const updatedElements = { ...elements };
+    
+    for (const [id, element] of Object.entries(updatedElements)) {
+      if (element.type === "sticky") {
+        // Move stickies that belong to source cluster
+        if (element.clusterId === args.sourceClusterId) {
+          updatedElements[id] = {
+            ...element,
+            clusterId: args.targetClusterId,
+            updatedAt: Date.now(),
+          };
+        }
+        // Also update parentSectionId for backwards compatibility
+        if (element.parentSectionId === args.sourceClusterId) {
+          updatedElements[id] = {
+            ...updatedElements[id],
+            parentSectionId: args.targetClusterId,
+          };
+        }
+      }
+    }
+
+    // Update target cluster title if provided
+    if (args.mergedTitle) {
+      updatedElements[args.targetClusterId] = {
+        ...updatedElements[args.targetClusterId],
+        text: args.mergedTitle,
+        updatedAt: Date.now(),
+      };
+    }
+
+    // Delete source cluster
+    delete updatedElements[args.sourceClusterId];
+
+    await ctx.db.patch(args.mapId, {
+      figJamElements: updatedElements,
+      updatedAt: Date.now(),
+    });
+
+    return {
+      success: true,
+      targetClusterId: args.targetClusterId,
+      sourceClusterId: args.sourceClusterId,
+      mergedTitle: args.mergedTitle || targetCluster.text,
+      stickiesMoved: Object.values(elements)
+        .filter((e: any) => e.type === "sticky" && e.clusterId === args.sourceClusterId)
+        .length,
+    };
+  },
+});
+
+/**
  * Load FigJam board elements from Convex
  * Called when the board mounts
  */

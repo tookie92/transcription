@@ -35,10 +35,25 @@
 
 
 ## 4. AI-POWERED SMART FEATURES
-- Auto-renommage intelligent de clusters basé sur le contenu
-- Suggestions de regroupement automatique
-- Détection de tendances dans les insights
-- Analyse de sentiments des stickies
+- ✅ Auto-renommage intelligent de clusters basé sur le contenu (implémenté)
+- ✅ Suggestions de regroupement automatique via AIGroupingPanel (implémenté)
+
+### TODO - Steps pour amélioration:
+
+**Step 1: Détection de clusters similaires**
+- Analyser les clusters existants pour trouver des thèmes communs
+- Afficher une suggestion: "Cluster A et Cluster B parlent du même sujet"
+- Bouton "Merge" pour fusionner automatiquement
+
+**Step 2: Analyse de sentiments par cluster**
+- Analyser le ton des stickies dans chaque cluster
+- Badge: "Mostly positive 😃" / "Mixed emotions 😐" / "Critical concerns 😟"
+- Couleur du cluster basée sur le sentiment dominant
+
+**Step 3: Suggestions proactives**
+- Quand l'utilisateur crée beaucoup de stickies non groupés → suggérer de les organiser
+- Quand 2+ clusters ont des stickies similaires → suggérer un merge
+- Quand un cluster a peu de stickies → suggérer de l'archiver ou fusionner
 
 
 ## 5. EMOJI RÉACTIONS
