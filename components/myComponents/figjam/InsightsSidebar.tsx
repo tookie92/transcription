@@ -48,55 +48,32 @@ interface InsightCardProps {
   sticky: StickyNoteData;
   onDragStart: (sticky: StickyNoteData) => void;
   isDragging?: boolean;
-  isLocked?: boolean;
-  isSelected?: boolean;
-  lockedByName?: string;
   canDelete?: boolean;
   onDelete?: (stickyId: string) => void;
 }
 
-function InsightCard({ sticky, onDragStart, isDragging, isLocked, isSelected, lockedByName, canDelete = false, onDelete }: InsightCardProps) {
+function InsightCard({ sticky, onDragStart, isDragging, canDelete = false, onDelete }: InsightCardProps) {
   const colors = STICKY_COLORS[sticky.color] || STICKY_COLORS.insight;
-  const canDrag = !isLocked;
   const isManualSource = sticky.source === "manual" || !sticky.source;
   
   return (
     <div
       className={cn(
         "relative rounded-xl transition-all duration-150",
-        "hover:shadow-md group",
-        isDragging && "opacity-50 scale-95",
-        isLocked ? "opacity-60 cursor-not-allowed" : "cursor-grab active:cursor-grabbing"
+        "hover:shadow-md group cursor-grab active:cursor-grabbing",
+        isDragging && "opacity-50 scale-95"
       )}
       style={{
         backgroundColor: colors.bg,
-        boxShadow: isSelected 
-          ? `0 0 0 2px ${colors.accent}` 
-          : "0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)",
       }}
-      draggable={canDrag}
+      draggable={true}
       onDragStart={(e) => {
-        if (canDrag) {
-          e.dataTransfer.setData("application/sticky-id", sticky.id);
-          e.dataTransfer.effectAllowed = "move";
-          onDragStart(sticky);
-        }
+        e.dataTransfer.setData("application/sticky-id", sticky.id);
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart(sticky);
       }}
     >
-      {/* Lock indicator */}
-      {isLocked && lockedByName && (
-        <div className="absolute top-1 right-1 z-10 flex items-center gap-1 px-1.5 py-0.5 bg-red-500/80 text-white text-[8px] rounded-full">
-          <svg className="w-2 h-2" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-          </svg>
-          {lockedByName}
-        </div>
-      )}
-      
-      {/* Selection indicator */}
-      {isSelected && !isLocked && (
-        <div className="absolute top-1 right-1 z-10 w-2 h-2 bg-blue-500 rounded-full" />
-      )}
       {/* Delete button - only for manual insights user created */}
       {canDelete && isManualSource && (
         <button
@@ -225,8 +202,6 @@ interface InsightsSidebarProps {
   onCreateSticky: (content: string, color: StickyColor) => string;
   onDragStart: (sticky: StickyNoteData) => void;
   draggingStickyId: string | null;
-  getLockInfo?: (elementId: string) => { isLocked: boolean; lockedByName?: string };
-  selectedIds?: string[];
   currentUserId?: string;
   onDeleteSticky?: (stickyId: string) => void;
   onCleanDrafts?: (stickyIds: string[]) => void;
@@ -239,8 +214,6 @@ export function InsightsSidebar({
   onCreateSticky,
   onDragStart,
   draggingStickyId,
-  getLockInfo,
-  selectedIds,
   currentUserId,
   onDeleteSticky,
   onCleanDrafts,
@@ -501,7 +474,6 @@ export function InsightsSidebar({
               </div>
             ) : (
               filteredStickies.map((sticky) => {
-                const lockInfo = getLockInfo?.(sticky.id);
                 const canDeleteThis = !!(currentUserId && onDeleteSticky && 
                   (sticky.author === currentUserId || sticky.authorName === currentUserId));
                 return (
@@ -510,9 +482,6 @@ export function InsightsSidebar({
                     sticky={sticky}
                     onDragStart={onDragStart}
                     isDragging={draggingStickyId === sticky.id}
-                    isLocked={lockInfo?.isLocked}
-                    isSelected={selectedIds?.includes(sticky.id)}
-                    lockedByName={lockInfo?.lockedByName}
                     canDelete={canDeleteThis}
                     onDelete={onDeleteSticky}
                   />

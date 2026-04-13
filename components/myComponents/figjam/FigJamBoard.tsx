@@ -1168,22 +1168,40 @@ export function FigJamBoard({
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
         board.undo();
-        // Only trigger parent callback, don't broadcast
+        // Trigger parent callback
         onUndo?.();
-        // Force save after undo to sync state
+        // Force immediate save after undo using current board state
         if (hasMapId) {
-          throttledSave(state.elements);
+          const currentElements = board.state.elements;
+          const elementsStr = JSON.stringify(currentElements);
+          if (elementsStr !== lastSavedElementsRef.current) {
+            lastSavedElementsRef.current = elementsStr;
+            saveToConvex({
+              mapId: mapId as Id<"affinityMaps">,
+              elements: currentElements,
+            });
+            console.log("[UNDO] Saved", Object.keys(currentElements).length, "elements after undo");
+          }
         }
         return;
       }
       if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
         e.preventDefault();
         board.redo();
-        // Only trigger parent callback, don't broadcast
+        // Trigger parent callback
         onRedo?.();
-        // Force save after redo to sync state
+        // Force immediate save after redo using current board state
         if (hasMapId) {
-          throttledSave(state.elements);
+          const currentElements = board.state.elements;
+          const elementsStr = JSON.stringify(currentElements);
+          if (elementsStr !== lastSavedElementsRef.current) {
+            lastSavedElementsRef.current = elementsStr;
+            saveToConvex({
+              mapId: mapId as Id<"affinityMaps">,
+              elements: currentElements,
+            });
+            console.log("[REDO] Saved", Object.keys(currentElements).length, "elements after redo");
+          }
         }
         return;
       }
@@ -1542,15 +1560,12 @@ export function FigJamBoard({
             const stickyId = board.addStickyNote(position, color, size, currentUserName);
             board.updateElement(stickyId, { content });
             safeLogActivity("sticky_created", stickyId, color);
-            board.selectElement(stickyId);
             return stickyId;
           }}
           onDragStart={(sticky) => {
             setDraggingStickyId(sticky.id);
           }}
           draggingStickyId={draggingStickyId}
-          getLockInfo={getLockInfo}
-          selectedIds={state.selectedIds}
           currentUserId={userId || undefined}
           onDeleteSticky={(stickyId) => {
             board.deleteElement(stickyId);
@@ -1847,30 +1862,16 @@ export function FigJamBoard({
                   // Stickies ne sont pas sélectionnables - uniquement les clusters
                 }}
                 onStickyUpdate={(stickyId, patch) => {
-                  const clearEditingPatch = {
-                    ...patch,
-                    editingBy: undefined,
-                    editingByName: undefined,
-                  };
-                  board.updateElement(stickyId, clearEditingPatch);
+                  board.updateElement(stickyId, patch);
                   if (patch.content && hasMapId) {
                     safeLogActivity("sticky_updated", stickyId, patch.content.slice(0, 30));
                   }
                   if (hasMapId) {
-                    throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, clearEditingPatch);
+                    throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, patch);
                   }
                 }}
-                onStickyStartEdit={(stickyId) => {
-                  board.updateElement(stickyId, { 
-                    editingBy: userId || "local-user",
-                    editingByName: currentUser?.name || "You"
-                  });
-                  if (hasMapId) {
-                    throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, {
-                      editingBy: userId || "local-user",
-                      editingByName: currentUser?.name || "You"
-                    });
-                  }
+                onStickyStartEdit={() => {
+                  // No lock needed - just allow editing
                 }}
                 onDrop={(stickyId) => {
                   board.updateElement(stickyId, { clusterId: el.id, parentSectionId: el.id });
