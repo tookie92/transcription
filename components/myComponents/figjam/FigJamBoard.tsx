@@ -724,12 +724,16 @@ export function FigJamBoard({
     // Also check for count changes
     const countChanged = currentIds.size !== savedIds.size;
 
-    // SIMPLE APPROACH: If there are changes, do a FULL reload from Convex
-    // This is more reliable than trying to merge changes
-    if (newIds.length > 0 || removedIds.length > 0 || countChanged) {
-      console.log("[SYNC] Full reload from Convex - new:", newIds, "removed:", removedIds, "count changed:", countChanged);
+    // Check for content changes (important for undo/redo)
+    const savedStr = JSON.stringify(savedElements);
+    const contentChanged = savedStr !== lastSyncedElementsRef.current;
+
+    // SIMPLE APPROACH: If there are ANY changes, do a FULL reload from Convex
+    // This ensures undo/redo is synced properly
+    if (newIds.length > 0 || removedIds.length > 0 || countChanged || contentChanged) {
+      console.log("[SYNC] Full reload from Convex - new:", newIds, "removed:", removedIds, "count changed:", countChanged, "content changed:", contentChanged);
       board.loadElements(savedElements);
-      lastSyncedElementsRef.current = JSON.stringify(savedElements);
+      lastSyncedElementsRef.current = savedStr;
     }
   }, [savedElements, isLoaded, state.elements, board]);
 
@@ -1862,16 +1866,32 @@ export function FigJamBoard({
                   // Stickies ne sont pas sélectionnables - uniquement les clusters
                 }}
                 onStickyUpdate={(stickyId, patch) => {
-                  board.updateElement(stickyId, patch);
+                  // Clear the lock when saving
+                  const lockClearPatch = {
+                    ...patch,
+                    editingBy: undefined,
+                    editingByName: undefined,
+                  };
+                  board.updateElement(stickyId, lockClearPatch as any);
                   if (patch.content && hasMapId) {
                     safeLogActivity("sticky_updated", stickyId, patch.content.slice(0, 30));
                   }
                   if (hasMapId) {
-                    throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, patch);
+                    throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, lockClearPatch as any);
                   }
                 }}
-                onStickyStartEdit={() => {
-                  // No lock needed - just allow editing
+                onStickyStartEdit={(stickyId) => {
+                  // Set the lock when starting to edit
+                  board.updateElement(stickyId, { 
+                    editingBy: userId || "local-user",
+                    editingByName: currentUser?.name || "You"
+                  });
+                  if (hasMapId) {
+                    throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, {
+                      editingBy: userId || "local-user",
+                      editingByName: currentUser?.name || "You",
+                    });
+                  }
                 }}
                 onDrop={(stickyId) => {
                   board.updateElement(stickyId, { clusterId: el.id, parentSectionId: el.id });

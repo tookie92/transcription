@@ -117,23 +117,36 @@ function RealStickyCard({
   }, [isEditing]);
 
   const handleDoubleClick = (e: React.MouseEvent) => {
+    // Check if someone else is editing
+    const isLockedByOther = sticky.editingBy && sticky.editingBy !== currentUserId;
+    if (isLockedByOther) {
+      return; // Can't edit if someone else is editing
+    }
+    
     e.stopPropagation();
     e.preventDefault();
     setEditingContent(sticky.content);
     setIsEditing(true);
+    onStartEdit?.(sticky.id);
   };
 
   const handleSave = () => {
     const contentChanged = editingContent !== sticky.content;
     setIsEditing(false);
-    if (onUpdate && contentChanged) {
-      onUpdate(sticky.id, { content: editingContent });
+    if (onUpdate) {
+      if (contentChanged) {
+        onUpdate(sticky.id, { content: editingContent });
+      } else {
+        // Just close without changes
+        onUpdate(sticky.id, {});
+      }
     }
   };
 
   const handleCancel = () => {
     setEditingContent(sticky.content);
     setIsEditing(false);
+    onStartEdit?.(sticky.id); // Signal editing ended
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -162,7 +175,8 @@ function RealStickyCard({
   };
 
   const handleDragStart = (e: React.DragEvent) => {
-    if (isEditing) {
+    const isLockedByOther = sticky.editingBy && sticky.editingBy !== currentUserId;
+    if (isEditing || isLockedByOther) {
       e.preventDefault();
       return;
     }
@@ -171,13 +185,19 @@ function RealStickyCard({
     onDragStart?.(sticky.id);
   };
 
+  const isLockedByOther = sticky.editingBy && sticky.editingBy !== currentUserId;
+  const editingUserName = sticky.editingByName;
+
   return (
     <div 
-      className="relative group cursor-grab active:cursor-grabbing"
+      className={cn(
+        "relative group",
+        !isLockedByOther && "cursor-grab active:cursor-grabbing"
+      )}
       onPointerDown={handlePointerDown}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      draggable={!isEditing}
+      draggable={!isEditing && !isLockedByOther}
       onDragStart={handleDragStart}
     >
       {/* Clickable sticky note */}
@@ -192,23 +212,36 @@ function RealStickyCard({
             width: CARD_WIDTH,
             minHeight: cardHeight,
             backgroundColor: colors.bg,
-            boxShadow: isHovered
+            boxShadow: isHovered && !isLockedByOther
               ? "4px 8px 20px rgba(0,0,0,0.2)"
               : "2px 4px 12px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.08)",
-            transform: isHovered && !isEditing ? "scale(1.02)" : "scale(1)",
+            transform: isHovered && !isEditing && !isLockedByOther ? "scale(1.02)" : "scale(1)",
             transition: "transform 0.15s, box-shadow 0.15s",
+            opacity: isLockedByOther ? 0.7 : 1,
           }}
         >
-          {/* Remove button */}
-          <button
-            onClick={handleRemoveClick}
-            className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-black/10"
-            style={{ color: colors.text }}
-          >
-            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
+          {/* Lock indicator */}
+          {isLockedByOther && (
+            <div className="absolute -top-6 left-2 flex items-center gap-1.5 px-2 py-1 bg-amber-100/95 backdrop-blur-sm rounded-md text-xs text-amber-800 z-10 shadow-sm whitespace-nowrap">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+              </svg>
+              <span className="font-medium">{editingUserName || "Someone"} editing</span>
+            </div>
+          )}
+
+          {/* Remove button - only if not locked */}
+          {!isLockedByOther && (
+            <button
+              onClick={handleRemoveClick}
+              className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-black/10"
+              style={{ color: colors.text }}
+            >
+              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          )}
           
           {/* Content area */}
           <div ref={contentRef} className="flex-1 pr-5 overflow-hidden pt-4">
@@ -227,7 +260,7 @@ function RealStickyCard({
                 className="text-[13px] font-medium leading-relaxed text-[#1d1d1b] break-words"
                 style={{ color: colors.text, wordBreak: "break-word", overflowWrap: "break-word" }}
               >
-                {sticky.content || "Double-click to edit"}
+                {sticky.content || (isLockedByOther ? "Being edited..." : "Double-click to edit")}
               </p>
             )}
           </div>
