@@ -617,13 +617,25 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     futureRef.current = [...futureRef.current, currentSnapshot];
     
     isUndoingRedoingRef.current = true;
-    baseDispatch({ type: "LOAD_ELEMENTS", elements: previousState.elements });
+    
+    // Clean locks on all stickies when restoring (important for collaborative editing)
+    const cleanedElements: Record<string, FigJamElement> = {};
+    for (const [id, el] of Object.entries(previousState.elements)) {
+      if (el.type === "sticky") {
+        const { editingBy, editingByName, ...rest } = el as FigJamElement & { editingBy?: string; editingByName?: string };
+        cleanedElements[id] = rest as FigJamElement;
+      } else {
+        cleanedElements[id] = el;
+      }
+    }
+    
+    baseDispatch({ type: "LOAD_ELEMENTS", elements: cleanedElements });
     isUndoingRedoingRef.current = false;
     
-    console.log(`[Undo] Restored ${Object.keys(previousState.elements).length}, redo stack: ${futureRef.current.length}`);
+    console.log(`[Undo] Restored ${Object.keys(cleanedElements).length}, redo stack: ${futureRef.current.length}`);
     
-    // Return the restored elements for immediate saving
-    return previousState.elements;
+    // Return the cleaned elements for immediate saving
+    return cleanedElements;
   }, []);
 
   const redo = useCallback((): Record<string, FigJamElement> | null => {
@@ -654,13 +666,25 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     historyRef.current = [...historyRef.current, currentSnapshot];
     
     isUndoingRedoingRef.current = true;
-    baseDispatch({ type: "LOAD_ELEMENTS", elements: nextState.elements });
+    
+    // Clean locks on all stickies when restoring (important for collaborative editing)
+    const cleanedElements: Record<string, FigJamElement> = {};
+    for (const [id, el] of Object.entries(nextState.elements)) {
+      if (el.type === "sticky") {
+        const { editingBy, editingByName, ...rest } = el as FigJamElement & { editingBy?: string; editingByName?: string };
+        cleanedElements[id] = rest as FigJamElement;
+      } else {
+        cleanedElements[id] = el;
+      }
+    }
+    
+    baseDispatch({ type: "LOAD_ELEMENTS", elements: cleanedElements });
     isUndoingRedoingRef.current = false;
     
-    console.log(`[Redo] Restored ${Object.keys(nextState.elements).length}, history: ${historyRef.current.length}`);
+    console.log(`[Redo] Restored ${Object.keys(cleanedElements).length}, history: ${historyRef.current.length}`);
     
-    // Return the restored elements for immediate saving
-    return nextState.elements;
+    // Return the cleaned elements for immediate saving
+    return cleanedElements;
   }, []);
 
   const canUndo = historyRef.current.length > 0;
