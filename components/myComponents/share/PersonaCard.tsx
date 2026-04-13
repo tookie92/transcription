@@ -67,7 +67,7 @@ export function PersonaCard({ persona, isCompact = false }: PersonaCardComponent
             />
           ) : (
             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <span className="text-sm font-bold text-primary">{initials}</span>
+              <span className="text-sm font-bold text-primary">{initials} </span>
             </div>
           )}
           
@@ -103,7 +103,7 @@ export function PersonaCard({ persona, isCompact = false }: PersonaCardComponent
   }
 
   return (
-    <Card className="w-full max-w-5xl mx-auto overflow-hidden shadow-lg rounded-2xl">
+    <Card className="w-full max-w-5xl mx-auto overflow-hidden p-0 shadow-lg rounded-2xl">
       {/* Header - Identity */}
       <div className="flex flex-col md:flex-row">
         {/* Left Panel - Identity */}
@@ -126,14 +126,14 @@ export function PersonaCard({ persona, isCompact = false }: PersonaCardComponent
           )}
           {persona.quote && (
             <div className="flex items-start gap-2 px-2">
-              <MessageSquareQuote className="w-4 h-4 text-primary-foreground/60 flex-shrink-0 mt-0.5" />
+              <MessageSquareQuote className="w-4 h-4 text-primary-foreground/60 shrink-0 mt-0.5" />
               <p className="text-primary-foreground/95 text-sm font-medium text-center leading-relaxed">&ldquo;{persona.quote}&rdquo;</p>
             </div>
           )}
         </div>
 
         {/* Right Panel - Content */}
-        <div className="md:w-2/3 bg-card p-6">
+        <div className="md:w-2/3 flex flex-col gap-0 bg-card px-8 py-10">
           {/* Demographics - First */}
           <div className="mb-5">
             <div className="flex items-center gap-2 mb-3">
@@ -143,7 +143,7 @@ export function PersonaCard({ persona, isCompact = false }: PersonaCardComponent
             <div className="grid grid-cols-2 gap-1.5">
               {persona.age && (
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="w-5 h-5 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                  <span className="w-5 h-5 rounded bg-muted flex items-center justify-center shrink-0">
                     <User className="w-3 h-3 text-muted-foreground" />
                   </span>
                   <span className="text-muted-foreground truncate">{persona.age} ans</span>
@@ -151,7 +151,7 @@ export function PersonaCard({ persona, isCompact = false }: PersonaCardComponent
               )}
               {persona.demographics?.location && (
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="w-5 h-5 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                  <span className="w-5 h-5 rounded bg-muted flex items-center justify-center shrink-0">
                     <MapPin className="w-3 h-3 text-muted-foreground" />
                   </span>
                   <span className="text-muted-foreground truncate">{persona.demographics.location}</span>
@@ -159,7 +159,7 @@ export function PersonaCard({ persona, isCompact = false }: PersonaCardComponent
               )}
               {persona.demographics?.income && (
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="w-5 h-5 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                  <span className="w-5 h-5 rounded bg-muted flex items-center justify-center shrink-0">
                     <DollarSign className="w-3 h-3 text-muted-foreground" />
                   </span>
                   <span className="text-muted-foreground truncate">{persona.demographics.income}</span>
@@ -167,7 +167,7 @@ export function PersonaCard({ persona, isCompact = false }: PersonaCardComponent
               )}
               {techLabel && (
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="w-5 h-5 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                  <span className="w-5 h-5 rounded bg-muted flex items-center justify-center shrink-0">
                     <Monitor className="w-3 h-3 text-muted-foreground" />
                   </span>
                   <span className="text-muted-foreground truncate">{techLabel}</span>
@@ -175,7 +175,7 @@ export function PersonaCard({ persona, isCompact = false }: PersonaCardComponent
               )}
               {persona.demographics?.education && (
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="w-5 h-5 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                  <span className="w-5 h-5 rounded bg-muted flex items-center justify-center shrink-0">
                     <BookOpen className="w-3 h-3 text-muted-foreground" />
                   </span>
                   <span className="text-muted-foreground truncate">{persona.demographics.education}</span>
@@ -215,7 +215,7 @@ export function PersonaCard({ persona, isCompact = false }: PersonaCardComponent
                 {persona.goals && persona.goals.length > 0 ? (
                   persona.goals.slice(0, 4).map((goal, idx) => (
                     <div key={idx} className="flex items-start gap-2">
-                      <TrendingUp className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      <TrendingUp className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
                       <span className="text-sm text-muted-foreground">{goal}</span>
                     </div>
                   ))
@@ -240,7 +240,7 @@ export function PersonaCard({ persona, isCompact = false }: PersonaCardComponent
                 {persona.frustrations && persona.frustrations.length > 0 ? (
                   persona.frustrations.slice(0, 4).map((frustration, idx) => (
                     <div key={idx} className="flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                      <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
                       <span className="text-sm text-muted-foreground">{frustration}</span>
                     </div>
                   ))
