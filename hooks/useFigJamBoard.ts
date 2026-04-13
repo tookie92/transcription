@@ -568,10 +568,10 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     baseDispatch(action);
   }, [startDrag]);
 
-  const undo = useCallback(() => {
+  const undo = useCallback((): Record<string, FigJamElement> | null => {
     if (historyRef.current.length === 0) {
       console.log("[Undo] No history");
-      return;
+      return null;
     }
     
     const previousState = historyRef.current[historyRef.current.length - 1];
@@ -600,12 +600,15 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     isUndoingRedoingRef.current = false;
     
     console.log(`[Undo] Restored ${Object.keys(previousState.elements).length}, redo stack: ${futureRef.current.length}`);
+    
+    // Return the restored elements for immediate saving
+    return previousState.elements;
   }, []);
 
-  const redo = useCallback(() => {
+  const redo = useCallback((): Record<string, FigJamElement> | null => {
     if (futureRef.current.length === 0) {
       console.log("[Redo] Nothing to redo");
-      return;
+      return null;
     }
     
     const nextState = futureRef.current[futureRef.current.length - 1];
@@ -634,6 +637,9 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     isUndoingRedoingRef.current = false;
     
     console.log(`[Redo] Restored ${Object.keys(nextState.elements).length}, history: ${historyRef.current.length}`);
+    
+    // Return the restored elements for immediate saving
+    return nextState.elements;
   }, []);
 
   const canUndo = historyRef.current.length > 0;

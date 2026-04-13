@@ -523,6 +523,18 @@ export function FigJamBoard({
   // Mutation: Log activity
   const logActivity = useMutation(api.activityLog.logActivity);
   
+  // Immediate save - for critical operations like lock/unlock
+  const immediateSave = useCallback((elements: Record<string, FigJamElement>) => {
+    if (hasMapId) {
+      lastSavedElementsRef.current = JSON.stringify(elements);
+      saveToConvex({
+        mapId: mapId as Id<"affinityMaps">,
+        elements,
+      });
+      console.log("[IMMEDIATE_SAVE] Saved", Object.keys(elements).length, "elements");
+    }
+  }, [hasMapId, mapId, saveToConvex]);
+  
   // Throttled save - saves every 500ms to keep Convex in sync
   const throttledSave = useThrottle((elements: Record<string, FigJamElement>) => {
     if (hasMapId) {
@@ -1171,41 +1183,35 @@ export function FigJamBoard({
       // Undo/Redo - LOCAL ONLY (does not broadcast to other users for collaborative editing)
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
-        board.undo();
+        // Get restored elements from undo
+        const restoredElements = board.undo();
         // Trigger parent callback
         onUndo?.();
-        // Force immediate save after undo using current board state
-        if (hasMapId) {
-          const currentElements = board.state.elements;
-          const elementsStr = JSON.stringify(currentElements);
-          if (elementsStr !== lastSavedElementsRef.current) {
-            lastSavedElementsRef.current = elementsStr;
-            saveToConvex({
-              mapId: mapId as Id<"affinityMaps">,
-              elements: currentElements,
-            });
-            console.log("[UNDO] Saved", Object.keys(currentElements).length, "elements after undo");
-          }
+        // Force immediate save after undo with restored elements
+        if (hasMapId && restoredElements) {
+          lastSavedElementsRef.current = JSON.stringify(restoredElements);
+          saveToConvex({
+            mapId: mapId as Id<"affinityMaps">,
+            elements: restoredElements,
+          });
+          console.log("[UNDO] Saved", Object.keys(restoredElements).length, "elements after undo");
         }
         return;
       }
       if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
         e.preventDefault();
-        board.redo();
+        // Get restored elements from redo
+        const restoredElements = board.redo();
         // Trigger parent callback
         onRedo?.();
-        // Force immediate save after redo using current board state
-        if (hasMapId) {
-          const currentElements = board.state.elements;
-          const elementsStr = JSON.stringify(currentElements);
-          if (elementsStr !== lastSavedElementsRef.current) {
-            lastSavedElementsRef.current = elementsStr;
-            saveToConvex({
-              mapId: mapId as Id<"affinityMaps">,
-              elements: currentElements,
-            });
-            console.log("[REDO] Saved", Object.keys(currentElements).length, "elements after redo");
-          }
+        // Force immediate save after redo with restored elements
+        if (hasMapId && restoredElements) {
+          lastSavedElementsRef.current = JSON.stringify(restoredElements);
+          saveToConvex({
+            mapId: mapId as Id<"affinityMaps">,
+            elements: restoredElements,
+          });
+          console.log("[REDO] Saved", Object.keys(restoredElements).length, "elements after redo");
         }
         return;
       }
@@ -1866,7 +1872,7 @@ export function FigJamBoard({
                   // Stickies ne sont pas sélectionnables - uniquement les clusters
                 }}
                 onStickyUpdate={(stickyId, patch) => {
-                  // Clear the lock when saving
+                  // Clear the lock when saving - save IMMEDIATELY
                   const lockClearPatch = {
                     ...patch,
                     editingBy: undefined,
@@ -1876,21 +1882,22 @@ export function FigJamBoard({
                   if (patch.content && hasMapId) {
                     safeLogActivity("sticky_updated", stickyId, patch.content.slice(0, 30));
                   }
+                  // Save immediately for lock release
                   if (hasMapId) {
-                    throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, lockClearPatch as any);
+                    console.log("[LOCK_CLEAR] Saving immediately for sticky:", stickyId);
+                    immediateSave(board.state.elements);
                   }
                 }}
                 onStickyStartEdit={(stickyId) => {
-                  // Set the lock when starting to edit
+                  // Set the lock when starting to edit - save IMMEDIATELY
                   board.updateElement(stickyId, { 
                     editingBy: userId || "local-user",
                     editingByName: currentUser?.name || "You"
                   });
+                  // Save immediately for lock acquisition
                   if (hasMapId) {
-                    throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, {
-                      editingBy: userId || "local-user",
-                      editingByName: currentUser?.name || "You",
-                    });
+                    console.log("[LOCK_ACQUIRE] Saving immediately for sticky:", stickyId, "by:", currentUser?.name);
+                    immediateSave(board.state.elements);
                   }
                 }}
                 onDrop={(stickyId) => {
