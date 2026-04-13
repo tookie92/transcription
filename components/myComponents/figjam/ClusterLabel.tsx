@@ -516,7 +516,6 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       }
 
       onDragStart();
-      isDraggingRef.current = true;
 
       const startX = e.clientX;
       const startY = e.clientY;
@@ -528,16 +527,13 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
           hasMoved = true;
         }
-        // Update ref and force re-render
-        dragOffsetRef.current = { x: dx, y: dy };
-        setDragTrigger(t => t + 1);
+        // Update state for CSS transform
+        setDragOffset({ x: dx, y: dy });
       };
 
       const handlePointerUp = (upEvent: PointerEvent) => {
-        // Reset visual offset
-        isDraggingRef.current = false;
-        dragOffsetRef.current = { x: 0, y: 0 };
-        setDragTrigger(t => t + 1);
+        // Reset state
+        setDragOffset({ x: 0, y: 0 });
         
         if (!hasMoved) {
           // This was a click, not a drag - voting
@@ -627,10 +623,8 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   const selectionBorderColor = isLocked ? "#ef4444" : "#3b82f6"; // Red if locked, blue if selected
   const selectionBorderStyle = isSolidBorder ? "2px solid" : "2px dashed";
 
-  // Visual drag state - use refs + trigger for re-render
-  const isDraggingRef = useRef(false);
-  const dragOffsetRef = useRef({ x: 0, y: 0 });
-  const [dragTrigger, setDragTrigger] = useState(0); // Force re-render
+  // Drag offset - simple state for CSS transform
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   return (
     <div
@@ -643,8 +637,8 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         width: CLUSTER_WIDTH,
         height: AUTO_HEIGHT,
         zIndex: cluster.zIndex,
-        // Simple CSS transform for drag - no transition, no bounce
-        transform: `translate(${dragOffsetRef.current.x}px, ${dragOffsetRef.current.y}px)`,
+        // CSS transform for smooth drag
+        transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
       }}
       onPointerDown={handlePointerDown}
       onDoubleClick={handleDoubleClick}

@@ -1798,21 +1798,9 @@ export function FigJamBoard({
                   draggingClusterRef.current = el.id;
                   board.startDrag();
                 }}
-                onDrag={(dx, dy) => {
-                  const newPos = {
-                    x: el.position.x + dx,
-                    y: el.position.y + dy,
-                  };
-                  board.updateElement(el.id, { position: newPos });
-
-                  // Only move stickies that belong to this cluster
-                  stickies.filter(s => s.clusterId === el.id).forEach(sticky => {
-                    const newStickyPos = {
-                      x: sticky.position.x + dx,
-                      y: sticky.position.y + dy,
-                    };
-                    board.updateElement(sticky.id, { position: newStickyPos });
-                  });
+                onDrag={() => {
+                  // Visual drag handled by CSS transform in ClusterLabel
+                  // Don't update state during drag - just visual position
                 }}
                 onDragEnd={(finalX, finalY) => {
                   board.updateElement(el.id, {
