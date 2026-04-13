@@ -16,7 +16,7 @@ import {
 import ButtonFooter from "../myComponents/ButtonFooter"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
-import { Folder, Users,  MailPlus, Check, X, Loader2, Search,  Trash2 } from "lucide-react"
+import { Folder, Users,  MailPlus, Check, X, Loader2, Search } from "lucide-react"
 import Link from "next/link"
 import { ModeToggle } from "../ModeToggle"
 import { Button } from "../ui/button"
@@ -62,8 +62,6 @@ export function AppSidebar() {
 
   const acceptInvite = useMutation(api.projects.claimInvite)
   const declineInvite = useMutation(api.projects.declineInvite)
-  const deleteProject = useMutation(api.projects.deleteProject)
-  const [deleteStates, setDeleteStates] = useState<Record<string, "deleting" | null>>({})
 
   const handleAccept = async (invite: { projectId: string; email: string }) => {
     setInviteStates(prev => ({ ...prev, [invite.projectId]: "accepting" }))
@@ -92,21 +90,6 @@ export function AppSidebar() {
       toast.error("Failed to decline invitation")
     } finally {
       setInviteStates(prev => ({ ...prev, [invite.projectId]: null }))
-    }
-  }
-
-  const handleDeleteProject = async (projectId: string) => {
-    if (!confirm("Are you sure you want to delete this project? This action cannot be undone.")) {
-      return
-    }
-    setDeleteStates(prev => ({ ...prev, [projectId]: "deleting" }))
-    try {
-      await deleteProject({ projectId: projectId as Id<"projects"> })
-      toast.success("Project deleted")
-    } catch (error) {
-      toast.error("Failed to delete project")
-    } finally {
-      setDeleteStates(prev => ({ ...prev, [projectId]: null }))
     }
   }
 
@@ -295,18 +278,6 @@ export function AppSidebar() {
                               )}
                             </span>
                           </div>
-                          {project.ownerId === userId && (
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault()
-                                handleDeleteProject(project._id)
-                              }}
-                              className="p-1.5 rounded-lg hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
-                              title="Delete project"
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </button>
-                          )}
                         </div>
                       )}
                     </SidebarMenuButton>

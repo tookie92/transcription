@@ -331,17 +331,30 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
     mapId: affinityMap._id as Id<"affinityMaps"> 
   } : "skip");
 
+  // ==================== LOADING STATE ====================
+  if (project === undefined) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading workspace...</p>
+        </div>
+      </div>
+    );
+  }
+
   // ==================== PROJECT NOT FOUND ====================
-  if (!project) {
+  if (project === null) {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Project not found</h1>
+          <p className="text-muted-foreground mb-4">This project doesn't exist or you don't have access.</p>
           <button 
-            onClick={() => router.push("/")}
-            className="px-4 py-2 bg-blue-500 text-white rounded"
+            onClick={() => router.push("/project")}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
           >
-            Back to Home
+            Back to Projects
           </button>
         </div>
       </div>

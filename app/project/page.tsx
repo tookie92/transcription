@@ -308,9 +308,86 @@ const ProjectPage = () => {
           )}
 
           {/* Projects Content */}
-          {projects && projects.length > 0 ? (
+          {projects === undefined ? (
+            <div className="text-center py-20">
+              <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-muted-foreground">Loading projects...</p>
+            </div>
+          ) : projects.length === 0 ? (
+            <motion.div
+              className="text-center py-20"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <div className="relative w-32 h-32 mx-auto mb-8">
+                <div className="absolute inset-0 bg-primary/5 rounded-full" />
+                <motion.div
+                  className="absolute top-4 left-1/2 -translate-x-1/2 w-16 h-16 bg-card rounded-2xl border border-border flex items-center justify-center shadow-sm"
+                  animate={{ y: [0, -5, 0] }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  <Folder className="w-8 h-8 text-primary" />
+                </motion.div>
+              </div>
+
+              <h2 
+                className="text-3xl font-normal mb-3"
+                style={{ fontFamily: "var(--font-display), sans-serif" }}
+              >
+                No projects yet
+              </h2>
+              <p className="text-muted-foreground text-lg mb-8 max-w-md mx-auto">
+                Create your first project to start organizing interviews and uncovering insights
+              </p>
+              
+              <Button 
+                onClick={() => setShowTemplateDialog(true)}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground h-12 px-8 text-base"
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                Create Your First Project
+              </Button>
+              
+              <div className="mt-16 max-w-3xl mx-auto">
+                <p 
+                  className="text-sm font-medium uppercase tracking-widest text-muted-foreground mb-6"
+                  style={{ fontFamily: "var(--font-display), sans-serif" }}
+                >
+                  How it works
+                </p>
+                <div className="grid sm:grid-cols-3 gap-6">
+                  {[
+                    { icon: Mic, step: "01", title: "Upload Interviews", description: "Upload audio or video files for AI transcription" },
+                    { icon: Sparkles, step: "02", title: "AI Analysis", description: "Extract insights and detect themes automatically" },
+                    { icon: FileText, step: "03", title: "Affinity Mapping", description: "Organize insights with drag-and-drop diagrams" },
+                  ].map((item, index) => (
+                    <motion.div
+                      key={index}
+                      className="relative p-6 bg-card rounded-2xl border border-border group hover:border-primary/30 transition-all"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 + index * 0.1 }}
+                      whileHover={{ y: -4 }}
+                    >
+                      <span 
+                        className="text-5xl font-normal absolute top-4 right-4 opacity-[0.05]"
+                        style={{ fontFamily: "var(--font-display), sans-serif" }}
+                      >
+                        {item.step}
+                      </span>
+                      <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
+                        <item.icon className="w-6 h-6 text-primary" />
+                      </div>
+                      <h4 className="font-semibold mb-2">{item.title}</h4>
+                      <p className="text-sm text-muted-foreground">{item.description}</p>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          ) : (
             <>
-              {/* Owner Projects */}
               {ownerProjects.length > 0 && (
                 <motion.div
                   className="mb-10"
@@ -352,14 +429,12 @@ const ProjectPage = () => {
                             <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
                           </div>
                         </div>
-                        
                         <h3 className="font-semibold text-lg mb-2 truncate group-hover:text-primary transition-colors">
                           {project.name}
                         </h3>
                         <p className="text-sm text-muted-foreground line-clamp-2 mb-5 min-h-[40px]">
                           {project.description || "No description"}
                         </p>
-                        
                         <div className="flex items-center justify-between pt-4 border-t border-border">
                           <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                             <Users className="w-4 h-4" />
@@ -376,7 +451,6 @@ const ProjectPage = () => {
                 </motion.div>
               )}
 
-              {/* Member Projects */}
               {memberProjects.length > 0 && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -405,14 +479,12 @@ const ProjectPage = () => {
                           </div>
                           <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-[var(--warm-terracotta)] group-hover:translate-x-1 transition-all" />
                         </div>
-                        
                         <h3 className="font-semibold text-lg mb-2 truncate group-hover:text-[var(--warm-terracotta)] transition-colors">
                           {project.name}
                         </h3>
                         <p className="text-sm text-muted-foreground line-clamp-2 mb-5 min-h-[40px]">
                           {project.description || "No description"}
                         </p>
-                        
                         <div className="flex items-center justify-between pt-4 border-t border-border">
                           <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                             <Users className="w-4 h-4" />
@@ -429,97 +501,6 @@ const ProjectPage = () => {
                 </motion.div>
               )}
             </>
-          ) : (
-            /* Empty State */
-            <motion.div
-              className="text-center py-20"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              {/* Decorative illustration */}
-              <div className="relative w-32 h-32 mx-auto mb-8">
-                <div className="absolute inset-0 bg-primary/5 rounded-full" />
-                <motion.div
-                  className="absolute top-4 left-1/2 -translate-x-1/2 w-16 h-16 bg-card rounded-2xl border border-border flex items-center justify-center shadow-sm"
-                  animate={{ y: [0, -5, 0] }}
-                  transition={{ duration: 3, repeat: Infinity }}
-                >
-                  <Folder className="w-8 h-8 text-primary" />
-                </motion.div>
-              </div>
-
-              <h2 
-                className="text-3xl font-normal mb-3"
-                style={{ fontFamily: "var(--font-display), sans-serif" }}
-              >
-                No projects yet
-              </h2>
-              <p className="text-muted-foreground text-lg mb-8 max-w-md mx-auto">
-                Create your first project to start organizing interviews and uncovering insights
-              </p>
-              
-              <Button 
-                onClick={() => setShowTemplateDialog(true)}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground h-12 px-8 text-base"
-              >
-                <Plus className="w-5 h-5 mr-2" />
-                Create Your First Project
-              </Button>
-              
-              {/* Quick Start Guide */}
-              <div className="mt-16 max-w-3xl mx-auto">
-                <p 
-                  className="text-sm font-medium uppercase tracking-widest text-muted-foreground mb-6"
-                  style={{ fontFamily: "var(--font-display), sans-serif" }}
-                >
-                  How it works
-                </p>
-                <div className="grid sm:grid-cols-3 gap-6">
-                  {[
-                    {
-                      icon: Mic,
-                      step: "01",
-                      title: "Upload Interviews",
-                      description: "Upload audio or video files for AI transcription"
-                    },
-                    {
-                      icon: Sparkles,
-                      step: "02",
-                      title: "AI Analysis",
-                      description: "Extract insights and detect themes automatically"
-                    },
-                    {
-                      icon: FileText,
-                      step: "03",
-                      title: "Affinity Mapping",
-                      description: "Organize insights with drag-and-drop diagrams"
-                    },
-                  ].map((item, index) => (
-                    <motion.div
-                      key={index}
-                      className="relative p-6 bg-card rounded-2xl border border-border group hover:border-primary/30 transition-all"
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 + index * 0.1 }}
-                      whileHover={{ y: -4 }}
-                    >
-                      <span 
-                        className="text-5xl font-normal absolute top-4 right-4 opacity-[0.05]"
-                        style={{ fontFamily: "var(--font-display), sans-serif" }}
-                      >
-                        {item.step}
-                      </span>
-                      <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
-                        <item.icon className="w-6 h-6 text-primary" />
-                      </div>
-                      <h4 className="font-semibold mb-2">{item.title}</h4>
-                      <p className="text-sm text-muted-foreground">{item.description}</p>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
           )}
         </div>
       </div>

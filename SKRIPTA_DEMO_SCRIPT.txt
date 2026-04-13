@@ -1,107 +1,131 @@
 SKRIPTA - Demo Script (4-5 min)
 ===================================
-VERSION: Screen Recording Demo
-USE CASE: Product Hunt, social media, landing page video
+START: From scratch - landing page
+END: Shareable research dashboard
 
-Differentiators vs competition:
-- AI auto-clustering with confidence scores
-- One-click persona generation
-- Beautiful shareable dashboards (no sign-up for viewers)
-- Visual undo/time machine
+Flow:
+Landing → Sign up → Create project → Add interview → 
+Extract insights → Go to affinity map → 
+AI group → Generate persona → Share
 
 
 HOOK (0:00-0:15)
 ------------------
-[Screen: Show a messy affinity map or jump straight to the magic]
+[Screen: Landing page]
 
-"What if organizing user research took minutes, not hours?"
-
-Pause. Let that land.
+"User research doesn't have to be painful. Let me show you."
 
 
-THE PROBLEM (0:15-0:30)
--------------------------
-[Screen: Text overlay or voiceover]
+PART 1: SIGN UP & PROJECT (0:15-0:45)
+----------------------------------------
+[Screen: Sign up flow]
 
-"Teams spend days grouping sticky notes. Days. While competitors ship faster."
+"Create an account. Takes 10 seconds."
 
+[Create new project: "Mobile App Research Q1"]
 
-THE MAGIC (0:30-2:00)
-------------------------
-[Screen: Open affinity map workspace]
+"Create your project. Add your team. Roles - owner, editor, viewer."
 
-"Let me show you what AI-powered research looks like."
+[Open team dialog - invite member]
 
-1. INSIGHTS → STICKIES
-   "Every insight from your interviews becomes a sticky note."
-   [Show stickies appearing]
-
-2. AI CLUSTERING (THE KILLER FEATURE)
-   "But watch this. I click 'AI Features'..."
-   [Open AI Grouping panel]
-   
-   "AI analyzes patterns and suggests clusters. With confidence scores."
-   [Select suggestions]
-   
-   "One click. Done. No dragging for hours."
-   [Create clusters]
-   
-   "AI generated the titles. Based on the content."
-
-3. SIMILAR CLUSTERS
-   "And if I have overlapping themes? AI finds them."
-   [Show Similar tab]
-   [Merge clusters]
-   "Merged. Clean."
+"Collaborate in real-time. See who's online. Changes sync instantly."
 
 
-PERSONA GENERATION (2:00-2:45)
----------------------------------
+PART 2: ADD INTERVIEW (0:45-1:30)
+------------------------------------
+[Screen: Add interview]
+
+"Drop your interview audio here. Or paste a transcript."
+
+[Upload/paste]
+
+"Our AI transcribes. Identifies speakers. Timestamps everything."
+
+[Show transcription with speakers highlighted]
+
+"One click to analyze. AI extracts insights automatically."
+
+
+PART 3: EXTRACT INSIGHTS (1:30-2:00)
+----------------------------------------
+[Screen: Interview detail with insights]
+
+"AI found pain points, quotes, insights. All classified."
+
+[Highlight different types with colors]
+
+"Or highlight text yourself. Classify it. Your call."
+
+
+PART 4: AFFINITY MAP (2:00-3:00)
+------------------------------------
+[Screen: Click "Open Affinity Map"]
+
+"Every insight becomes a sticky. Drag to organize."
+
+[Show stickies on canvas]
+
+"But here's where it gets interesting."
+
+[Open AI Features panel]
+
+"AI analyzes patterns. Suggests clusters. With confidence scores."
+
+[Select suggestion, create cluster]
+
+"One click. AI created the cluster. Named it. Based on content."
+
+
+PART 5: PERSONA (3:00-3:30)
+-------------------------------
 [Screen: Click Generate Persona]
 
-"This is my favorite part. One click..."
+"AI creates a user persona. From all your data."
 
 [Wait for generation]
 
-"AI created a complete persona. Goals, pain points, behaviors, quote. 
-Everything you'd get from hours of synthesis... in seconds."
+"Goals. Pain points. Behaviors. Quote. Everything synthesized."
 
 
-SHARING (2:45-3:30)
----------------------
+PART 6: SHARE (3:30-4:30)
+----------------------------
 [Screen: Click Share]
 
 "Share with stakeholders. No sign-up required for them."
 
-[Show dashboard]
+[Show shareable link]
 
-"Presentation-ready. Keyboard navigation. Themes, insights, personas."
+"Presentation mode. Keyboard navigation."
+
+[Navigate slides]
+
+"Dashboard view. Stats, insights, personas."
 
 [Show overview mode]
-
-"Or dashboard view. Everything at a glance."
 
 "Password protection. Expiration. Full control."
 
 
-CLOSING (3:30-4:00)
+CLOSING (4:30-5:00)
 ---------------------
-"Skripta: From hours to minutes. From messy to meaningful."
+"From interview to insights to shareable dashboard. In minutes."
 
-[End card: Try free at [your-url]]
+[End card: Try at [your-url]]
 
 
 ---
 
-TIPS FOR RECORDING:
-- Use keyboard shortcuts (V, C, S) to look professional
-- Speed up transitions (1.5x)
-- Background music: copyright-free lofi
-- Add subtitles (many watch on mute)
+TIPS:
+- Use Cmd/Ctrl + clicks to speed up
+- Use keyboard shortcuts on canvas (V=vote, C=cluster, S=select)
+- Record at 1.5x speed, edit down to 4 min
+- Add subtle background music
+- Show timestamps on video timeline for editing
 
-VARIANT FOR SALES CALLS (8-10 min):
-Add these sections:
-- Team collaboration demo (presence, cursors)
-- Timeline/time machine
-- Dot voting results
+
+VARIANT FOR SALES (8-10 min):
+Add before Share:
+- Dot voting demo
+- Team collaboration (show 2 users)
+- Timeline time machine
 - Role permissions demo
