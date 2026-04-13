@@ -299,7 +299,7 @@ interface ClusterLabelProps {
   currentUserName?: string;
   hasUserVoted?: boolean;
   onDragStart: () => void;
-  onDrag: (dx: number, dy: number) => void;
+  onDrag?: (dx: number, dy: number) => void;
   onDragEnd: (finalX: number, finalY: number) => void;
   onLabelChange?: (newLabel: string) => void;
   onSelect?: (id: string, multi: boolean) => void;
@@ -519,14 +519,23 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
 
       const startX = e.clientX;
       const startY = e.clientY;
+      const el = e.currentTarget as HTMLElement;
       let hasMoved = false;
 
       const handlePointerMove = (moveEvent: PointerEvent) => {
-        // Visual feedback only - no state update during drag
-        // Position updates only on drag end
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+          hasMoved = true;
+        }
+        // Direct DOM manipulation for smooth visual feedback
+        el.style.transform = `translate(${dx}px, ${dy}px)`;
       };
 
       const handlePointerUp = (upEvent: PointerEvent) => {
+        // Clear transform first
+        el.style.transform = '';
+        
         if (!hasMoved) {
           // This was a click, not a drag - voting
           if (isVotingActive && !isVotingRevealed) {
