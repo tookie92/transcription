@@ -519,7 +519,8 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
 
       const startX = e.clientX;
       const startY = e.clientY;
-      const el = e.currentTarget as HTMLElement;
+      const startPosX = cluster.position.x;
+      const startPosY = cluster.position.y;
       let hasMoved = false;
 
       const handlePointerMove = (moveEvent: PointerEvent) => {
@@ -528,13 +529,16 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
           hasMoved = true;
         }
-        // Direct DOM manipulation for smooth visual feedback
-        el.style.transform = `translate(${dx}px, ${dy}px)`;
+        // Update position directly during drag for smooth movement
+        const el = e.currentTarget as HTMLElement;
+        el.style.left = `${startPosX + dx}px`;
+        el.style.top = `${startPosY + dy}px`;
       };
 
       const handlePointerUp = (upEvent: PointerEvent) => {
-        // Clear transform first
-        el.style.transform = '';
+        // Remove listeners first
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
         
         if (!hasMoved) {
           // This was a click, not a drag - voting
@@ -542,12 +546,10 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
             onClusterClick?.(cluster.id);
           }
         } else {
-          const finalX = cluster.position.x + (upEvent.clientX - startX);
-          const finalY = cluster.position.y + (upEvent.clientY - startY);
+          const finalX = startPosX + (upEvent.clientX - startX);
+          const finalY = startPosY + (upEvent.clientY - startY);
           onDragEnd(finalX, finalY);
         }
-        window.removeEventListener("pointermove", handlePointerMove);
-        window.removeEventListener("pointerup", handlePointerUp);
       };
 
       window.addEventListener("pointermove", handlePointerMove);

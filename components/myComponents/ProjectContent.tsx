@@ -451,14 +451,20 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
           )}
           <ShareProjectModal projectId={projectId} projectName={project.name} />
           {project.ownerId === userId && (
-            <Button
-              variant="outline"
-              onClick={() => setTeamDialogOpen(true)}
-              className="h-10"
-            >
-              <Users className="w-4 h-4 mr-2" />
-              Manage Team
-            </Button>
+            // <Button
+            //   variant="outline"
+            //   onClick={() => setTeamDialogOpen(true)}
+            //   className="h-10"
+            // >
+            //   <Users className="w-4 h-4 mr-2" />
+            //   Manage Team
+            // </Button>
+             {/* Invite Dialog */}
+      <TeamDialog 
+        projectId={projectId} 
+        open={teamDialogOpen} 
+        onOpenChange={setTeamDialogOpen} 
+      />
           )}
           <Button
             variant="outline"
@@ -537,12 +543,7 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
         />
       </div>
 
-      {/* Invite Dialog */}
-      <TeamDialog 
-        projectId={projectId} 
-        open={teamDialogOpen} 
-        onOpenChange={setTeamDialogOpen} 
-      />
+     
 
       {/* Interviews Section */}
       <motion.div
