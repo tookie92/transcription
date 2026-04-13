@@ -5,7 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Plus, Users, ArrowLeft, CircuitBoard, Lightbulb, ArrowRight, CheckCircle2, Circle, Clock, Trash2, ChevronRight, MoreHorizontal, Share2, Mic, Sparkles, BarChart3, UserPlus } from "lucide-react";
+import { FileText, Plus, Users, ArrowLeft, CircuitBoard, Lightbulb, ArrowRight, CheckCircle2, Circle, Clock, Trash2, ChevronRight, MoreHorizontal, Share2, Mic, Sparkles, BarChart3, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
@@ -293,9 +293,11 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
   const insights = useQuery(api.insights.getByProject, { projectId });
   const affinityMaps = useQuery(api.affinityMaps.getByProject, { projectId });
   const deleteInterview = useAction(api.interviews.deleteInterview);
+  const deleteProject = useMutation(api.projects.deleteProject);
   
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [interviewToDelete, setInterviewToDelete] = useState<{ id: Id<"interviews">; title: string } | null>(null);
+  const [deleteProjectDialogOpen, setDeleteProjectDialogOpen] = useState(false);
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
 
   const currentMap = affinityMaps?.find(m => m.isCurrent);
@@ -366,6 +368,17 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
     }
   };
 
+  const confirmDeleteProject = async () => {
+    try {
+      await deleteProject({ projectId });
+      toast.success("Project deleted");
+      setDeleteProjectDialogOpen(false);
+      router.push("/project");
+    } catch (error) {
+      toast.error("Failed to delete project");
+    }
+  };
+
   if (!project) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -425,7 +438,28 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
         
         {/* Actions */}
         <div className="flex items-center gap-3">
+          {project.ownerId === userId && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setDeleteProjectDialogOpen(true)}
+              className="h-10 w-10 border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+              title="Delete project"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          )}
           <ShareProjectModal projectId={projectId} projectName={project.name} />
+          {project.ownerId === userId && (
+            <Button
+              variant="outline"
+              onClick={() => setTeamDialogOpen(true)}
+              className="h-10"
+            >
+              <Users className="w-4 h-4 mr-2" />
+              Manage Team
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={() => router.push(`/project/${projectId}/affinity/`)}
@@ -472,7 +506,7 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
       )}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           icon={FileText}
           label="Interviews"
@@ -501,24 +535,14 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
           progressLabel="Grouped"
           delay={0.2}
         />
-        <StatCard
-          icon={Users}
-          label="Team"
-          value={project.members.length}
-          subtext={project.ownerId === userId ? "you are owner" : "collaborators"}
-          color="#F97316"
-          delay={0.25}
-          actionIcon={project.ownerId === userId ? UserPlus : undefined}
-          onActionClick={project.ownerId === userId ? () => setTeamDialogOpen(true) : undefined}
-        />
       </div>
 
-      {/* Invite Dialog */}
+      {/* Invite Dialog
       <TeamDialog 
         projectId={projectId} 
         open={teamDialogOpen} 
         onOpenChange={setTeamDialogOpen} 
-      />
+      /> */}
 
       {/* Interviews Section */}
       <motion.div
@@ -595,6 +619,33 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
               onClick={confirmDelete}
             >
               Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Project Dialog */}
+      <Dialog open={deleteProjectDialogOpen} onOpenChange={setDeleteProjectDialogOpen}>
+        <DialogContent className="max-w-md">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+            </div>
+            <DialogTitle className="text-lg font-semibold">Delete Project</DialogTitle>
+          </div>
+          <p className="text-muted-foreground">
+            Are you sure you want to delete &quot;{project.name}&quot;? This will permanently remove all interviews, insights, and affinity maps. This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setDeleteProjectDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmDeleteProject}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Project
             </Button>
           </div>
         </DialogContent>

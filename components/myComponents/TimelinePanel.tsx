@@ -26,21 +26,13 @@ import {
   Zap,
   Eye,
   X,
-  RotateCcw,
-  RotateCw,
-  ChevronLeft,
-  ChevronRight,
   Undo2,
   Redo2,
-  Layers,
 } from "lucide-react";
 import { ActivityLog, ActivityAction } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { 
   Tooltip,
@@ -269,8 +261,6 @@ export function TimelinePanel({
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
-  const [undoMode, setUndoMode] = useState(false);
-  const [undoIndex, setUndoIndex] = useState(0);
 
   const activities = useQuery(api.activityLog.getActivityForMap, { 
     mapId, 
@@ -372,39 +362,6 @@ export function TimelinePanel({
     }
   }, [onRedo]);
 
-  // Handle restore to a specific point in the timeline
-  const handleRestoreToPoint = useCallback(() => {
-    if (!canUndo || !onUndo) return;
-    
-    const stepsToUndo = filteredActivities.length - 1 - undoIndex;
-    
-    if (stepsToUndo <= 0) return;
-    
-    // Check if any action in the range is limited undo
-    const actionsToUndo = filteredActivities.slice(undoIndex + 1);
-    const hasLimitedUndo = actionsToUndo.some(a => isActionLimitedUndo(a.action));
-    
-    if (hasLimitedUndo) {
-      toast.warning(
-        "Some actions may not be fully undone",
-        { description: "AI operations and grouping have limited undo support" }
-      );
-    }
-    
-    // Perform undo steps with a small delay between each
-    let undone = 0;
-    const undoInterval = setInterval(() => {
-      if (undone >= stepsToUndo) {
-        clearInterval(undoInterval);
-        toast.success(`Restored ${undone} step${undone > 1 ? "s" : ""}`);
-        setUndoMode(false);
-        return;
-      }
-      onUndo();
-      undone++;
-    }, 100);
-  }, [undoIndex, filteredActivities, canUndo, onUndo]);
-
   if (!isOpen) return null;
 
   return (
@@ -469,7 +426,7 @@ export function TimelinePanel({
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9 h-10 bg-muted/50"
           />
-        </div>
+          </div>
 
         {/* Filter toggle */}
         <div className="flex items-center justify-between mt-3">
@@ -488,17 +445,17 @@ export function TimelinePanel({
             )}
           </Button>
           
-          <div className="flex items-center gap-2">
-            <Label htmlFor="undo-mode" className="text-xs text-muted-foreground cursor-pointer">
-              Visual Undo
-            </Label>
-            <Switch
-              id="undo-mode"
-              checked={undoMode}
-              onCheckedChange={setUndoMode}
-              className="scale-75"
-            />
-          </div>
+          {canUndo && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleUndo}
+              className="text-xs h-8 text-primary hover:text-primary"
+            >
+              <Undo2 size={14} className="mr-1.5" />
+              Undo last
+            </Button>
+          )}
         </div>
 
         {/* Filters panel */}
@@ -569,96 +526,6 @@ export function TimelinePanel({
           </div>
         )}
       </div>
-
-      {/* Visual Undo Mode */}
-      {undoMode && filteredActivities.length > 0 && (
-        <div className="px-4 py-3 border-b border-border bg-muted/20">
-          <div className="flex items-center gap-3 mb-2">
-            <Layers size={16} className="text-primary" />
-            <span className="text-sm font-medium text-foreground">Visual Undo Mode</span>
-            <Badge variant="outline" className="ml-auto text-xs">
-              {filteredActivities.length} actions
-            </Badge>
-          </div>
-          
-          <Slider
-            value={[undoIndex]}
-            onValueChange={([v]) => setUndoIndex(v)}
-            min={0}
-            max={filteredActivities.length - 1}
-            step={1}
-            className="w-full"
-          />
-          
-          <div className="flex items-center justify-between mt-2">
-            <span className="text-xs text-muted-foreground">
-              Step {undoIndex + 1} of {filteredActivities.length}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setUndoIndex(Math.max(0, undoIndex - 1))}
-                disabled={undoIndex === 0}
-                className="h-7 w-7 p-0"
-              >
-                <ChevronLeft size={14} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setUndoIndex(Math.min(filteredActivities.length - 1, undoIndex + 1))}
-                disabled={undoIndex === filteredActivities.length - 1}
-                className="h-7 w-7 p-0"
-              >
-                <ChevronRight size={14} />
-              </Button>
-            </div>
-          </div>
-          
-          {filteredActivities[undoIndex] && (
-            <div className="mt-2 p-2 bg-background rounded-lg border border-border">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-xs text-muted-foreground">Preview:</p>
-                <Badge 
-                  variant={isActionUndoable(filteredActivities[undoIndex].action) ? "default" : "secondary"}
-                  className="text-[10px] h-5"
-                >
-                  {isActionUndoable(filteredActivities[undoIndex].action) ? "Undoable" : "Limited undo"}
-                </Badge>
-              </div>
-              <p className="text-sm text-foreground">
-                {filteredActivities[undoIndex].userName} - {ACTION_LABELS[filteredActivities[undoIndex].action]}
-              </p>
-            </div>
-          )}
-
-          {/* Restore to this point button */}
-          {undoIndex < filteredActivities.length - 1 && (
-            <div className="mt-2 flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleRestoreToPoint}
-                disabled={!canUndo}
-                className="flex-1 gap-1.5 text-xs"
-              >
-                <RotateCcw size={12} />
-                Restore to this point
-              </Button>
-              <span className="text-[10px] text-muted-foreground">
-                ({filteredActivities.length - 1 - undoIndex} undos)
-              </span>
-            </div>
-          )}
-          
-          {undoIndex === filteredActivities.length - 1 && (
-            <p className="mt-2 text-xs text-center text-muted-foreground">
-              Already at the beginning
-            </p>
-          )}
-        </div>
-      )}
 
       {/* Timeline content */}
       <div className="flex-1 overflow-y-auto">

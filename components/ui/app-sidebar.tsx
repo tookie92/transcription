@@ -18,6 +18,7 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { Folder, Users,  MailPlus, Check, X, Loader2, Search } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { ModeToggle } from "../ModeToggle"
 import { Button } from "../ui/button"
 import { useState } from "react"
@@ -32,6 +33,7 @@ export function AppSidebar() {
   const { state,  } = useSidebar()
   const {  userId } = useAuth()
   const { user } = useUser()
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
   
   const userEmail = user?.emailAddresses?.[0]?.emailAddress;
@@ -100,12 +102,12 @@ export function AppSidebar() {
       <SidebarHeader className="border-b">
         <div className="p-4 flex items-center justify-between">
           {!isCollapsed && (
-            <div className="flex items-center gap-3">
+            <Link href="/project" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
                 <Image width={50} height={50} src="/logomark.svg" alt="Skripta" className="size-4" />
               </div>
               <h2 className="text-lg font-semibold">Projects</h2>
-            </div>
+            </Link>
           )}
           {/* <Button
             variant="ghost"
