@@ -79,8 +79,23 @@ function reducer(state: BoardState, action: Action): BoardState {
     case "UPDATE_ELEMENT": {
       const el = state.elements[action.id];
       if (!el) return state;
-      const updated = { ...el, ...action.patch, updatedAt: now() } as FigJamElement;
-      return { ...state, elements: { ...state.elements, [action.id]: updated } };
+      
+      // Build new element by spreading the patch
+      // If patch has editingBy: undefined or editingByName: undefined, delete them
+      const patch = action.patch as Record<string, unknown>;
+      const newEl = { ...el, updatedAt: now() };
+      
+      // Copy non-undefined properties from patch
+      for (const key of Object.keys(patch)) {
+        if (patch[key] !== undefined) {
+          (newEl as Record<string, unknown>)[key] = patch[key];
+        } else {
+          // Delete the property if it exists and is being set to undefined
+          delete (newEl as Record<string, unknown>)[key];
+        }
+      }
+      
+      return { ...state, elements: { ...state.elements, [action.id]: newEl as FigJamElement } };
     }
 
     case "DELETE_ELEMENT": {
@@ -108,6 +123,12 @@ function reducer(state: BoardState, action: Action): BoardState {
     }
 
     case "SELECT": {
+      // Stickies cannot be selected - only clusters/labels
+      const el = state.elements[action.id];
+      if (el?.type === "sticky") {
+        return state; // Prevent selecting stickies
+      }
+      
       if (action.multi) {
         const already = state.selectedIds.includes(action.id);
         return {
@@ -405,7 +426,12 @@ function reducer(state: BoardState, action: Action): BoardState {
       return { ...state, votesRevealed: action.revealed };
 
     case "LOAD_ELEMENTS":
-      return { ...state, elements: action.elements };
+      // Filter out any sticky IDs from selection when loading
+      const nonStickySelectedIds = state.selectedIds.filter(id => {
+        const el = action.elements[id];
+        return el && el.type !== "sticky";
+      });
+      return { ...state, elements: action.elements, selectedIds: nonStickySelectedIds };
 
     case "UNDO":
     case "REDO":

@@ -1164,17 +1164,27 @@ export function FigJamBoard({
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-      // Undo/Redo
+      // Undo/Redo - LOCAL ONLY (does not broadcast to other users for collaborative editing)
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
         board.undo();
+        // Only trigger parent callback, don't broadcast
         onUndo?.();
+        // Force save after undo to sync state
+        if (hasMapId) {
+          throttledSave(state.elements);
+        }
         return;
       }
       if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
         e.preventDefault();
         board.redo();
+        // Only trigger parent callback, don't broadcast
         onRedo?.();
+        // Force save after redo to sync state
+        if (hasMapId) {
+          throttledSave(state.elements);
+        }
         return;
       }
 
@@ -1299,16 +1309,19 @@ export function FigJamBoard({
 
               if (element.type === "sticky") {
                 // Move sticky to "discard" area instead of deleting
-                // Find a position below the canvas (or to the side)
+                // Also clear votes to remove blue dot
                 const ungroupedAreaY = 50;
                 const ungroupedAreaX = 50 + Math.random() * 200;
                 board.updateElement(id, { 
                   clusterId: null, 
                   parentSectionId: null,
-                  position: { x: ungroupedAreaX, y: ungroupedAreaY }
+                  position: { x: ungroupedAreaX, y: ungroupedAreaY },
+                  votes: 0,
+                  votedBy: [],
                 });
               } else if (element.type === "label") {
                 // When deleting a cluster, release all stickies back to ungrouped area
+                // Also clear votes to remove blue dots
                 const clusterId = id;
                 const stickiesInCluster = allStickies.filter(s => s.clusterId === clusterId || s.parentSectionId === clusterId);
                 stickiesInCluster.forEach(sticky => {
@@ -1316,7 +1329,9 @@ export function FigJamBoard({
                   board.updateElement(sticky.id, { 
                     clusterId: null, 
                     parentSectionId: null,
-                    position: { ...sticky.position, y: ungroupedY }
+                    position: { ...sticky.position, y: ungroupedY },
+                    votes: 0,
+                    votedBy: [],
                   });
                 });
                 board.deleteElement(id);
@@ -1812,13 +1827,50 @@ export function FigJamBoard({
                 }}
                 onSelect={handleSelectWithLock}
                 onRemoveSticky={(stickyId) => {
-                  board.updateElement(stickyId, { clusterId: null, parentSectionId: null });
+                  // Clear cluster association AND votes when dragging out
+                  board.updateElement(stickyId, { 
+                    clusterId: null, 
+                    parentSectionId: null,
+                    votes: 0,
+                    votedBy: [],
+                  });
                   if (hasMapId) {
-                    throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, { clusterId: null, parentSectionId: null });
+                    throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, { 
+                      clusterId: null, 
+                      parentSectionId: null,
+                      votes: 0,
+                      votedBy: [],
+                    });
                   }
                 }}
                 onStickyClick={(stickyId) => {
-                  board.selectElement(stickyId);
+                  // Stickies ne sont pas sélectionnables - uniquement les clusters
+                }}
+                onStickyUpdate={(stickyId, patch) => {
+                  const clearEditingPatch = {
+                    ...patch,
+                    editingBy: undefined,
+                    editingByName: undefined,
+                  };
+                  board.updateElement(stickyId, clearEditingPatch);
+                  if (patch.content && hasMapId) {
+                    safeLogActivity("sticky_updated", stickyId, patch.content.slice(0, 30));
+                  }
+                  if (hasMapId) {
+                    throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, clearEditingPatch);
+                  }
+                }}
+                onStickyStartEdit={(stickyId) => {
+                  board.updateElement(stickyId, { 
+                    editingBy: userId || "local-user",
+                    editingByName: currentUser?.name || "You"
+                  });
+                  if (hasMapId) {
+                    throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, {
+                      editingBy: userId || "local-user",
+                      editingByName: currentUser?.name || "You"
+                    });
+                  }
                 }}
                 onDrop={(stickyId) => {
                   board.updateElement(stickyId, { clusterId: el.id, parentSectionId: el.id });

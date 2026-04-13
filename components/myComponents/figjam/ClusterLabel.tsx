@@ -64,41 +64,99 @@ function InsightTypeBadge({ type }: { type: string }) {
   );
 }
 
-const CARD_WIDTH = 220;
+const CARD_WIDTH = 280;
 const CARD_GAP = 20;
 const MAX_COLS = 4;
 const HEADER_OFFSET = 40;
-const CLUSTER_PADDING = 12;
-const MIN_CLUSTER_WIDTH = 300;
-const MIN_CLUSTER_HEIGHT = 200;
+const CLUSTER_PADDING = 16;
+const MIN_CLUSTER_WIDTH = 320;
+const MIN_CLUSTER_HEIGHT = 280;
 
 function RealStickyCard({ 
   sticky, 
   onRemove,
   onClick,
-  onDragStart 
+  onDragStart,
+  onUpdate,
+  onStartEdit,
+  currentUserId,
 }: { 
   sticky: StickyNoteData; 
   onRemove?: (id: string) => void;
   onClick?: (id: string) => void;
   onDragStart?: (id: string) => void;
+  onUpdate?: (id: string, patch: Partial<StickyNoteData>) => void;
+  onStartEdit?: (id: string) => void;
+  currentUserId?: string;
 }) {
   const colors = STICKY_COLORS[sticky.color] || STICKY_COLORS.yellow;
   const contentRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [cardHeight, setCardHeight] = useState(100);
   const [isHovered, setIsHovered] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingContent, setEditingContent] = useState(sticky.content);
   
   useEffect(() => {
     if (contentRef.current) {
       const updateHeight = () => {
-        const scrollHeight = contentRef.current?.scrollHeight || 100;
-        const minHeight = 166;
-        const maxHeight = 250;
-        setCardHeight(Math.min(maxHeight, Math.max(minHeight, scrollHeight + 60)));
+        const scrollHeight = contentRef.current?.scrollHeight || 160;
+        const minHeight = 160;
+        const maxHeight = 400;
+        setCardHeight(Math.min(maxHeight, Math.max(minHeight, scrollHeight + 50)));
       };
       updateHeight();
     }
   }, [sticky.content]);
+
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if ((sticky as any).editingBy && (sticky as any).editingBy !== currentUserId) {
+      return;
+    }
+    e.stopPropagation();
+    e.preventDefault();
+    setEditingContent(sticky.content);
+    setIsEditing(true);
+    onStartEdit?.(sticky.id);
+  };
+
+  const handleSave = () => {
+    const contentChanged = editingContent !== sticky.content;
+    setIsEditing(false);
+    if (onUpdate) {
+      onUpdate(sticky.id, { 
+        content: contentChanged ? editingContent : sticky.content,
+        editingBy: undefined,
+        editingByName: undefined,
+      });
+    }
+  };
+
+  const handleCancel = () => {
+    setEditingContent(sticky.content);
+    setIsEditing(false);
+    if (onUpdate) {
+      onUpdate(sticky.id, { 
+        editingBy: undefined,
+        editingByName: undefined,
+      });
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      handleCancel();
+    } else if (e.key === "Enter" && !e.shiftKey) {
+      handleSave();
+    }
+  };
 
   const handleCardClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button')) return;
@@ -113,14 +171,22 @@ function RealStickyCard({
   };
   
   const handlePointerDown = (e: React.PointerEvent) => {
+    if (isEditing) return;
     e.stopPropagation();
   };
 
   const handleDragStart = (e: React.DragEvent) => {
+    if (isEditing) {
+      e.preventDefault();
+      return;
+    }
     e.dataTransfer.setData("application/sticky-id", sticky.id);
     e.dataTransfer.effectAllowed = "move";
     onDragStart?.(sticky.id);
   };
+
+  const isLockedByOther = (sticky as any).editingBy && (sticky as any).editingBy !== currentUserId;
+  const editingUserName = (sticky as any).editingByName;
 
   return (
     <div 
@@ -128,13 +194,14 @@ function RealStickyCard({
       onPointerDown={handlePointerDown}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      draggable
+      draggable={!isEditing && !isLockedByOther}
       onDragStart={handleDragStart}
     >
       {/* Clickable sticky note */}
       <div
         className="relative cursor-pointer group"
         onClick={handleCardClick}
+        onDoubleClick={handleDoubleClick}
       >
         <div
           className="relative rounded-[3px] p-3 flex flex-col"
@@ -142,32 +209,57 @@ function RealStickyCard({
             width: CARD_WIDTH,
             minHeight: cardHeight,
             backgroundColor: colors.bg,
-            boxShadow: isHovered
+            boxShadow: isHovered && !isLockedByOther
               ? "4px 8px 20px rgba(0,0,0,0.2)"
               : "2px 4px 12px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.08)",
-            transform: isHovered ? "scale(1.02)" : "scale(1)",
+            transform: isHovered && !isEditing && !isLockedByOther ? "scale(1.02)" : "scale(1)",
             transition: "transform 0.15s, box-shadow 0.15s",
+            opacity: isLockedByOther ? 0.7 : 1,
           }}
         >
-          {/* Remove button - subtle in top right corner */}
-          <button
-            onClick={handleRemoveClick}
-            className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-black/10"
-            style={{ color: colors.text }}
-          >
-            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
+          {/* Lock indicator */}
+          {isLockedByOther && (
+            <div className="absolute -top-6 left-2 flex items-center gap-1.5 px-2 py-1 bg-amber-100/95 backdrop-blur-sm rounded-md text-xs text-amber-800 z-10 shadow-sm whitespace-nowrap">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+              </svg>
+              <span className="font-medium">{editingUserName || "Someone"} editing</span>
+            </div>
+          )}
+
+          {/* Remove button */}
+          {!isLockedByOther && (
+            <button
+              onClick={handleRemoveClick}
+              className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-black/10"
+              style={{ color: colors.text }}
+            >
+              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          )}
           
           {/* Content area */}
-          <div ref={contentRef} className="flex-1 pr-5 overflow-hidden">
-            <p 
-              className="text-[13px] font-medium leading-relaxed text-[#1d1d1b] break-words"
-              style={{ color: colors.text, wordBreak: "break-word", overflowWrap: "break-word" }}
-            >
-              {sticky.content || "Empty"}
-            </p>
+          <div ref={contentRef} className="flex-1 pr-5 overflow-hidden pt-4">
+            {isEditing ? (
+              <textarea
+                ref={textareaRef}
+                value={editingContent}
+                onChange={(e) => setEditingContent(e.target.value)}
+                onBlur={handleSave}
+                onKeyDown={handleKeyDown}
+                className="w-full h-full min-h-[60px] resize-none outline-none bg-transparent text-[13px] font-medium leading-relaxed break-words"
+                style={{ color: colors.text, wordBreak: "break-word", overflowWrap: "break-word" }}
+              />
+            ) : (
+              <p 
+                className="text-[13px] font-medium leading-relaxed text-[#1d1d1b] break-words"
+                style={{ color: colors.text, wordBreak: "break-word", overflowWrap: "break-word" }}
+              >
+                {sticky.content || (isLockedByOther ? "Being edited..." : "Double-click to edit")}
+              </p>
+            )}
           </div>
           
           {/* Footer with author and type */}
@@ -210,6 +302,8 @@ interface ClusterLabelProps {
   onSelect?: (id: string, multi: boolean) => void;
   onRemoveSticky?: (stickyId: string) => void;
   onStickyClick?: (stickyId: string) => void;
+  onStickyUpdate?: (stickyId: string, patch: Partial<StickyNoteData>) => void;
+  onStickyStartEdit?: (stickyId: string) => void;
   onDrop?: (stickyId: string) => void;
   onContextMenu?: (e: React.MouseEvent, clusterId: string) => void;
   onResize?: (clusterId: string, newHeight: number) => void;
@@ -245,6 +339,8 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   onSelect,
   onRemoveSticky,
   onStickyClick,
+  onStickyUpdate,
+  onStickyStartEdit,
   onDrop,
   onContextMenu,
   onResize,
@@ -280,7 +376,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   const rows = Math.ceil(memberStickies.length / COLS) || 1;
   
   // Calculate height based on actual sticky content
-  const CARD_HEIGHT_WITH_PADDING = 166; // minHeight + padding
+  const CARD_HEIGHT_WITH_PADDING = 210; // minHeight + padding
   const MIN_CLUSTER_HEIGHT = 200;
   const HEADER_AND_PADDING = HEADER_OFFSET + CLUSTER_PADDING + 20;
   const calculatedHeight = rows * (CARD_HEIGHT_WITH_PADDING + CARD_GAP) - CARD_GAP + HEADER_AND_PADDING;
@@ -846,6 +942,9 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
               sticky={sticky}
               onRemove={onRemoveSticky}
               onClick={onStickyClick}
+              onUpdate={onStickyUpdate}
+              onStartEdit={onStickyStartEdit}
+              currentUserId={currentUserId}
             />
           </div>
         ))}

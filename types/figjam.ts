@@ -62,6 +62,10 @@ export interface StickyNoteData extends BaseElement {
   size: Size;
   /** ID of the cluster this sticky belongs to (explicit assignment via hit-test) */
   clusterId?: string | null;
+  /** User ID who is currently editing this sticky (for real-time collaboration) */
+  editingBy?: string;
+  /** Name of the user editing this sticky */
+  editingByName?: string;
 }
 
 export interface SectionData extends BaseElement {

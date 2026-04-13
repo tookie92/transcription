@@ -537,12 +537,12 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
         />
       </div>
 
-      {/* Invite Dialog
+      {/* Invite Dialog */}
       <TeamDialog 
         projectId={projectId} 
         open={teamDialogOpen} 
         onOpenChange={setTeamDialogOpen} 
-      /> */}
+      />
 
       {/* Interviews Section */}
       <motion.div
