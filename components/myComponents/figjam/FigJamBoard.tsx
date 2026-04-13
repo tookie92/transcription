@@ -1577,6 +1577,7 @@ export function FigJamBoard({
           }}
           draggingStickyId={draggingStickyId}
           currentUserId={userId || undefined}
+          currentUserName={currentUserName}
           onDeleteSticky={(stickyId) => {
             board.deleteElement(stickyId);
             safeLogActivity("sticky_deleted", stickyId);

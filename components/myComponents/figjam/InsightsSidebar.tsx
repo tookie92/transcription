@@ -202,6 +202,7 @@ interface InsightsSidebarProps {
   onDragStart: (sticky: StickyNoteData) => void;
   draggingStickyId: string | null;
   currentUserId?: string;
+  currentUserName?: string;
   onDeleteSticky?: (stickyId: string) => void;
   onCleanDrafts?: (stickyIds: string[]) => void;
 }
@@ -214,6 +215,7 @@ export function InsightsSidebar({
   onDragStart,
   draggingStickyId,
   currentUserId,
+  currentUserName,
   onDeleteSticky,
   onCleanDrafts,
 }: InsightsSidebarProps) {
@@ -473,8 +475,12 @@ export function InsightsSidebar({
               </div>
             ) : (
               filteredStickies.map((sticky) => {
-                const canDeleteThis = !!(currentUserId && onDeleteSticky && 
-                  (sticky.author === currentUserId || sticky.authorName === currentUserId));
+                // Allow delete if user owns the sticky (by authorName)
+                const canDeleteThis = !!(
+                  currentUserName && 
+                  onDeleteSticky && 
+                  sticky.authorName === currentUserName
+                );
                 return (
                   <InsightCard
                     key={sticky.id}
