@@ -486,16 +486,6 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
     window.addEventListener("pointerup", handlePointerUp);
   }, [canInteract, cluster.id, CLUSTER_WIDTH, onWidthChange]);
 
-  // Visual drag callbacks - declared before handlePointerDown
-  const handleVisualDrag = useCallback((dx: number, dy: number) => {
-    setDragOffset({ x: dx, y: dy });
-  }, []);
-
-  const handleVisualDragEnd = useCallback(() => {
-    setIsDraggingVisually(false);
-    setDragOffset({ x: 0, y: 0 });
-  }, []);
-
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (!canInteract) return;
@@ -526,7 +516,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       }
 
       onDragStart();
-      setIsDraggingVisually(true);
+      isDraggingRef.current = true;
 
       const startX = e.clientX;
       const startY = e.clientY;
@@ -538,13 +528,16 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
           hasMoved = true;
         }
-        // Use visual drag (CSS transform) for smooth dragging
-        handleVisualDrag(dx, dy);
+        // Update ref and force re-render
+        dragOffsetRef.current = { x: dx, y: dy };
+        setDragTrigger(t => t + 1);
       };
 
       const handlePointerUp = (upEvent: PointerEvent) => {
-        // End visual drag
-        handleVisualDragEnd();
+        // Reset visual offset
+        isDraggingRef.current = false;
+        dragOffsetRef.current = { x: 0, y: 0 };
+        setDragTrigger(t => t + 1);
         
         if (!hasMoved) {
           // This was a click, not a drag - voting
@@ -563,7 +556,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       window.addEventListener("pointermove", handlePointerMove);
       window.addEventListener("pointerup", handlePointerUp);
     },
-    [canInteract, isVotingActive, isVotingRevealed, cluster.id, cluster.position.x, cluster.position.y, onDragStart, onDrag, onDragEnd, onSelect, onClusterClick, handleVisualDrag, handleVisualDragEnd]
+    [canInteract, isVotingActive, isVotingRevealed, cluster.id, cluster.position.x, cluster.position.y, onDragStart, onDragEnd, onSelect, onClusterClick]
   );
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
@@ -634,9 +627,10 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   const selectionBorderColor = isLocked ? "#ef4444" : "#3b82f6"; // Red if locked, blue if selected
   const selectionBorderStyle = isSolidBorder ? "2px solid" : "2px dashed";
 
-  // Visual drag state (for smooth dragging without state updates per pixel)
-  const [isDraggingVisually, setIsDraggingVisually] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  // Visual drag state - use refs + trigger for re-render
+  const isDraggingRef = useRef(false);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const [dragTrigger, setDragTrigger] = useState(0); // Force re-render
 
   return (
     <div
@@ -649,9 +643,8 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         width: CLUSTER_WIDTH,
         height: AUTO_HEIGHT,
         zIndex: cluster.zIndex,
-        // Use transform for smooth dragging without state updates
-        transform: isDraggingVisually ? `translate(${dragOffset.x}px, ${dragOffset.y}px)` : undefined,
-        transition: isDraggingVisually ? "none" : "transform 0.1s ease-out",
+        // Simple CSS transform for drag - no transition, no bounce
+        transform: `translate(${dragOffsetRef.current.x}px, ${dragOffsetRef.current.y}px)`,
       }}
       onPointerDown={handlePointerDown}
       onDoubleClick={handleDoubleClick}
