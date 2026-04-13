@@ -139,6 +139,7 @@ export interface UseFigJamBoardReturn {
   addClusterLabel: (pos: Position, size?: { width: number; height: number }) => string;
   addDot: (pos: Position, parentSectionId: string | null, color: string) => string;
   updateElement: (id: string, patch: Partial<FigJamElement>) => void;
+  updateElementNoHistory: (id: string, patch: Partial<FigJamElement>) => void;
   updateMany: (patches: { id: string; patch: Partial<FigJamElement> }[]) => void;
   deleteElement: (id: string) => void;
   duplicateElement: (id: string) => void;

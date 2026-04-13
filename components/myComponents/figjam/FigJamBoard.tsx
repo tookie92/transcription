@@ -1872,13 +1872,16 @@ export function FigJamBoard({
                   // Stickies ne sont pas sélectionnables - uniquement les clusters
                 }}
                 onStickyUpdate={(stickyId, patch) => {
-                  // Clear the lock when saving - save IMMEDIATELY
+                  // Clear the lock when saving - use NO_HISTORY since this is meta
                   const lockClearPatch = {
                     ...patch,
                     editingBy: undefined,
                     editingByName: undefined,
                   };
-                  board.updateElement(stickyId, lockClearPatch as any);
+                  // Content change goes to history, lock clear does not
+                  board.updateElement(stickyId, patch); // Content to history
+                  board.updateElementNoHistory(stickyId, lockClearPatch as any); // Lock clear not in history
+                  
                   if (patch.content && hasMapId) {
                     safeLogActivity("sticky_updated", stickyId, patch.content.slice(0, 30));
                   }
@@ -1889,8 +1892,8 @@ export function FigJamBoard({
                   }
                 }}
                 onStickyStartEdit={(stickyId) => {
-                  // Set the lock when starting to edit - save IMMEDIATELY
-                  board.updateElement(stickyId, { 
+                  // Set the lock when starting to edit - NO_HISTORY (meta operation)
+                  board.updateElementNoHistory(stickyId, { 
                     editingBy: userId || "local-user",
                     editingByName: currentUser?.name || "You"
                   });

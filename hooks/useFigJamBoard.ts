@@ -29,7 +29,8 @@ const MAX_HISTORY = 50;
 
 type Action =
   | { type: "ADD_ELEMENT"; element: FigJamElement }
-  | { type: "UPDATE_ELEMENT"; id: string; patch: Partial<FigJamElement> }
+  | { type: "UPDATE_ELEMENT"; id: string; patch: Partial<FigJamElement>; skipHistory?: boolean }
+  | { type: "UPDATE_ELEMENT_NO_HISTORY"; id: string; patch: Partial<FigJamElement> }
   | { type: "UPDATE_MANY"; patches: { id: string; patch: Partial<FigJamElement> }[] }
   | { type: "DELETE_ELEMENT"; id: string }
   | { type: "SELECT"; id: string; multi: boolean }
@@ -91,6 +92,26 @@ function reducer(state: BoardState, action: Action): BoardState {
           (newEl as Record<string, unknown>)[key] = patch[key];
         } else {
           // Delete the property if it exists and is being set to undefined
+          delete (newEl as Record<string, unknown>)[key];
+        }
+      }
+      
+      return { ...state, elements: { ...state.elements, [action.id]: newEl as FigJamElement } };
+    }
+
+    case "UPDATE_ELEMENT_NO_HISTORY": {
+      // Same as UPDATE_ELEMENT but without adding to history
+      // This is for meta operations like locking, voting, etc.
+      const el = state.elements[action.id];
+      if (!el) return state;
+      
+      const patch = action.patch as Record<string, unknown>;
+      const newEl = { ...el, updatedAt: now() };
+      
+      for (const key of Object.keys(patch)) {
+        if (patch[key] !== undefined) {
+          (newEl as Record<string, unknown>)[key] = patch[key];
+        } else {
           delete (newEl as Record<string, unknown>)[key];
         }
       }
@@ -747,6 +768,14 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     []
   );
 
+  // For meta operations that shouldn't be in history (lock, votes, etc.)
+  const updateElementNoHistory = useCallback(
+    (id: string, patch: Partial<FigJamElement>) => {
+      dispatch({ type: "UPDATE_ELEMENT_NO_HISTORY", id, patch });
+    },
+    []
+  );
+
   const deleteElement = useCallback((id: string) => {
     dispatch({ type: "DELETE_ELEMENT", id });
   }, []);
@@ -991,6 +1020,7 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     addSection,
     addClusterLabel,
     updateElement,
+    updateElementNoHistory,
     updateMany,
     deleteElement,
     duplicateElement,

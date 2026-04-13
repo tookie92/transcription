@@ -54,7 +54,6 @@ interface InsightCardProps {
 
 function InsightCard({ sticky, onDragStart, isDragging, canDelete = false, onDelete }: InsightCardProps) {
   const colors = STICKY_COLORS[sticky.color] || STICKY_COLORS.insight;
-  const isManualSource = sticky.source === "manual" || !sticky.source;
   
   return (
     <div
@@ -74,8 +73,8 @@ function InsightCard({ sticky, onDragStart, isDragging, canDelete = false, onDel
         onDragStart(sticky);
       }}
     >
-      {/* Delete button - only for manual insights user created */}
-      {canDelete && isManualSource && (
+      {/* Delete button - for stickies the user created */}
+      {canDelete && (
         <button
           onClick={(e) => {
             e.stopPropagation();
