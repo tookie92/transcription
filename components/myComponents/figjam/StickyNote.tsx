@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { StickyNoteData, StickyColor, Size } from "@/types/figjam";
+import type { StickyNoteData, StickyColor, Size, Position } from "@/types/figjam";
 import { useDraggable } from "@/hooks/useDraggable";
 
 // ─── Color palette (FigJam authentic) ────────────────────────────────────────
@@ -181,6 +181,7 @@ export function StickyNote({
   }, [isEditing, editingContent]);
 
   const isDraggingRef = useRef(false);
+  const dragPositionRef = useRef<Position>(note.position);
   const { visualPosition, handlePointerDown } = useDraggable({
     id: note.id,
     position: note.position,
@@ -190,6 +191,7 @@ export function StickyNote({
     onDragStart: (id) => {
       if (isLocked) return;
       isDraggingRef.current = true;
+      dragPositionRef.current = { ...note.position };
       onSelect(id, false);
       onBringToFront(id);
       setShowMenu(false);
@@ -197,7 +199,11 @@ export function StickyNote({
     },
     onDragEnd: (id) => {
       isDraggingRef.current = false;
+      dragPositionRef.current = { ...note.position };
       onDragEnd?.(id);
+    },
+    onPositionChange: (pos) => {
+      dragPositionRef.current = pos;
     },
     disabled: isEditing || isResizing || isLocked,
     stickyWidth: stickySize.width,
@@ -207,6 +213,16 @@ export function StickyNote({
   });
 
   const isDragging = isDraggingRef.current;
+  
+  // Sync drag position ref when position changes from outside (not during drag)
+  useEffect(() => {
+    if (!isDraggingRef.current) {
+      dragPositionRef.current = { ...note.position };
+    }
+  }, [note.position]);
+  
+  // Use ref for position during drag to avoid React re-render issues
+  const renderPosition = isDragging ? dragPositionRef.current : visualPosition;
 
   const handleDoubleClick = useCallback(() => {
     if (isLocked) return;
@@ -307,8 +323,8 @@ export function StickyNote({
       className="absolute group sticky-note"
       data-sticky-id={note.id}
       style={{
-        left: visualPosition.x,
-        top: visualPosition.y,
+        left: renderPosition.x,
+        top: renderPosition.y,
         zIndex: note.zIndex,
         cursor: isVotingMode ? "default" : cursorStyle,
         filter: isDragging

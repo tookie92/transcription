@@ -1672,6 +1672,8 @@ export function FigJamBoard({
               if (hasMapId) {
                 throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, { clusterId: targetClusterId });
               }
+              // Clear selection after drop
+              board.clearSelection();
             }
           }
           setDraggingStickyId(null);
@@ -1898,6 +1900,7 @@ export function FigJamBoard({
                   if (hasMapId) {
                     throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, { clusterId: el.id, parentSectionId: el.id });
                   }
+                  board.clearSelection();
                   setDraggingStickyId(null);
                 }}
                 onContextMenu={(e, clusterId) => {

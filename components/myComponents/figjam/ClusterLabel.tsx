@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useRef, useState, memo, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import type { ClusterLabelData, StickyNoteData } from "@/types/figjam";
 import { MoreHorizontal, Sparkles, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -96,6 +96,7 @@ function RealStickyCard({
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingContent, setEditingContent] = useState(sticky.content);
+  const [isRemoving, setIsRemoving] = useState(false);
   
   useEffect(() => {
     if (contentRef.current) {
@@ -166,7 +167,11 @@ function RealStickyCard({
   const handleRemoveClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    onRemove?.(sticky.id);
+    // Animate out before removing
+    setIsRemoving(true);
+    setTimeout(() => {
+      onRemove?.(sticky.id);
+    }, 150);
   };
   
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -175,6 +180,10 @@ function RealStickyCard({
   };
 
   const handleDragStart = (e: React.DragEvent) => {
+    if (isRemoving) {
+      e.preventDefault();
+      return;
+    }
     const isLockedByOther = sticky.editingBy && sticky.editingBy !== currentUserId;
     if (isEditing || isLockedByOther) {
       e.preventDefault();
@@ -192,13 +201,18 @@ function RealStickyCard({
     <div 
       className={cn(
         "relative group",
-        !isLockedByOther && "cursor-grab active:cursor-grabbing"
+        !isLockedByOther && !isRemoving && "cursor-grab active:cursor-grabbing"
       )}
       onPointerDown={handlePointerDown}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      draggable={!isEditing && !isLockedByOther}
-      onDragStart={handleDragStart}
+      draggable={!isEditing && !isLockedByOther && !isRemoving}
+      onDragStart={isRemoving ? undefined : handleDragStart}
+      style={{
+        transition: isRemoving ? "opacity 0.15s, transform 0.15s" : undefined,
+        opacity: isRemoving ? 0 : 1,
+        transform: isRemoving ? "scale(0.8)" : "scale(1)",
+      }}
     >
       {/* Clickable sticky note */}
       <div
@@ -369,6 +383,9 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   const prevStickiesCountRef = useRef(memberStickies.length);
   const isAutoFittingRef = useRef(false);
 
+  // Track if we're currently dragging (used to prevent React from controlling position)
+  const isDomDraggingRef = useRef(false);
+
   const isDraggingActive = isDragging;
   const canInteract = !isLocked && !isEditing;
   const hasInsights = memberStickies.length > 0;
@@ -517,11 +534,17 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
 
       onDragStart();
 
+      const el = e.currentTarget as HTMLElement;
       const startX = e.clientX;
       const startY = e.clientY;
       const startPosX = cluster.position.x;
       const startPosY = cluster.position.y;
       let hasMoved = false;
+      
+      // Mark as DOM dragging to prevent React from controlling position
+      isDomDraggingRef.current = true;
+      // Initialize the DOM position ref
+      domPositionRef.current = { x: startPosX, y: startPosY };
 
       const handlePointerMove = (moveEvent: PointerEvent) => {
         const dx = moveEvent.clientX - startX;
@@ -529,16 +552,22 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
           hasMoved = true;
         }
-        // Update position directly during drag for smooth movement
-        const el = e.currentTarget as HTMLElement;
-        el.style.left = `${startPosX + dx}px`;
-        el.style.top = `${startPosY + dy}px`;
+        const newX = startPosX + dx;
+        const newY = startPosY + dy;
+        // Update position DIRECTLY on DOM during drag - NO React state updates
+        el.style.left = `${newX}px`;
+        el.style.top = `${newY}px`;
+        // Also update the ref so React uses it if it re-renders
+        domPositionRef.current = { x: newX, y: newY };
       };
 
       const handlePointerUp = (upEvent: PointerEvent) => {
         // Remove listeners first
         window.removeEventListener("pointermove", handlePointerMove);
         window.removeEventListener("pointerup", handlePointerUp);
+        
+        // Clear DOM dragging flag
+        isDomDraggingRef.current = false;
         
         if (!hasMoved) {
           // This was a click, not a drag - voting
@@ -548,6 +577,11 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         } else {
           const finalX = startPosX + (upEvent.clientX - startX);
           const finalY = startPosY + (upEvent.clientY - startY);
+          // DOM position is already set by last handlePointerMove, ensure it matches
+          el.style.left = `${finalX}px`;
+          el.style.top = `${finalY}px`;
+          domPositionRef.current = { x: finalX, y: finalY };
+          // Now update React state with final position
           onDragEnd(finalX, finalY);
         }
       };
@@ -626,14 +660,34 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   const selectionBorderColor = isLocked ? "#ef4444" : "#3b82f6"; // Red if locked, blue if selected
   const selectionBorderStyle = isSolidBorder ? "2px solid" : "2px dashed";
 
+  // Track DOM position during drag to avoid React re-render issues
+  const domPositionRef = useRef<{ x: number; y: number } | null>(null);
+  
+  // Expose DOM position tracking for the drag handler
+  useEffect(() => {
+    if (clusterRef.current) {
+      (clusterRef.current as any).setDomPosition = (x: number, y: number) => {
+        domPositionRef.current = { x, y };
+        if (isDomDraggingRef.current && clusterRef.current) {
+          clusterRef.current.style.left = `${x}px`;
+          clusterRef.current.style.top = `${y}px`;
+        }
+      };
+    }
+  }, []);
+
+  // Compute effective position - use DOM ref during drag, props otherwise
+  const effectiveLeft = domPositionRef.current?.x ?? cluster.position.x;
+  const effectiveTop = domPositionRef.current?.y ?? cluster.position.y;
+
   return (
     <div
       ref={clusterRef}
       data-cluster-id={cluster.id}
       className="absolute select-none"
       style={{
-        left: cluster.position.x,
-        top: cluster.position.y,
+        left: effectiveLeft,
+        top: effectiveTop,
         width: CLUSTER_WIDTH,
         height: AUTO_HEIGHT,
         zIndex: cluster.zIndex,
@@ -931,21 +985,8 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
               e.dataTransfer.setData("application/sticky-id", sticky.id);
               e.dataTransfer.effectAllowed = "move";
             }}
-            onDragEnd={(e) => {
-              if (isVotingActive && !isVotingRevealed) return;
-              // If drag ended outside this cluster, remove the sticky
-              const rect = clusterRef.current?.getBoundingClientRect();
-              if (rect) {
-                const isOutside = (
-                  e.clientX < rect.left ||
-                  e.clientX > rect.right ||
-                  e.clientY < rect.top ||
-                  e.clientY > rect.bottom
-                );
-                if (isOutside && onRemoveSticky) {
-                  onRemoveSticky(sticky.id);
-                }
-              }
+            onDragEnd={() => {
+              // Ne rien faire - le Canvas gère la logique de cluster
             }}
           >
             <RealStickyCard

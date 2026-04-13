@@ -24,6 +24,7 @@ interface UseDraggableOptions {
   stickyHeight?: number;
   selectedIds?: string[];
   noMomentum?: boolean;
+  onPositionChange?: (pos: Position) => void;
 }
 
 interface UseDraggableReturn {
@@ -39,6 +40,7 @@ export function useDraggable({
   onMoveSelected,
   onDragStart,
   onDragEnd,
+  onPositionChange,
   disabled = false,
   bounds,
   stickyWidth = 200,
@@ -51,16 +53,14 @@ export function useDraggable({
   const startPositionRef = useRef<Position>({ x: 0, y: 0 });
   const lastFramePointerRef = useRef<Position>({ x: 0, y: 0 });
   const isDraggingRef = useRef(false);
-  const suppressSyncRef = useRef(false);
-  const lastUpdateTimeRef = useRef<number>(0);
+  const visualPositionRef = useRef<Position>({ ...position });
+  
+  const elementRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    visualPositionRef.current = { ...position };
     if (!isDraggingRef.current) {
-      suppressSyncRef.current = true;
       setVisualPosition({ ...position });
-      requestAnimationFrame(() => {
-        suppressSyncRef.current = false;
-      });
     }
   }, [position]);
 
@@ -71,15 +71,14 @@ export function useDraggable({
 
       e.stopPropagation();
       e.currentTarget.setPointerCapture(e.pointerId);
+      elementRef.current = e.currentTarget as HTMLElement;
 
       isDraggingRef.current = true;
-      suppressSyncRef.current = true;
 
-      const currentPos = visualPosition;
+      const currentPos = visualPositionRef.current;
       startPointerRef.current = { x: e.clientX, y: e.clientY };
       startPositionRef.current = { ...currentPos };
       lastFramePointerRef.current = { x: e.clientX, y: e.clientY };
-      lastUpdateTimeRef.current = Date.now();
 
       onDragStart?.(id);
 
@@ -115,23 +114,29 @@ export function useDraggable({
             newY = Math.max(bounds.minY, Math.min(bounds.maxY - stickyHeight, newY));
           }
 
-          setVisualPosition({ x: newX, y: newY });
-
-          const now = Date.now();
-          if (now - lastUpdateTimeRef.current > 50) {
-            lastUpdateTimeRef.current = now;
-            onMove(id, { x: newX, y: newY });
+          const newPos = { x: newX, y: newY };
+          visualPositionRef.current = newPos;
+          
+          // Update DOM directly for smooth movement
+          if (elementRef.current) {
+            elementRef.current.style.left = `${newX}px`;
+            elementRef.current.style.top = `${newY}px`;
           }
+          
+          // Notify external ref of position change (for StickyNote's renderPosition)
+          onPositionChange?.(newPos);
         }
       };
 
       const onPointerUp = () => {
+        const finalPos = { ...visualPositionRef.current };
+        const wasDragging = isDraggingRef.current;
         isDraggingRef.current = false;
-        suppressSyncRef.current = false;
+        elementRef.current = null;
 
-        if (isDraggingRef.current) {
-          const currentPos = visualPosition;
-          onMove(id, { x: currentPos.x, y: currentPos.y });
+        if (wasDragging) {
+          setVisualPosition(finalPos);
+          onMove(id, finalPos);
         }
 
         onDragEnd?.(id);
@@ -142,7 +147,7 @@ export function useDraggable({
       window.addEventListener("pointermove", onPointerMove);
       window.addEventListener("pointerup", onPointerUp);
     },
-    [disabled, id, zoom, onMove, onMoveSelected, onDragStart, onDragEnd, bounds, stickyWidth, stickyHeight, selectedIds, visualPosition]
+    [disabled, id, zoom, onMove, onMoveSelected, onDragStart, onDragEnd, onPositionChange, bounds, stickyWidth, stickyHeight, selectedIds]
   );
 
   return {
