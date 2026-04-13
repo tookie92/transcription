@@ -522,19 +522,11 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       let hasMoved = false;
 
       const handlePointerMove = (moveEvent: PointerEvent) => {
-        const dx = moveEvent.clientX - startX;
-        const dy = moveEvent.clientY - startY;
-        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-          hasMoved = true;
-        }
-        // Update state for CSS transform
-        setDragOffset({ x: dx, y: dy });
+        // Visual feedback only - no state update during drag
+        // Position updates only on drag end
       };
 
       const handlePointerUp = (upEvent: PointerEvent) => {
-        // Reset state
-        setDragOffset({ x: 0, y: 0 });
-        
         if (!hasMoved) {
           // This was a click, not a drag - voting
           if (isVotingActive && !isVotingRevealed) {
@@ -623,9 +615,6 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   const selectionBorderColor = isLocked ? "#ef4444" : "#3b82f6"; // Red if locked, blue if selected
   const selectionBorderStyle = isSolidBorder ? "2px solid" : "2px dashed";
 
-  // Drag offset - simple state for CSS transform
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-
   return (
     <div
       ref={clusterRef}
@@ -637,8 +626,6 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         width: CLUSTER_WIDTH,
         height: AUTO_HEIGHT,
         zIndex: cluster.zIndex,
-        // CSS transform for smooth drag
-        transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
       }}
       onPointerDown={handlePointerDown}
       onDoubleClick={handleDoubleClick}
