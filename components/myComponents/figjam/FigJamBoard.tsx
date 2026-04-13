@@ -68,7 +68,7 @@ function CanvasGrid({ zoom, pan }: { zoom: number; pan: Position }) {
           width={spacing} height={spacing}
           patternUnits="userSpaceOnUse"
         >
-          <path d={`M 0 0 L ${spacing} 0 M 0 0 L 0 ${spacing}`} stroke="#e5e7eb" strokeWidth={0.5} fill="none" opacity={0.5} />
+          <path d={`M ${spacing} 0 L 0 0 L 0 ${spacing}`} stroke="#d1d5db" strokeWidth={1} fill="none" opacity={0.8} />
         </pattern>
       </defs>
       <rect width="100%" height="100%" fill="url(#figjam-grid)" />
@@ -1514,7 +1514,7 @@ export function FigJamBoard({
 
   return (
     <div
-      className="relative w-full h-full overflow-hidden bg-[#f5f5f0] select-none flex"
+      className="relative w-full h-full overflow-hidden select-none flex dark:bg-[#1a1a1a] bg-white"
       style={{ fontFamily: "'DM Sans', system-ui, sans-serif", ...style }}
     >
       {/* ── Insights Sidebar ── */}
@@ -2015,10 +2015,10 @@ export function FigJamBoard({
       {Object.keys(state.elements).length === 0 && (
         <div className="absolute inset-0 top-12 flex items-center justify-center pointer-events-none">
           <div className="text-center">
-            <p className="text-gray-300 text-4xl mb-3">✦</p>
-            <p className="text-gray-400 text-sm font-medium">Appuyez sur S ou cliquez sur l&apos;outil sticky pour commencer</p>
+            <p className="text-gray-500 text-4xl mb-3">✦</p>
+            <p className="text-gray-500 text-sm font-medium">Appuyez sur S ou cliquez sur l&apos;outil sticky pour commencer</p>
             {newInsightsCount > 0 && (
-              <p className="text-muted-foreground text-xs mt-2">
+              <p className="text-gray-500 text-xs mt-2">
                 {newInsightsCount} insight{newInsightsCount > 1 ? "s" : ""} available to import
               </p>
             )}

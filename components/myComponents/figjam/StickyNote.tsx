@@ -50,8 +50,9 @@ function InsightTypeBadge({ type }: { type: string }) {
   );
 }
 
-const MIN_STICKY_SIZE = { width: 140, height: 120 };
-const MAX_STICKY_SIZE = { width: 600, height: 600 };
+const MIN_STICKY_SIZE = { width: 180, height: 150 };
+const MAX_STICKY_SIZE = { width: 280, height: 220 };
+const DEFAULT_STICKY_SIZE = { width: 220, height: 180 };
 const HEADER_HEIGHT = 28;
 const FOOTER_HEIGHT = 32;
 const PADDING = 12;
@@ -113,7 +114,7 @@ export function StickyNote({
   isFiltered = false,
 }: StickyNoteProps) {
   const colors = STICKY_COLORS[note.color];
-  const stickySize = note.size ?? { width: 220, height: 200 };
+  const stickySize = note.size ?? DEFAULT_STICKY_SIZE;
   const [isEditing, setIsEditing] = useState(false);
   const [editingContent, setEditingContent] = useState(note.content);
   const [showMenu, setShowMenu] = useState(false);

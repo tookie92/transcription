@@ -26,6 +26,7 @@ import { useActivityNotifications } from "@/hooks/useActivityNotifications";
 import { TimelinePanel } from "./TimelinePanel";
 import { CommentPanel } from "./CommentPanel";
 import { ActivityButtonWithBadge } from "./figjam/NotificationBadge";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { ArrowLeft } from "lucide-react";
 
 // Avatar components
@@ -416,6 +417,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
               }
             }}
           />
+          <ThemeToggle />
         </div>
       </div>
 

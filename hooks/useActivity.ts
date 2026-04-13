@@ -16,6 +16,7 @@ interface UseActivityReturn {
   logInsightMoved: (mapId: Id<"affinityMaps">, fromGroupId: string, toGroupId: string, fromGroupTitle: string, toGroupTitle: string, insightId: string) => void;
   logCommentAdded: (mapId: Id<"affinityMaps">, groupId: string, groupTitle: string) => void;
   logUserMentioned: (mapId: Id<"affinityMaps">, groupId: string, groupTitle: string, mentionedUserId: string, mentionedUserName: string) => void;
+  logStickyUpdated: (mapId: Id<"affinityMaps">, stickyId: string, oldContent: string, newContent: string) => void;
 }
 
 export function useActivity(): UseActivityReturn {
@@ -174,6 +175,26 @@ export function useActivity(): UseActivityReturn {
     });
   };
 
+  const logStickyUpdated = (
+    mapId: Id<"affinityMaps">, 
+    stickyId: string, 
+    oldContent: string, 
+    newContent: string
+  ) => {
+    const details: ActivityDetails = {
+      from: oldContent.slice(0, 50),
+      to: newContent.slice(0, 50),
+    };
+
+    logActivity({
+      mapId,
+      action: "sticky_updated",
+      targetId: stickyId,
+      targetName: newContent.slice(0, 30) || "Sticky",
+      details,
+    });
+  };
+
   return {
     logGroupCreated,
     logGroupMoved,
@@ -184,5 +205,6 @@ export function useActivity(): UseActivityReturn {
     logInsightMoved,
     logCommentAdded,
     logUserMentioned,
+    logStickyUpdated,
   };
 }
