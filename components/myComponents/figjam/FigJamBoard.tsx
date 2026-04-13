@@ -1268,6 +1268,7 @@ export function FigJamBoard({
           board.setTool("select");
           board.clearSelection();
           setShowStickyPicker(false);
+          setShowAIGroupingPanel(false);
           break;
         case "Backspace":
         case "Delete":
@@ -1330,7 +1331,7 @@ export function FigJamBoard({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [board, state.selectedIds, state.zoom, state.elements, allStickies, allClusters, onUndo, onRedo]);
+  }, [board, state.selectedIds, state.zoom, state.elements, allStickies, allClusters, onUndo, onRedo, setShowAIGroupingPanel]);
 
   useEffect(() => { onChange?.(state.elements); }, [state.elements, onChange]);
 

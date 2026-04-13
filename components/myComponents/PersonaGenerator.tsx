@@ -208,22 +208,32 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
   };
 
   const savePersona = async () => {
-    if (!generatedPersona) {
+    if (!generatedPersona && !editingPersona) {
       toast.error("No persona to save");
       return;
     }
 
     try {
-      const personaToSave = isEditMode ? editingPersona! : generatedPersona;
-      await createPersona({
-        projectId: projectId as Id<"projects">,
-        mapId: mapId as Id<"affinityMaps">,
-        ...personaToSave,
-        profileImage: profileImage || getFallbackImageUrl(personaToSave.name),
-        basedOn: basedOn || { groups: 0, insights: 0, groupTitles: [] },
-      });
+      // If editing an existing persona, update it
+      if (isEditMode && selectedSavedPersona?._id) {
+        await updatePersona({
+          personaId: selectedSavedPersona._id as Id<"personas">,
+          ...editingPersona!,
+        });
+        toast.success("Persona updated!");
+      } else {
+        // Create a new persona
+        const personaToSave = generatedPersona!;
+        await createPersona({
+          projectId: projectId as Id<"projects">,
+          mapId: mapId as Id<"affinityMaps">,
+          ...personaToSave,
+          profileImage: profileImage || getFallbackImageUrl(personaToSave.name),
+          basedOn: basedOn || { groups: 0, insights: 0, groupTitles: [] },
+        });
+        toast.success("Persona saved!");
+      }
 
-      toast.success("Persona saved!");
       setViewMode("saved");
       setIsEditMode(false);
       setGeneratedPersona(null);

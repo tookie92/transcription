@@ -5,7 +5,7 @@ import type { ToolType } from "@/types/figjam";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MousePointer2, Hand, ArrowLeft, Sparkles, MessageSquare, Presentation, DownloadCloud, Vote, Layers, Trophy, RotateCcw, Plus, Settings, User, Eye } from "lucide-react";
+import { MousePointer2, Hand, ArrowLeft, Sparkles, MessageSquare, Presentation, DownloadCloud, Vote, Layers, Trophy, RotateCcw, Plus, Settings, User, Eye, Crown, Medal } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import {
   Dialog,
@@ -746,8 +746,6 @@ interface VoteResultsContentProps {
 }
 
 function VoteResultsContent({ results, totalVotes, onNewRound, onNewRoundWithConfig, onClose }: VoteResultsContentProps) {
-  const topThree = results.slice(0, 3);
-  
   return (
     <div className="bg-card text-card-foreground">
       {/* Header */}
@@ -759,70 +757,57 @@ function VoteResultsContent({ results, totalVotes, onNewRound, onNewRoundWithCon
         </div>
       </div>
 
-      {/* Top 3 Podium */}
-      <div className="px-4 py-3 flex items-end justify-center gap-3">
-        {/* 2nd place */}
-        {topThree[1] && (
-          <div className="flex flex-col items-center">
-            <span className="text-lg mb-1">🥈</span>
-            <div 
-              className="w-12 h-10 rounded-md flex items-center justify-center text-center px-1"
-              style={{ backgroundColor: topThree[1].color || "var(--primary)" }}
-            >
-              <span className="text-white text-[9px] font-medium line-clamp-2">{topThree[1].title}</span>
+      {/* Full Ranking List */}
+      <div className="px-4 py-3 max-h-64 overflow-y-auto space-y-1.5">
+        {results.map((result, index) => (
+          <div
+            key={result.clusterId}
+            className={cn(
+              "flex items-center gap-3 py-2.5 px-3 rounded-lg transition-colors",
+              index === 0 ? "bg-primary/10 border border-primary/20" : "bg-accent/50 hover:bg-accent"
+            )}
+          >
+            {/* Rank Icon */}
+            <div className={cn(
+              "w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0",
+              index === 0 && "bg-primary text-primary-foreground",
+              index === 1 && "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300",
+              index === 2 && "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400",
+              index > 2 && "bg-muted text-muted-foreground"
+            )}>
+              {index === 0 && <Crown className="w-3.5 h-3.5" />}
+              {index === 1 && <Medal className="w-3.5 h-3.5" />}
+              {index === 2 && <Medal className="w-3.5 h-3.5" />}
+              {index > 2 && <span className="text-xs font-bold">{index + 1}</span>}
             </div>
-            <span className="text-xs font-bold mt-1">{topThree[1].voteCount}</span>
-          </div>
-        )}
 
-        {/* 1st place */}
-        {topThree[0] && (
-          <div className="flex flex-col items-center">
-            <span className="text-xl mb-1">🥇</span>
+            {/* Color indicator */}
             <div 
-              className="w-16 h-12 rounded-md flex items-center justify-center text-center px-2 shadow-lg"
-              style={{ backgroundColor: topThree[0].color || "var(--primary)" }}
-            >
-              <span className="text-white text-xs font-semibold line-clamp-2">{topThree[0].title}</span>
-            </div>
-            <span className="text-sm font-bold text-primary mt-1">{topThree[0].voteCount}</span>
-          </div>
-        )}
+              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+              style={{ backgroundColor: result.color || "var(--primary)" }}
+            />
 
-        {/* 3rd place */}
-        {topThree[2] && (
-          <div className="flex flex-col items-center">
-            <span className="text-lg mb-1">🥉</span>
-            <div 
-              className="w-10 h-8 rounded-md flex items-center justify-center text-center px-1"
-              style={{ backgroundColor: topThree[2].color || "var(--primary)" }}
-            >
-              <span className="text-white text-[9px] font-medium line-clamp-2">{topThree[2].title}</span>
+            {/* Title */}
+            <span className={cn(
+              "flex-1 truncate text-sm",
+              index === 0 ? "font-semibold text-foreground" : "text-muted-foreground"
+            )}>
+              {result.title}
+            </span>
+
+            {/* Vote count */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <span className={cn(
+                "text-sm font-bold",
+                index === 0 ? "text-primary" : "text-muted-foreground"
+              )}>
+                {result.voteCount}
+              </span>
+              <span className="text-xs text-muted-foreground">votes</span>
             </div>
-            <span className="text-xs font-bold mt-1">{topThree[2].voteCount}</span>
           </div>
-        )}
+        ))}
       </div>
-
-      {/* Full ranking list */}
-      {results.length > 3 && (
-        <div className="px-4 pb-3 max-h-32 overflow-y-auto space-y-1">
-          {results.slice(3).map((result, index) => (
-            <div
-              key={result.clusterId}
-              className="flex items-center gap-2 py-1.5 px-2 rounded-lg bg-accent/50"
-            >
-              <span className="text-muted-foreground text-xs font-medium w-5">#{index + 4}</span>
-              <div 
-                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                style={{ backgroundColor: result.color || "var(--primary)" }}
-              />
-              <span className="text-card-foreground text-xs flex-1 truncate">{result.title}</span>
-              <span className="text-muted-foreground text-xs font-medium">{result.voteCount}</span>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border">

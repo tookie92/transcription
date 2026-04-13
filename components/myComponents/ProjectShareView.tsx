@@ -668,9 +668,12 @@ export function ProjectShareView({ token }: ProjectShareViewProps) {
             </h2>
             <div className="flex-1 flex items-center justify-center">
               <div className="flex flex-wrap gap-3 justify-center max-w-4xl">
-                {interview.summary.mainThemes.map((theme: string, i: number) => (
-                  <Badge key={i} variant="secondary" className="text-lg px-6 py-3">{theme}</Badge>
-                ))}
+                {interview.summary.mainThemes.map((theme: string | {theme: string; description?: string}, i: number) => {
+                  const themeText = typeof theme === 'string' ? theme : theme.theme;
+                  return (
+                    <Badge key={i} variant="secondary" className="text-lg px-6 py-3">{themeText}</Badge>
+                  );
+                })}
               </div>
             </div>
           </div>
