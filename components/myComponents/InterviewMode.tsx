@@ -77,14 +77,23 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
     return () => { if (sessionTimerRef.current) clearInterval(sessionTimerRef.current); };
   }, []);
 
-  // Auto-focus input
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  // Auto-focus input on mount, but don't prevent Space from working
+  useEffect(() => { 
+    inputRef.current?.focus(); 
+  }, []);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts - allow Space to work even when input is focused (for play/pause)
+  // But allow typing in input when user explicitly clicks into it
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Allow space to control audio even when input is focused
-      if (e.code === "Space" && !showEndDialog) {
+      if (showEndDialog) return;
+      
+      const key = e.key.toUpperCase();
+      const target = e.target as HTMLElement;
+      const isTypingInInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA";
+      
+      // Allow Space for play/pause even when typing in input
+      if (e.code === "Space" && isTypingInInput) {
         e.preventDefault();
         if (audioPlayerRef.current?.getCurrentTime() === 0 || audioPlayerRef.current?.getCurrentTime() === undefined) {
           audioPlayerRef.current?.play();
@@ -94,15 +103,22 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
         return;
       }
       
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || showEndDialog) return;
-      
-      const key = e.key.toUpperCase();
+      // Other shortcuts only when not typing
+      if (isTypingInInput) return;
       
       if (key === "1") { e.preventDefault(); setSelectedTag("insight"); inputRef.current?.focus(); }
       else if (key === "2") { e.preventDefault(); setSelectedTag("pain-point"); inputRef.current?.focus(); }
       else if (key === "3") { e.preventDefault(); setSelectedTag("quote"); inputRef.current?.focus(); }
       else if (key === "4") { e.preventDefault(); setSelectedTag("follow-up"); inputRef.current?.focus(); }
       else if (key === "5") { e.preventDefault(); setSelectedTag("custom"); inputRef.current?.focus(); }
+      else if (e.code === "Space") {
+        e.preventDefault();
+        if (audioPlayerRef.current?.getCurrentTime() === 0 || audioPlayerRef.current?.getCurrentTime() === undefined) {
+          audioPlayerRef.current?.play();
+        } else {
+          audioPlayerRef.current?.pause();
+        }
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
