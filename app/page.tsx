@@ -254,7 +254,7 @@ export default function Home() {
 
       {/* Pricing - Orange accent */}
       <section className="py-40 px-6 lg:px-16 bg-gray-50">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <motion.div
             className="mb-24"
             initial={{ opacity: 0, y: 30 }}
@@ -263,76 +263,122 @@ export default function Home() {
             transition={{ duration: 0.6 }}
           >
             <h2 className="text-5xl md:text-7xl font-bold text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>
-              Pricing
+              Simple Pricing
             </h2>
+            <p className="text-xl text-gray-500 mt-6">Pay only for what you use. No credit card required.</p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 gap-10">
+          <div className="grid md:grid-cols-3 gap-8">
             {/* Free */}
             <motion.div
-              className="p-12 bg-white rounded-3xl border border-gray-200"
+              className="p-8 bg-white rounded-3xl border border-gray-200"
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6 }}
             >
-              <h3 className="text-3xl font-bold mb-3 text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>Starter</h3>
-              <p className="text-gray-500 mb-8 text-lg">For individual researchers</p>
-              <div className="mb-10">
-                <span className="text-6xl font-bold text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>$0</span>
+              <h3 className="text-2xl font-bold mb-2 text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>Free</h3>
+              <p className="text-gray-500 mb-6 text-sm">For students & learning</p>
+              <div className="mb-6">
+                <span className="text-5xl font-bold text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>€0</span>
                 <span className="text-gray-500 text-lg ml-2">/month</span>
               </div>
-              <ul className="space-y-5 mb-10">
-                {["3 interviews/month", "60 min audio", "Basic transcription", "Manual affinity mapping"].map((feature, index) => (
-                  <li key={index} className="flex items-center gap-4 text-gray-600 text-lg">
-                    <Check className="w-5 h-5 text-[#4CA771]" />
+              <ul className="space-y-3 mb-8">
+                {["150 credits/month", "3 projects", "AI clustering", "Basic personas", "Dot voting"].map((feature, index) => (
+                  <li key={index} className="flex items-center gap-3 text-gray-600">
+                    <Check className="w-4 h-4 text-[#4CA771]" />
                     {feature}
                   </li>
                 ))}
               </ul>
               <ClerkLoaded>
                 {isSignedIn ? (
-                  <Button variant="outline" className="w-full h-14 border-2 border-gray-300 text-lg font-medium" disabled>Current Plan</Button>
+                  <Button variant="outline" className="w-full h-12 border-2 border-gray-300 text-lg font-medium" disabled>Current Plan</Button>
                 ) : (
                   <SignUpButton mode="modal">
-                    <Button variant="outline" className="w-full h-14 border-2 border-gray-300 text-gray-900 text-lg font-medium">Get Started</Button>
+                    <Button variant="outline" className="w-full h-12 border-2 border-gray-300 text-gray-900 text-lg font-medium">Get Started</Button>
                   </SignUpButton>
                 )}
               </ClerkLoaded>
             </motion.div>
 
-            {/* Pro - Orange card */}
+            {/* Starter */}
             <motion.div
-              className="p-12 bg-[#4CA771] rounded-3xl text-white"
+              className="p-8 bg-white rounded-3xl border-2 border-[#4CA771] shadow-xl"
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6, delay: 0.1 }}
             >
-              <span className="inline-block bg-[#4CA771] text-white text-sm font-semibold px-4 py-2 rounded-full mb-6">Most Popular</span>
-              <h3 className="text-3xl font-bold mb-3" style={{ fontFamily: "var(--font-display), sans-serif" }}>Pro</h3>
-              <p className="text-white/70 mb-8 text-lg">For growing teams</p>
-              <div className="mb-10">
-                <span className="text-6xl font-bold" style={{ fontFamily: "var(--font-display), sans-serif" }}>$20</span>
-                <span className="text-white/70 text-lg ml-2">/month</span>
+              <span className="inline-block bg-[#4CA771] text-white text-xs font-semibold px-3 py-1 rounded-full mb-4">Most Popular</span>
+              <h3 className="text-2xl font-bold mb-2 text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>Starter</h3>
+              <p className="text-gray-500 mb-6 text-sm">For individual researchers</p>
+              <div className="mb-6">
+                <span className="text-5xl font-bold text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>€19</span>
+                <span className="text-gray-500 text-lg ml-2">/month</span>
               </div>
-              <ul className="space-y-5 mb-10">
-                {["Unlimited interviews", "Unlimited audio", "AI transcription", "Smart affinity mapping", "Team collaboration", "Priority support"].map((feature, index) => (
-                  <li key={index} className="flex items-center gap-4 text-white/90 text-lg">
-                    <Check className="w-5 h-5" />
+              <div className="mb-4">
+                <span className="text-sm text-[#4CA771] font-medium">€0.15 per additional credit</span>
+              </div>
+              <ul className="space-y-3 mb-8">
+                {["500 credits/month", "Unlimited projects", "Priority AI features", "Advanced personas", "Team collaboration", "Export PDF/CSV"].map((feature, index) => (
+                  <li key={index} className="flex items-center gap-3 text-gray-600">
+                    <Check className="w-4 h-4 text-[#4CA771]" />
                     {feature}
                   </li>
                 ))}
               </ul>
               <ClerkLoaded>
                 {isSignedIn ? (
-                  <Button className="w-full h-14 bg-white text-[#4CA771] font-bold text-lg">
+                  <Button className="w-full h-12 bg-[#4CA771] text-white font-bold text-lg">
                     Upgrade
                     <ArrowRight className="ml-2 w-5 h-5" />
                   </Button>
                 ) : (
                   <SignUpButton mode="modal">
-                    <Button className="w-full h-14 bg-white text-[#4CA771] font-bold text-lg">
+                    <Button className="w-full h-12 bg-[#4CA771] text-white font-bold text-lg">
+                      Start Trial
+                      <ArrowRight className="ml-2 w-5 h-5" />
+                    </Button>
+                  </SignUpButton>
+                )}
+              </ClerkLoaded>
+            </motion.div>
+
+            {/* Pro */}
+            <motion.div
+              className="p-8 bg-gray-900 rounded-3xl text-white"
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              <h3 className="text-2xl font-bold mb-2" style={{ fontFamily: "var(--font-display), sans-serif" }}>Pro</h3>
+              <p className="text-gray-400 mb-6 text-sm">For agencies & teams</p>
+              <div className="mb-6">
+                <span className="text-5xl font-bold" style={{ fontFamily: "var(--font-display), sans-serif" }}>€35</span>
+                <span className="text-gray-400 text-lg ml-2">/user/month</span>
+              </div>
+              <div className="mb-4">
+                <span className="text-sm text-gray-400">Everything in Starter +</span>
+              </div>
+              <ul className="space-y-3 mb-8">
+                {["Unlimited credits", "Unlimited projects", "API access", "Custom branding", "Priority support", "Dedicated account manager"].map((feature, index) => (
+                  <li key={index} className="flex items-center gap-3 text-gray-300">
+                    <Check className="w-4 h-4" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              <ClerkLoaded>
+                {isSignedIn ? (
+                  <Button className="w-full h-12 bg-white text-gray-900 font-bold text-lg">
+                    Contact Sales
+                    <ArrowRight className="ml-2 w-5 h-5" />
+                  </Button>
+                ) : (
+                  <SignUpButton mode="modal">
+                    <Button className="w-full h-12 bg-white text-gray-900 font-bold text-lg">
                       Start Trial
                       <ArrowRight className="ml-2 w-5 h-5" />
                     </Button>
@@ -341,6 +387,31 @@ export default function Home() {
               </ClerkLoaded>
             </motion.div>
           </div>
+
+          {/* Credits Info */}
+          <motion.div
+            className="mt-16 p-8 bg-white rounded-3xl border border-gray-200"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+          >
+            <h4 className="text-xl font-bold text-gray-900 mb-6">How credits work</h4>
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-[#4CA771] mb-2">20</div>
+                <div className="text-gray-600">Transcription (per audio)</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-[#4CA771] mb-2">10</div>
+                <div className="text-gray-600">AI Grouping (per cluster)</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-[#4CA771] mb-2">5</div>
+                <div className="text-gray-600">AI Rename (per action)</div>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </section>
 
