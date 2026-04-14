@@ -80,9 +80,20 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
   // Auto-focus input
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  // Keyboard shortcuts
+// Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Allow space to toggle audio even when input is focused
+      if (e.code === "Space" && (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        if (audioPlayerRef.current?.getCurrentTime() === 0 || audioPlayerRef.current?.getCurrentTime() === undefined) {
+          audioPlayerRef.current?.play();
+        } else {
+          audioPlayerRef.current?.pause();
+        }
+        return;
+      }
+      
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || showEndDialog) return;
       
       const key = e.key.toUpperCase();
