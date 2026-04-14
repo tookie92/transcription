@@ -920,7 +920,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
           display: "grid",
           gridTemplateColumns: `repeat(${COLS}, ${CARD_WIDTH}px)`,
           gap: CARD_GAP,
-          alignContent: "start",
+          alignContent: "center",
           justifyContent: "start",
         }}
         onDragOver={(e) => {

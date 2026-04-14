@@ -301,6 +301,34 @@ export function FigJamBoard({
     return null;
   }
 
+  // Helper to calculate sticky position in grid within cluster
+  function calculateStickyPositionInCluster(
+    cluster: ClusterLabelData,
+    stickiesInCluster: StickyNoteData[],
+    CARD_WIDTH: number,
+    CARD_GAP: number,
+    HEADER_OFFSET: number,
+    CLUSTER_PADDING: number,
+    MAX_COLS: number
+  ): Position {
+    const clusterWidth = cluster.width ?? 500;
+    const cols = Math.min(MAX_COLS, Math.max(1, Math.floor((clusterWidth - CLUSTER_PADDING * 2) / (CARD_WIDTH + CARD_GAP))));
+    
+    const index = stickiesInCluster.length;
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    
+    const startX = CLUSTER_PADDING;
+    const startY = HEADER_OFFSET;
+    const spacingX = CARD_WIDTH + CARD_GAP;
+    const spacingY = 230; // CARD_HEIGHT_WITH_PADDING + CARD_GAP
+    
+    return {
+      x: cluster.position.x + startX + col * spacingX,
+      y: cluster.position.y + startY + row * spacingY,
+    };
+  }
+
   // Compute new insights that can be imported
   const existingIdsSet = useMemo(() => new Set(existingInsightIds), [existingInsightIds]);
   const newInsightsCount = useMemo(() => {
@@ -338,10 +366,8 @@ export function FigJamBoard({
     newInsights.forEach((insight, index) => {
       const col = index % cols;
       const row = Math.floor(index / cols);
-      const position = {
-        x: startX + col * spacingX,
-        y: startY + row * spacingY,
-      };
+      let position: Position;
+      let clusterId: string | null = null;
       const size = { width: 200, height: 200 };
       
       // Determine color based on insight type
@@ -349,16 +375,43 @@ export function FigJamBoard({
       if (insight.type === "quote") stickyColor = "quote";
       else if (insight.type === "pain-point") stickyColor = "pain-point";
       
+      // Check if this position is inside a cluster
+      const testPos = {
+        x: startX + col * spacingX,
+        y: startY + row * spacingY,
+      };
+      clusterId = findClusterAtPositionHelper(testPos.x, testPos.y, size.width, size.height, labels);
+      
+      if (clusterId) {
+        // Calculate position within cluster grid
+        const cluster = state.elements[clusterId] as ClusterLabelData;
+        const stickiesInCluster = stickies.filter(s => 
+          s.clusterId === clusterId || s.parentSectionId === clusterId
+        );
+        position = calculateStickyPositionInCluster(
+          cluster,
+          stickiesInCluster,
+          280,  // CARD_WIDTH
+          20,   // CARD_GAP
+          40,   // HEADER_OFFSET
+          16,   // CLUSTER_PADDING
+          4     // MAX_COLS
+        );
+      } else {
+        // Use default grid position for ungrouped stickies
+        position = {
+          x: startX + col * spacingX,
+          y: startY + row * spacingY,
+        };
+      }
+      
       const stickyId = board.addStickyNote(position, stickyColor, size, insight.createdByName || "Imported");
       
-      // Auto-assign to cluster if created inside one (labels are available via state.elements after board.addStickyNote updates state)
-      const clusterId = findClusterAtPositionHelper(position.x, position.y, size.width, size.height, labels);
-      
-      // Update content with the insight text, store the insight ID, and assign to cluster
+      // Update content with the insight text, store the insight ID, and assign to cluster if found
       board.updateElement(stickyId, { 
         content: insight.text,
         insightId: insight.id,
-        ...(clusterId && { clusterId }),
+        ...(clusterId && { clusterId, parentSectionId: clusterId }),
       });
     });
 
@@ -1062,6 +1115,24 @@ export function FigJamBoard({
         return;
       }
 
+      // Comment tool - create bubble on click
+      if (isCommentToolActive) {
+        const pos = screenToCanvas(e.clientX, e.clientY);
+        createBubbleMutation({
+          mapId: mapId as Id<"affinityMaps">,
+          position: pos,
+          targetId: undefined,
+          targetType: "canvas",
+          createdBy: userId || "",
+          createdByName: currentUserName,
+        }).then(() => {
+          // Return to select tool after creating bubble
+          board.setTool("select");
+          setIsCommentToolActive(false);
+        }).catch(console.error);
+        return;
+      }
+
       // Sticky tool
       if (state.activeTool === "sticky" && !voting.isVoting) {
         const pos = screenToCanvas(e.clientX, e.clientY);
@@ -1132,7 +1203,7 @@ export function FigJamBoard({
         board.clearSelection();
       }
     },
-    [state.activeTool, state.pan, board, screenToCanvas, isSpacePressed, currentUserName, hasMapId, mapId, userId]
+    [state.activeTool, state.pan, board, screenToCanvas, isSpacePressed, currentUserName, hasMapId, mapId, userId, isCommentToolActive, createBubbleMutation]
   );
 
   const handleCanvasPointerMove = useCallback(
@@ -1937,7 +2008,24 @@ export function FigJamBoard({
                   }
                 }}
                 onDrop={(stickyId) => {
-                  board.updateElement(stickyId, { clusterId: el.id, parentSectionId: el.id });
+                  // Calculate position for sticky in grid
+                  const stickiesInCluster = stickies.filter(s => 
+                    s.clusterId === el.id || s.parentSectionId === el.id
+                  );
+                  const position = calculateStickyPositionInCluster(
+                    el,
+                    stickiesInCluster,
+                    280,  // CARD_WIDTH
+                    20,   // CARD_GAP
+                    40,   // HEADER_OFFSET
+                    16,   // CLUSTER_PADDING
+                    4     // MAX_COLS
+                  );
+                  board.updateElement(stickyId, { 
+                    clusterId: el.id, 
+                    parentSectionId: el.id,
+                    position 
+                  });
                   safeLogActivity("sticky_moved", stickyId, `Moved to ${el.text || "cluster"}`);
                   if (hasMapId) {
                     throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, { clusterId: el.id, parentSectionId: el.id });

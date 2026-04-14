@@ -1,6 +1,11 @@
-import { Metadata } from "next";
-import { ProjectContent } from "@/components/myComponents/ProjectContent";
+"use client";
+
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { ProjectContent } from "@/components/myComponents/ProjectContent";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/ui/app-sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -19,16 +24,37 @@ interface ProjectPageProps {
   }>;
 }
 
-export async function generateMetadata({ params }: ProjectPageProps): Promise<Metadata> {
-  const { projectId } = await params;
-  return {
-    title: "Project Details",
-    description: "View and manage your project interviews",
-  };
-}
+export default function ProjectPage({ params }: ProjectPageProps) {
+  const router = useRouter();
+  const projectIdPromise = params;
+  const [projectId, setProjectId] = useState<string>("");
 
-export default async function ProjectPage({ params }: ProjectPageProps) {
-  const { projectId } = await params;
+  const project = useQuery(api.projects.getById, { 
+    projectId: projectId as Id<"projects">
+  });
+
+  useEffect(() => {
+    projectIdPromise.then(({ projectId }) => setProjectId(projectId));
+  }, [projectIdPromise]);
+
+  useEffect(() => {
+    if (project === null) {
+      router.push("/project");
+    }
+  }, [project, router]);
+
+  if (!projectId) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (project === null) {
+    return null;
+  }
+
   return (
     <SidebarProvider>
       <AppSidebar />
