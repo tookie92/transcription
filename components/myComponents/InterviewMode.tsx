@@ -80,11 +80,11 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
   // Auto-focus input
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-// Keyboard shortcuts
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Allow space to toggle audio even when input is focused
-      if (e.code === "Space" && (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+      // Allow space to control audio even when input is focused
+      if (e.code === "Space" && !showEndDialog) {
         e.preventDefault();
         if (audioPlayerRef.current?.getCurrentTime() === 0 || audioPlayerRef.current?.getCurrentTime() === undefined) {
           audioPlayerRef.current?.play();
@@ -103,14 +103,6 @@ export function InterviewMode({ projectId, interviewId }: InterviewModeProps) {
       else if (key === "3") { e.preventDefault(); setSelectedTag("quote"); inputRef.current?.focus(); }
       else if (key === "4") { e.preventDefault(); setSelectedTag("follow-up"); inputRef.current?.focus(); }
       else if (key === "5") { e.preventDefault(); setSelectedTag("custom"); inputRef.current?.focus(); }
-      else if (e.code === "Space") {
-        e.preventDefault();
-        if (audioPlayerRef.current?.getCurrentTime() === 0 || audioPlayerRef.current?.getCurrentTime() === undefined) {
-          audioPlayerRef.current?.play();
-        } else {
-          audioPlayerRef.current?.pause();
-        }
-      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
