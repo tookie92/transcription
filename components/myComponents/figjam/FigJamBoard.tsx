@@ -106,7 +106,7 @@ interface FigJamBoardProps {
   // Callback to open persona panel
   onOpenPersona?: () => void;
   // Callback to receive cluster/label data for panels
-  onLabelDataChange?: (labels: Array<{ id: string; title: string; insightIds: string[] }>) => void;
+  onLabelDataChange?: (labels: Array<{ id: string; title: string; insightIds: string[]; color: string; position: Position }>) => void;
   // Callback to toggle voting mode
   onToggleVoting?: () => void;
   // Whether personas exist for showing "View Persona" vs "Generate Persona"
@@ -152,6 +152,24 @@ export function FigJamBoard({
   const board = useFigJamBoard();
   const { state, setTool } = board;
 
+  // Pre-compute stickies for use in drag handlers (memoized)
+  const allSortedElements = useMemo(() => 
+    Object.values(state.elements).sort((a, b) => a.zIndex - b.zIndex), 
+    [state.elements]
+  );
+  const stickies = useMemo(() => 
+    allSortedElements.filter((el): el is StickyNoteData => el.type === "sticky"),
+    [allSortedElements]
+  );
+
+  // Conditional debug logging (only in development)
+  const DEBUG = process.env.NODE_ENV === 'development';
+  const debugLog = (message: string, ...args: any[]) => {
+    if (DEBUG) {
+      console.log(`[DEBUG] ${message}`, ...args);
+    }
+  };
+
   // Expose undo/redo controls to parent
   useEffect(() => {
     if (onBoardControlsReady) {
@@ -182,6 +200,7 @@ export function FigJamBoard({
 
   const draggingRef = useRef<Set<string>>(new Set());
   const draggingClusterRef = useRef<string | null>(null);
+  const draggingClusterStartPosRef = useRef<Position | null>(null);
 
   const isDraggingElement = useCallback((id: string) => {
     return draggingRef.current.has(id);
@@ -531,7 +550,7 @@ export function FigJamBoard({
         mapId: mapId as Id<"affinityMaps">,
         elements,
       });
-      console.log("[IMMEDIATE_SAVE] Saved", Object.keys(elements).length, "elements");
+      debugLog("[IMMEDIATE_SAVE] Saved", Object.keys(elements).length, "elements");
     }
   }, [hasMapId, mapId, saveToConvex]);
   
@@ -740,10 +759,14 @@ export function FigJamBoard({
     const savedStr = JSON.stringify(savedElements);
     const contentChanged = savedStr !== lastSyncedElementsRef.current;
 
-    // SIMPLE APPROACH: If there are ANY changes, do a FULL reload from Convex
-    // This ensures undo/redo is synced properly
-    if (newIds.length > 0 || removedIds.length > 0 || countChanged || contentChanged) {
-      console.log("[SYNC] Full reload from Convex - new:", newIds, "removed:", removedIds, "count changed:", countChanged, "content changed:", contentChanged);
+    // Only do full reload if:
+    // 1. Elements were added or removed (newIds or removedIds)
+    // 2. Content changed (text, etc.) - NOT just position changes
+    // Skip if ONLY positions changed - that means another user just moved something
+    const onlyPositionsChanged = newIds.length === 0 && removedIds.length === 0 && !countChanged && contentChanged;
+    
+    if (!onlyPositionsChanged && (newIds.length > 0 || removedIds.length > 0 || contentChanged)) {
+      debugLog("[SYNC] Full reload from Convex - new:", newIds, "removed:", removedIds, "content changed:", contentChanged, "only positions:", onlyPositionsChanged);
       board.loadElements(savedElements);
       lastSyncedElementsRef.current = savedStr;
     }
@@ -767,11 +790,11 @@ export function FigJamBoard({
     if (storageKey) {
       localStorage.setItem(storageKey, JSON.stringify(state.elements));
     }
-    
+
     // Save to Convex (throttled) - only if there are elements
     if (Object.keys(state.elements).length > 0) {
       lastSavedElementsRef.current = currentElementsStr;
-      console.log("[SAVE] Saving", Object.keys(state.elements).length, "elements to Convex");
+      debugLog("[SAVE] Saving", Object.keys(state.elements).length, "elements to Convex");
       throttledSave(state.elements);
     }
     
@@ -991,39 +1014,39 @@ export function FigJamBoard({
 
       // Cluster tool - create ONE cluster
       if (state.activeTool === "cluster") {
-        console.log("[DEBUG] Cluster click detected, activeTool:", state.activeTool);
+        debugLog("Cluster click detected, activeTool:", state.activeTool);
         const pos = screenToCanvas(e.clientX, e.clientY);
-        console.log("[DEBUG] Canvas position:", pos);
-        
+        debugLog("Canvas position:", pos);
+
         // Guard: prevent duplicate creation within 500ms at same position
         const now = Date.now();
         const guard = clusterCreationGuardRef.current;
-        if (guard && 
-            now - guard.timestamp < 500 && 
-            Math.abs(guard.position.x - pos.x) < 10 && 
+        if (guard &&
+            now - guard.timestamp < 500 &&
+            Math.abs(guard.position.x - pos.x) < 10 &&
             Math.abs(guard.position.y - pos.y) < 10) {
-          console.log("[DEBUG] Blocked duplicate cluster creation");
+          debugLog("Blocked duplicate cluster creation");
           return;
         }
         clusterCreationGuardRef.current = { timestamp: now, position: pos };
-        
-        console.log("[DEBUG] Calling addClusterLabel...");
+
+        debugLog("Calling addClusterLabel...");
         const clusterId = board.addClusterLabel(
           { x: pos.x - 250, y: pos.y - 120 },
           { width: 500, height: 300 }
         );
-        console.log("[DEBUG] Created cluster:", clusterId);
+        debugLog("Created cluster:", clusterId);
         board.updateElement(clusterId, { text: "New Cluster" });
         safeLogActivity("section_created", clusterId, "New Cluster");
         board.setTool("select");
-        
+
         if (hasMapId) {
           saveToConvex({
             mapId: mapId as Id<"affinityMaps">,
             elements: state.elements,
           });
         }
-        console.log("[DEBUG] Cluster creation complete");
+        debugLog("Cluster creation complete");
         return;
       }
 
@@ -1106,7 +1129,7 @@ export function FigJamBoard({
         board.clearSelection();
       }
     },
-    [state.activeTool, state.pan, state.elements, board, screenToCanvas, isSpacePressed, currentUserName, hasMapId, mapId, logActivity, createBubbleMutation, userId]
+    [state.activeTool, state.pan, board, screenToCanvas, isSpacePressed, currentUserName, hasMapId, mapId, userId]
   );
 
   const handleCanvasPointerMove = useCallback(
@@ -1194,7 +1217,7 @@ export function FigJamBoard({
             mapId: mapId as Id<"affinityMaps">,
             elements: restoredElements,
           });
-          console.log("[UNDO] Saved", Object.keys(restoredElements).length, "elements after undo");
+          debugLog("[UNDO] Saved", Object.keys(restoredElements).length, "elements after undo");
         }
         return;
       }
@@ -1211,7 +1234,7 @@ export function FigJamBoard({
             mapId: mapId as Id<"affinityMaps">,
             elements: restoredElements,
           });
-          console.log("[REDO] Saved", Object.keys(restoredElements).length, "elements after redo");
+          debugLog("[REDO] Saved", Object.keys(restoredElements).length, "elements after redo");
         }
         return;
       }
@@ -1382,7 +1405,7 @@ export function FigJamBoard({
 
   const sorted    = Object.values(state.elements).sort((a, b) => a.zIndex - b.zIndex);
   const labels    = sorted.filter((el): el is ClusterLabelData     => el.type === "label");
-  const stickies  = sorted.filter((el): el is StickyNoteData      => el.type === "sticky");
+  // stickies already defined at top of component
   const clusterElements = labels;
 
   // Track previous label data to avoid unnecessary updates
@@ -1396,6 +1419,8 @@ export function FigJamBoard({
       insightIds: stickies
         .filter(s => s.clusterId === label.id || s.parentSectionId === label.id)
         .map(s => s.id),
+      color: label.color || "#E1BEE7",
+      position: label.position,
     }));
   }, [labels, stickies]);
 
@@ -1479,7 +1504,7 @@ export function FigJamBoard({
     // Create cluster with calculated size
     const clusterId = board.addClusterLabel(position, { width: clusterWidth, height: clusterHeight });
 
-    console.log(`[AI GROUPING] Creating cluster ${clusterId} with ${stickyIds.length} stickies (${COLUMNS}x${rows})`);
+    debugLog(`[AI GROUPING] Creating cluster ${clusterId} with ${stickyIds.length} stickies (${COLUMNS}x${rows})`);
 
     stickyIds.forEach((stickyId, index) => {
       // ROW-FIRST: fill row left-to-right, then next row
@@ -1508,7 +1533,7 @@ export function FigJamBoard({
     board.updateElement(clusterId, { text: title });
     safeLogActivity("ai_cluster_created", clusterId, title);
 
-    console.log(`[AI GROUPING] Cluster ${clusterId} created and positioned (${clusterWidth}x${clusterHeight})`);
+    debugLog(`[AI GROUPING] Cluster ${clusterId} created and positioned (${clusterWidth}x${clusterHeight})`);
 
     toast.success(`Created cluster "${title}" with ${stickyIds.length} stickies`);
   }, [board, state.elements]);
@@ -1624,14 +1649,14 @@ export function FigJamBoard({
       <div
         ref={canvasRef}
         className={`flex-1 ${cursorStyle}`}
-        onPointerDown={handleCanvasPointerDown}
-        onPointerMove={handleCanvasPointerMove}
-        onPointerUp={handleCanvasPointerUp}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          if (state.selectedIds.length > 0) {
-            setContextMenu({
-              position: { x: e.clientX, y: e.clientY },
+          onPointerDown={handleCanvasPointerDown}
+          onPointerMove={handleCanvasPointerMove}
+          onPointerUp={handleCanvasPointerUp}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            if (state.selectedIds.length > 0) {
+              setContextMenu({
+                position: { x: e.clientX, y: e.clientY },
               ids: state.selectedIds,
             });
           }
@@ -1646,15 +1671,16 @@ export function FigJamBoard({
           if (stickyId) {
             const pos = screenToCanvas(e.clientX, e.clientY);
             const sticky = state.elements[stickyId];
+
             if (sticky && sticky.type === "sticky") {
               let targetClusterId: string | null = null;
-              
+
               for (const label of labels) {
                 const clusterX = label.position.x;
                 const clusterY = label.position.y;
                 const clusterWidth = label.width ?? 500;
                 const clusterHeight = label.height ?? 350;
-                
+
                 if (
                   pos.x >= clusterX &&
                   pos.x <= clusterX + clusterWidth &&
@@ -1665,21 +1691,27 @@ export function FigJamBoard({
                   break;
                 }
               }
-              
-              board.updateElement(stickyId, { 
-                clusterId: targetClusterId,
-              });
-              if (hasMapId) {
-                throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, { clusterId: targetClusterId });
+
+              // FIX: Let the cluster handle the drop if dropped inside a cluster
+              // The cluster already manages clusterId AND parentSectionId via its own onDrop
+              if (!targetClusterId) {
+                // Only handle if dropped outside all clusters (empty canvas)
+                board.updateElement(stickyId, {
+                  clusterId: null,
+                  parentSectionId: null,
+                });
+                if (hasMapId) {
+                  throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, {
+                    clusterId: null,
+                    parentSectionId: null,
+                  });
+                }
               }
+              // If targetClusterId is set, the cluster handles the drop via its own onDrop
               // Clear selection after drop
               board.clearSelection();
             }
           }
-          setDraggingStickyId(null);
-        }}
-        onDragEnd={() => {
-          setDraggingStickyId(null);
         }}
       >
         <CanvasGrid zoom={state.zoom} pan={state.pan} />
@@ -1778,6 +1810,7 @@ export function FigJamBoard({
                 key={el.id}
                 cluster={el}
                 memberStickies={stickiesInThisCluster}
+                zoom={state.zoom}
                 isDragging={isClusterDragging}
                 isDropTarget={draggingStickyId !== null}
                 isLocked={getLockInfo(el.id).isLocked}
@@ -1798,6 +1831,8 @@ export function FigJamBoard({
                 }}
                 onDragStart={() => {
                   draggingClusterRef.current = el.id;
+                  // Store the initial position BEFORE drag starts
+                  draggingClusterStartPosRef.current = { ...el.position };
                   board.startDrag();
                 }}
                 onDrag={() => {
@@ -1809,10 +1844,13 @@ export function FigJamBoard({
                     position: { x: finalX, y: finalY }
                   });
 
+                  // Get the initial position (saved at drag start) to calculate correct delta
+                  const startPos = draggingClusterStartPosRef.current;
+                  const dx = startPos ? finalX - startPos.x : 0;
+                  const dy = startPos ? finalY - startPos.y : 0;
+
                   // Move all stickies belonging to this cluster
                   stickies.filter(s => s.clusterId === el.id).forEach(sticky => {
-                    const dx = finalX - el.position.x;
-                    const dy = finalY - el.position.y;
                     board.updateElement(sticky.id, {
                       position: {
                         x: sticky.position.x + dx,
@@ -1832,6 +1870,7 @@ export function FigJamBoard({
                   }
                   setDraggingStickyId(null);
                   draggingClusterRef.current = null;
+                  draggingClusterStartPosRef.current = null;
                   board.endDrag();
                 }}
                 onLabelChange={(newLabel) => {
@@ -1872,25 +1911,25 @@ export function FigJamBoard({
                   // Content change goes to history, lock clear does not
                   board.updateElement(stickyId, patch); // Content to history
                   board.updateElementNoHistory(stickyId, lockClearPatch as any); // Lock clear not in history
-                  
+
                   if (patch.content && hasMapId) {
                     safeLogActivity("sticky_updated", stickyId, patch.content.slice(0, 30));
                   }
                   // Save immediately for lock release
                   if (hasMapId) {
-                    console.log("[LOCK_CLEAR] Saving immediately for sticky:", stickyId);
+                    debugLog("[LOCK_CLEAR] Saving immediately for sticky:", stickyId);
                     immediateSave(board.state.elements);
                   }
                 }}
                 onStickyStartEdit={(stickyId) => {
                   // Set the lock when starting to edit - NO_HISTORY (meta operation)
-                  board.updateElementNoHistory(stickyId, { 
+                  board.updateElementNoHistory(stickyId, {
                     editingBy: userId || "local-user",
                     editingByName: currentUser?.name || "You"
                   });
                   // Save immediately for lock acquisition
                   if (hasMapId) {
-                    console.log("[LOCK_ACQUIRE] Saving immediately for sticky:", stickyId, "by:", currentUser?.name);
+                    debugLog("[LOCK_ACQUIRE] Saving immediately for sticky:", stickyId, "by:", currentUser?.name);
                     immediateSave(board.state.elements);
                   }
                 }}

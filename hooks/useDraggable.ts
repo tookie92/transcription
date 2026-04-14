@@ -25,6 +25,7 @@ interface UseDraggableOptions {
   selectedIds?: string[];
   noMomentum?: boolean;
   onPositionChange?: (pos: Position) => void;
+  onDragMove?: (pos: Position) => void;
 }
 
 interface UseDraggableReturn {
@@ -41,6 +42,7 @@ export function useDraggable({
   onDragStart,
   onDragEnd,
   onPositionChange,
+  onDragMove,
   disabled = false,
   bounds,
   stickyWidth = 200,
@@ -117,14 +119,14 @@ export function useDraggable({
           const newPos = { x: newX, y: newY };
           visualPositionRef.current = newPos;
           
-          // Update DOM directly for smooth movement
+          // Direct DOM update for immediate feedback (critical for smooth drag)
           if (elementRef.current) {
             elementRef.current.style.left = `${newX}px`;
             elementRef.current.style.top = `${newY}px`;
           }
           
-          // Notify external ref of position change (for StickyNote's renderPosition)
-          onPositionChange?.(newPos);
+          // Only notify on drag end to minimize React re-renders during drag
+          // The DOM already has the new position, React will sync on pointer up
         }
       };
 
@@ -147,7 +149,7 @@ export function useDraggable({
       window.addEventListener("pointermove", onPointerMove);
       window.addEventListener("pointerup", onPointerUp);
     },
-    [disabled, id, zoom, onMove, onMoveSelected, onDragStart, onDragEnd, onPositionChange, bounds, stickyWidth, stickyHeight, selectedIds]
+    [disabled, id, zoom, onMove, onMoveSelected, onDragStart, onDragEnd, onPositionChange, onDragMove, bounds, stickyWidth, stickyHeight, selectedIds]
   );
 
   return {

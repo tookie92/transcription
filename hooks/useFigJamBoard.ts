@@ -72,7 +72,7 @@ function cloneElements(elements: Record<string, FigJamElement>): Record<string, 
 function reducer(state: BoardState, action: Action): BoardState {
   switch (action.type) {
     case "ADD_ELEMENT": {
-      console.log("[REDUCER] ADD_ELEMENT called, element type:", action.element.type, "id:", action.element.id);
+      // debugLog("[REDUCER] ADD_ELEMENT called, element type:", action.element.type, "id:", action.element.id);
       const elements = { ...state.elements, [action.element.id]: action.element };
       return { ...state, elements, selectedIds: [action.element.id] };
     }
@@ -484,10 +484,18 @@ function initialState(): BoardState {
 
 export function useFigJamBoard(): UseFigJamBoardReturn {
   const [state, baseDispatch] = useReducer(reducer, undefined, initialState);
-  
+
   // Ref to always have latest state (avoids closure issues)
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  // Conditional debug logging (only in development)
+  const DEBUG = process.env.NODE_ENV === 'development';
+  const debugLog = (message: string, ...args: any[]) => {
+    if (DEBUG) {
+      console.log(`[DEBUG] ${message}`, ...args);
+    }
+  };
   
   // Complete state snapshots for history
   const historyRef = useRef<BoardState[]>([]);
@@ -509,7 +517,7 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
   // Mark loading as complete after first meaningful user action
   const markLoaded = useCallback(() => {
     isLoadingRef.current = false;
-    console.log("[History] Board loaded, history tracking enabled. Elements:", Object.keys(stateRef.current.elements).length);
+    debugLog("[History] Board loaded, history tracking enabled. Elements:", Object.keys(stateRef.current.elements).length);
   }, []);
 
   // Call this when drag starts to prepare snapshot
@@ -563,8 +571,8 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     if (UNDOABLE_ACTIONS.has(action.type) && !isUndoingRedoingRef.current && !isLoadingRef.current) {
       const currentState = stateRef.current;
       const elementsBefore = Object.keys(currentState.elements).length;
-      console.log(`[History] ${action.type}: ${elementsBefore} elements`);
-      
+      debugLog(`[History] ${action.type}: ${elementsBefore} elements`);
+
       // Save complete state snapshot BEFORE action
       const stateSnapshot: BoardState = {
         elements: cloneElements(currentState.elements),
@@ -591,15 +599,15 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
 
   const undo = useCallback((): Record<string, FigJamElement> | null => {
     if (historyRef.current.length === 0) {
-      console.log("[Undo] No history");
+      debugLog("[Undo] No history");
       return null;
     }
-    
+
     const previousState = historyRef.current[historyRef.current.length - 1];
     historyRef.current = historyRef.current.slice(0, -1);
-    
-    console.log(`[Undo] History size: ${historyRef.current.length}, will restore: ${Object.keys(previousState.elements).length}`);
-    
+
+    debugLog(`[Undo] History size: ${historyRef.current.length}, will restore: ${Object.keys(previousState.elements).length}`);
+
     // Save current state to redo stack
     const currentState = stateRef.current;
     const currentSnapshot: BoardState = {
@@ -615,40 +623,48 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
       votesRevealed: currentState.votesRevealed,
     };
     futureRef.current = [...futureRef.current, currentSnapshot];
-    
+
     isUndoingRedoingRef.current = true;
-    
+
     // Clean locks on all stickies when restoring (important for collaborative editing)
+    // Only remove locks that belong to the current user
     const cleanedElements: Record<string, FigJamElement> = {};
     for (const [id, el] of Object.entries(previousState.elements)) {
       if (el.type === "sticky") {
-        const { editingBy, editingByName, ...rest } = el as FigJamElement & { editingBy?: string; editingByName?: string };
-        cleanedElements[id] = rest as FigJamElement;
+        const sticky = el as StickyNoteData;
+        // Only remove lock if it belongs to current user
+        if (sticky.editingBy === stateRef.current.currentUserId) {
+          const { editingBy, editingByName, ...rest } = sticky as any;
+          cleanedElements[id] = rest as FigJamElement;
+        } else {
+          // Keep lock from other user
+          cleanedElements[id] = el;
+        }
       } else {
         cleanedElements[id] = el;
       }
     }
-    
+
     baseDispatch({ type: "LOAD_ELEMENTS", elements: cleanedElements });
     isUndoingRedoingRef.current = false;
-    
-    console.log(`[Undo] Restored ${Object.keys(cleanedElements).length}, redo stack: ${futureRef.current.length}`);
-    
+
+    debugLog(`[Undo] Restored ${Object.keys(cleanedElements).length}, redo stack: ${futureRef.current.length}`);
+
     // Return the cleaned elements for immediate saving
     return cleanedElements;
   }, []);
 
   const redo = useCallback((): Record<string, FigJamElement> | null => {
     if (futureRef.current.length === 0) {
-      console.log("[Redo] Nothing to redo");
+      debugLog("[Redo] Nothing to redo");
       return null;
     }
     
     const nextState = futureRef.current[futureRef.current.length - 1];
     futureRef.current = futureRef.current.slice(0, -1);
-    
-    console.log(`[Redo] Will restore: ${Object.keys(nextState.elements).length}, history: ${historyRef.current.length}`);
-    
+
+    debugLog(`[Redo] Will restore: ${Object.keys(nextState.elements).length}, history: ${historyRef.current.length}`);
+
     // Save current state to undo stack
     const currentState = stateRef.current;
     const currentSnapshot: BoardState = {
@@ -666,23 +682,31 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     historyRef.current = [...historyRef.current, currentSnapshot];
     
     isUndoingRedoingRef.current = true;
-    
+
     // Clean locks on all stickies when restoring (important for collaborative editing)
+    // Only remove locks that belong to the current user
     const cleanedElements: Record<string, FigJamElement> = {};
     for (const [id, el] of Object.entries(nextState.elements)) {
       if (el.type === "sticky") {
-        const { editingBy, editingByName, ...rest } = el as FigJamElement & { editingBy?: string; editingByName?: string };
-        cleanedElements[id] = rest as FigJamElement;
+        const sticky = el as StickyNoteData;
+        // Only remove lock if it belongs to current user
+        if (sticky.editingBy === stateRef.current.currentUserId) {
+          const { editingBy, editingByName, ...rest } = sticky as any;
+          cleanedElements[id] = rest as FigJamElement;
+        } else {
+          // Keep lock from other user
+          cleanedElements[id] = el;
+        }
       } else {
         cleanedElements[id] = el;
       }
     }
-    
+
     baseDispatch({ type: "LOAD_ELEMENTS", elements: cleanedElements });
     isUndoingRedoingRef.current = false;
-    
-    console.log(`[Redo] Restored ${Object.keys(cleanedElements).length}, history: ${historyRef.current.length}`);
-    
+
+    debugLog(`[Redo] Restored ${Object.keys(cleanedElements).length}, history: ${historyRef.current.length}`);
+
     // Return the cleaned elements for immediate saving
     return cleanedElements;
   }, []);

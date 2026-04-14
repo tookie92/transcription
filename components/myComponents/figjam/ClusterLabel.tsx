@@ -300,6 +300,7 @@ function RealStickyCard({
 interface ClusterLabelProps {
   cluster: ClusterLabelData;
   memberStickies: StickyNoteData[];
+  zoom: number;
   isDragging: boolean;
   isLocked?: boolean;
   isSelected?: boolean;
@@ -337,6 +338,7 @@ interface ClusterLabelProps {
 export const ClusterLabel = memo(function ClusterLabelComponent({
   cluster,
   memberStickies,
+  zoom,
   isDragging,
   isLocked = false,
   isSelected = false,
@@ -383,10 +385,20 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   const prevStickiesCountRef = useRef(memberStickies.length);
   const isAutoFittingRef = useRef(false);
 
-  // Track if we're currently dragging (used to prevent React from controlling position)
-  const isDomDraggingRef = useRef(false);
+  // React state for drag (replaces DOM refs)
+  const [isLocalDragging, setIsLocalDragging] = useState(false);
+  const visualPositionRef = useRef<{ x: number; y: number }>(cluster.position);
+  const [visualPosition, setVisualPosition] = useState<{ x: number; y: number }>(cluster.position);
 
-  const isDraggingActive = isDragging;
+  // Sync ref when position changes externally (but NOT during local drag)
+  useEffect(() => {
+    if (!isLocalDragging) {
+      visualPositionRef.current = { ...cluster.position };
+      setVisualPosition({ ...cluster.position });
+    }
+  }, [cluster.position.x, cluster.position.y, isLocalDragging]);
+
+  const isDraggingActive = isLocalDragging || isDragging;
   const canInteract = !isLocked && !isEditing;
   const hasInsights = memberStickies.length > 0;
 
@@ -514,7 +526,6 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
 
       // During voting mode - clicking sticky cards still works, clicking cluster votes
       if (target.closest('[data-sticky-card]')) {
-        // Let sticky cards handle their own events
         return;
       }
 
@@ -528,60 +539,50 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       e.stopPropagation();
       e.preventDefault();
 
-      if (onSelect) {
-        onSelect(cluster.id, e.shiftKey || e.ctrlKey || e.metaKey);
-      }
-
       onDragStart();
 
-      const el = e.currentTarget as HTMLElement;
       const startX = e.clientX;
       const startY = e.clientY;
       const startPosX = cluster.position.x;
       const startPosY = cluster.position.y;
       let hasMoved = false;
       
-      // Mark as DOM dragging to prevent React from controlling position
-      isDomDraggingRef.current = true;
-      // Initialize the DOM position ref
-      domPositionRef.current = { x: startPosX, y: startPosY };
+      setIsLocalDragging(true);
+      visualPositionRef.current = { x: startPosX, y: startPosY };
 
       const handlePointerMove = (moveEvent: PointerEvent) => {
-        const dx = moveEvent.clientX - startX;
-        const dy = moveEvent.clientY - startY;
+        const dx = (moveEvent.clientX - startX);
+        const dy = (moveEvent.clientY - startY);
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
           hasMoved = true;
         }
-        const newX = startPosX + dx;
-        const newY = startPosY + dy;
-        // Update position DIRECTLY on DOM during drag - NO React state updates
-        el.style.left = `${newX}px`;
-        el.style.top = `${newY}px`;
-        // Also update the ref so React uses it if it re-renders
-        domPositionRef.current = { x: newX, y: newY };
+        
+        const newX = startPosX + dx / zoom;
+        const newY = startPosY + dy / zoom;
+        
+        visualPositionRef.current = { x: newX, y: newY };
       };
 
       const handlePointerUp = (upEvent: PointerEvent) => {
-        // Remove listeners first
         window.removeEventListener("pointermove", handlePointerMove);
         window.removeEventListener("pointerup", handlePointerUp);
-        
-        // Clear DOM dragging flag
-        isDomDraggingRef.current = false;
-        
+
+        setIsLocalDragging(false);
+
         if (!hasMoved) {
-          // This was a click, not a drag - voting
+          // This was a click, not a drag - select the cluster
+          if (onSelect) {
+            onSelect(cluster.id, e.shiftKey || e.ctrlKey || e.metaKey);
+          }
+          // Also handle voting click
           if (isVotingActive && !isVotingRevealed) {
             onClusterClick?.(cluster.id);
           }
         } else {
-          const finalX = startPosX + (upEvent.clientX - startX);
-          const finalY = startPosY + (upEvent.clientY - startY);
-          // DOM position is already set by last handlePointerMove, ensure it matches
-          el.style.left = `${finalX}px`;
-          el.style.top = `${finalY}px`;
-          domPositionRef.current = { x: finalX, y: finalY };
-          // Now update React state with final position
+          const finalX = startPosX + (upEvent.clientX - startX) / zoom;
+          const finalY = startPosY + (upEvent.clientY - startY) / zoom;
+          visualPositionRef.current = { x: finalX, y: finalY };
+          setVisualPosition({ x: finalX, y: finalY });
           onDragEnd(finalX, finalY);
         }
       };
@@ -589,7 +590,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       window.addEventListener("pointermove", handlePointerMove);
       window.addEventListener("pointerup", handlePointerUp);
     },
-    [canInteract, isVotingActive, isVotingRevealed, cluster.id, cluster.position.x, cluster.position.y, onDragStart, onDragEnd, onSelect, onClusterClick]
+    [canInteract, isVotingActive, isVotingRevealed, cluster.id, cluster.position.x, cluster.position.y, zoom, onDragStart, onDragEnd, onSelect, onClusterClick]
   );
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
@@ -660,25 +661,8 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   const selectionBorderColor = isLocked ? "#ef4444" : "#3b82f6"; // Red if locked, blue if selected
   const selectionBorderStyle = isSolidBorder ? "2px solid" : "2px dashed";
 
-  // Track DOM position during drag to avoid React re-render issues
-  const domPositionRef = useRef<{ x: number; y: number } | null>(null);
-  
-  // Expose DOM position tracking for the drag handler
-  useEffect(() => {
-    if (clusterRef.current) {
-      (clusterRef.current as any).setDomPosition = (x: number, y: number) => {
-        domPositionRef.current = { x, y };
-        if (isDomDraggingRef.current && clusterRef.current) {
-          clusterRef.current.style.left = `${x}px`;
-          clusterRef.current.style.top = `${y}px`;
-        }
-      };
-    }
-  }, []);
-
-  // Compute effective position - use DOM ref during drag, props otherwise
-  const effectiveLeft = domPositionRef.current?.x ?? cluster.position.x;
-  const effectiveTop = domPositionRef.current?.y ?? cluster.position.y;
+  // Use ref for position during drag for instant updates
+  const effectivePosition = isLocalDragging ? visualPositionRef.current : cluster.position;
 
   return (
     <div
@@ -686,8 +670,8 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       data-cluster-id={cluster.id}
       className="absolute select-none"
       style={{
-        left: effectiveLeft,
-        top: effectiveTop,
+        left: effectivePosition.x,
+        top: effectivePosition.y,
         width: CLUSTER_WIDTH,
         height: AUTO_HEIGHT,
         zIndex: cluster.zIndex,

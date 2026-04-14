@@ -70,7 +70,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const [commentPanel, setCommentPanel] = useState<{groupId: string; rect: DOMRect; title?: string} | null>(null);
   const [canvasInsightIds, setCanvasInsightIds] = useState<Set<string>>(new Set());
   // Clusters from FigJamBoard (canvas-based, not from affinityMap.clusters)
-  const [canvasClusters, setCanvasClusters] = useState<Array<{ id: string; title: string; insightIds: string[] }>>([]);
+  const [canvasClusters, setCanvasClusters] = useState<Array<{ id: string; title: string; insightIds: string[]; color: string; position: { x: number; y: number } }>>([]);
   
   // Board controls for Timeline integration
   const [boardControls, setBoardControls] = useState<{ undo: () => void; redo: () => void } | null>(null);
@@ -473,7 +473,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         isPresentMode={false}
         activePanel={activePanel}
         setActivePanel={setActivePanel}
-        groups={clusters}
+        groups={canvasClusters}
         canvasGroups={canvasClusters}
         insights={insights}
         projectId={projectId}
@@ -491,6 +491,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
         onAnalyzeThemes={handleAnalyzeThemes}
         onClearThemes={handleClearThemes}
         onCreateGroup={async (insightIds, title) => {
+          // Create cluster via old system for now (TODO: migrate to FigJamBoard system)
           const position = { x: 400 + Math.random() * 200, y: 400 + Math.random() * 200 };
           const groupId = await handlers.handleClusterCreate(position, title);
           insightIds.forEach(insightId => {

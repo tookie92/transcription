@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { StickyNoteData, StickyColor, Size, Position } from "@/types/figjam";
 import { useDraggable } from "@/hooks/useDraggable";
+import type { StickyNoteData, StickyColor, Size, Position } from "@/types/figjam";
 
 // ─── Color palette (FigJam authentic) ────────────────────────────────────────
 
@@ -17,6 +17,7 @@ export const STICKY_COLORS: Record<
   purple:  { bg: "#E1BEE7", header: "#CE93D8", text: "#4A148C", accent: "#8E24AA", shadow: "rgba(142, 36, 170, 0.25)" },
   orange:  { bg: "#FFE0B2", header: "#FFCC80", text: "#E65100", accent: "#FB8C00", shadow: "rgba(251, 140, 0, 0.25)" },
   white:   { bg: "#FAFAFA", header: "#EEEEEE", text: "#424242", accent: "#757575", shadow: "rgba(0, 0, 0, 0.1)" },
+  gray:    { bg: "#F5F5F5", header: "#EEEEEE", text: "#424242", accent: "#757575", shadow: "rgba(0, 0, 0, 0.1)" },
   // Insight type colors
   "pain-point":  { bg: "#FFCDD2", header: "#EF9A9A", text: "#B71C1C", accent: "#E53935", shadow: "rgba(229, 57, 53, 0.25)" },
   "quote":       { bg: "#E1BEE7", header: "#CE93D8", text: "#4A148C", accent: "#8E24AA", shadow: "rgba(142, 36, 170, 0.25)" },
@@ -180,9 +181,10 @@ export function StickyNote({
     return () => observer.disconnect();
   }, [isEditing, editingContent]);
 
-  const isDraggingRef = useRef(false);
-  const dragPositionRef = useRef<Position>(note.position);
-  const { visualPosition, handlePointerDown } = useDraggable({
+  const [isDragging, setIsDragging] = useState(false);
+  const visualPositionRef = useRef<Position>(note.position);
+  const [visualPosition, setVisualPosition] = useState<Position>(note.position);
+  const { handlePointerDown } = useDraggable({
     id: note.id,
     position: note.position,
     zoom,
@@ -190,20 +192,18 @@ export function StickyNote({
     onMoveSelected,
     onDragStart: (id) => {
       if (isLocked) return;
-      isDraggingRef.current = true;
-      dragPositionRef.current = { ...note.position };
+      setIsDragging(true);
+      visualPositionRef.current = { ...note.position };
       onSelect(id, false);
       onBringToFront(id);
       setShowMenu(false);
       onDragStart?.(id);
     },
     onDragEnd: (id) => {
-      isDraggingRef.current = false;
-      dragPositionRef.current = { ...note.position };
+      setIsDragging(false);
+      setVisualPosition(note.position);
+      visualPositionRef.current = { ...note.position };
       onDragEnd?.(id);
-    },
-    onPositionChange: (pos) => {
-      dragPositionRef.current = pos;
     },
     disabled: isEditing || isResizing || isLocked,
     stickyWidth: stickySize.width,
@@ -212,17 +212,8 @@ export function StickyNote({
     bounds: clusterBounds ?? undefined,
   });
 
-  const isDragging = isDraggingRef.current;
-  
-  // Sync drag position ref when position changes from outside (not during drag)
-  useEffect(() => {
-    if (!isDraggingRef.current) {
-      dragPositionRef.current = { ...note.position };
-    }
-  }, [note.position]);
-  
-  // Use ref for position during drag to avoid React re-render issues
-  const renderPosition = isDragging ? dragPositionRef.current : visualPosition;
+  // Use ref for position during drag for instant updates, state otherwise
+  const renderPosition = isDragging ? visualPositionRef.current : visualPosition;
 
   const handleDoubleClick = useCallback(() => {
     if (isLocked) return;
@@ -261,15 +252,18 @@ export function StickyNote({
 
       const multi = e.shiftKey || e.ctrlKey || e.metaKey;
 
+      // Update ref BEFORE drag starts for instant visual feedback
+      visualPositionRef.current = { ...note.position };
+
       if (multi) {
         onSelect(note.id, true);
         return;
       }
 
       onSelect(note.id, false);
-      handlePointerDown(e);
+      // dnd-kit handles drag via its own listeners
     },
-    [note.id, onSelect, handlePointerDown]
+    [note.id, onSelect, note.position]
   );
 
   // ── Resize handle ────────────────────────────────────────────────────────
