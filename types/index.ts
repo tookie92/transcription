@@ -74,7 +74,7 @@ export interface Insight {
   type: 'pain-point' | 'quote' | 'insight' | 'follow-up' | 'custom';
   text: string;
   timestamp: number;
-  source: 'ai' | 'manual';
+  source: 'ai' | 'manual' | 'demo';
   createdBy: string;
   createdByName: string;
   createdAt: string;
@@ -195,7 +195,7 @@ export interface ConvexInsight {
   type: 'pain-point' | 'quote' | 'insight' | 'follow-up' | 'custom';
   text: string;
   timestamp: number;
-  source: 'ai' | 'manual';
+  source: 'ai' | 'manual' | 'demo';
   createdBy: string;
   createdAt: number;
   tags?: string[];

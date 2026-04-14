@@ -8,6 +8,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     ownerId: v.string(), // Clerk user ID
     isPublic: v.boolean(),
+    isDemo: v.optional(v.boolean()),
     members: v.array(v.object({
       userId: v.string(),
       role: v.union(v.literal("owner"), v.literal("editor"), v.literal("viewer")),
@@ -115,7 +116,7 @@ export default defineSchema({
     ),
     text: v.string(),
     timestamp: v.number(),
-    source: v.union(v.literal("ai"), v.literal("manual")),
+    source: v.union(v.literal("ai"), v.literal("manual"), v.literal("demo")),
     createdBy: v.string(),
     createdByName: v.string(),
     tags: v.optional(v.array(v.string())),
