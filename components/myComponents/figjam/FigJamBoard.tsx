@@ -68,7 +68,7 @@ function CanvasGrid({ zoom, pan }: { zoom: number; pan: Position }) {
           width={spacing} height={spacing}
           patternUnits="userSpaceOnUse"
         >
-          <path d={`M ${spacing} 0 L 0 0 L 0 ${spacing}`} stroke="#d1d5db" strokeWidth={1} fill="none" opacity={0.8} />
+          <circle cx={1} cy={1} r={1} fill="currentColor" className="text-border/40" />
         </pattern>
       </defs>
       <rect width="100%" height="100%" fill="url(#figjam-grid)" />
@@ -109,6 +109,8 @@ interface FigJamBoardProps {
   onLabelDataChange?: (labels: Array<{ id: string; title: string; insightIds: string[]; color: string; position: Position }>) => void;
   // Callback to toggle voting mode
   onToggleVoting?: () => void;
+  // Trigger to open voting config modal (passed as number)
+  votingConfigTrigger?: number;
   // Whether personas exist for showing "View Persona" vs "Generate Persona"
   hasPersonas?: boolean;
   // Callbacks for undo/redo (for Timeline panel integration)
@@ -220,6 +222,7 @@ export function FigJamBoard({
   const [showAIGroupingPanel, setShowAIGroupingPanel] = useState(false);
   const [showGDPRConsent, setShowGDPRConsent] = useState(false);
   const [showInsightsSidebar, setShowInsightsSidebar] = useState(true);
+  const [votingConfigTrigger, setVotingConfigTrigger] = useState(0);
 
   // Close sidebar when voting starts (avoid distraction)
   useEffect(() => {
@@ -1315,7 +1318,7 @@ export function FigJamBoard({
         case "t": case "T": board.setTool("text");   break;
         case "f": case "F": board.setTool("section"); break;
         case "c": case "C": board.setTool("cluster"); break;
-        case "v": case "V": onToggleVoting?.(); break;
+        case "v": case "V": setVotingConfigTrigger(prev => prev + 1); break;
         case "F2":
           if (state.selectedIds.length === 1) {
             const selectedEl = state.elements[state.selectedIds[0]];
@@ -1582,7 +1585,7 @@ export function FigJamBoard({
 
   return (
     <div
-      className="relative w-full h-full overflow-hidden select-none flex dark:bg-[#1a1a1a] bg-white"
+      className="relative w-full h-full overflow-hidden select-none flex bg-dot-pattern"
       style={{ fontFamily: "'DM Sans', system-ui, sans-serif", ...style }}
     >
       {/* ── Insights Sidebar ── */}
@@ -2107,6 +2110,7 @@ export function FigJamBoard({
         }}
         onOpenPersona={onOpenPersona}
         hasPersonas={hasPersonas}
+        votingConfigTrigger={votingConfigTrigger}
       />
 
       {/* ── MiniMap ── */}

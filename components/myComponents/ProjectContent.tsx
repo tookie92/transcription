@@ -537,11 +537,12 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
         />
       </div>
 
-      {/* Invite Dialog */}
+      {/* Invite Dialog - empty trigger since we use our own button */}
       <TeamDialog 
         projectId={projectId} 
         open={teamDialogOpen} 
-        onOpenChange={setTeamDialogOpen} 
+        onOpenChange={setTeamDialogOpen}
+        trigger={null}
       />
 
       {/* Interviews Section */}

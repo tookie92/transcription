@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import type { ToolType } from "@/types/figjam";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -79,6 +79,7 @@ interface FigJamToolbarProps {
   onCreateCluster?: (title: string) => void;
   onOpenPersona?: () => void;
   hasPersonas?: boolean;
+  votingConfigTrigger?: number;
 }
 
 const PRESET_CONFIGS = [
@@ -115,6 +116,7 @@ export function FigJamToolbar({
   onCreateCluster,
   onOpenPersona,
   hasPersonas = false,
+  votingConfigTrigger = 0,
 }: FigJamToolbarProps) {
   const [showVotingConfig, setShowVotingConfig] = useState(false);
   const [showClusterDialog, setShowClusterDialog] = useState(false);
@@ -125,6 +127,13 @@ export function FigJamToolbar({
 
   const { userId } = useAuth();
   const isVotingCreator = voting?.session?.createdBy === userId;
+
+  // Open modal when trigger changes (from keyboard shortcut)
+  useEffect(() => {
+    if (votingConfigTrigger > 0) {
+      setShowVotingConfig(true);
+    }
+  }, [votingConfigTrigger]);
 
   const handleClusterTool = () => {
     // Toggle between cluster tool and select

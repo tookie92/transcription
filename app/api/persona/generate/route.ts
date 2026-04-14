@@ -26,6 +26,7 @@ interface PersonaRequest {
 
 interface UserPersonaResponse {
   name: string;
+  gender: 'male' | 'female';
   age: number;
   occupation: string;
   background: string;
@@ -46,24 +47,20 @@ interface UserPersonaResponse {
   };
 }
 
-// 🎯 CREATIVE NAMES IN ENGLISH
+// 🎯 CREATIVE NAMES BY GENDER
 const CREATIVE_NAMES = {
-  tech: [
-    "Sarah Coder", "Alex Techlover", "Clara Digital", "Max Connected", 
-    "Lea Innovator", "Tom Geek", "Julie 2.0", "Mark Algorithmic"
-  ],
-  creative: [
-    "Sophie Social", "Lucas Creative", "Emma Inspiring", "Hugo Artistic",
-    "Chloe Visionary", "Nathan Imaginative", "Zoe Creative", "Theo Conceptual"
-  ],
-  business: [
-    "Marie Manager", "Paul Strategist", "Anna Entrepreneur", "Pierre Proactive",
-    "Camille Leader", "Anthony Visionary", "Laura Organized", "David Ambitious"
-  ],
-  general: [
-    "Julie Curious", "Thomas Observer", "Alice Pragmatic", "Simon Methodical",
-    "Lea Persistent", "Kevin Optimistic", "Manon Reflective", "Nicholas Analytical"
-  ]
+  male: {
+    tech: ["Alex Techlover", "Max Connected", "Tom Geek", "Mark Algorithmic", "Chris Builder", "David Digital", "James App", "Ryan Software"],
+    creative: ["Lucas Creative", "Hugo Artistic", "Nathan Imaginative", "Theo Conceptual", "Jack Design", "Oliver Art", "Ethan Creative", "Mason Vision"],
+    business: ["Paul Strategist", "Pierre Proactive", "Anthony Visionary", "David Ambitious", "Michael Leader", "Charles Manager", "Thomas Strategy", "Daniel Enterprise"],
+    general: ["Thomas Observer", "Simon Methodical", "Kevin Optimistic", "Nicholas Analytical", "Peter Curious", "George Practical", "Andrew Reflective", "Brian Logical"]
+  },
+  female: {
+    tech: ["Sarah Coder", "Clara Digital", "Lea Innovator", "Julie 2.0", "Emma Tech", "Sophie Code", "Mia Digital", "Grace Builder"],
+    creative: ["Sophie Social", "Emma Inspiring", "Chloe Visionary", "Zoe Creative", "Lily Design", "Ava Artistic", "Isabella Art", "Mila Vision"],
+    business: ["Marie Manager", "Anna Entrepreneur", "Camille Leader", "Laura Organized", "Jessica Business", "Rachel Strategy", "Nicole Enterprise", "Victoria Pro"],
+    general: ["Julie Curious", "Alice Pragmatic", "Lea Persistent", "Manon Reflective", "Emma Observer", "Sophie Practical", "Chloe Logical", "Nina Analytical"]
+  }
 };
 
 export async function POST(request: NextRequest) {
@@ -79,8 +76,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 🎯 ANALYZE CONTEXT FOR CREATIVE NAME
-    const nameCategory = determineNameCategory(groups, projectContext);
-    const creativeName = getCreativeName(nameCategory);
+    const { gender, category } = determineGenderAndCategory(groups, projectContext);
+    const creativeName = getCreativeName(gender, category);
 
     const insightsText = insights.map(insight => 
       `- ${insight.type.toUpperCase()}: ${insight.text}`
@@ -121,6 +118,7 @@ IMPORTANT: Use the name "${creativeName}" for this persona.
 Return a JSON object with this exact structure:
 {
   "name": "${creativeName}",
+  "gender": "${gender}",
   "age": number between 25-65,
   "occupation": "Realistic job title that matches the research insights",
   "background": "2-3 sentence background story based on the research",
@@ -195,58 +193,34 @@ Make the persona realistic, specific, and directly based on the research insight
   }
 }
 
-// 🎯 DETERMINE NAME CATEGORY
-function determineNameCategory(groups: Array<{title: string}>, projectContext?: string): keyof typeof CREATIVE_NAMES {
+// 🎯 DETERMINE GENDER AND CATEGORY
+function determineGenderAndCategory(groups: Array<{title: string}>, projectContext?: string): { gender: 'male' | 'female'; category: keyof typeof CREATIVE_NAMES.male } {
   const allText = [...groups.map(g => g.title), projectContext || ''].join(' ').toLowerCase();
   
+  // Randomly pick gender for variety
+  const gender: 'male' | 'female' = Math.random() > 0.5 ? 'male' : 'female';
+  
+  let category: keyof typeof CREATIVE_NAMES.male = 'general';
   if (allText.includes('tech') || allText.includes('digital') || allText.includes('app') || allText.includes('software')) {
-    return 'tech';
+    category = 'tech';
   } else if (allText.includes('design') || allText.includes('creative') || allText.includes('art') || allText.includes('social')) {
-    return 'creative';
+    category = 'creative';
   } else if (allText.includes('business') || allText.includes('manager') || allText.includes('enterprise') || allText.includes('strategy')) {
-    return 'business';
+    category = 'business';
   }
   
-  return 'general';
+  return { gender, category };
 }
 
 // 🎯 GET CREATIVE NAME
-function getCreativeName(category: keyof typeof CREATIVE_NAMES): string {
-  const names = CREATIVE_NAMES[category];
+function getCreativeName(gender: 'male' | 'female', category: keyof typeof CREATIVE_NAMES.male): string {
+  const names = CREATIVE_NAMES[gender][category];
   return names[Math.floor(Math.random() * names.length)];
 }
 
 // 🎯 SIMPLE PROFILE IMAGE GENERATION WITHOUT EXTERNAL APIS
 function generateSimpleProfileImage(persona: UserPersonaResponse): string {
-  const portraitAPIs = [
-    // 1. Random User API (very reliable)
-    () => {
-      const gender = Math.random() > 0.5 ? 'women' : 'men';
-      const id = Math.floor(Math.random() * 50);
-      return `https://randomuser.me/api/portraits/med/${gender}/${id}.jpg`;
-    },
-    // 2. Pravatar (styled avatars but human-like)
-    () => {
-      const seed = persona.name.replace(/\s+/g, '');
-      return `https://i.pravatar.cc/400?u=${seed}`;
-    },
-    // 3. UI Faces (professional service)
-    () => {
-      return `https://ui-avatars.com/api/?name=${encodeURIComponent(persona.name)}&background=0D8ABC&color=fff&size=400&bold=true&font-size=0.5`;
-    },
-    // 4. DiceBear with human style
-    () => {
-      const seed = persona.name.replace(/\s+/g, '');
-      return `https://api.dicebear.com/7.x/adventurer/svg?seed=${seed}&backgroundColor=65c9ff,b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
-    },
-    // 5. RoboHash alternative
-    () => {
-      const seed = persona.name.replace(/\s+/g, '');
-      return `https://robohash.org/${seed}?set=set4&size=400x400`;
-    }
-  ];
-
-  // 🎯 CHOOSE AN API RANDOMLY
-  const selectedAPI = portraitAPIs[Math.floor(Math.random() * portraitAPIs.length)];
-  return selectedAPI();
+  const gender = persona.gender === 'female' ? 'women' : 'men';
+  const id = Math.floor(Math.random() * 50);
+  return `https://randomuser.me/api/portraits/med/${gender}/${id}.jpg`;
 }

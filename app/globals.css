@@ -299,3 +299,14 @@
    * Pour les liens de navigation
    */
 }
+
+/* Dot pattern for canvas background */
+.bg-dot-pattern {
+  background-image: radial-gradient(circle, oklch(var(--border)) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-color: oklch(var(--background));
+}
+
+.dark .bg-dot-pattern {
+  background-image: radial-gradient(circle, oklch(var(--border) / 0.3) 1px, transparent 1px);
+}

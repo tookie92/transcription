@@ -7,6 +7,7 @@ export const createPersona = mutation({
     projectId: v.id("projects"),
     mapId: v.id("affinityMaps"),
     name: v.string(),
+    gender: v.optional(v.union(v.literal("male"), v.literal("female"))),
     age: v.number(),
     occupation: v.string(),
     background: v.string(),
@@ -85,6 +86,7 @@ export const updatePersona = mutation({
   args: {
     personaId: v.id("personas"),
     name: v.optional(v.string()),
+    gender: v.optional(v.union(v.literal("male"), v.literal("female"))),
     age: v.optional(v.number()),
     occupation: v.optional(v.string()),
     background: v.optional(v.string()),

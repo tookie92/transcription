@@ -456,13 +456,7 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           currentUser={{ userId: userId || "", name: user?.fullName || user?.firstName || "You" }}
           onOpenPersona={() => setActivePanel("persona")}
           onLabelDataChange={setCanvasClusters}
-          onToggleVoting={() => {
-            if (voting.isVoting) {
-              voting.stopVoting();
-            } else {
-              voting.startVoting({ dotsPerUser: 5, durationMinutes: null, prompt: "Vote for priorities" });
-            }
-          }}
+          onToggleVoting={() => {}}
           hasPersonas={hasPersonas}
           onBoardControlsReady={setBoardControls}
         />

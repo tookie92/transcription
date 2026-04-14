@@ -34,6 +34,7 @@ interface PersonaGeneratorProps {
 interface GeneratedPersona {
   _id?: string;
   name: string;
+  gender?: 'male' | 'female';
   age: number;
   occupation: string;
   background: string;
@@ -79,7 +80,10 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
 
   const winningClusterIds = useMemo(() => {
     if (!dotVotingResults || dotVotingResults.length === 0) return new Set<string>();
-    return new Set(dotVotingResults.map(r => r.sectionId));
+    // Only top 3 winners
+    const sorted = [...dotVotingResults].sort((a, b) => b.voteCount - a.voteCount);
+    const top3 = sorted.slice(0, 3);
+    return new Set(top3.map(r => r.sectionId));
   }, [dotVotingResults]);
 
   const createPersona = useMutation(api.personas.createPersona);
@@ -94,22 +98,39 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(personaName)}&background=0D8ABC&color=fff&size=400`;
   };
 
-  const getRandomAvatar = (seed: string): string => {
-    // Try randomuser.me first, fallback to dicebear on error
-    const lowerSeed = seed.toLowerCase();
-    const malePatterns = ['son', 'ton', 'man', 'ley', 'ard', 'er', 'well', 'ford', 'ie'];
-    const femalePatterns = ['a', 'ie', 'ey', 'ine', 'elle', 'y', 'na', 'ra', 'ia', 'lyn', 'ley'];
+  const getRandomAvatar = (seed: string, gender?: 'male' | 'female'): string => {
+    let avatarGender: 'men' | 'women' = 'men';
     
-    let gender: 'men' | 'women' = 'men';
-    if (femalePatterns.some(p => lowerSeed.endsWith(p)) && !malePatterns.some(p => lowerSeed.endsWith(p))) {
-      gender = 'women';
-    } else if (lowerSeed.endsWith('a') || lowerSeed.includes(' ')) {
-      gender = 'women';
+    // Use provided gender if available, otherwise detect from name
+    if (gender === 'female') {
+      avatarGender = 'women';
+    } else if (gender === 'male') {
+      avatarGender = 'men';
+    } else {
+      // Fallback to name-based detection
+      const name = seed.trim();
+      const firstName = name.split(' ')[0].toLowerCase();
+      
+      const maleNames = ['john', 'james', 'robert', 'michael', 'william', 'david', 'richard', 'joseph', 'thomas', 'charles', 'christopher', 'daniel', 'matthew', 'anthony', 'mark', 'steven', 'paul', 'andrew', 'joshua', 'kenneth', 'kevin', 'brian', 'george', 'edward', 'ronald', 'timothy', 'jason', 'jeffrey', 'ryan', 'jacob', 'gary', 'nicholas', 'eric', 'jonathan', 'stephen', 'larry', 'justin', 'scott', 'brandon', 'raymond', 'gregory', 'benjamin', 'samuel', 'patrick', 'frank', 'alexander', 'jack', 'dennis', 'jerry', 'tyler', 'aaron', 'jose', 'adam', 'nathan', 'henry', 'douglas', 'zachary', 'peter', 'kyle', 'noah', 'ethan', 'jeremy', 'walter', 'christian', 'keith', 'roger', 'terry', 'austin', 'sean', 'gerald', 'carl', 'harold', 'dylan', 'arthur', 'lawrence', 'jordan', 'jesse', 'bryan', 'billy', 'bruce', 'gabriel', 'joe', 'logan', 'albert', 'willie', 'alan', 'eugene', 'russell', 'bobby', 'philip', 'ralph', 'roy', 'louis', 'johnny', 'howard', 'phillip', 'wayne', 'vincent', 'randy', 'martin', 'harry', 'frederick', 'miles', 'lewis'];
+      
+      const femaleNames = ['mary', 'patricia', 'jennifer', 'linda', 'elizabeth', 'barbara', 'susan', 'jessica', 'sarah', 'karen', 'lisa', 'nancy', 'betty', 'margaret', 'sandra', 'ashley', 'kimberly', 'emily', 'donna', 'michelle', 'dorothy', 'carol', 'amanda', 'melissa', 'deborah', 'stephanie', 'rebecca', 'sharon', 'laura', 'cynthia', 'kathleen', 'amy', 'shirley', 'angela', 'helen', 'anna', 'brenda', 'pamela', 'nicole', 'samantha', 'katherine', 'christine', 'debra', 'rachel', 'carolyn', 'janet', 'catherine', 'maria', 'heather', 'diane', 'ruth', 'julie', 'olivia', 'joyce', 'virginia', 'victoria', 'kelly', 'lauren', 'christina', 'joan', 'evelyn', 'judith', 'megan', 'andrea', 'cheryl', 'hannah', 'jacqueline', 'martha', 'gloria', 'teresa', 'ann', 'sara', 'madison', 'frances', 'kathryn', 'janice', 'jean', 'abigail', 'alice', 'judy', 'sophia', 'grace', 'denise', 'amber', 'doris', 'marilyn', 'danielle', 'beverly', 'isabella', 'theresa', 'diana', 'natalie', 'brittany', 'charlotte', 'marie', 'kayla', 'alexis', 'lori'];
+      
+      if (femaleNames.includes(firstName)) {
+        avatarGender = 'women';
+      } else if (maleNames.includes(firstName)) {
+        avatarGender = 'men';
+      } else {
+        const lowerSeed = name.toLowerCase();
+        const femalePatterns = ['a', 'ie', 'ey', 'ine', 'elle', 'y', 'na', 'ra', 'ia', 'lyn'];
+        if (femalePatterns.some(p => lowerSeed.endsWith(p)) || lowerSeed.includes(' ')) {
+          avatarGender = 'women';
+        }
+      }
     }
     
     const seedNum = Math.abs(hashCode(seed + Date.now().toString()));
     const id = (seedNum % 99) + 1;
-    return `https://randomuser.me/api/portraits/${gender}/${id}.jpg`;
+    return `https://randomuser.me/api/portraits/${avatarGender}/${id}.jpg`;
   };
 
   const getFallbackAvatar = (seed: string): string => {
@@ -127,8 +148,8 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
     return hash;
   };
 
-  const generateRandomAvatar = (personaName?: string): string => {
-    return getRandomAvatar(personaName || Math.random().toString(36).substring(7));
+  const generateRandomAvatar = (personaName?: string, gender?: 'male' | 'female'): string => {
+    return getRandomAvatar(personaName || Math.random().toString(36).substring(7), gender);
   };
 
   const generatePersona = async () => {
@@ -179,7 +200,7 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
 
       const data = await response.json();
       setGeneratedPersona(data.persona);
-      setProfileImage(generateRandomAvatar(data.persona.name));
+      setProfileImage(generateRandomAvatar(data.persona.name, data.persona.gender));
       setBasedOn(data.basedOn);
       setViewMode("new");
       setIsEditMode(false);
@@ -191,7 +212,7 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
           projectId: projectId as Id<"projects">,
           mapId: mapId as Id<"affinityMaps">,
           ...data.persona,
-          profileImage: generateRandomAvatar(data.persona.name),
+          profileImage: generateRandomAvatar(data.persona.name, data.persona.gender),
           basedOn: data.basedOn,
         });
         toast.success(`Persona "${data.persona.name}" generated and saved!`);
@@ -531,6 +552,7 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
                         src={persona.profileImage || getFallbackImageUrl(persona.name)}
                         alt={persona.name}
                         fill
+                        sizes="40px"
                         className="rounded-full object-cover"
                       />
                     </div>
@@ -581,6 +603,7 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
                             src={currentImageUrl}
                             alt={currentPersona.name}
                             fill
+                            sizes="80px"
                             unoptimized
                             className="object-cover"
                           />
@@ -589,7 +612,25 @@ export function PersonaGenerator({ projectId, mapId, groups, insights, projectCo
                           variant="secondary"
                           size="icon"
                           className="absolute -bottom-1 -right-1 rounded-full w-6 h-6"
-                          onClick={() => setProfileImage(generateRandomAvatar(currentPersona.name))}
+                          onClick={async () => {
+                            const newImage = generateRandomAvatar(currentPersona.name, currentPersona.gender);
+                            setProfileImage(newImage);
+                            
+                            // Auto-save whenever image changes (edit mode OR viewing saved persona)
+                            if (selectedSavedPersona?._id) {
+                              try {
+                                await updatePersona({
+                                  personaId: selectedSavedPersona._id as Id<"personas">,
+                                  profileImage: newImage,
+                                });
+                                // Update local state so UI reflects change immediately
+                                setSelectedSavedPersona(prev => prev ? { ...prev, profileImage: newImage } : null);
+                                toast.success("Image updated!");
+                              } catch (error) {
+                                console.error("Failed to update image:", error);
+                              }
+                            }
+                          }}
                         >
                           <RefreshCw className="w-3 h-3" />
                         </Button>

@@ -439,6 +439,7 @@ personas: defineTable({
   projectId: v.id("projects"),
   mapId: v.id("affinityMaps"),
   name: v.string(),
+  gender: v.optional(v.union(v.literal("male"), v.literal("female"))),
   age: v.number(),
   occupation: v.string(),
   background: v.string(),
