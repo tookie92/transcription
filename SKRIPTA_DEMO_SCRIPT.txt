@@ -1,140 +1,239 @@
 SKRIPTA - Demo Script (4-5 min)
-===================================
+==================================
+TARGET: LinkedIn, Social Media, Future Clients
+PURPOSE: Showcase value, generate interest, drive sign-ups
+
 START: From scratch - landing page
 END: Shareable research dashboard
 
-Flow:
-Landing → Sign up → Create project → Add interview → 
-Live notes → Extract insights → Affinity map → 
-AI group → Generate persona → Share
+
+══════════════════════════════════════════════════════════════
+HOOK (0:00-0:20) - GRAB ATTENTION IN 5 SECONDS
+══════════════════════════════════════════════════════════════
+
+[Screen: Split view - Chaos vs Order]
+Left: Messy wall of post-it notes, tangled wires
+Right: Clean digital affinity map with clusters, personas
+
+Voiceover (confident, energetic):
+"Ever spent 5 hours manually grouping post-it notes? 
+That's 5 hours you could spend actually talking to users."
+
+[Quick cut to Skripta landing page]
+
+"Let me show you how to go from interview to insights in minutes."
 
 
-HOOK (0:00-0:15)
-------------------
-[Screen: Landing page]
+══════════════════════════════════════════════════════════════
+PART 1: SIGN UP & PROJECT SETUP (0:20-0:50)
+══════════════════════════════════════════════════════════════
 
-"User research doesn't have to be painful. Let me show you."
+[Screen: Landing page → Click Sign Up]
+
+"Sign up with Google, GitHub, or email. Takes 15 seconds."
+
+[Fill in signup, create project: "Mobile App Research Q1"]
+
+"Create your project. Name it. Set the context."
+
+[Click Team → Invite member modal]
+
+"Add your team. Owner, editor, viewer - role-based access."
+
+[Show team member appears with presence indicator]
+
+"See who's online. Real-time collaboration. Changes sync instantly."
 
 
-PART 1: SIGN UP & PROJECT (0:15-0:45)
-----------------------------------------
-[Screen: Sign up flow]
+══════════════════════════════════════════════════════════════
+PART 2: ADD INTERVIEW (0:50-1:30)
+══════════════════════════════════════════════════════════════
 
-"Create an account. Takes 10 seconds."
+[Screen: Empty interview page with dropzone]
 
-[Create new project: "Mobile App Research Q1"]
+"Drop your interview audio. MP4, MP3, WAV - we support all formats."
 
-"Create your project. Add your team. Roles - owner, editor, viewer."
+[Drag and drop a sample audio file]
 
-[Open team dialog - invite member]
+"Or paste a transcript directly. Your choice."
 
-"Collaborate in real-time. See who's online. Changes sync instantly."
-
-
-PART 2: ADD INTERVIEW (0:45-1:30)
-------------------------------------
-[Screen: Add interview]
-
-"Drop your interview audio here. Or paste a transcript."
-
-[Upload/paste]
+[Show processing state with progress bar]
 
 "Our AI transcribes. Identifies speakers. Timestamps everything."
 
-[Show transcription with speakers highlighted]
+[Show completed transcription with speaker labels]
+
+"Speaker A. Speaker B. Timestamps. Searchable. All automatic."
 
 
-PART 3: LIVE NOTES (1:30-1:50)
-------------------------------------
-[Screen: Live note-taking during interview]
+══════════════════════════════════════════════════════════════
+PART 3: EXTRACT INSIGHTS (1:30-2:00)
+══════════════════════════════════════════════════════════════
 
-"Take live notes during the interview. Real-time."
+[Screen: Interview detail view with highlighted text]
 
-[Write note]
+"Here's where the magic happens."
 
-"Your team can see notes instantly. No more waiting."
+[Click "Extract Insights" or show AI-extracted items]
+
+"AI scans your transcript. Finds pain points. Quotes. Patterns."
+
+[Show color-coded insights: red=pain, blue=quote, green=insight]
+
+"Each insight classified. Color-coded. Ready to use."
+
+[Manual highlight: Select text → Choose type]
+
+"Or do it manually. Select text. Choose type. Your call."
 
 
-PART 4: EXTRACT INSIGHTS (1:50-2:20)
-----------------------------------------
-[Screen: Interview detail with insights]
+══════════════════════════════════════════════════════════════
+PART 4: AFFINITY MAP - THE CORE (2:00-3:00)
+══════════════════════════════════════════════════════════════
 
-"AI found pain points, quotes, insights. All classified."
-
-[Highlight different types with colors]
-
-"Or highlight text yourself. Classify it. Your call."
-
-
-PART 5: AFFINITY MAP (2:20-3:20)
-------------------------------------
 [Screen: Click "Open Affinity Map"]
 
-"Every insight becomes a sticky. Drag to organize."
+"Click 'Open Affinity Map'. Your canvas."
 
-[Show stickies on canvas]
+[Show stickies appearing on canvas]
 
-"But here's where it gets interesting."
+"Every insight becomes a sticky. Drag. Drop. Organize."
 
-[Open AI Features panel]
+[Zoom out to show full canvas]
 
-"AI analyzes patterns. Suggests clusters. With confidence scores."
+"But organizing manually takes forever. Let's use AI."
 
-[Select suggestion, create cluster]
+[Click AI Features button on toolbar]
 
-"One click. AI created the cluster. Named it. Based on content."
+"AI analyzes your insights. Finds patterns. Suggests clusters."
+
+[Show AI grouping suggestions panel]
+
+"Look at this. Confidence scores. Reasoning. All explained."
+
+[Select a suggestion → Click Create Cluster]
+
+"One click. AI creates the cluster. Names it. Adds the insights."
+
+[Show new cluster with label]
+
+"Boom. Cluster created. Named automatically. Ready to go."
+
+[Show manual cluster creation too]
+
+"Or create manually. Draw a circle. Name it. Drag stickies in."
 
 
-PART 6: PERSONA (3:20-3:50)
--------------------------------
-[Screen: Click Generate Persona]
+══════════════════════════════════════════════════════════════
+PART 5: PERSONA GENERATION (3:00-3:30)
+══════════════════════════════════════════════════════════════
 
-"AI creates a user persona. From all your data."
+[Screen: With selected clusters]
 
-[Wait for generation]
+"Want to create a user persona? Select your clusters. Click 'Generate'."
 
-"Goals. Pain points. Behaviors. Quote. Everything synthesized."
+[Click Generate Persona, show loading]
+
+"AI synthesizes all your data. Creates a complete persona."
+
+[Show generated persona]
+
+"Background. Goals. Pain points. Quote. Behaviors. All from your data."
+
+[Click refresh on profile image]
+
+"Change the photo. Generates new AI avatar based on name."
+
+[Click save]
+
+"Save it. It syncs to your dashboard. Ready to share."
 
 
-PART 7: SHARE (3:50-4:30)
-----------------------------
-[Screen: Click Share]
+══════════════════════════════════════════════════════════════
+PART 6: COLLABORATION FEATURES (3:30-4:00)
+══════════════════════════════════════════════════════════════
+
+[Screen: Dot voting mode]
+
+"Team voting? Enable dot voting mode."
+
+[Show dots being placed]
+
+"Each team member gets 5 dots. Click to vote. Priorities emerge."
+
+[Switch back to normal mode]
+
+"Exit voting mode. See results. Clear dots or keep them."
+
+
+══════════════════════════════════════════════════════════════
+PART 7: SHARE & EXPORT (4:00-4:30)
+══════════════════════════════════════════════════════════════
+
+[Screen: Share button]
 
 "Share with stakeholders. No sign-up required for them."
 
-[Show shareable link]
+[Click Share → Show link]
 
-"Presentation mode. Keyboard navigation."
+"Generate a link. Password protection. Expiration date."
 
-[Navigate slides]
+[Show Presentation Mode]
 
-"Dashboard view. Stats, insights, personas."
+"Presentation mode. Arrow keys to navigate. Clean view."
 
-[Show overview mode]
+[Slide through different clusters]
 
-"Password protection. Expiration. Full control."
+"Or share the full dashboard."
+
+[Show dashboard view - stats, insights count, personas]
+
+"Overview mode. All your data. Beautiful. Exportable."
 
 
+══════════════════════════════════════════════════════════════
 CLOSING (4:30-5:00)
----------------------
-"From interview to insights to shareable dashboard. In minutes."
+══════════════════════════════════════════════════════════════
 
-[End card: Try at [your-url]]
+[Screen: Landing page with product name]
 
+"From interview to shareable insights. In minutes. Not hours."
 
----
+[End card: Try free at skripta.com]
 
-TIPS:
-- Use Cmd/Ctrl + clicks to speed up
-- Use keyboard shortcuts on canvas (V=vote, C=cluster, S=select)
-- Record at 1.5x speed, edit down to 4 min
-- Add subtle background music
-- Show timestamps on video timeline for editing
+"Your turn. Try it. Link in bio."
+
+[Optional: Show quick footer with pricing teaser]
+"Free tier. 150 credits/month. No credit card."
 
 
-VARIANT FOR SALES (8-10 min):
-Add before Share:
-- Dot voting demo
-- Team collaboration (show 2 users)
-- Timeline time machine
-- Role permissions demo
+══════════════════════════════════════════════════════════════
+PRO TIPS FOR RECORDING
+══════════════════════════════════════════════════════════════
+
+TECHNICAL:
+- Record at 1.5x or 2x speed, edit to 4-5 min
+- Use Loom or similar for easy recording
+- Add timestamps in video editor for quick cuts
+- Clean audio = wireless mic or good internal mic
+- 1080p minimum, 4K if possible
+
+PERFORMANCE:
+- Practice the script 3x before recording
+- Smile at start - first 3 seconds matter on LinkedIn
+- Speak clearly, slightly slower than normal
+- Pause after key moments for impact
+- End with confident energy
+
+EDITING:
+- Add subtle background music (keep it low)
+- Cut loading times, keep action moments
+- Add text overlays for key features
+- Use transitions between sections
+- End with clear CTA
+
+BEST TIMES TO POST:
+- LinkedIn: Tuesday-Thursday, 8-10am or 12-2pm
+- Twitter/X: Anytime, engage within first hour
+- Instagram: Evenings, 7-9pm
+
