@@ -66,6 +66,7 @@ interface FigJamToolbarProps {
     remainingTime: number | null;
     startVoting: (config: { dotsPerUser: number; durationMinutes: number | null; prompt: string }) => Promise<void>;
     stopVoting: () => Promise<void>;
+    leaveVoting: () => void;
     completeVoting: () => Promise<void>;
     startNewRound: () => Promise<void>;
   };
@@ -487,7 +488,7 @@ export function FigJamToolbar({
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => voting.stopVoting()}
+                  onClick={() => voting.leaveVoting()}
                   className="text-orange-600 border-orange-300 hover:bg-orange-50"
                 >
                   Leave

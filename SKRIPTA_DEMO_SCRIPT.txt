@@ -22,9 +22,9 @@ grouping post-it notes? Like... a lot, right?"
 PART 1: QUICK SETUP (0:15-0:45)
 ══════════════════════════════════════════════════════════════
 
-[Click Sign Up]
+[Click Sign in]
 
-"Sign up - Google, email, whatever. 15 seconds."
+"Sign in - Google, email, whatever. 15 seconds."
 
 [Create project: "Mobile App Research Q1"]
 

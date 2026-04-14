@@ -201,6 +201,10 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
     }
   }, [activeSession, stopVotingMutation]);
 
+  const leaveVoting = useCallback(() => {
+    setIsLocallyVoting(false);
+  }, []);
+
   const completeVoting = useCallback(async () => {
     if (!activeSession) return;
     
@@ -277,6 +281,7 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
     // Actions
     startVoting,
     stopVoting,
+    leaveVoting,
     completeVoting,
     startNewRound,
     toggleVote,
