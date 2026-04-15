@@ -34,7 +34,7 @@ import { useThrottle } from "@/hooks/useThrottle";
 import { useVotingSync } from "@/hooks/useVotingSync";
 import { MentionToastProvider } from "@/hooks/useMentionToasts";
 import { toast } from "sonner";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, MonitorSmartphone } from "lucide-react";
 import { useConfirmationToast } from "@/hooks/useConfirmationToast";
 
 interface PresenceUser {
@@ -172,6 +172,7 @@ export function FigJamBoard({
   useEffect(() => {
     if (isMobile) {
       setTool("select");
+      setShowInsightsSidebar(false);
     }
   }, [isMobile, setTool]);
 
@@ -1683,7 +1684,7 @@ export function FigJamBoard({
       {/* ── Mobile read-only banner ── */}
       {isMobile && (
         <div className="absolute top-0 left-0 right-0 z-50 bg-amber-100 dark:bg-amber-900/30 px-4 py-2 text-center text-sm text-amber-800 dark:text-amber-200 flex items-center justify-center gap-2">
-          <span>📱</span>
+          <MonitorSmartphone size={16} className="shrink-0" />
           <span>Read-only on mobile - Use a larger screen to edit</span>
         </div>
       )}
