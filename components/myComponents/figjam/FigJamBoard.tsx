@@ -154,6 +154,27 @@ export function FigJamBoard({
   const board = useFigJamBoard();
   const { state, setTool } = board;
 
+  // Detect mobile/touch device
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const checkMobile = () => {
+      // Touch device OR small screen (< 768px)
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const isSmallScreen = window.innerWidth < 768;
+      setIsMobile(isTouchDevice || isSmallScreen);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Force select mode on mobile (read-only experience)
+  useEffect(() => {
+    if (isMobile) {
+      setTool("select");
+    }
+  }, [isMobile, setTool]);
+
   // Pre-compute stickies for use in drag handlers (memoized)
   const allSortedElements = useMemo(() => 
     Object.values(state.elements).sort((a, b) => a.zIndex - b.zIndex), 
@@ -1659,6 +1680,14 @@ export function FigJamBoard({
       className="relative w-full h-full overflow-hidden select-none flex bg-dot-pattern"
       style={{ fontFamily: "'DM Sans', system-ui, sans-serif", ...style }}
     >
+      {/* ── Mobile read-only banner ── */}
+      {isMobile && (
+        <div className="absolute top-0 left-0 right-0 z-50 bg-amber-100 dark:bg-amber-900/30 px-4 py-2 text-center text-sm text-amber-800 dark:text-amber-200 flex items-center justify-center gap-2">
+          <span>📱</span>
+          <span>Read-only on mobile - Use a larger screen to edit</span>
+        </div>
+      )}
+
       {/* ── Insights Sidebar ── */}
       {showInsightsSidebar && (
         <InsightsSidebar
