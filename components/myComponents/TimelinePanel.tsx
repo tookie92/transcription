@@ -102,21 +102,21 @@ const ACTION_CATEGORIES = {
 };
 
 const ACTION_COLORS: Record<string, string> = {
-  create: "bg-emerald-500",
+  create: "bg-primary",
   edit: "bg-amber-500",
   move: "bg-blue-500",
   delete: "bg-red-500",
   collaborate: "bg-violet-500",
-  ai: "bg-cyan-500",
+  ai: "bg-[var(--warm-terracotta)]",
 };
 
 const ACTION_BG_COLORS: Record<string, string> = {
-  create: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  create: "bg-primary/10 text-primary",
   edit: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
   move: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
   delete: "bg-red-500/10 text-red-600 dark:text-red-400",
   collaborate: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
-  ai: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
+  ai: "bg-[var(--warm-terracotta)]/10 text-[var(--warm-terracotta)]",
 };
 
 const ACTION_ICONS: Record<ActivityAction, React.ReactNode> = {
@@ -182,10 +182,10 @@ function getActionCategory(action: ActivityAction): string {
 
 function getUserColor(userId: string): string {
   const colors = [
-    "bg-red-500", "bg-orange-500", "bg-amber-500", "bg-yellow-500",
-    "bg-lime-500", "bg-emerald-500", "bg-teal-500", "bg-cyan-500",
-    "bg-sky-500", "bg-blue-500", "bg-indigo-500", "bg-violet-500",
-    "bg-purple-500", "bg-fuchsia-500", "bg-pink-500", "bg-rose-500",
+    "bg-primary", "bg-[var(--warm-terracotta)]", "bg-blue-500", "bg-violet-500",
+    "bg-purple-500", "bg-pink-500", "bg-orange-500", "bg-teal-500",
+    "bg-indigo-500", "bg-cyan-500", "bg-rose-500", "bg-lime-500",
+    "bg-emerald-500", "bg-amber-500", "bg-fuchsia-500", "bg-sky-500",
   ];
   let hash = 0;
   for (let i = 0; i < userId.length; i++) {
