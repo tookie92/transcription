@@ -39,9 +39,6 @@ const ProjectPage = () => {
     userEmail 
   });
   const createProject = useMutation(api.projects.createProject);
-  const createDemoProject = useMutation(api.projects.createDemoProject);
-
-  const isFirstProject = projects && projects.length === 0;
 
   const ownerProjects = projects?.filter(project => project.ownerId === userId) || [];
   const memberProjects = projects?.filter(project => 
@@ -71,12 +68,6 @@ const ProjectPage = () => {
       const result = await createProject({
         name: projectName,
       });
-      
-      // Create demo project for first-time users
-      if (isFirstProject) {
-        await createDemoProject();
-      }
-      
       toast.success("Project created!");
       setShowTemplateDialog(false);
       setProjectName("");
