@@ -493,13 +493,7 @@ export function CommentThread({
             Write it down…
           </p>
         ) : (
-          comments.map((comment: {
-            _id: string;
-            userId?: string;
-            userName?: string;
-            text: string;
-            _creationTime: number;
-          }) => {
+          comments.map((comment) => {
             const isCurrentUser = comment.userId === userId;
             return (
               <div key={comment._id} className="space-y-0.5">
@@ -513,7 +507,7 @@ export function CommentThread({
                     {getAuthorDisplayName(comment)}
                   </span>
                   <span className="font-mono text-[10px] tabular-nums text-muted-foreground/70">
-                    {new Date(comment._creationTime).toLocaleTimeString([], {
+                    {new Date(comment.createdAt).toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
