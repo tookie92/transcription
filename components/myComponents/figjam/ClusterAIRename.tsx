@@ -1,17 +1,22 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
-import { Sparkles, Loader2, Check, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
-import { useQuery, useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
 interface ClusterAIRenameProps {
@@ -43,107 +48,17 @@ export function ClusterAIRename({
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [customName, setCustomName] = useState("");
+  const autoRanRef = useRef(false);
 
-  // Credits & GDPR
   const userCredits = useQuery(api.credits.getUserCredits);
   const userConsent = useQuery(api.credits.getConsent);
   const deductCredits = useMutation(api.credits.deductCredits);
   const initializeCredits = useMutation(api.credits.initializeCredits);
 
-  const checkCredits = async () => {
-    // Check GDPR consent first
-    if (!userConsent) {
-      onNeedConsent?.();
-      return false;
-    }
-
-    try {
-      await initializeCredits({});
-    } catch {
-      // Ignore init errors
-    }
-
-    const creditsData = userCredits || { credits: 150, costs: { transcription: 20, aiGrouping: 10, aiRename: 5 } };
-    
-    if (creditsData.credits < creditsData.costs.aiRename) {
-      toast.error(`Not enough credits for AI rename. You need ${creditsData.costs.aiRename} credits but have ${creditsData.credits}.`);
-      return false;
-    }
-
-    try {
-      await deductCredits({ operation: "aiRename" });
-      return true;
-    } catch (e) {
-      toast.error(`Not enough credits for AI rename.`);
-      return false;
-    }
-  };
-
-  useEffect(() => {
-    if (isOpen && stickyTexts.length > 0) {
-      fetchSuggestions();
-    } else if (isOpen && stickyTexts.length === 0) {
-      setIsLoading(false);
-      generateFallback();
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setSuggestions([]);
-      setSelectedIndex(0);
-      setCustomName("");
-      setIsLoading(true);
-    }
-  }, [isOpen]);
-
-  const fetchSuggestions = useCallback(async () => {
-    // Check credits first
-    const hasCredits = await checkCredits();
-    if (!hasCredits) {
-      setIsLoading(false);
-      generateFallback();
-      return;
-    }
-
-    setIsLoading(true);
-    console.log("AI Rename: Fetching for cluster:", clusterId);
-
-    try {
-      const response = await fetch("/api/suggest-group-names", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          insights: stickyTexts.slice(0, 10).map((text) => ({ text, type: "insight" })),
-          currentTitle: clusterTitle,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log("AI Rename: Got suggestions:", data.suggestions);
-        setSuggestions(data.suggestions || []);
-        setSelectedIndex(0);
-        setCustomName(data.suggestions?.[0]?.title || clusterTitle || "");
-      } else {
-        generateFallback();
-      }
-    } catch (err) {
-      console.error("AI Rename: Error", err);
-      generateFallback();
-    } finally {
-      setIsLoading(false);
-    }
-  }, [stickyTexts, clusterTitle, clusterId]);
-
-  const generateFallback = () => {
+  const generateFallback = useCallback(() => {
     const words = stickyTexts
       .flatMap((t) => t.toLowerCase().split(/\s+/))
-      .filter((w) => w.length > 3)
-      .filter(
-        (w) =>
-          !["that", "this", "with", "have", "from", "the", "and", "are", "was", "were", "been", "being", "have", "has", "had", "not", "you", "your", "they", "them", "their", "what", "when", "where", "which", "will", "would", "could", "should", "just", "like", "really", "very", "also", "than", "then", "some", "any", "most", "more", "pour", "avec", "mais", "dans", "sur", "une", "les", "des"].includes(w)
-      );
+      .filter((w) => w.length > 3);
 
     const wordCount: Record<string, number> = {};
     words.forEach((w) => {
@@ -157,143 +72,194 @@ export function ClusterAIRename({
 
     const fallback: Suggestion[] = [
       {
-        title: topWords.join(" / ") || clusterTitle || "New Cluster",
-        reason: "Keywords from insights",
+        title: topWords.join(" / ") || clusterTitle || "Untitled",
+        reason: "From the slips in this packet",
         category: "descriptive",
       },
     ];
     setSuggestions(fallback);
     setSelectedIndex(0);
-    setCustomName(fallback[0]?.title);
-  };
+    setCustomName(fallback[0]?.title ?? "");
+  }, [stickyTexts, clusterTitle]);
 
-  const handleApply = () => {
-    const nameToApply = customName.trim() || suggestions[selectedIndex]?.title || clusterTitle;
-    
-    if (!nameToApply) {
-      toast.error("Please enter a name");
+  const checkCredits = useCallback(async () => {
+    if (userConsent === undefined) return false;
+    if (userConsent !== true) {
+      onNeedConsent?.();
+      return false;
+    }
+
+    try {
+      await initializeCredits({});
+    } catch {
+      // already initialized
+    }
+
+    const creditsData = userCredits || {
+      credits: 150,
+      costs: { transcription: 20, aiGrouping: 10, aiRename: 5 },
+    };
+
+    if (creditsData.credits < creditsData.costs.aiRename) {
+      toast.error("Not enough credits to suggest a name");
+      return false;
+    }
+
+    try {
+      await deductCredits({ operation: "aiRename" });
+      return true;
+    } catch {
+      toast.error("Not enough credits to suggest a name");
+      return false;
+    }
+  }, [userConsent, userCredits, initializeCredits, deductCredits, onNeedConsent]);
+
+  const fetchSuggestions = useCallback(async () => {
+    if (userConsent === undefined) return;
+
+    const hasCredits = await checkCredits();
+    if (!hasCredits) {
+      setIsLoading(false);
+      generateFallback();
       return;
     }
 
-    console.log("AI Rename: Applying -", nameToApply);
-    onRename(clusterId, nameToApply);
-    toast.success(`Renamed to "${nameToApply}"`);
-    onClose();
-  };
+    setIsLoading(true);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
-      onClose();
-    } else if (e.key === "Enter" && !isLoading) {
-      handleApply();
-    } else if (e.key === "ArrowDown" && suggestions.length > 1) {
-      e.preventDefault();
-      const nextIndex = (selectedIndex + 1) % suggestions.length;
-      setSelectedIndex(nextIndex);
-      setCustomName(suggestions[nextIndex]?.title || "");
-    } else if (e.key === "ArrowUp" && suggestions.length > 1) {
-      e.preventDefault();
-      const prevIndex = selectedIndex === 0 ? suggestions.length - 1 : selectedIndex - 1;
-      setSelectedIndex(prevIndex);
-      setCustomName(suggestions[prevIndex]?.title || "");
+    try {
+      const response = await fetch("/api/suggest-group-names", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          insights: stickyTexts.slice(0, 10).map((text) => ({ text, type: "insight" })),
+          currentTitle: clusterTitle,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const next = (data.suggestions || []) as Suggestion[];
+        setSuggestions(next);
+        setSelectedIndex(0);
+        setCustomName(next[0]?.title || clusterTitle || "");
+      } else {
+        generateFallback();
+      }
+    } catch {
+      generateFallback();
+    } finally {
+      setIsLoading(false);
     }
+  }, [stickyTexts, clusterTitle, checkCredits, generateFallback, userConsent]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      autoRanRef.current = false;
+      setSuggestions([]);
+      setSelectedIndex(0);
+      setCustomName("");
+      setIsLoading(true);
+      return;
+    }
+    if (autoRanRef.current) return;
+    if (userConsent === undefined) return;
+    autoRanRef.current = true;
+    void fetchSuggestions();
+  }, [isOpen, userConsent, fetchSuggestions]);
+
+  const handleApply = () => {
+    const nameToApply = customName.trim() || suggestions[selectedIndex]?.title || clusterTitle;
+    if (!nameToApply) {
+      toast.error("Type a name first");
+      return;
+    }
+    onRename(clusterId, nameToApply);
+    onClose();
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md" onKeyDown={handleKeyDown}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-primary" />
-            Rename with AI
-          </DialogTitle>
+          <DialogTitle>Suggest a name</DialogTitle>
           <DialogDescription>
-            Analyzing {stickyTexts.length} insight{stickyTexts.length !== 1 ? "s" : ""} to suggest a name
+            From {stickyTexts.length} slip{stickyTexts.length === 1 ? "" : "s"} in this packet.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          {/* Loading state - show immediately */}
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8 gap-3">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-              <span className="text-sm text-muted-foreground">Generating suggestions...</span>
+        {isLoading ? (
+          <div className="flex flex-col gap-3 py-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Spinner />
+              Reading slips
             </div>
-          ) : (
-            <>
-              {/* Suggestions */}
-              {suggestions.length > 0 && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Suggested names:</label>
-                  <div className="space-y-1.5">
-                    {suggestions.map((suggestion, index) => (
-                      <button
-                        key={index}
-                        onClick={() => {
-                          setSelectedIndex(index);
-                          setCustomName(suggestion.title);
-                        }}
-                        className={`w-full text-left p-3 rounded-lg border transition-all ${
-                          selectedIndex === index
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/50 hover:bg-accent"
-                        }`}
-                      >
-                        <div className="flex items-start gap-2">
-                          <div className="mt-0.5">
-                            {selectedIndex === index ? (
-                              <Check className="w-4 h-4 text-primary" />
-                            ) : (
-                              <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/30" />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{suggestion.title}</p>
-                            <p className="text-xs text-muted-foreground">{suggestion.reason}</p>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+            <Skeleton className="h-12 rounded-none" />
+            <Skeleton className="h-12 rounded-none" />
+            <Skeleton className="h-9 rounded-none" />
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4 py-1">
+            {suggestions.length > 0 ? (
+              <RadioGroup
+                value={String(selectedIndex)}
+                onValueChange={(value) => {
+                  const index = Number(value);
+                  setSelectedIndex(index);
+                  setCustomName(suggestions[index]?.title || "");
+                }}
+                className="flex flex-col gap-2"
+              >
+                {suggestions.map((suggestion, index) => (
+                  <label
+                    key={`${suggestion.title}-${index}`}
+                    className="flex cursor-pointer items-start gap-3 border border-border p-3 has-data-[state=checked]:border-foreground has-data-[state=checked]:bg-accent"
+                  >
+                    <RadioGroupItem value={String(index)} className="mt-0.5 rounded-none" />
+                    <span className="flex min-w-0 flex-1 flex-col gap-1">
+                      <span className="font-mono text-[11px] tracking-widest uppercase">
+                        {suggestion.title}
+                      </span>
+                      {suggestion.reason ? (
+                        <span className="text-xs text-muted-foreground">{suggestion.reason}</span>
+                      ) : null}
+                    </span>
+                  </label>
+                ))}
+              </RadioGroup>
+            ) : null}
 
-              {/* Custom name input */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Custom name:</label>
-                <input
-                  type="text"
-                  value={customName}
-                  onChange={(e) => setCustomName(e.target.value)}
-                  placeholder="Or type a custom name..."
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  autoFocus
-                />
-              </div>
-            </>
-          )}
-        </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="packet-name" className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground">
+                Stamp
+              </Label>
+              <Input
+                id="packet-name"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleApply();
+                }}
+                placeholder="Untitled"
+              />
+            </div>
+          </div>
+        )}
 
-        <div className="flex justify-between gap-2">
+        <DialogFooter>
           <Button
             variant="outline"
-            size="sm"
-            onClick={fetchSuggestions}
+            onClick={() => void fetchSuggestions()}
             disabled={isLoading}
-            className="gap-1.5"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-            Regenerate
+            Again
           </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button onClick={handleApply} disabled={isLoading || !customName.trim()}>
-              Apply
-            </Button>
-          </div>
-        </div>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleApply} disabled={isLoading || !customName.trim()}>
+            Stamp
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

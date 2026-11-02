@@ -1,7 +1,7 @@
 // components/AffinityMapWorkspace.tsx - FigJam Style
 "use client";
 
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -37,9 +37,10 @@ import { CanvasSidePanels } from "./canvas/CanvasSidePanels";
 
 interface AffinityMapWorkspaceProps {
   projectId: Id<"projects">;
+  sittingId?: string;
 }
 
-export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
+export function AffinityMapWorkspace({ projectId, sittingId }: AffinityMapWorkspaceProps) {
   const router = useRouter();
   const { userId } = useAuth();
   const { user } = useUser();
@@ -73,7 +74,11 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   const [canvasClusters, setCanvasClusters] = useState<Array<{ id: string; title: string; insightIds: string[]; color: string; position: { x: number; y: number } }>>([]);
   
   // Board controls for Timeline integration
-  const [boardControls, setBoardControls] = useState<{ undo: () => void; redo: () => void } | null>(null);
+  const [boardControls, setBoardControls] = useState<{
+    undo: () => void;
+    redo: () => void;
+    openFind: () => void;
+  } | null>(null);
 
   // ==================== COMMENT HANDLER ====================
   const handleOpenComment = useCallback((elementId: string, rect: DOMRect, title?: string) => {
@@ -82,13 +87,6 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
 
   // ==================== VOTING (passed to FigJamBoard) ====================
   const voting = useVotingSync(affinityMap?._id, projectId as Id<"projects">);
-
-  // ==================== PERSONAS ====================
-  const savedPersonas = useQuery(
-    api.personas.getPersonasByMap,
-    affinityMap?._id ? { mapId: affinityMap._id as Id<"affinityMaps"> } : "skip"
-  );
-  const hasPersonas = (savedPersonas?.length ?? 0) > 0;
 
   // Reset canvas tool when panel opens or closes to prevent stuck state
   useEffect(() => {
@@ -112,18 +110,6 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
       .filter(r => r.voteCount > 0)
       .sort((a, b) => b.voteCount - a.voteCount);
   }, [canvasClusters, voting.session, voting]);
-
-  // ==================== AUTO-CREATE MAP ====================
-  const createAffinityMap = useMutation(api.affinityMaps.create);
-  useEffect(() => {
-    if (project && !affinityMap) {
-      createAffinityMap({
-        projectId: projectId as Id<"projects">,
-        name: `${project.name} Affinity Map`,
-        description: `Affinity map for ${project.name}`
-      }).catch(console.error);
-    }
-  }, [project, affinityMap, projectId, createAffinityMap]);
 
   // ==================== HANDLERS HOOK ====================
   const handlers = useAffinityMapHandlers({
@@ -368,19 +354,30 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
   return (
     <div className="h-full relative bg-background">
       {/* Header */}
-      <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-2 bg-card border-b">
+      <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-2 bg-card border-b border-border">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push(`/project/${projectId}`)}
-            className="p-2 rounded-lg hover:bg-accent transition-colors"
+            className="p-2 hover:bg-accent transition-transform duration-150 ease-out active:scale-[0.97]"
             title="Back to project"
           >
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </button>
-          <h1 className="text-lg font-semibold text-foreground">{project.name}</h1>
-          <span className="text-sm text-muted-foreground">Affinity Map</span>
+          <div>
+            <p className="font-mono text-[11px] tracking-widest uppercase text-muted-foreground">
+              Wall
+            </p>
+            <h1 className="text-sm font-medium text-foreground leading-tight">{project.name}</h1>
+          </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => boardControls?.openFind()}
+            className="h-8 px-3 font-mono text-[11px] uppercase tracking-widest border border-border hover:bg-accent transition-transform duration-150 ease-out active:scale-[0.97] md:hidden"
+          >
+            Find
+          </button>
           {/* Presence Avatars - Before vote button */}
           {otherUsers && otherUsers.length > 0 && (
             <AvatarGroup className="mr-1">
@@ -441,23 +438,20 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           style={{ paddingTop: '56px' }}
           projectInsights={insights}
           existingInsightIds={Array.from(canvasInsightIds)}
+          sittingId={sittingId}
           voting={voting}
           onBack={() => router.push(`/project/${projectId}`)}
           onOpenComment={handleOpenComment}
-          onChange={(elements) => {
-            // console.log("Board changed:", Object.keys(elements).length, "elements");
+          onCanvasInsightIdsChange={(ids) => {
+            setCanvasInsightIds((prev) => {
+              if (prev.size === ids.length && ids.every((id) => prev.has(id))) return prev;
+              return new Set(ids);
+            });
           }}
-          onImportInsights={(insightsToImport) => {
-            // The canvas will automatically update canvasInsightIds via onCanvasInsightIdsChange
-            // No manual state update needed
-          }}
-          onCanvasInsightIdsChange={(ids) => setCanvasInsightIds(new Set(ids))}
           presenceUsers={otherUsers || []}
           currentUser={{ userId: userId || "", name: user?.fullName || user?.firstName || "You" }}
-          onOpenPersona={() => setActivePanel("persona")}
           onLabelDataChange={setCanvasClusters}
           onToggleVoting={() => {}}
-          hasPersonas={hasPersonas}
           onBoardControlsReady={setBoardControls}
         />
       )}
@@ -550,57 +544,6 @@ export function AffinityMapWorkspace({ projectId }: AffinityMapWorkspaceProps) {
           "Start Voting"
         )}
       </button> */}
-
-      {/* Side Panels Toggle */}
-      <div className="fixed top-16 left-4 z-20 flex flex-col gap-2">
-        {/* <button
-          onClick={() => setActivePanel(activePanel === "aiAssistant" ? null : "aiAssistant")}
-          aria-label="AI Assistant panel"
-          aria-pressed={activePanel === "aiAssistant"}
-          className={`p-3 rounded-lg transition-all duration-200 shadow-sm ${
-            activePanel === "aiAssistant"
-              ? "bg-violet-600 text-white"
-              : "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
-          }`}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-            <path d="M2 17l10 5 10-5" />
-            <path d="M2 12l10 5 10-5" />
-          </svg>
-        </button> */}
-        
-        {/* <button
-          onClick={() => setActivePanel(activePanel === "analytics" ? null : "analytics")}
-          aria-label="Analytics panel"
-          aria-pressed={activePanel === "analytics"}
-          className={`p-3 rounded-lg transition-all duration-200 shadow-sm ${
-            activePanel === "analytics"
-              ? "bg-violet-600 text-white"
-              : "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
-          }`}
-        >
-          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M18 20V10M12 20V4M6 20v-6" />
-          </svg>
-        </button> */}
-        
-        {/* <button
-          onClick={() => setActivePanel(activePanel === "persona" ? null : "persona")}
-          aria-label="Personas panel"
-          aria-pressed={activePanel === "persona"}
-          className={`p-3 rounded-lg transition-all duration-200 shadow-sm ${
-            activePanel === "persona"
-              ? "bg-violet-600 text-white"
-              : "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
-          }`}
-        >
-          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-          </svg>
-        </button> */}
-      </div>
     </div>
   );
 }

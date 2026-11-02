@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useReducer, useRef } from "react";
+import { useCallback, useReducer, useRef, useState } from "react";
 import type {
   BoardState,
   FigJamElement,
@@ -15,6 +15,7 @@ import type {
   ClusterLabelData,
 } from "../types/figjam";
 import { isInsideSection, isOutsideSection } from "./useContainment";
+import { PACKET_EMPTY } from "@/lib/packetLayout";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ type Action =
   | { type: "MOVE_STICKY"; stickyId: string; position: Position }
   | { type: "MOVE_SELECTED"; ids: string[]; dx: number; dy: number }
   | { type: "LOAD_ELEMENTS"; elements: Record<string, FigJamElement> }
+  | { type: "HYDRATE"; state: BoardState }
   | { type: "UNDO" }
   | { type: "REDO" };
 
@@ -67,6 +69,17 @@ function maxZIndex(elements: Record<string, FigJamElement>): number {
 
 function cloneElements(elements: Record<string, FigJamElement>): Record<string, FigJamElement> {
   return JSON.parse(JSON.stringify(elements));
+}
+
+function stampDoc(
+  elements: Record<string, FigJamElement>,
+  at: number
+): Record<string, FigJamElement> {
+  const next: Record<string, FigJamElement> = {};
+  for (const [id, el] of Object.entries(elements)) {
+    next[id] = { ...el, updatedAt: at };
+  }
+  return next;
 }
 
 function reducer(state: BoardState, action: Action): BoardState {
@@ -169,10 +182,16 @@ function reducer(state: BoardState, action: Action): BoardState {
       return { ...state, activeTool: action.tool, selectedIds: [] };
 
     case "SET_PAN":
+      if (state.pan.x === action.pan.x && state.pan.y === action.pan.y) {
+        return state;
+      }
       return { ...state, pan: action.pan };
 
-    case "SET_ZOOM":
-      return { ...state, zoom: Math.min(4, Math.max(0.1, action.zoom)) };
+    case "SET_ZOOM": {
+      const zoom = Math.min(4, Math.max(0.1, action.zoom));
+      if (state.zoom === zoom) return state;
+      return { ...state, zoom };
+    }
 
     case "UPDATE_MANY": {
       const elements = { ...state.elements };
@@ -447,12 +466,14 @@ function reducer(state: BoardState, action: Action): BoardState {
       return { ...state, votesRevealed: action.revealed };
 
     case "LOAD_ELEMENTS":
-      // Filter out any sticky IDs from selection when loading
       const nonStickySelectedIds = state.selectedIds.filter(id => {
         const el = action.elements[id];
         return el && el.type !== "sticky";
       });
       return { ...state, elements: action.elements, selectedIds: nonStickySelectedIds };
+
+    case "HYDRATE":
+      return action.state;
 
     case "UNDO":
     case "REDO":
@@ -487,232 +508,148 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
 
   // Ref to always have latest state (avoids closure issues)
   const stateRef = useRef(state);
-  stateRef.current = state;
 
-  // Conditional debug logging (only in development)
-  const DEBUG = process.env.NODE_ENV === 'development';
-  const debugLog = (message: string, ...args: any[]) => {
-    if (DEBUG) {
-      console.log(`[DEBUG] ${message}`, ...args);
-    }
-  };
-  
-  // Complete state snapshots for history
-  const historyRef = useRef<BoardState[]>([]);
-  const futureRef = useRef<BoardState[]>([]);
+  // Document stack (Figma-style): history[index] is the current wall.
+  const historyRef = useRef<Record<string, FigJamElement>[]>([]);
+  const indexRef = useRef(0);
+  const readyRef = useRef(false);
+  const pauseRef = useRef(0);
   const isUndoingRedoingRef = useRef(false);
-  const isLoadingRef = useRef(true);
   const isDraggingRef = useRef(false);
-  const pendingDragSnapshotRef = useRef<BoardState | null>(null);
+  const [historyVersion, setHistoryVersion] = useState(0);
 
-  // Actions that modify state and should be undoable
+  const bumpHistory = useCallback(() => {
+    setHistoryVersion((version) => version + 1);
+  }, []);
+
+  const applyState = useCallback((next: BoardState) => {
+    stateRef.current = next;
+    baseDispatch({ type: "HYDRATE", state: next });
+  }, []);
+
+  const applyAction = useCallback((action: Action): BoardState => {
+    const next = reducer(stateRef.current, action);
+    applyState(next);
+    return next;
+  }, [applyState]);
+
+  const commitDoc = useCallback((elements: Record<string, FigJamElement>) => {
+    if (!readyRef.current || pauseRef.current > 0 || isUndoingRedoingRef.current) return;
+    const clipped = historyRef.current.slice(0, indexRef.current + 1);
+    const current = clipped[clipped.length - 1];
+    if (current && JSON.stringify(current) === JSON.stringify(elements)) return;
+    clipped.push(cloneElements(elements));
+    if (clipped.length > MAX_HISTORY) clipped.shift();
+    historyRef.current = clipped;
+    indexRef.current = clipped.length - 1;
+    bumpHistory();
+  }, [bumpHistory]);
+
+  const beginHistoryBatch = useCallback(() => {
+    pauseRef.current += 1;
+  }, []);
+
+  const endHistoryBatch = useCallback((record = true) => {
+    pauseRef.current = Math.max(0, pauseRef.current - 1);
+    if (pauseRef.current === 0 && record) {
+      commitDoc(stateRef.current.elements);
+    }
+  }, [commitDoc]);
+
   const UNDOABLE_ACTIONS = new Set([
     "ADD_ELEMENT", "UPDATE_ELEMENT", "UPDATE_MANY", "DELETE_ELEMENT",
     "MOVE_SECTION_WITH_CHILDREN", "RESET_VOTES"
   ]);
 
-  // Actions that use drag optimization (only save on drag end)
   const DRAG_ACTIONS = new Set(["MOVE_STICKY", "MOVE_SELECTED"]);
 
-  // Mark loading as complete after first meaningful user action
   const markLoaded = useCallback(() => {
-    isLoadingRef.current = false;
-    debugLog("[History] Board loaded, history tracking enabled. Elements:", Object.keys(stateRef.current.elements).length);
-  }, []);
+    if (readyRef.current) return;
+    readyRef.current = true;
+    historyRef.current = [cloneElements(stateRef.current.elements)];
+    indexRef.current = 0;
+    bumpHistory();
+  }, [bumpHistory]);
 
-  // Call this when drag starts to prepare snapshot
   const startDrag = useCallback(() => {
-    if (isLoadingRef.current || isUndoingRedoingRef.current) return;
-    
-    pendingDragSnapshotRef.current = {
-      elements: cloneElements(stateRef.current.elements),
-      selectedIds: [...stateRef.current.selectedIds],
-      activeTool: stateRef.current.activeTool,
-      pan: { ...stateRef.current.pan },
-      zoom: stateRef.current.zoom,
-      currentUserId: stateRef.current.currentUserId,
-      maxVotesPerUser: stateRef.current.maxVotesPerUser,
-      votesUsed: stateRef.current.votesUsed,
-      votingModeActive: stateRef.current.votingModeActive,
-      votesRevealed: stateRef.current.votesRevealed,
-    };
+    if (!readyRef.current || isUndoingRedoingRef.current || isDraggingRef.current) return;
     isDraggingRef.current = true;
+    pauseRef.current += 1;
   }, []);
 
-  // Call this when drag ends to save to history
   const endDrag = useCallback(() => {
     if (!isDraggingRef.current) return;
-    
     isDraggingRef.current = false;
-    
-    if (pendingDragSnapshotRef.current && !isLoadingRef.current && !isUndoingRedoingRef.current) {
-      historyRef.current = [
-        ...historyRef.current.slice(-MAX_HISTORY + 1),
-        pendingDragSnapshotRef.current,
-      ];
-      futureRef.current = [];
+    pauseRef.current = Math.max(0, pauseRef.current - 1);
+    if (pauseRef.current === 0) {
+      commitDoc(stateRef.current.elements);
     }
-    pendingDragSnapshotRef.current = null;
-  }, []);
+  }, [commitDoc]);
 
-  // Dispatch with history tracking - captures state BEFORE action
   const dispatch = useCallback((action: Action) => {
-    // Handle drag actions specially - skip during drag, save on drag end
     if (DRAG_ACTIONS.has(action.type)) {
-      if (!isDraggingRef.current) {
-        // First drag action - save snapshot
-        startDrag();
-      }
-      baseDispatch(action);
+      if (!isDraggingRef.current) startDrag();
+      applyAction(action);
       return;
     }
-    
-    // Skip history for initial loading and undo/redo operations
-    if (UNDOABLE_ACTIONS.has(action.type) && !isUndoingRedoingRef.current && !isLoadingRef.current) {
-      const currentState = stateRef.current;
-      const elementsBefore = Object.keys(currentState.elements).length;
-      debugLog(`[History] ${action.type}: ${elementsBefore} elements`);
 
-      // Save complete state snapshot BEFORE action
-      const stateSnapshot: BoardState = {
-        elements: cloneElements(currentState.elements),
-        selectedIds: [...currentState.selectedIds],
-        activeTool: currentState.activeTool,
-        pan: { ...currentState.pan },
-        zoom: currentState.zoom,
-        currentUserId: currentState.currentUserId,
-        maxVotesPerUser: currentState.maxVotesPerUser,
-        votesUsed: currentState.votesUsed,
-        votingModeActive: currentState.votingModeActive,
-        votesRevealed: currentState.votesRevealed,
-      };
-      
-      historyRef.current = [
-        ...historyRef.current.slice(-MAX_HISTORY + 1),
-        stateSnapshot,
-      ];
-      futureRef.current = []; // Clear redo stack on new action
+    applyAction(action);
+
+    if (
+      UNDOABLE_ACTIONS.has(action.type) &&
+      readyRef.current &&
+      pauseRef.current === 0 &&
+      !isUndoingRedoingRef.current
+    ) {
+      commitDoc(stateRef.current.elements);
     }
-    
-    baseDispatch(action);
-  }, [startDrag]);
+  }, [applyAction, startDrag, commitDoc]);
+
+  const restoreDoc = useCallback((elements: Record<string, FigJamElement>) => {
+    isUndoingRedoingRef.current = true;
+    const stamped = stampDoc(elements, Date.now());
+    const cleaned: Record<string, FigJamElement> = {};
+    for (const [id, el] of Object.entries(stamped)) {
+      if (el.type === "sticky") {
+        const sticky = el as StickyNoteData;
+        if (sticky.editingBy === stateRef.current.currentUserId) {
+          const { editingBy: _editingBy, editingByName: _editingByName, ...rest } = sticky as StickyNoteData & {
+            editingBy?: string;
+            editingByName?: string;
+          };
+          cleaned[id] = rest as FigJamElement;
+        } else {
+          cleaned[id] = el;
+        }
+      } else {
+        cleaned[id] = el;
+      }
+    }
+    applyAction({ type: "LOAD_ELEMENTS", elements: cleaned });
+    isUndoingRedoingRef.current = false;
+    bumpHistory();
+    return cleaned;
+  }, [applyAction, bumpHistory]);
 
   const undo = useCallback((): Record<string, FigJamElement> | null => {
-    if (historyRef.current.length === 0) {
-      debugLog("[Undo] No history");
-      return null;
-    }
-
-    const previousState = historyRef.current[historyRef.current.length - 1];
-    historyRef.current = historyRef.current.slice(0, -1);
-
-    debugLog(`[Undo] History size: ${historyRef.current.length}, will restore: ${Object.keys(previousState.elements).length}`);
-
-    // Save current state to redo stack
-    const currentState = stateRef.current;
-    const currentSnapshot: BoardState = {
-      elements: cloneElements(currentState.elements),
-      selectedIds: [...currentState.selectedIds],
-      activeTool: currentState.activeTool,
-      pan: { ...currentState.pan },
-      zoom: currentState.zoom,
-      currentUserId: currentState.currentUserId,
-      maxVotesPerUser: currentState.maxVotesPerUser,
-      votesUsed: currentState.votesUsed,
-      votingModeActive: currentState.votingModeActive,
-      votesRevealed: currentState.votesRevealed,
-    };
-    futureRef.current = [...futureRef.current, currentSnapshot];
-
-    isUndoingRedoingRef.current = true;
-
-    // Clean locks on all stickies when restoring (important for collaborative editing)
-    // Only remove locks that belong to the current user
-    const cleanedElements: Record<string, FigJamElement> = {};
-    for (const [id, el] of Object.entries(previousState.elements)) {
-      if (el.type === "sticky") {
-        const sticky = el as StickyNoteData;
-        // Only remove lock if it belongs to current user
-        if (sticky.editingBy === stateRef.current.currentUserId) {
-          const { editingBy, editingByName, ...rest } = sticky as any;
-          cleanedElements[id] = rest as FigJamElement;
-        } else {
-          // Keep lock from other user
-          cleanedElements[id] = el;
-        }
-      } else {
-        cleanedElements[id] = el;
-      }
-    }
-
-    baseDispatch({ type: "LOAD_ELEMENTS", elements: cleanedElements });
-    isUndoingRedoingRef.current = false;
-
-    debugLog(`[Undo] Restored ${Object.keys(cleanedElements).length}, redo stack: ${futureRef.current.length}`);
-
-    // Return the cleaned elements for immediate saving
-    return cleanedElements;
-  }, []);
+    if (indexRef.current <= 0) return null;
+    const nextIndex = indexRef.current - 1;
+    const doc = historyRef.current[nextIndex];
+    if (!doc) return null;
+    indexRef.current = nextIndex;
+    return restoreDoc(doc);
+  }, [restoreDoc]);
 
   const redo = useCallback((): Record<string, FigJamElement> | null => {
-    if (futureRef.current.length === 0) {
-      debugLog("[Redo] Nothing to redo");
-      return null;
-    }
-    
-    const nextState = futureRef.current[futureRef.current.length - 1];
-    futureRef.current = futureRef.current.slice(0, -1);
+    if (indexRef.current >= historyRef.current.length - 1) return null;
+    indexRef.current += 1;
+    const doc = historyRef.current[indexRef.current];
+    if (!doc) return null;
+    return restoreDoc(doc);
+  }, [restoreDoc]);
 
-    debugLog(`[Redo] Will restore: ${Object.keys(nextState.elements).length}, history: ${historyRef.current.length}`);
-
-    // Save current state to undo stack
-    const currentState = stateRef.current;
-    const currentSnapshot: BoardState = {
-      elements: cloneElements(currentState.elements),
-      selectedIds: [...currentState.selectedIds],
-      activeTool: currentState.activeTool,
-      pan: { ...currentState.pan },
-      zoom: currentState.zoom,
-      currentUserId: currentState.currentUserId,
-      maxVotesPerUser: currentState.maxVotesPerUser,
-      votesUsed: currentState.votesUsed,
-      votingModeActive: currentState.votingModeActive,
-      votesRevealed: currentState.votesRevealed,
-    };
-    historyRef.current = [...historyRef.current, currentSnapshot];
-    
-    isUndoingRedoingRef.current = true;
-
-    // Clean locks on all stickies when restoring (important for collaborative editing)
-    // Only remove locks that belong to the current user
-    const cleanedElements: Record<string, FigJamElement> = {};
-    for (const [id, el] of Object.entries(nextState.elements)) {
-      if (el.type === "sticky") {
-        const sticky = el as StickyNoteData;
-        // Only remove lock if it belongs to current user
-        if (sticky.editingBy === stateRef.current.currentUserId) {
-          const { editingBy, editingByName, ...rest } = sticky as any;
-          cleanedElements[id] = rest as FigJamElement;
-        } else {
-          // Keep lock from other user
-          cleanedElements[id] = el;
-        }
-      } else {
-        cleanedElements[id] = el;
-      }
-    }
-
-    baseDispatch({ type: "LOAD_ELEMENTS", elements: cleanedElements });
-    isUndoingRedoingRef.current = false;
-
-    debugLog(`[Redo] Restored ${Object.keys(cleanedElements).length}, history: ${historyRef.current.length}`);
-
-    // Return the cleaned elements for immediate saving
-    return cleanedElements;
-  }, []);
-
-  const canUndo = historyRef.current.length > 0;
-  const canRedo = futureRef.current.length > 0;
+  const canUndo = historyVersion >= 0 && indexRef.current > 0;
+  const canRedo = historyVersion >= 0 && indexRef.current < historyRef.current.length - 1;
 
   // ── Element creation ──────────────────────────────────────────────────────
 
@@ -772,11 +709,11 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
         id,
         type: "label",
         position: pos,
-        text: "New Cluster",
+        text: "",
         color: "#B8B4FF",
         fontSize: 13,
-        width: size?.width ?? 500,
-        height: size?.height ?? 300,
+        width: size?.width ?? PACKET_EMPTY.width,
+        height: size?.height ?? PACKET_EMPTY.height,
         zIndex: 1,
         createdAt: now(),
         updatedAt: now(),
@@ -829,9 +766,9 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
   }, []);
 
   const duplicateElement = useCallback(
-    (id: string) => {
+    (id: string): string | null => {
       const el = state.elements[id];
-      if (!el) return;
+      if (!el) return null;
       const newId = uid();
       const dup: FigJamElement = {
         ...el,
@@ -842,6 +779,7 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
         updatedAt: now(),
       } as FigJamElement;
       dispatch({ type: "ADD_ELEMENT", element: dup });
+      return newId;
     },
     [state.elements]
   );
@@ -941,7 +879,6 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
 
       if (selectedStickies.length === 0) return null;
 
-      // Arrange stickies in a grid inside the section
       const spacing = 20;
       const STICKY_W = 200;
       const STICKY_H = 200;
@@ -949,12 +886,10 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
       const TITLE_BAR_H = 40;
       const COLS = Math.max(1, Math.min(selectedStickies.length, 4));
 
-      // Calculate section size based on grid
       const rows = Math.ceil(selectedStickies.length / COLS);
       const sectionWidth = SECTION_PADDING * 2 + COLS * STICKY_W + (COLS - 1) * spacing;
       const sectionHeight = TITLE_BAR_H + SECTION_PADDING * 2 + rows * STICKY_H + (rows - 1) * spacing;
 
-      // Starting position for section (center the stickies)
       let minX = Infinity, minY = Infinity;
       for (const sticky of selectedStickies) {
         minX = Math.min(minX, sticky.position.x);
@@ -965,7 +900,6 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
         y: minY - SECTION_PADDING - TITLE_BAR_H,
       };
 
-      // Create section with auto-resize ON
       const sectionId = uid();
       const section: FigJamElement = {
         id: sectionId,
@@ -974,7 +908,7 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
         size: { width: sectionWidth, height: sectionHeight },
         title,
         color: "#e8f4fd",
-        autoResize: true, // Enable auto-resize by default
+        autoResize: true,
         votes: 0,
         votedBy: [],
         zIndex: 0,
@@ -982,7 +916,6 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
         updatedAt: now(),
       };
 
-      // Update stickies: attach to section AND arrange in grid
       const patches: { id: string; patch: Partial<FigJamElement> }[] = selectedStickies.map((sticky, i) => {
         const row = Math.floor(i / COLS);
         const col = i % COLS;
@@ -998,15 +931,16 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
         };
       });
 
-      // Dispatch all updates
+      beginHistoryBatch();
       dispatch({ type: "ADD_ELEMENT", element: section });
       dispatch({ type: "UPDATE_MANY", patches });
       dispatch({ type: "CLEAR_SELECTION" });
       dispatch({ type: "SELECT", id: sectionId, multi: false });
+      endHistoryBatch();
 
       return sectionId;
     },
-    [state.selectedIds, state.elements]
+    [state.selectedIds, state.elements, beginHistoryBatch, endHistoryBatch]
   );
 
   // ── Auto-arrange stickies ───────────────────────────────────────────────
@@ -1097,5 +1031,7 @@ export function useFigJamBoard(): UseFigJamBoardReturn {
     groupSelectedIntoSection,
     autoArrange,
     addDot,
+    beginHistoryBatch,
+    endHistoryBatch,
   };
 }

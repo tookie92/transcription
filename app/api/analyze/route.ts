@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { GROQ_MODEL } from '@/lib/groq';
 import { AnalysisRequest, InsightResponse } from '@/types';
 
 const groq = new Groq({
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
 ${transcription}`;
 
       const translationResponse = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
+        model: GROQ_MODEL,
         messages: [{ role: 'user', content: translatePrompt }],
         temperature: 0.3,
       });
@@ -89,7 +90,7 @@ Example output:
           content: prompt,
         },
       ],
-      model: 'llama-3.3-70b-versatile',
+      model: GROQ_MODEL,
       temperature: 0.3,
       response_format: { type: 'json_object' },
     });

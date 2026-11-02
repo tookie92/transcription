@@ -1,48 +1,41 @@
 "use client";
 
-import { useState } from "react";
-import { 
-  Sparkles, 
-  Loader2, 
-  Layers,
-  X,
-  Check,
-  RefreshCw,
-  GitMerge,
-  Search
-} from "lucide-react";
-import { motion } from "framer-motion";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { ButtonGroup } from "@/components/ui/button-group";
+import { Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import type { StickyNoteData, ClusterLabelData } from "@/types/figjam";
-import { useQuery, useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import { SlipStamp, slipKindOf } from "@/components/myComponents/affinity/SlipFace";
+import { cn } from "@/lib/utils";
 
 interface GroupingSuggestion {
   id: string;
   action: "create_new" | "add_to_existing";
-  confidence: number;
-  reason: string;
   insightIds: string[];
   newGroupTitle?: string;
-  newGroupDescription?: string;
-}
-
-interface SimilarClustersSuggestion {
-  clusterAId: string;
-  clusterATitle: string;
-  clusterBId: string;
-  clusterBTitle: string;
-  similarityScore: number;
-  reason: string;
-  mergedTitle?: string;
+  targetGroupId?: string;
+  reason?: string;
 }
 
 interface AIGroupingPanelProps {
@@ -51,18 +44,10 @@ interface AIGroupingPanelProps {
   ungroupedStickies: StickyNoteData[];
   existingClusters: ClusterLabelData[];
   projectContext?: string;
-  onCreateCluster: (stickyIds: string[], title: string, position: { x: number; y: number }) => void;
+  onCreateCluster: (stickyIds: string[], title: string) => void;
+  onAddToCluster?: (stickyIds: string[], clusterId: string) => void;
   onNeedConsent?: () => void;
-  mapId: string;
-  userId: string;
 }
-
-const INSIGHT_TYPE_COLORS: Record<string, string> = {
-  pain: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-  quote: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  insight: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-  follow: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-};
 
 export function AIGroupingPanel({
   isOpen,
@@ -71,41 +56,64 @@ export function AIGroupingPanel({
   existingClusters,
   projectContext,
   onCreateCluster,
+  onAddToCluster,
   onNeedConsent,
-  mapId,
-  userId,
 }: AIGroupingPanelProps) {
-  // Simple state - no cache
   const [suggestions, setSuggestions] = useState<GroupingSuggestion[]>([]);
+  const [skipped, setSkipped] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<number>>(new Set());
+  const [hasTried, setHasTried] = useState(false);
+  const autoRanRef = useRef(false);
 
-  // Similar clusters detection
-  const [similarClusters, setSimilarClusters] = useState<SimilarClustersSuggestion[]>([]);
-  const [isDetectingSimilar, setIsDetectingSimilar] = useState(false);
-  const [showSimilarTab, setShowSimilarTab] = useState(false);
-
-  // Mutations
-  const mergeClustersMutation = useMutation(api.affinityMaps.mergeClusters);
   const userCredits = useQuery(api.credits.getUserCredits);
   const userConsent = useQuery(api.credits.getConsent);
   const deductCredits = useMutation(api.credits.deductCredits);
   const initializeCredits = useMutation(api.credits.initializeCredits);
 
-  const checkCredits = async () => {
-    if (!userConsent) {
+  const trayIds = useMemo(
+    () => new Set(ungroupedStickies.map((s) => s.id)),
+    [ungroupedStickies]
+  );
+
+  const visible = useMemo(() => {
+    return suggestions.filter((suggestion) => {
+      if (skipped.has(suggestion.id)) return false;
+      const remaining = suggestion.insightIds.filter((id) => trayIds.has(id));
+      return remaining.length >= 2;
+    });
+  }, [suggestions, skipped, trayIds]);
+
+  const packetTitle = useCallback(
+    (suggestion: GroupingSuggestion): string => {
+      if (suggestion.action === "add_to_existing") {
+        const cluster = existingClusters.find((c) => c.id === suggestion.targetGroupId);
+        return cluster?.text?.trim() || "Untitled";
+      }
+      return suggestion.newGroupTitle?.trim() || "Untitled";
+    },
+    [existingClusters]
+  );
+
+  const checkCredits = useCallback(async (): Promise<boolean> => {
+    if (userConsent === undefined) return false;
+    if (userConsent !== true) {
       onNeedConsent?.();
       return false;
     }
 
     try {
       await initializeCredits({});
-    } catch {}
+    } catch {
+      // already initialized
+    }
 
-    const creditsData = userCredits || { credits: 150, costs: { transcription: 20, aiGrouping: 10, aiRename: 5 } };
-    
+    const creditsData = userCredits || {
+      credits: 150,
+      costs: { transcription: 20, aiGrouping: 10, aiRename: 5 },
+    };
+
     if (creditsData.credits < creditsData.costs.aiGrouping) {
-      toast.error(`Not enough credits. Need ${creditsData.costs.aiGrouping} but have ${creditsData.credits}.`);
+      toast.error("Not enough credits to sort the tray");
       return false;
     }
 
@@ -113,44 +121,32 @@ export function AIGroupingPanel({
       await deductCredits({ operation: "aiGrouping" });
       return true;
     } catch {
-      toast.error("Not enough credits for AI grouping.");
+      toast.error("Not enough credits to sort the tray");
       return false;
     }
-  };
+  }, [userConsent, userCredits, initializeCredits, deductCredits, onNeedConsent]);
 
-  // Toggle selection
-  const toggleSuggestion = (index: number) => {
-    setSelectedSuggestions((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) {
-        next.delete(index);
-      } else {
-        next.add(index);
-      }
-      return next;
-    });
-  };
+  const fetchSuggestions = useCallback(async () => {
+    if (ungroupedStickies.length < 2) return;
+    if (userConsent === undefined) return;
 
-  // Fetch suggestions - SIMPLE: always based on current ungrouped stickies
-  const fetchSuggestions = async () => {
-    if (ungroupedStickies.length < 2) {
-      toast.info("Need at least 2 ungrouped stickies");
+    const hasCredits = await checkCredits();
+    if (!hasCredits) {
+      setHasTried(true);
+      setIsLoading(false);
       return;
     }
 
-    const hasCredits = await checkCredits();
-    if (!hasCredits) return;
-
     setIsLoading(true);
-    setSelectedSuggestions(new Set());
-    setSuggestions([]); // Clear previous suggestions
+    setSkipped(new Set());
+    setSuggestions([]);
+    setHasTried(true);
 
     try {
       const response = await fetch("/api/suggest-groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // ONLY send current ungrouped stickies
           insights: ungroupedStickies.map((s) => ({
             id: s.id,
             text: s.content,
@@ -168,403 +164,233 @@ export function AIGroupingPanel({
       if (!response.ok) throw new Error("Failed to fetch");
 
       const data = await response.json();
-      const newSuggestions: GroupingSuggestion[] = (data.suggestions || []).map((s: GroupingSuggestion, idx: number) => ({
-        ...s,
-        id: `suggestion-${Date.now()}-${idx}`,
-      }));
-
-      setSuggestions(newSuggestions);
-
-      if (newSuggestions.length === 0) {
-        toast.info("No groupings could be suggested");
-      } else {
-        toast.success(`Generated ${newSuggestions.length} suggestion(s)`);
+      if (typeof data.warning === "string" && data.warning) {
+        toast.message(data.warning);
       }
+      const next: GroupingSuggestion[] = (data.suggestions || [])
+        .map((s: GroupingSuggestion, idx: number) => ({
+          ...s,
+          id: `packet-${Date.now()}-${idx}`,
+        }))
+        .filter((s: GroupingSuggestion) => {
+          const count = s.insightIds.filter((id) => trayIds.has(id)).length;
+          const mega = ungroupedStickies.length >= 6 && count >= Math.ceil(ungroupedStickies.length * 0.7);
+          return count >= 2 && count <= 5 && !mega;
+        });
+      setSuggestions(next);
     } catch {
-      toast.error("Failed to generate groupings");
+      toast.error("Could not sort the tray");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [ungroupedStickies, existingClusters, projectContext, checkCredits, userConsent]);
 
-  // Detect similar clusters
-  const detectSimilarClusters = async () => {
-    if (existingClusters.length < 2) {
-      toast.info("Need at least 2 clusters");
+  useEffect(() => {
+    if (!isOpen) {
+      autoRanRef.current = false;
+      setHasTried(false);
+      setSuggestions([]);
+      setSkipped(new Set());
+      setIsLoading(false);
       return;
     }
 
-    setIsDetectingSimilar(true);
-    setShowSimilarTab(true);
+    if (autoRanRef.current) return;
+    if (ungroupedStickies.length < 2) return;
+    if (userConsent === undefined) return;
 
-    try {
-      const clustersWithInsights = existingClusters.map(cluster => {
-        const stickiesInCluster = ungroupedStickies.filter(s => 
-          s.clusterId === cluster.id || s.parentSectionId === cluster.id
-        );
-        return {
-          id: cluster.id,
-          title: cluster.text,
-          insights: stickiesInCluster.map(s => ({
-            id: s.id,
-            content: s.content,
-          })),
-        };
-      });
+    autoRanRef.current = true;
+    void fetchSuggestions();
+  }, [isOpen, ungroupedStickies.length, userConsent, fetchSuggestions]);
 
-      const response = await fetch("/api/find-similar-clusters", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clusters: clustersWithInsights }),
-      });
+  const placeOne = (suggestion: GroupingSuggestion) => {
+    const ids = suggestion.insightIds.filter((id) => trayIds.has(id));
+    if (ids.length === 0) return;
 
-      if (!response.ok) throw new Error("Failed to find similar");
-
-      const data = await response.json();
-      setSimilarClusters(data.similarPairs || []);
-    } catch {
-      toast.error("Failed to detect similar clusters");
-    } finally {
-      setIsDetectingSimilar(false);
+    if (suggestion.action === "add_to_existing" && suggestion.targetGroupId) {
+      onAddToCluster?.(ids, suggestion.targetGroupId);
+    } else {
+      onCreateCluster(ids, packetTitle(suggestion));
     }
+    setSkipped((prev) => new Set(prev).add(suggestion.id));
   };
 
-  // Create clusters from selected suggestions - SIMPLE
-  const handleCreateClusters = () => {
-    if (selectedSuggestions.size === 0) {
-      toast.info("Select suggestions first");
-      return;
-    }
-
-    if (ungroupedStickies.length === 0) {
-      toast.error("No stickies to group");
-      return;
-    }
-
-    const selectedList = Array.from(selectedSuggestions).map((i) => suggestions[i]);
-    
-    // Calculate center
-    const stickyCenters = ungroupedStickies.map(s => ({
-      x: s.position.x + 100,
-      y: s.position.y + 100,
-    }));
-    const avgX = stickyCenters.reduce((sum, c) => sum + c.x, 0) / stickyCenters.length;
-    const avgY = stickyCenters.reduce((sum, c) => sum + c.y, 0) / stickyCenters.length;
-
-    const CLUSTERS_PER_ROW = 2;
-    const SPACING_X = 350;
-    const SPACING_Y = 400;
-    const baseClusterX = avgX - (CLUSTERS_PER_ROW * SPACING_X) / 2 + 100;
-    const baseClusterY = avgY - 100;
-
-    // Simple position finder
-    const findEmptySpot = (startX: number, startY: number) => {
-      let bestX = startX;
-      let bestY = startY;
-      let found = false;
-      const maxAttempts = 20;
-
-      for (let attempt = 0; attempt < maxAttempts && !found; attempt++) {
-        let overlap = false;
-        for (const cluster of existingClusters) {
-          const dx = Math.abs(bestX - cluster.position.x);
-          const dy = Math.abs(bestY - cluster.position.y);
-          if (dx < 300 && dy < 300) {
-            overlap = true;
-            break;
-          }
-        }
-        if (!overlap) found = true;
-        else {
-          bestX += 50;
-          bestY += 50;
-        }
-      }
-      return { x: bestX, y: bestY };
-    };
-
-    // Create clusters
-    selectedList.forEach((suggestion, index) => {
-      const col = index % CLUSTERS_PER_ROW;
-      const row = Math.floor(index / CLUSTERS_PER_ROW);
-      const targetX = baseClusterX + col * SPACING_X;
-      const targetY = baseClusterY - row * SPACING_Y;
-      const position = findEmptySpot(targetX, targetY);
-
-      onCreateCluster(
-        suggestion.insightIds,
-        suggestion.newGroupTitle || "New Cluster",
-        position
-      );
-    });
-
-    // SIMPLE: Clear all suggestions after creation
-    setSuggestions([]);
-    setSelectedSuggestions(new Set());
-    
-    toast.success(`Created ${selectedList.length} cluster(s)`);
+  const placeRest = () => {
+    visible.forEach(placeOne);
   };
-
-  // Merge clusters
-  const handleMergeClusters = async (suggestion: SimilarClustersSuggestion) => {
-    try {
-      await mergeClustersMutation({
-        mapId: mapId as Id<"affinityMaps">,
-        targetClusterId: suggestion.clusterAId,
-        sourceClusterId: suggestion.clusterBId,
-        mergedTitle: suggestion.mergedTitle,
-      });
-
-      setSimilarClusters(prev => prev.filter(s => 
-        !(s.clusterAId === suggestion.clusterAId && s.clusterBId === suggestion.clusterBId)
-      ));
-
-      toast.success(`Merged into "${suggestion.mergedTitle}"`);
-    } catch {
-      toast.error("Failed to merge clusters");
-    }
-  };
-
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 0.8) return "bg-green-500";
-    if (confidence >= 0.6) return "bg-yellow-500";
-    return "bg-gray-400";
-  };
-
-  if (!isOpen) return null;
 
   return (
-    <motion.div
-      initial={{ x: 300, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      exit={{ x: 300, opacity: 0 }}
-      className="fixed right-0 top-0 bottom-0 w-80 bg-card border-l border-border shadow-xl z-50 flex flex-col"
+    <Sheet
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      modal={false}
     >
-      {/* Header */}
-      <div className="p-4 border-b border-border shrink-0">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-violet-100 dark:bg-violet-900/30 rounded-lg flex items-center justify-center">
-              <Sparkles size={16} className="text-violet-600 dark:text-violet-400" />
-            </div>
-            <h2 className="font-semibold text-foreground">AI Grouping</h2>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center">
-            <X size={18} className="text-muted-foreground" />
-          </button>
-        </div>
+      <SheetContent
+        side="right"
+        overlay={false}
+        className="flex w-full flex-col gap-0 p-0 sm:max-w-sm"
+      >
+        <SheetHeader className="border-b border-border">
+          <SheetTitle>Sort tray</SheetTitle>
+          <SheetDescription>
+            {ungroupedStickies.length} loose{" "}
+            {ungroupedStickies.length === 1 ? "slip" : "slips"}
+          </SheetDescription>
+        </SheetHeader>
 
-        {/* Tabs */}
-        <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
-          <button
-            onClick={() => setShowSimilarTab(false)}
-            className={`flex-1 py-1.5 px-3 text-xs font-medium rounded-md transition-colors ${
-              !showSimilarTab ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Layers size={14} className="inline mr-1" />
-            Grouping
-          </button>
-          <button
-            onClick={() => {
-              setShowSimilarTab(true);
-              if (similarClusters.length === 0) detectSimilarClusters();
-            }}
-            className={`flex-1 py-1.5 px-3 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 ${
-              showSimilarTab ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <GitMerge size={14} className="inline mr-1" />
-            Similar
-            {similarClusters.length > 0 && (
-              <Badge variant="secondary" className="ml-1 text-[10px] px-1.5">{similarClusters.length}</Badge>
-            )}
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mt-3">
-          <Layers size={14} />
-          <span>{ungroupedStickies.length} ungrouped</span>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {/* Similar Clusters Tab */}
-        {showSimilarTab ? (
-          <div className="space-y-4">
-            <Button
-              onClick={detectSimilarClusters}
-              disabled={isDetectingSimilar || existingClusters.length < 2}
-              className="w-full"
-              variant="outline"
-            >
-              {isDetectingSimilar ? (
-                <><Loader2 size={16} className="mr-2 animate-spin" />Analyzing...</>
-              ) : (
-                <><Search size={16} className="mr-2" />Find Similar</>
-              )}
-            </Button>
-
-            {similarClusters.length > 0 ? (
-              <div className="space-y-3">
-                {similarClusters.map((suggestion, idx) => (
-                  <div key={`${suggestion.clusterAId}-${suggestion.clusterBId}`} className="p-3 rounded-lg border border-border bg-muted/30">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline" className="text-xs font-medium">
-                        {Math.round(suggestion.similarityScore)}% similar
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="flex-1 p-2 bg-card rounded-lg border">
-                        <p className="text-xs font-medium text-foreground truncate">{suggestion.clusterATitle}</p>
-                      </div>
-                      <GitMerge size={16} className="text-muted-foreground shrink-0" />
-                      <div className="flex-1 p-2 bg-card rounded-lg border">
-                        <p className="text-xs font-medium text-foreground truncate">{suggestion.clusterBTitle}</p>
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => handleMergeClusters(suggestion)}
-                    >
-                      Merge
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : existingClusters.length < 2 ? (
-              <p className="text-xs text-muted-foreground text-center">Need at least 2 clusters</p>
-            ) : null}
-          </div>
-        ) : (
-          /* Grouping Tab - SIMPLE */
-          <div className="space-y-4">
-            {/* Generate Button */}
-            {!suggestions.length && !isLoading && (
-              <Button onClick={fetchSuggestions} className="w-full" disabled={ungroupedStickies.length < 2}>
-                <Sparkles size={16} className="mr-2" />
-                Generate Groupings
-              </Button>
-            )}
-
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="flex flex-col gap-3 p-4">
             {ungroupedStickies.length < 2 && (
-              <p className="text-xs text-muted-foreground text-center">
-                Need at least 2 ungrouped stickies
-              </p>
+              <Empty className="border border-dashed py-8">
+                <EmptyHeader>
+                  <EmptyTitle className="font-mono text-xs tracking-widest uppercase">
+                    Tray too thin
+                  </EmptyTitle>
+                  <EmptyDescription>
+                    Need at least two loose slips to stack a packet.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             )}
 
-            {/* Loading */}
             {isLoading && (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 size={24} className="animate-spin text-muted-foreground" />
-                <span className="ml-2 text-sm text-muted-foreground">Analyzing patterns...</span>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Spinner />
+                  Reading slips
+                </div>
+                <Skeleton className="h-36 rounded-none" />
+                <Skeleton className="h-36 rounded-none" />
               </div>
             )}
 
-            {/* Suggestions List */}
-            {suggestions.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-foreground">
-                    {suggestions.length} suggestion{suggestions.length !== 1 ? "s" : ""}
-                  </p>
-                  <Button variant="ghost" size="sm" onClick={fetchSuggestions}>
-                    <RefreshCw size={14} className="mr-1" />
-                    Refresh
-                  </Button>
-                </div>
+            {!isLoading &&
+              ungroupedStickies.length >= 2 &&
+              visible.length === 0 &&
+              hasTried &&
+              skipped.size > 0 && (
+              <Empty className="border border-dashed py-8">
+                <EmptyHeader>
+                  <EmptyTitle className="font-mono text-xs tracking-widest uppercase">
+                    Packets on the wall
+                  </EmptyTitle>
+                  <EmptyDescription>
+                    The rest stay in the tray until you file them.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            )}
 
-                <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
-                  {suggestions.map((suggestion, index) => {
-                    const isSelected = selectedSuggestions.has(index);
-                    const stickiesInSuggestion = ungroupedStickies.filter((s) => suggestion.insightIds.includes(s.id));
-
-                    return (
-                      <motion.div
-                        key={suggestion.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className={`group relative p-3 rounded-lg border transition-all cursor-pointer ${
-                          isSelected
-                            ? "border-primary bg-primary/5 shadow-md"
-                            : "border-border hover:border-primary/50 hover:bg-muted/30"
-                        }`}
-                        onClick={() => toggleSuggestion(index)}
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <p className="font-medium text-sm text-foreground line-clamp-1">
-                            {suggestion.newGroupTitle || "New Group"}
-                          </p>
-                        </div>
-
-                        {/* Confidence */}
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                            <motion.div
-                              initial={{ width: 0 }}
-                              animate={{ width: `${suggestion.confidence * 100}%` }}
-                              className={`h-full ${getConfidenceColor(suggestion.confidence)}`}
-                            />
-                          </div>
-                          <Badge variant="secondary" className="text-xs">
-                            {Math.round(suggestion.confidence * 100)}%
-                          </Badge>
-                        </div>
-
-                        <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
-                          {suggestion.reason}
-                        </p>
-
-                        {/* Preview */}
-                        <div className="flex flex-wrap gap-1 mb-2">
-                          {stickiesInSuggestion.slice(0, 3).map((sticky) => (
-                            <span key={sticky.id} className="text-[10px] px-1.5 py-0.5 bg-muted rounded truncate max-w-[100px]">
-                              {sticky.content.slice(0, 15)}...
-                            </span>
-                          ))}
-                          {stickiesInSuggestion.length > 3 && (
-                            <span className="text-[10px] text-muted-foreground">+{stickiesInSuggestion.length - 3} more</span>
-                          )}
-                        </div>
-
-                        {/* Selection indicator */}
-                        <div className={`flex items-center gap-2 text-xs ${isSelected ? "text-primary" : "text-muted-foreground"}`}>
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                            isSelected ? "bg-primary border-primary" : "border-muted-foreground"
-                          }`}>
-                            {isSelected && <Check size={12} className="text-white" />}
-                          </div>
-                          <span>{isSelected ? "Selected" : "Click to select"}</span>
-                          <Badge variant="outline" className="ml-auto text-[10px]">
-                            {suggestion.insightIds.length} items
-                          </Badge>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </div>
-
-                {/* Create Button */}
-                <div className="sticky bottom-0 bg-gradient-to-t from-card to-transparent pt-4 pb-2">
+            {!isLoading &&
+              ungroupedStickies.length >= 2 &&
+              visible.length === 0 &&
+              hasTried &&
+              skipped.size === 0 && (
+              <Empty className="border border-dashed py-8">
+                <EmptyHeader>
+                  <EmptyTitle className="font-mono text-xs tracking-widest uppercase">
+                    No stack
+                  </EmptyTitle>
+                  <EmptyDescription>
+                    Nothing obvious to bundle. File them by hand, or try again.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
                   <Button
-                    onClick={handleCreateClusters}
-                    disabled={selectedSuggestions.size === 0}
-                    className="w-full"
-                    size="lg"
+                    variant="outline"
+                    onClick={() => {
+                      autoRanRef.current = true;
+                      void fetchSuggestions();
+                    }}
                   >
-                    <Sparkles size={16} className="mr-2" />
-                    Create {selectedSuggestions.size > 0 ? `${selectedSuggestions.size} ` : ""}Cluster{selectedSuggestions.size !== 1 ? "s" : ""}
+                    Try again
                   </Button>
-                </div>
-              </div>
+                </EmptyContent>
+              </Empty>
             )}
+
+            {visible.map((suggestion) => {
+              const ids = suggestion.insightIds.filter((id) => trayIds.has(id));
+              const slips = ungroupedStickies.filter((s) => ids.includes(s.id));
+              const intoExisting = suggestion.action === "add_to_existing";
+
+              return (
+                <Card
+                  key={suggestion.id}
+                  className="rounded-none py-3 shadow-none gap-3"
+                >
+                  <CardHeader className="px-3 [.border-b]:pb-0">
+                    <CardTitle className="font-mono text-[11px] font-normal tracking-widest uppercase">
+                      {packetTitle(suggestion)}
+                    </CardTitle>
+                    <CardAction>
+                      <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                        ×{slips.length}
+                      </span>
+                    </CardAction>
+                  </CardHeader>
+                  <CardContent className="px-3">
+                    {suggestion.reason ? (
+                      <p className="mb-2 text-xs text-muted-foreground line-clamp-2">
+                        {suggestion.reason}
+                      </p>
+                    ) : null}
+                    <ul className="flex flex-col gap-2">
+                      {slips.slice(0, 3).map((slip) => {
+                        const kind = slipKindOf(slip.color, slip.source);
+                        return (
+                          <li key={slip.id} className="flex items-start gap-2">
+                            <SlipStamp kind={kind} />
+                            <p
+                              className={cn(
+                                "line-clamp-2 text-[12px] leading-snug",
+                                kind === "quote" && "italic"
+                              )}
+                            >
+                              {slip.content || "Empty"}
+                            </p>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {slips.length > 3 ? (
+                      <p className="mt-2 font-mono text-[10px] text-muted-foreground">
+                        +{slips.length - 3}
+                      </p>
+                    ) : null}
+                  </CardContent>
+                  <CardFooter className="justify-end px-3">
+                    <ButtonGroup>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setSkipped((prev) => new Set(prev).add(suggestion.id))
+                        }
+                      >
+                        Skip
+                      </Button>
+                      <Button size="sm" onClick={() => placeOne(suggestion)}>
+                        {intoExisting ? "File in" : "Place"}
+                      </Button>
+                    </ButtonGroup>
+                  </CardFooter>
+                </Card>
+              );
+            })}
           </div>
-        )}
-      </div>
-    </motion.div>
+        </ScrollArea>
+
+        {visible.length > 1 ? (
+          <SheetFooter className="border-t border-border">
+            <Button variant="outline" onClick={placeRest}>
+              Place all {visible.length}
+            </Button>
+          </SheetFooter>
+        ) : null}
+      </SheetContent>
+    </Sheet>
   );
 }

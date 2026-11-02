@@ -13,15 +13,12 @@ import {
   AlignLeft,
   MoreHorizontal,
   Edit3,
-  Maximize2,
   Minimize2,
   Move,
   Palette,
-  Sparkles,
   Loader2,
-  Check
+  User,
 } from "lucide-react";
-import { ClusterAIRename } from "./ClusterAIRename";
 
 export interface ContextMenuAction {
   id: string;
@@ -190,7 +187,7 @@ export function LassoContextMenu({
     },
     {
       id: "comment",
-      label: "Add comment",
+      label: "Pin note",
       icon: <MessageSquare className="w-4 h-4" />,
       onClick: onComment,
     },
@@ -289,7 +286,7 @@ export function StickyContextMenu({
     },
     {
       id: "duplicate",
-      label: "Dupliquer",
+      label: "Also file",
       icon: <Copy className="w-4 h-4" />,
       shortcut: "Ctrl+D",
       onClick: onDuplicate,
@@ -323,12 +320,14 @@ interface ClusterContextMenuProps {
   onRename: (newName: string) => void;
   onDelete: () => void;
   isOpen: boolean;
-  autoFitEnabled?: boolean;
-  onToggleAutoFit?: (clusterId: string, enabled: boolean) => void;
+  onSuggestName?: () => void;
+  onCopyQuotes?: () => void;
+  onCopyFollowUps?: () => void;
+  onCast?: () => void;
 }
 
 export function ClusterContextMenu({
-  clusterId,
+  clusterId: _clusterId,
   clusterTitle,
   stickyTexts = [],
   position,
@@ -336,16 +335,35 @@ export function ClusterContextMenu({
   onRename,
   onDelete,
   isOpen,
-  autoFitEnabled = false,
-  onToggleAutoFit,
+  onSuggestName,
+  onCopyQuotes,
+  onCopyFollowUps,
+  onCast,
 }: ClusterContextMenuProps) {
   const actions: ContextMenuAction[] = [
     {
-      id: "autofit",
-      label: autoFitEnabled ? "Disable auto-fit" : "Enable auto-fit",
-      icon: autoFitEnabled ? <Check className="w-4 h-4 text-primary" /> : <Maximize2 className="w-4 h-4" />,
-      variant: autoFitEnabled ? "primary" : "default",
-      onClick: () => onToggleAutoFit?.(clusterId, !autoFitEnabled),
+      id: "name",
+      label: "Suggest a name",
+      icon: <Tag className="w-4 h-4" />,
+      onClick: () => onSuggestName?.(),
+    },
+    {
+      id: "quotes",
+      label: "Copy quotes",
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => onCopyQuotes?.(),
+    },
+    {
+      id: "followups",
+      label: "Copy follow-ups",
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => onCopyFollowUps?.(),
+    },
+    {
+      id: "cast",
+      label: "Cast",
+      icon: <User className="w-4 h-4" />,
+      onClick: () => onCast?.(),
     },
     {
       id: "delete",

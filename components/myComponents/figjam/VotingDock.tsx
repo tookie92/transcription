@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { RotateCcw, GripVertical } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
 interface VotingDockProps {
   isActive: boolean;
@@ -68,48 +68,48 @@ export function VotingDock({
       <AnimatePresence>
         {draggingIndex !== null && (
           <motion.div
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            className="fixed w-12 h-12 rounded-full border-4 border-white shadow-2xl pointer-events-none z-[200]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed h-5 w-5 border border-foreground/25 pointer-events-none z-[200]"
             style={{
-              left: dragPos.x - 24,
-              top: dragPos.y - 24,
+              left: dragPos.x - 10,
+              top: dragPos.y - 10,
               backgroundColor: userColor,
+              transform: "rotate(-8deg)",
             }}
           />
         )}
       </AnimatePresence>
 
       <motion.div
-        initial={{ x: 100, opacity: 0 }}
+        initial={{ x: 12, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
-        exit={{ x: 100, opacity: 0 }}
-        className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-200/50 p-4"
+        exit={{ x: 12, opacity: 0 }}
+        className="border border-border bg-card p-3"
       >
-        <div className="text-xs text-gray-500 font-medium mb-3 flex items-center gap-2">
-          <GripVertical className="w-4 h-4" />
-          Drag dot onto a sticky to vote
+        <div className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground mb-3">
+          Stickers
         </div>
         
         <div className="flex flex-wrap gap-2 mb-3">
           {Array.from({ length: Math.max(0, remaining) }).map((_, i) => (
-            <motion.div
+            <div
               key={i}
-              initial={{ scale: 0, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              transition={{ delay: i * 0.05, type: "spring", stiffness: 300, damping: 20 }}
-              className="w-10 h-10 rounded-full border-2 border-white shadow-lg cursor-grab active:cursor-grabbing hover:scale-110 hover:rotate-12 transition-all"
-              style={{ backgroundColor: userColor }}
+              className="h-8 w-8 border border-foreground/20 cursor-grab active:cursor-grabbing active:scale-[0.97]"
+              style={{
+                backgroundColor: userColor,
+                transform: `rotate(${i % 2 === 0 ? -8 : 6}deg)`,
+              }}
               onPointerDown={(e) => handleDragStart(e, i)}
             />
           ))}
         </div>
 
         {usedDots > 0 && (
-          <div className="flex items-center justify-between border-t border-gray-100 pt-3">
-            <span className="text-xs text-gray-400 font-medium">
-              {usedDots}/{dotsPerUser} votes
+          <div className="flex items-center justify-between border-t border-border pt-3">
+            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+              ×{usedDots}/{dotsPerUser}
             </span>
             <button
               onClick={onReset}

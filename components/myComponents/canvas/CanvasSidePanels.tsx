@@ -4,10 +4,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AffinityGroup as AffinityGroupType, ActivePanel, DetectedTheme, Insight, ThemeAnalysis, ThemeRecommendation } from "@/types";
 import { ThemeDiscoveryPanel } from "../ThemeDiscoveryPanel";
 import { AnalyticsDashboard } from "../AnalyticsDashboard";
-import { PersonaGenerator } from "../PersonaGenerator";
 import { ExportPanel } from "../ExportPanel";
 import { AIPanel } from "../figjam/AIPanel";
-import { Id } from "@/convex/_generated/dataModel";
 
 interface CanvasSidePanelsProps {
   isPresentMode: boolean;
@@ -16,7 +14,7 @@ interface CanvasSidePanelsProps {
 
   // Legacy groups (with color/position) - for ThemeDiscovery, Analytics
   groups: AffinityGroupType[];
-  // Canvas-based groups (from FigJamBoard) - simpler, for PersonaGenerator
+  // Canvas-based groups (from FigJamBoard)
   canvasGroups?: Array<{ id: string; title: string; insightIds: string[] }>;
   insights: Insight[];
   projectId: string;
@@ -51,12 +49,12 @@ export function CanvasSidePanels({
   activePanel,
   setActivePanel,
   groups,
-  canvasGroups,
+  canvasGroups: _canvasGroups,
   insights,
   projectId,
   projectInfo,
   mapId,
-  dotVotingResults,
+  dotVotingResults: _dotVotingResults,
   selectedTheme,
   setSelectedTheme,
   onApplyRecommendation,
@@ -130,28 +128,6 @@ export function CanvasSidePanels({
             groups={groups}
             insights={insights}
             projectName={`Project: ${projectInfo?.name}`}
-            onClose={() => setActivePanel(null)}
-          />
-        </motion.div>
-      )}
-
-      {activePanel === "persona" && (
-        <motion.div
-          initial={{ x: 820, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: 820, opacity: 0 }}
-          transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          className="absolute top-0 right-0 w-[800px] h-full bg-card border-l border-border flex flex-col shadow-2xl z-40"
-        >
-          <PersonaGenerator
-            projectId={projectId}
-            mapId={mapId}
-            groups={canvasGroups || []}
-            insights={insights}
-            projectContext={
-              projectInfo ? `PROJECT: ${projectInfo.name}` : undefined
-            }
-            dotVotingResults={dotVotingResults}
             onClose={() => setActivePanel(null)}
           />
         </motion.div>

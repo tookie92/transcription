@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useDraggable } from "@/hooks/useDraggable";
 import type { StickyNoteData, StickyColor, Size, Position } from "@/types/figjam";
+import { SlipFace, SlipStamp, slipKindOf } from "@/components/myComponents/affinity/SlipFace";
+import { SLIP_KINDS } from "@/lib/slip";
 
-// ─── Color palette (FigJam authentic) ────────────────────────────────────────
+// Kept for the color picker export; canvas slips use Tape kinds, not pastels.
 
 export const STICKY_COLORS: Record<
   StickyColor,
@@ -25,31 +27,6 @@ export const STICKY_COLORS: Record<
   "follow-up":   { bg: "#BBDEFB", header: "#90CAF9", text: "#0D47A1", accent: "#1976D2", shadow: "rgba(25, 118, 210, 0.25)" },
 };
 
-const INSIGHT_TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  "pain-point": { label: "Pain Point", color: "#E53935" },
-  "quote": { label: "Quote", color: "#8E24AA" },
-  "insight": { label: "Insight", color: "#43A047" },
-  "follow-up": { label: "Follow-up", color: "#1976D2" },
-};
-
-function InsightTypeBadge({ type }: { type: string }) {
-  const info = INSIGHT_TYPE_LABELS[type];
-  if (!info) return null;
-
-  return (
-    <span
-      className="text-[9px] px-1.5 py-0.5 rounded font-medium truncate"
-      style={{
-        color: info.color,
-        backgroundColor: `${info.color}15`,
-        border: `1px solid ${info.color}30`,
-      }}
-      title={info.label}
-    >
-      {info.label}
-    </span>
-  );
-}
 
 const MIN_STICKY_SIZE = { width: 180, height: 150 };
 const MAX_STICKY_SIZE = { width: 280, height: 220 };
@@ -114,7 +91,7 @@ export function StickyNote({
   clusterBounds,
   isFiltered = false,
 }: StickyNoteProps) {
-  const colors = STICKY_COLORS[note.color];
+  const kind = slipKindOf(note.color, note.source);
   const stickySize = note.size ?? DEFAULT_STICKY_SIZE;
   const [isEditing, setIsEditing] = useState(false);
   const [editingContent, setEditingContent] = useState(note.content);
@@ -321,31 +298,22 @@ export function StickyNote({
         top: renderPosition.y,
         zIndex: note.zIndex,
         cursor: isVotingMode ? "default" : cursorStyle,
-        filter: isDragging
-          ? `drop-shadow(6px 12px 20px ${colors.shadow})`
-          : isSelected
-          ? `drop-shadow(0 4px 16px ${colors.shadow})`
-          : `drop-shadow(0 2px 8px rgba(0,0,0,0.08))`,
-        transform: isDragging ? "rotate(-2deg) scale(1.02)" : "rotate(0deg)",
-        transition: isDragging ? "none" : "transform 0.2s ease, filter 0.2s ease",
+        transform: isDragging ? "scale(1.01)" : "scale(1)",
+        transition: isDragging ? "none" : "transform 160ms ease-out",
         opacity: isVotingMode ? 0.85 : isFiltered ? 0.25 : 1,
         pointerEvents: isFiltered ? "none" as const : "auto" as const,
       }}
       onPointerDown={isFiltered ? undefined : handlePointerDownWrapper}
       onDoubleClick={handleDoubleClick}
     >
-      {/* Card body */}
-      <div
-        className="relative overflow-hidden"
+      <SlipFace
+        kind={kind}
+        selected={isSelected}
+        dragging={isDragging}
         style={{
           width: stickySize.width,
           height: isExpanded && isEditing ? undefined : stickySize.height,
           minHeight: stickySize.height,
-          background: colors.bg,
-          borderRadius: 6,
-          outline: isSelected ? `2px solid ${colors.accent}` : "1px solid rgba(0,0,0,0.06)",
-          outlineOffset: 2,
-          transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -366,24 +334,15 @@ export function StickyNote({
           </div>
         )}
 
-        {/* Cluster badge */}
-        {clusterLabel && (
-          <div
-            className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium opacity-60 hover:opacity-100 transition-opacity max-w-[80%] group/cluster"
-            style={{
-              backgroundColor: `${colors.accent}20`,
-              color: colors.accent,
-              border: `1px solid ${colors.accent}40`,
-            }}
-            title={`Cluster: ${clusterLabel}`}
-          >
-            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-              <line x1="7" y1="7" x2="7.01" y2="7"/>
-            </svg>
-            <span className="truncate">{clusterLabel}</span>
-          </div>
-        )}
+        {/* Kind stamp */}
+        <div className="absolute top-0 left-0 right-0 flex items-center px-3" style={{ height: HEADER_HEIGHT }}>
+          <SlipStamp kind={kind} />
+          {clusterLabel && (
+            <span className="ml-2 truncate font-mono text-[10px] tracking-widest uppercase text-muted-foreground/70">
+              {clusterLabel}
+            </span>
+          )}
+        </div>
 
         {/* Text content area */}
         <div
@@ -399,10 +358,8 @@ export function StickyNote({
             <div className="flex-1 flex flex-col min-h-0">
               <textarea
                 ref={textareaRef}
-                className="w-full resize-none outline-none bg-transparent flex-shrink-0"
+                className="w-full resize-none outline-none bg-transparent flex-shrink-0 text-foreground"
                 style={{
-                  color: colors.text,
-                  fontFamily: "'Inter', 'DM Sans', system-ui, sans-serif",
                   fontSize: BASE_FONT_SIZE,
                   lineHeight: LINE_HEIGHT,
                   minHeight: editorHeight ?? 60,
@@ -425,7 +382,7 @@ export function StickyNote({
                   }
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
-                placeholder="Écrivez votre insight..."
+                placeholder="Write the line"
               />
             </div>
           ) : (
@@ -446,10 +403,8 @@ export function StickyNote({
               {/* Hidden measure element - always full height */}
               <div
                 ref={textMeasureRef}
-                className="absolute inset-0 overflow-visible pointer-events-none"
+                className="absolute inset-0 overflow-visible pointer-events-none text-foreground"
                 style={{
-                  color: colors.text,
-                  fontFamily: "'Inter', 'DM Sans', system-ui, sans-serif",
                   fontSize: BASE_FONT_SIZE,
                   lineHeight: LINE_HEIGHT,
                   whiteSpace: "pre-wrap",
@@ -464,10 +419,8 @@ export function StickyNote({
               <div
                 className={`w-full h-full break-words whitespace-pre-wrap ${
                   isOverflowing && !isExpanded ? "overflow-hidden" : "overflow-hidden"
-                }`}
+                } ${note.content ? "text-foreground" : "text-muted-foreground italic"}`}
                 style={{
-                  color: note.content ? colors.text : `${colors.text}60`,
-                  fontFamily: "'Inter', 'DM Sans', system-ui, sans-serif",
                   fontSize: BASE_FONT_SIZE,
                   lineHeight: LINE_HEIGHT,
                   display: "-webkit-box",
@@ -475,9 +428,7 @@ export function StickyNote({
                   WebkitBoxOrient: "vertical",
                 }}
               >
-                {note.content || (
-                  <span className="italic">Double-cliquez pour éditer</span>
-                )}
+                {note.content || "Double-click to edit"}
               </div>
 
               {/* Truncation indicator with gradient fade */}
@@ -485,7 +436,7 @@ export function StickyNote({
                 <button
                   className="absolute bottom-0 left-0 right-0 pt-6 cursor-pointer group/btn"
                   style={{
-                    background: `linear-gradient(to top, ${colors.bg} 30%, transparent)`,
+                    background: "linear-gradient(to top, var(--card) 30%, transparent)",
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
@@ -494,14 +445,10 @@ export function StickyNote({
                   }}
                 >
                   <div
-                    className="flex items-center justify-center gap-1 py-1 text-xs font-medium transition-transform group-hover/btn:scale-105"
-                    style={{ color: colors.accent }}
+                    className="flex items-center justify-center gap-1 py-1 text-xs font-medium text-muted-foreground"
                   >
                     <span
-                      className="px-2 py-0.5 rounded-full"
-                      style={{
-                        backgroundColor: `${colors.accent}15`,
-                      }}
+                      className="px-2 py-0.5 bg-muted text-muted-foreground"
                     >
                       ...
                     </span>
@@ -531,11 +478,7 @@ export function StickyNote({
                   }}
                 >
                   <div
-                    className="flex items-center gap-1 py-0.5 px-2 rounded-full text-xs font-medium transition-all hover:scale-105"
-                    style={{
-                      color: colors.accent,
-                      backgroundColor: `${colors.accent}15`,
-                    }}
+                    className="flex items-center gap-1 py-0.5 px-2 text-xs font-medium text-muted-foreground bg-muted"
                   >
                     <svg
                       width="10"
@@ -562,15 +505,11 @@ export function StickyNote({
           <div className="flex items-center gap-2 min-w-0">
             {note.authorName && (
               <span
-                className="text-[10px] font-medium truncate opacity-60"
-                style={{ color: colors.text }}
+                className="text-[10px] truncate opacity-60 text-muted-foreground"
                 title={note.authorName}
               >
                 {note.authorName}
               </span>
-            )}
-            {note.source && (note.source === "pain-point" || note.source === "quote" || note.source === "insight" || note.source === "follow-up") && (
-              <InsightTypeBadge type={note.source} />
             )}
           </div>
         </div>
@@ -582,10 +521,10 @@ export function StickyNote({
           onPointerDown={handleResizePointerDown}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path d="M2 8 L8 8 L8 2" stroke={colors.accent} strokeWidth="1.5" strokeLinecap="round"/>
+            <path d="M2 8 L8 8 L8 2" stroke="currentColor" className="text-muted-foreground" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
         </div>
-      </div>
+      </SlipFace>
 
       {/* Context menu */}
       {showMenu && (
@@ -620,37 +559,28 @@ function ContextMenu({
   onClose: () => void;
   isLocked?: boolean;
 }) {
-  const insightTypes: { id: StickyColor; label: string; desc: string }[] = [
-    { id: "pain-point", label: "Pain Point", desc: "Problèmes" },
-    { id: "insight", label: "Insight", desc: "Découvertes" },
-    { id: "quote", label: "Quote", desc: "Citations" },
-    { id: "follow-up", label: "Follow-up", desc: "À suivre" },
-  ];
-
   return (
     <>
       <div className="fixed inset-0 z-40" onPointerDown={onClose} />
       <div
-        className="absolute right-0 top-8 z-50 bg-card rounded-xl shadow-2xl border border-border p-2 min-w-[200px]"
+        className="absolute right-0 top-8 z-50 bg-card border border-border p-2 min-w-[200px]"
         onPointerDown={(e) => e.stopPropagation()}
       >
         {isLocked && (
-          <div className="flex items-center gap-2 px-2 py-1 mb-2 text-xs text-amber-600 bg-amber-50 rounded-lg">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2z"/>
-            </svg>
-            Verrouillé par un autre utilisateur
+          <div className="flex items-center gap-2 px-2 py-1 mb-2 text-xs text-destructive bg-destructive/10">
+            Locked by another user
           </div>
         )}
 
-        {/* Type d'insight */}
-        <div className="text-xs font-medium text-muted-foreground px-2 pb-2">Type</div>
+        <div className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground px-2 pb-2">
+          Kind
+        </div>
         <div className="space-y-1 mb-2">
-          {insightTypes.map((type) => (
+          {SLIP_KINDS.map((type) => (
             <button
               key={type.id}
               disabled={isLocked}
-              className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg transition-colors ${
+              className={`w-full flex items-center gap-3 px-2 py-2 transition-colors ${
                 isLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-accent"
               } ${currentColor === type.id ? "bg-accent" : ""}`}
               onClick={() => {
@@ -659,16 +589,9 @@ function ContextMenu({
                 onClose();
               }}
             >
-              <div
-                className="w-5 h-5 rounded"
-                style={{ backgroundColor: STICKY_COLORS[type.id].bg }}
-              />
-              <div className="text-left">
-                <div className="text-sm font-medium">{type.label}</div>
-                <div className="text-[10px] text-muted-foreground">{type.desc}</div>
-              </div>
+              <SlipStamp kind={type.id} />
               {currentColor === type.id && (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="ml-auto text-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="ml-auto text-foreground">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               )}
@@ -689,7 +612,7 @@ function ContextMenu({
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
             </svg>
-            <span>Dupliquer</span>
+            <span>Duplicate</span>
             <span className="ml-auto text-xs text-muted-foreground">⌘D</span>
           </button>
           <button
@@ -703,17 +626,17 @@ function ContextMenu({
               <rect x="8" y="8" width="12" height="12" rx="2" />
               <path d="M4 16V4a2 2 0 0 1 2-2h12" />
             </svg>
-            <span>Mettre au premier plan</span>
+            <span>Bring to front</span>
           </button>
           <button
-            className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors"
+            className="w-full flex items-center gap-3 px-2 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
             onClick={onDelete}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="3 6 5 6 21 6" />
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
             </svg>
-            <span>Supprimer</span>
+            <span>Delete</span>
             <span className="ml-auto text-xs text-muted-foreground">⌫</span>
           </button>
         </div>

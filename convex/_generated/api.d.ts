@@ -20,6 +20,7 @@ import type * as export_ from "../export.js";
 import type * as http from "../http.js";
 import type * as insights from "../insights.js";
 import type * as interviews from "../interviews.js";
+import type * as lib_pickBestMap from "../lib/pickBestMap.js";
 import type * as liveNotes from "../liveNotes.js";
 import type * as notificationService from "../notificationService.js";
 import type * as notifications from "../notifications.js";
@@ -28,7 +29,9 @@ import type * as presence from "../presence.js";
 import type * as projectSharing from "../projectSharing.js";
 import type * as projects from "../projects.js";
 import type * as sharing from "../sharing.js";
+import type * as signals from "../signals.js";
 import type * as silentSorting from "../silentSorting.js";
+import type * as studySearch from "../studySearch.js";
 import type * as typingIndicators from "../typingIndicators.js";
 
 import type {
@@ -58,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   insights: typeof insights;
   interviews: typeof interviews;
+  "lib/pickBestMap": typeof lib_pickBestMap;
   liveNotes: typeof liveNotes;
   notificationService: typeof notificationService;
   notifications: typeof notifications;
@@ -66,7 +70,9 @@ declare const fullApi: ApiFromModules<{
   projectSharing: typeof projectSharing;
   projects: typeof projects;
   sharing: typeof sharing;
+  signals: typeof signals;
   silentSorting: typeof silentSorting;
+  studySearch: typeof studySearch;
   typingIndicators: typeof typingIndicators;
 }>;
 declare const fullApiWithMounts: typeof fullApi;

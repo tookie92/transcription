@@ -1,76 +1,38 @@
 "use client";
 
-import React, { useCallback, useRef, useState, memo, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useCallback, useRef, useState, memo, useEffect, useLayoutEffect } from "react";
 import type { ClusterLabelData, StickyNoteData } from "@/types/figjam";
-import { MoreHorizontal, Sparkles, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { SlipFace, SlipStamp, slipKindOf } from "@/components/myComponents/affinity/SlipFace";
+import { VoteSticker } from "@/components/myComponents/affinity/VoteSticker";
+import {
+  PACKET_EMPTY,
+  PACKET_HEADER,
+  PACKET_PAD,
+  SLIP_GAP,
+  SLIP_MIN_HEIGHT,
+  SLIP_MIN_WIDTH,
+  packetColumns,
+  packetHeight,
+  packetHugWidth,
+} from "@/lib/packetLayout";
+import { slipTilt } from "@/lib/slip";
 
-const DEFAULT_BORDER_COLOR = "#B8B4FF";
-const DEFAULT_BG_COLOR = "rgba(184, 180, 255, 0.05)";
-const HOVER_BORDER_COLOR = "#9C7BFF";
-const HOVER_BG_COLOR = "rgba(156, 123, 255, 0.07)";
-const LABEL_COLOR_NORMAL = "#8B7FCC";
-const LABEL_COLOR_DRAGGING = "#7C4DFF";
+const DEFAULT_BORDER = "var(--border)";
+const HOVER_BORDER = "var(--foreground)";
+const DROP_BORDER = "var(--primary)";
 
-const STICKY_COLORS: Record<string, { bg: string; header: string; text: string; accent: string }> = {
-  yellow:  { bg: "#FFF9C4", header: "#FFF176", text: "#3E2723", accent: "#F9A825" },
-  pink:    { bg: "#F8BBD9", header: "#F48FB1", text: "#4A148C", accent: "#E91E63" },
-  green:   { bg: "#C8E6C9", header: "#A5D6A7", text: "#1B5E20", accent: "#43A047" },
-  blue:    { bg: "#BBDEFB", header: "#90CAF9", text: "#0D47A1", accent: "#1976D2" },
-  purple:  { bg: "#E1BEE7", header: "#CE93D8", text: "#4A148C", accent: "#8E24AA" },
-  orange:  { bg: "#FFE0B2", header: "#FFCC80", text: "#E65100", accent: "#FB8C00" },
-  white:   { bg: "#FAFAFA", header: "#EEEEEE", text: "#424242", accent: "#757575" },
-  "pain-point":  { bg: "#FFCDD2", header: "#EF9A9A", text: "#B71C1C", accent: "#E53935" },
-  "quote":       { bg: "#E1BEE7", header: "#CE93D8", text: "#4A148C", accent: "#8E24AA" },
-  "insight":     { bg: "#C8E6C9", header: "#A5D6A7", text: "#1B5E20", accent: "#43A047" },
-  "follow-up":   { bg: "#BBDEFB", header: "#90CAF9", text: "#0D47A1", accent: "#1976D2" },
-};
-
-const INSIGHT_TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  "pain-point": { label: "PP", color: "#E53935" },
-  "quote": { label: "Q", color: "#8E24AA" },
-  "insight": { label: "I", color: "#43A047" },
-  "follow-up": { label: "F", color: "#1976D2" },
-};
-
-function InsightTypeBadge({ type }: { type: string }) {
-  const info = INSIGHT_TYPE_LABELS[type];
-  if (!info) return null;
-
-  return (
-    <span
-      className="text-[8px] px-1 py-0.5 rounded font-bold"
-      style={{
-        color: info.color,
-        backgroundColor: `${info.color}20`,
-      }}
-      title={info.label}
-    >
-      {info.label}
-    </span>
-  );
+function formatStamp(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "";
+  return `${Math.floor(seconds / 60)}:${Math.round(seconds % 60)
+    .toString()
+    .padStart(2, "0")}`;
 }
-
-const CARD_WIDTH = 280;
-const CARD_GAP = 20;
-const MAX_COLS = 4;
-const HEADER_OFFSET = 40;
-const CLUSTER_PADDING = 16;
-const MIN_CLUSTER_WIDTH = 320;
-const MIN_CLUSTER_HEIGHT = 280;
 
 function RealStickyCard({ 
   sticky, 
@@ -79,6 +41,7 @@ function RealStickyCard({
   onDragStart,
   onUpdate,
   onStartEdit,
+  onAlsoFile,
   currentUserId,
 }: { 
   sticky: StickyNoteData; 
@@ -87,29 +50,17 @@ function RealStickyCard({
   onDragStart?: (id: string) => void;
   onUpdate?: (id: string, patch: Partial<StickyNoteData>) => void;
   onStartEdit?: (id: string) => void;
+  onAlsoFile?: (id: string) => void;
   currentUserId?: string;
 }) {
-  const colors = STICKY_COLORS[sticky.color] || STICKY_COLORS.yellow;
+  const kind = slipKindOf(sticky.color, sticky.source);
   const contentRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [cardHeight, setCardHeight] = useState(100);
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingContent, setEditingContent] = useState(sticky.content);
   const [isRemoving, setIsRemoving] = useState(false);
   
-  useEffect(() => {
-    if (contentRef.current) {
-      const updateHeight = () => {
-        const scrollHeight = contentRef.current?.scrollHeight || 160;
-        const minHeight = 160;
-        const maxHeight = 400;
-        setCardHeight(Math.min(maxHeight, Math.max(minHeight, scrollHeight + 50)));
-      };
-      updateHeight();
-    }
-  }, [sticky.content]);
-
   useEffect(() => {
     if (isEditing && textareaRef.current) {
       textareaRef.current.focus();
@@ -159,8 +110,13 @@ function RealStickyCard({
   };
 
   const handleCardClick = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button')) return;
+    if ((e.target as HTMLElement).closest("button")) return;
     e.stopPropagation();
+  };
+
+  const handlePeek = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
     onClick?.(sticky.id);
   };
   
@@ -209,56 +165,71 @@ function RealStickyCard({
       draggable={!isEditing && !isLockedByOther && !isRemoving}
       onDragStart={isRemoving ? undefined : handleDragStart}
       style={{
-        transition: isRemoving ? "opacity 0.15s, transform 0.15s" : undefined,
+        transition: isRemoving ? "opacity 150ms ease-out, transform 150ms ease-out" : undefined,
         opacity: isRemoving ? 0 : 1,
-        transform: isRemoving ? "scale(0.8)" : "scale(1)",
+        transform: isRemoving ? "translateY(4px)" : "none",
       }}
     >
-      {/* Clickable sticky note */}
       <div
-        className="relative cursor-pointer group"
+        className="relative group"
         onClick={handleCardClick}
         onDoubleClick={handleDoubleClick}
       >
-        <div
-          className="relative rounded-[3px] p-3 flex flex-col"
+        <SlipFace
+          kind={kind}
+          className="w-full h-full p-2.5 flex flex-col min-w-0"
           style={{
-            width: CARD_WIDTH,
-            minHeight: cardHeight,
-            backgroundColor: colors.bg,
-            boxShadow: isHovered && !isLockedByOther
-              ? "4px 8px 20px rgba(0,0,0,0.2)"
-              : "2px 4px 12px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.08)",
-            transform: isHovered && !isEditing && !isLockedByOther ? "scale(1.02)" : "scale(1)",
-            transition: "transform 0.15s, box-shadow 0.15s",
+            minHeight: SLIP_MIN_HEIGHT,
+            transform:
+              isHovered && !isEditing && !isLockedByOther
+                ? `rotate(${slipTilt(sticky.id)}deg) translateY(-2px)`
+                : `rotate(${slipTilt(sticky.id)}deg)`,
+            transition: "transform 160ms ease-out",
             opacity: isLockedByOther ? 0.7 : 1,
           }}
         >
           {/* Lock indicator */}
           {isLockedByOther && (
-            <div className="absolute -top-6 left-2 flex items-center gap-1.5 px-2 py-1 bg-amber-100/95 backdrop-blur-sm rounded-md text-xs text-amber-800 z-10 shadow-sm whitespace-nowrap">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
-              </svg>
-              <span className="font-medium">{editingUserName || "Someone"} editing</span>
+            <div className="absolute -top-6 left-2 flex items-center gap-1.5 px-2 py-1 bg-card border border-border text-xs text-foreground z-10 whitespace-nowrap">
+              <span>{editingUserName || "Someone"} editing</span>
             </div>
           )}
 
           {/* Remove button - only if not locked */}
           {!isLockedByOther && (
-            <button
-              onClick={handleRemoveClick}
-              className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-black/10"
-              style={{ color: colors.text }}
-            >
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
+            <div className="absolute top-1 right-1 flex items-center">
+              {onAlsoFile && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onAlsoFile(sticky.id);
+                  }}
+                  className="w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-accent text-muted-foreground"
+                  title="Also file"
+                  aria-label="Also file in another packet"
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                  </svg>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleRemoveClick}
+                className="w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-accent text-muted-foreground"
+                aria-label="Remove from packet"
+              >
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           )}
           
           {/* Content area */}
-          <div ref={contentRef} className="flex-1 pr-5 overflow-hidden pt-4">
+          <div ref={contentRef} className="flex-1 pr-5 overflow-hidden pt-2">
             {isEditing ? (
               <textarea
                 ref={textareaRef}
@@ -266,32 +237,44 @@ function RealStickyCard({
                 onChange={(e) => setEditingContent(e.target.value)}
                 onBlur={handleSave}
                 onKeyDown={handleKeyDown}
-                className="w-full h-full min-h-[60px] resize-none outline-none bg-transparent text-[13px] font-medium leading-relaxed break-words"
-                style={{ color: colors.text, wordBreak: "break-word", overflowWrap: "break-word" }}
+                className="w-full h-full min-h-[60px] resize-none outline-none bg-transparent text-[13px] leading-relaxed break-words text-foreground"
+                style={{ wordBreak: "break-word", overflowWrap: "break-word" }}
               />
             ) : (
-              <p 
-                className="text-[13px] font-medium leading-relaxed text-[#1d1d1b] break-words"
-                style={{ color: colors.text, wordBreak: "break-word", overflowWrap: "break-word" }}
+              <p
+                className={cn(
+                  "text-[13px] leading-relaxed text-foreground break-words",
+                  kind === "quote" && "italic"
+                )}
+                style={{ wordBreak: "break-word", overflowWrap: "break-word" }}
               >
                 {sticky.content || (isLockedByOther ? "Being edited..." : "Double-click to edit")}
               </p>
             )}
           </div>
           
-          {/* Footer with author and type */}
-          <div className="flex items-center justify-between mt-auto pt-2">
-            {sticky.authorName ? (
-              <span 
-                className="text-[11px] truncate max-w-[70px]"
-                style={{ color: colors.text, opacity: 0.5 }}
+          <div className="flex items-center gap-2 mt-auto pt-2 min-w-0">
+            {kind === "follow-up" && (
+              <span aria-hidden className="h-2.5 w-2.5 shrink-0 border border-foreground/50" />
+            )}
+            <SlipStamp kind={kind} />
+            {typeof sticky.timestamp === "number" && sticky.timestamp >= 0 && (
+              <button
+                type="button"
+                onClick={handlePeek}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="font-mono text-[10px] text-muted-foreground hover:text-foreground"
               >
+                {formatStamp(sticky.timestamp)}
+              </button>
+            )}
+            {sticky.authorName ? (
+              <span className="text-[11px] truncate min-w-0 flex-1 text-right text-muted-foreground">
                 {sticky.authorName}
               </span>
-            ) : <div />}
-            {sticky.source && <InsightTypeBadge type={sticky.source} />}
+            ) : null}
           </div>
-        </div>
+        </SlipFace>
       </div>
     </div>
   );
@@ -322,17 +305,20 @@ interface ClusterLabelProps {
   onStickyClick?: (stickyId: string) => void;
   onStickyUpdate?: (stickyId: string, patch: Partial<StickyNoteData>) => void;
   onStickyStartEdit?: (stickyId: string) => void;
+  onAlsoFile?: (stickyId: string) => void;
   onDrop?: (stickyId: string) => void;
   onContextMenu?: (e: React.MouseEvent, clusterId: string) => void;
   onResize?: (clusterId: string, newHeight: number) => void;
   onWidthChange?: (clusterId: string, newWidth: number) => void;
+  onFitFrame?: (clusterId: string, size: { width?: number; height?: number }) => void;
   onClusterClick?: (clusterId: string) => void;
   onAutoFit?: (clusterId: string) => void;
   triggerEdit?: boolean;
   triggerAutoFit?: boolean;
   onOpenAIRename?: (clusterId: string) => void;
-  autoFitEnabled?: boolean;
-  onToggleAutoFit?: (clusterId: string, enabled: boolean) => void;
+  dotsRemaining?: number;
+  onVotePanStart?: () => void;
+  onVotePanDelta?: (dx: number, dy: number) => void;
 }
 
 export const ClusterLabel = memo(function ClusterLabelComponent({
@@ -360,31 +346,31 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   onStickyClick,
   onStickyUpdate,
   onStickyStartEdit,
+  onAlsoFile,
   onDrop,
   onContextMenu,
   onResize,
   onWidthChange,
+  onFitFrame,
   onClusterClick,
   onAutoFit,
   triggerEdit,
   triggerAutoFit,
-  onOpenAIRename,
-  autoFitEnabled = false,
-  onToggleAutoFit,
+  dotsRemaining = 0,
+  onVotePanStart,
+  onVotePanDelta,
 }: ClusterLabelProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [needsAutoFit, setNeedsAutoFit] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const [aiPopoverOpen, setAiPopoverOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const clusterRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [fittedHeight, setFittedHeight] = useState(PACKET_EMPTY.height);
 
   // Track previous stickies count for smart auto-resize
-  const prevStickiesCountRef = useRef(memberStickies.length);
-  const isAutoFittingRef = useRef(false);
-
   // React state for drag (replaces DOM refs)
   const [isLocalDragging, setIsLocalDragging] = useState(false);
   const visualPositionRef = useRef<{ x: number; y: number }>(cluster.position);
@@ -400,33 +386,68 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
 
   const isDraggingActive = isLocalDragging || isDragging;
   const canInteract = !isLocked && !isEditing;
-  const hasInsights = memberStickies.length > 0;
 
   // Calculate grid dimensions based on actual sticky content
-  const CLUSTER_WIDTH = cluster.width ?? 500;
-  const COLS = Math.min(MAX_COLS, Math.max(1, Math.floor((CLUSTER_WIDTH - CLUSTER_PADDING * 2) / (CARD_WIDTH + CARD_GAP))));
-  const rows = Math.ceil(memberStickies.length / COLS) || 1;
-  
-  // Calculate height based on actual sticky content
-  const CARD_HEIGHT_WITH_PADDING = 210; // minHeight + padding
-  const MIN_CLUSTER_HEIGHT = 200;
-  const HEADER_AND_PADDING = HEADER_OFFSET + CLUSTER_PADDING + 20;
-  const calculatedHeight = rows * (CARD_HEIGHT_WITH_PADDING + CARD_GAP) - CARD_GAP + HEADER_AND_PADDING;
-  const AUTO_HEIGHT = Math.max(MIN_CLUSTER_HEIGHT, calculatedHeight);
+  const CLUSTER_WIDTH = cluster.width ?? PACKET_EMPTY.width;
+  const COLS = packetColumns(CLUSTER_WIDTH, memberStickies.length);
+  const MIN_CLUSTER_HEIGHT = PACKET_EMPTY.height;
+  const MIN_CLUSTER_WIDTH = SLIP_MIN_WIDTH + PACKET_PAD * 2;
+  const contentHeight = packetHeight(memberStickies.length, COLS);
+  const AUTO_HEIGHT = Math.max(MIN_CLUSTER_HEIGHT, contentHeight);
+  const FRAME_HEIGHT = isResizing
+    ? Math.max(MIN_CLUSTER_HEIGHT, cluster.height ?? AUTO_HEIGHT)
+    : Math.max(AUTO_HEIGHT, fittedHeight);
+
+  const onFitFrameRef = useRef(onFitFrame);
+  onFitFrameRef.current = onFitFrame;
+  const lastFitRef = useRef({ width: CLUSTER_WIDTH, height: cluster.height ?? PACKET_EMPTY.height });
+
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+
+    const measure = () => {
+      if (isResizing) return;
+      const next = Math.max(
+        PACKET_EMPTY.height,
+        PACKET_HEADER + grid.scrollHeight + PACKET_PAD
+      );
+      setFittedHeight((prev) => (Math.abs(prev - next) > 1 ? next : prev));
+      const currentHeight = lastFitRef.current.height;
+      if (Math.abs(next - currentHeight) > 8) {
+        lastFitRef.current.height = next;
+        onFitFrameRef.current?.(cluster.id, { height: next });
+      }
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(grid);
+    return () => observer.disconnect();
+  }, [memberStickies.length, isResizing, cluster.id]);
+
+  useEffect(() => {
+    if (isResizing) return;
+    const hug = packetHugWidth(Math.max(1, memberStickies.length));
+    if (lastFitRef.current.width + 1 < hug) {
+      lastFitRef.current.width = hug;
+      onFitFrameRef.current?.(cluster.id, { width: hug });
+    }
+  }, [memberStickies.length, cluster.id, isResizing]);
 
   // Auto-fit when explicitly requested
   const autoFitTriggeredRef = useRef(false);
   useEffect(() => {
-    if (needsAutoFit && onResize && !autoFitTriggeredRef.current) {
+    if (needsAutoFit && onFitFrame && !autoFitTriggeredRef.current) {
       autoFitTriggeredRef.current = true;
-      const newHeight = Math.max(MIN_CLUSTER_HEIGHT, calculatedHeight);
-      onResize(cluster.id, newHeight);
+      const newHeight = AUTO_HEIGHT;
+      onFitFrame(cluster.id, { height: newHeight });
       setNeedsAutoFit(false);
       setTimeout(() => {
         autoFitTriggeredRef.current = false;
       }, 100);
     }
-  }, [needsAutoFit, cluster.id, onResize, calculatedHeight]);
+  }, [needsAutoFit, cluster.id, onFitFrame, AUTO_HEIGHT]);
 
   // Expose auto-fit function via ref
   useEffect(() => {
@@ -436,33 +457,6 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       };
     }
   }, []);
-
-  // Smart auto-resize: automatically resize when stickies are added/removed
-  useEffect(() => {
-    const currentCount = memberStickies.length;
-    const prevCount = prevStickiesCountRef.current;
-
-    // Only auto-resize if enabled AND not currently resizing AND count changed
-    if (autoFitEnabled && !isResizing && !isAutoFittingRef.current && currentCount !== prevCount) {
-      isAutoFittingRef.current = true;
-      const newHeight = Math.max(MIN_CLUSTER_HEIGHT, calculatedHeight);
-
-      // Smooth resize with animation
-      if (onResize) {
-        onResize(cluster.id, newHeight);
-        console.log(`[AUTO-FIT] Cluster ${cluster.id} resized to ${newHeight}px (${currentCount} stickies)`);
-      }
-
-      // Reset the flag after animation completes
-      setTimeout(() => {
-        isAutoFittingRef.current = false;
-        prevStickiesCountRef.current = currentCount;
-      }, 300);
-    } else if (!autoFitEnabled) {
-      // When auto-fit is disabled, just track count
-      prevStickiesCountRef.current = currentCount;
-    }
-  }, [memberStickies.length, autoFitEnabled, isResizing, calculatedHeight, cluster.id, onResize]);
 
   // Handle external edit trigger
   useEffect(() => {
@@ -478,14 +472,14 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
   // Handle external auto-fit trigger - only once per trigger
   const autoFitHandledRef = useRef(false);
   useEffect(() => {
-    if (triggerAutoFit && onResize && !autoFitHandledRef.current) {
+    if (triggerAutoFit && onFitFrame && !autoFitHandledRef.current) {
       autoFitHandledRef.current = true;
-      onResize(cluster.id, AUTO_HEIGHT);
+      onFitFrame(cluster.id, { height: AUTO_HEIGHT });
     }
     if (!triggerAutoFit) {
       autoFitHandledRef.current = false;
     }
-  }, [triggerAutoFit, cluster.id, onResize]);
+  }, [triggerAutoFit, cluster.id, onFitFrame]);
 
   // Handle width resize from right edge
   const handleResizeStart = useCallback((e: React.PointerEvent) => {
@@ -517,22 +511,50 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (!canInteract) return;
       if (e.button !== 0) return;
-      
-      const target = e.target as HTMLElement;
-      if (target.closest('input')) return;
-      if (target.closest('button')) return;
 
-      // During voting mode - clicking sticky cards still works, clicking cluster votes
-      if (target.closest('[data-sticky-card]')) {
+      const target = e.target as HTMLElement;
+      if (target.closest("input")) return;
+      if (target.closest("button")) return;
+
+      // During voting, locked packets still accept dots (lock is edit-only)
+      if (isVotingActive && !isVotingRevealed) {
+        if (target.closest("[data-sticky-card]")) {
+          return;
+        }
+        e.stopPropagation();
+        e.preventDefault();
+        const startX = e.clientX;
+        const startY = e.clientY;
+        let hasMoved = false;
+        onVotePanStart?.();
+
+        const handleVoteMove = (moveEvent: PointerEvent) => {
+          const dx = moveEvent.clientX - startX;
+          const dy = moveEvent.clientY - startY;
+          if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+            hasMoved = true;
+            onVotePanDelta?.(dx, dy);
+          }
+        };
+
+        const handleVoteUp = () => {
+          window.removeEventListener("pointermove", handleVoteMove);
+          window.removeEventListener("pointerup", handleVoteUp);
+          if (!hasMoved) {
+            onClusterClick?.(cluster.id);
+          }
+        };
+
+        window.addEventListener("pointermove", handleVoteMove);
+        window.addEventListener("pointerup", handleVoteUp);
         return;
       }
 
-      // During voting - click anywhere on cluster (not sticky) to vote
-      if (isVotingActive && !isVotingRevealed) {
-        e.stopPropagation();
-        onClusterClick?.(cluster.id);
+      if (!canInteract) return;
+
+      // During voting mode - clicking sticky cards still works, clicking cluster votes
+      if (target.closest("[data-sticky-card]")) {
         return;
       }
 
@@ -546,20 +568,20 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       const startPosX = cluster.position.x;
       const startPosY = cluster.position.y;
       let hasMoved = false;
-      
+
       setIsLocalDragging(true);
       visualPositionRef.current = { x: startPosX, y: startPosY };
 
       const handlePointerMove = (moveEvent: PointerEvent) => {
-        const dx = (moveEvent.clientX - startX);
-        const dy = (moveEvent.clientY - startY);
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
           hasMoved = true;
         }
-        
+
         const newX = startPosX + dx / zoom;
         const newY = startPosY + dy / zoom;
-        
+
         visualPositionRef.current = { x: newX, y: newY };
       };
 
@@ -570,13 +592,8 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         setIsLocalDragging(false);
 
         if (!hasMoved) {
-          // This was a click, not a drag - select the cluster
           if (onSelect) {
             onSelect(cluster.id, e.shiftKey || e.ctrlKey || e.metaKey);
-          }
-          // Also handle voting click
-          if (isVotingActive && !isVotingRevealed) {
-            onClusterClick?.(cluster.id);
           }
         } else {
           const finalX = startPosX + (upEvent.clientX - startX) / zoom;
@@ -590,7 +607,21 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       window.addEventListener("pointermove", handlePointerMove);
       window.addEventListener("pointerup", handlePointerUp);
     },
-    [canInteract, isVotingActive, isVotingRevealed, cluster.id, cluster.position.x, cluster.position.y, zoom, onDragStart, onDragEnd, onSelect, onClusterClick]
+    [
+      canInteract,
+      isVotingActive,
+      isVotingRevealed,
+      cluster.id,
+      cluster.position.x,
+      cluster.position.y,
+      zoom,
+      onDragStart,
+      onDragEnd,
+      onSelect,
+      onClusterClick,
+      onVotePanStart,
+      onVotePanDelta,
+    ]
   );
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
@@ -648,18 +679,12 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
     onContextMenu?.(e, cluster.id);
   };
 
-  const borderColor = isDragOver ? "#22c55e" : isDraggingActive || isHovered ? HOVER_BORDER_COLOR : DEFAULT_BORDER_COLOR;
-  const bgColor = isDragOver ? "rgba(34, 197, 94, 0.1)" : isDraggingActive || isHovered ? HOVER_BG_COLOR : DEFAULT_BG_COLOR;
-  const labelColor = isDraggingActive ? LABEL_COLOR_DRAGGING : LABEL_COLOR_NORMAL;
-
-  // Auto-fit visual indicator - subtle glow when enabled
-  const autoFitBorderColor = autoFitEnabled ? "#a855f7" : borderColor;
-  const autoFitGlow = autoFitEnabled ? "0 0 20px rgba(168, 85, 247, 0.15)" : "none";
-
-  // Selection and lock styling
-  const isSolidBorder = isSelected || isLocked;
-  const selectionBorderColor = isLocked ? "#ef4444" : "#3b82f6"; // Red if locked, blue if selected
-  const selectionBorderStyle = isSolidBorder ? "2px solid" : "2px dashed";
+  const borderColor = isDragOver ? DROP_BORDER : isDraggingActive || isHovered ? HOVER_BORDER : DEFAULT_BORDER;
+  const bgColor = isDragOver
+    ? "color-mix(in oklab, var(--card) 88%, var(--primary))"
+    : "var(--card)";
+  const selectionBorderColor = isLocked ? "var(--destructive)" : "var(--foreground)";
+  const isVoteSpent = isVotingActive && !isVotingRevealed && dotsRemaining <= 0 && !hasUserVoted;
 
   // Use ref for position during drag for instant updates
   const effectivePosition = isLocalDragging ? visualPositionRef.current : cluster.position;
@@ -673,7 +698,8 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
         left: effectivePosition.x,
         top: effectivePosition.y,
         width: CLUSTER_WIDTH,
-        height: AUTO_HEIGHT,
+        height: FRAME_HEIGHT,
+        overflow: "visible",
         zIndex: cluster.zIndex,
       }}
       onPointerDown={handlePointerDown}
@@ -686,44 +712,42 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
       onDrop={handleDrop}
     >
       <div
-        className={cn(
-          "absolute inset-0 rounded-xl",
-          autoFitEnabled && "transition-all duration-300 ease-out"
-        )}
+        className="absolute inset-0"
         style={{
-          border: isLocked
-            ? `2px solid ${selectionBorderColor}`
-            : isSelected
-              ? `2px solid ${selectionBorderColor}`
-              : autoFitEnabled
-                ? `2px solid ${autoFitBorderColor}`
-                : `2px dashed ${borderColor}`,
-          backgroundColor: isLocked ? "rgba(239, 68, 68, 0.1)" : bgColor,
-          borderRadius: 12,
-          opacity: isLocked ? 0.7 : 1,
-          boxShadow: autoFitEnabled ? autoFitGlow : "none",
+          border: `1px solid ${
+            isLocked || isSelected ? selectionBorderColor : borderColor
+          }`,
+          backgroundColor: isLocked
+            ? "color-mix(in oklab, var(--destructive) 8%, var(--card))"
+            : bgColor,
+          transform: isDragOver ? "translateY(-3px)" : "none",
+          transition:
+            "transform 150ms ease-out, border-color 150ms ease-out, background-color 150ms ease-out",
+          opacity: isLocked && !(isVotingActive && !isVotingRevealed) ? 0.85 : 1,
         }}
-      />
-      
-      {/* Lock indicator */}
+      >
+        <span
+          aria-hidden
+          className="absolute left-1/2 top-0 h-2.5 w-7 -translate-x-1/2 -translate-y-1/2 border border-border bg-muted"
+        />
+        <span
+          aria-hidden
+          className="absolute right-0 top-0 h-3.5 w-3.5 border-b border-l border-border bg-muted"
+        />
+      </div>
+
       {isLocked && (
-        <div 
-          className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-1 bg-red-500 text-white text-xs rounded-full font-medium"
-        >
-          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-          </svg>
+        <div className="absolute top-2 right-2 z-10 bg-card px-1.5 py-0.5 font-mono text-[9px] tracking-widest uppercase text-destructive border border-destructive">
           Locked
         </div>
       )}
 
-      {/* Header with title and AI button */}
       <div
-        className="absolute group flex items-center gap-1"
+        className="absolute flex min-w-0 items-center gap-2"
         style={{
-          top: -28,
-          left: 0,
-          right: 50,
+          top: 8,
+          left: PACKET_PAD,
+          right: isVotingActive || isVotingRevealed ? 88 : 52,
         }}
       >
         {isEditing ? (
@@ -735,193 +759,125 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
             onPointerDown={(e) => e.stopPropagation()}
-            className="outline-none bg-transparent border-none px-0 py-0 m-0 w-full"
-            style={{
-              fontFamily: "'DM Sans', sans-serif",
-              fontWeight: 600,
-              fontSize: 13,
-              color: labelColor,
-              letterSpacing: "0.3px",
-              caretColor: labelColor,
-            }}
+            className="outline-none bg-transparent border-none px-0 py-0 m-0 w-full font-mono text-[11px] tracking-widest uppercase text-foreground"
             onFocus={(e) => e.target.select()}
           />
         ) : (
-          <>
-            <span 
-              className="cursor-text"
-              style={{ 
-                fontFamily: "'DM Sans', sans-serif",
-                fontWeight: 600,
-                fontSize: 13,
-                color: labelColor,
-                letterSpacing: "0.3px",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {cluster.text || "New Cluster"}
-            </span>
-            {/* AI Rename Button - Show on hover when cluster has insights */}
-            {hasInsights && (
-              <button
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  onOpenAIRename?.(cluster.id);
-                }}
-                className="p-1 rounded-md bg-primary/20 hover:bg-primary/30 transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
-                title="Rename with AI"
-              >
-                <Sparkles className="w-4 h-4 text-primary" />
-              </button>
+          <span
+            className={cn(
+              "cursor-text min-w-0 flex-1 truncate font-mono text-[11px] tracking-widest uppercase",
+              cluster.text ? "text-foreground" : "text-muted-foreground"
             )}
-          </>
+          >
+            {cluster.text || "Untitled"}
+          </span>
         )}
       </div>
 
-      {/* Cluster header section */}
       <div
-        className="absolute flex items-center gap-2"
+        className="absolute z-10 flex items-center"
         style={{
-          top: -28,
-          right: 0,
+          top: 0,
+          right: 2,
+          height: PACKET_HEADER,
         }}
       >
-        {/* Real sticker-style dots for votes */}
-        {((isVotingActive && !isVotingRevealed && voteCount > 0) || (isVotingRevealed && voteCount > 0)) && (
-          <div className="absolute -top-3 left-0 flex -space-x-1">
-            {/* Show user's dot during voting */}
-            {isVotingActive && !isVotingRevealed && hasUserVoted && (
-              <motion.div
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                className="w-5 h-5 rounded-full border-2 border-white shadow-md"
-                style={{ backgroundColor: currentUserColor }}
-              />
-            )}
-            {/* Show hidden count during voting */}
-            {isVotingActive && !isVotingRevealed && voteCount > 0 && (
-              <div className="w-5 h-5 rounded-full bg-slate-800 border-2 border-white shadow-md flex items-center justify-center">
-                <span className="text-[9px] font-bold text-white">?</span>
-              </div>
-            )}
-            {/* Show revealed dots with tooltips */}
-            {isVotingRevealed && voteUsers && voteUsers.length > 0 && (
-              <>
-                {voteUsers.slice(0, 8).map((voter, i) => (
-                  <Tooltip key={voter.userId} delayDuration={0}>
-                    <TooltipTrigger asChild>
-                      <motion.div
-                        initial={{ scale: 0, y: -10 }}
-                        animate={{ scale: 1, y: 0 }}
-                        transition={{ delay: i * 0.03 }}
-                        className="w-5 h-5 rounded-full border-2 border-white shadow-md cursor-default"
-                        style={{ backgroundColor: voter.color }}
+        {isVotingRevealed && voteCount > 0 && (
+          <div className="flex items-center gap-1 pr-1">
+            <div className="flex -space-x-1">
+              {voteUsers.slice(0, 6).map((voter, i) => (
+                <Tooltip key={`${voter.userId}-${i}`} delayDuration={0}>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <VoteSticker
+                        color={voter.color}
+                        label={voter.name}
+                        rotate={((i % 5) - 2) * 6}
                       />
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">
-                      <p className="font-medium">{voter.name}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                ))}
-                {voteUsers.length > 8 && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="w-5 h-5 rounded-full bg-slate-700 border-2 border-white shadow-md flex items-center justify-center cursor-help">
-                        <span className="text-[8px] font-bold text-white">+{voteUsers.length - 8}</span>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">
-                      <p className="font-medium mb-1">Also voted:</p>
-                      <div className="space-y-0.5">
-                        {voteUsers.slice(8).map(voter => (
-                          <p key={voter.userId} className="flex items-center gap-1.5">
-                            <span 
-                              className="w-2 h-2 rounded-full" 
-                              style={{ backgroundColor: voter.color }}
-                            />
-                            {voter.name}
-                          </p>
-                        ))}
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-              </>
-            )}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="rounded-none text-xs">
+                    {voter.name}
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </div>
+            <span className="font-mono text-[11px] tabular-nums text-foreground">
+              ×{voteCount}
+            </span>
           </div>
         )}
 
-        {/* Vote button during voting - always visible */}
         {isVotingActive && !isVotingRevealed && (
-          <motion.button
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            whileHover={{ scale: 1.15 }}
-            whileTap={{ scale: 0.9 }}
+          <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
               onClusterClick?.(cluster.id);
             }}
             className={cn(
-              "w-7 h-7 rounded-full flex items-center justify-center",
-              "border-2 shadow-md transition-all duration-200 cursor-pointer",
+              "flex h-11 w-11 cursor-pointer items-center justify-center",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground",
+              isVoteSpent && "cursor-not-allowed opacity-50"
+            )}
+            title={
               hasUserVoted
-                ? "bg-primary border-primary text-primary-foreground"
-                : "bg-white border-slate-300 text-slate-400 hover:border-primary hover:text-primary"
-            )}
-            style={!hasUserVoted ? { 
-              borderColor: currentUserColor,
-              boxShadow: `0 0 0 2px ${currentUserColor}40`
-            } : {}}
-            title={hasUserVoted ? "Remove vote" : "Vote!"}
+                ? "Pull your dot"
+                : isVoteSpent
+                  ? "Spent — no dots left"
+                  : "Place a dot"
+            }
+            aria-label={
+              hasUserVoted
+                ? "Pull your dot"
+                : isVoteSpent
+                  ? "Spent, no dots left"
+                  : "Place a dot"
+            }
+            aria-pressed={hasUserVoted}
           >
-            {hasUserVoted ? (
-              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-            ) : (
-              <div
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: currentUserColor }}
-              />
-            )}
-          </motion.button>
+            <VoteSticker
+              color={
+                hasUserVoted
+                  ? currentUserColor || "var(--foreground)"
+                  : "var(--foreground)"
+              }
+              filled={hasUserVoted}
+              size="md"
+              rotate={hasUserVoted ? -10 : 0}
+              label={hasUserVoted ? "Yours" : undefined}
+            />
+          </button>
         )}
 
-        {/* Sticky count - hidden during voting */}
         {!isVotingActive && (
-          <span
-            className="pointer-events-none"
-            style={{
-              fontFamily: "'DM Sans', sans-serif",
-              fontSize: 11,
-              color: labelColor,
-              opacity: 0.7,
-            }}
-          >
-            {memberStickies.length}
+          <span className="pointer-events-none pr-2 font-mono text-[11px] tabular-nums text-muted-foreground">
+            ×{memberStickies.length}
           </span>
         )}
       </div>
 
       {/* Stickies grid */}
       <div
+        ref={gridRef}
         data-sticky-grid
         className={cn(
           "absolute overflow-visible",
           isVotingActive && !isVotingRevealed && "pointer-events-none"
         )}
         style={{
-          left: CLUSTER_PADDING,
-          right: CLUSTER_PADDING,
-          bottom: CLUSTER_PADDING,
-          top: HEADER_OFFSET,
+          left: PACKET_PAD,
+          right: PACKET_PAD,
+          bottom: "auto",
+          height: "auto",
+          top: PACKET_HEADER,
           display: "grid",
-          gridTemplateColumns: `repeat(${COLS}, ${CARD_WIDTH}px)`,
-          gap: CARD_GAP,
-          alignContent: "center",
-          justifyContent: "start",
+          gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))`,
+          gap: SLIP_GAP,
+          alignContent: "start",
+          alignItems: "stretch",
+          justifyItems: "stretch",
         }}
         onDragOver={(e) => {
           if (isVotingActive && !isVotingRevealed) {
@@ -939,11 +895,18 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
           }
         }}
       >
+        {memberStickies.length === 0 && (
+          <div className="min-h-[72px] bg-muted/25" />
+        )}
         {memberStickies.map((sticky) => (
-          <div 
-            key={sticky.id} 
-            data-sticky-card 
-            style={{ 
+          <div
+            key={sticky.id}
+            data-sticky-card
+            className={cn(
+              "min-w-0",
+              isVotingActive && !isVotingRevealed ? "select-none" : ""
+            )}
+            style={{
               pointerEvents: isVotingActive && !isVotingRevealed ? "none" : "auto",
             }}
             onPointerDown={(e) => {
@@ -960,7 +923,6 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
                 onClusterClick?.(cluster.id);
               }
             }}
-            className={isVotingActive && !isVotingRevealed ? "select-none" : ""}
             onDragStart={(e) => {
               if (isVotingActive && !isVotingRevealed) {
                 e.preventDefault();
@@ -979,26 +941,12 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
               onClick={onStickyClick}
               onUpdate={onStickyUpdate}
               onStartEdit={onStickyStartEdit}
+              onAlsoFile={onAlsoFile}
               currentUserId={currentUserId}
             />
           </div>
         ))}
       </div>
-
-      {/* Empty state - hidden during voting */}
-      {memberStickies.length === 0 && !isVotingActive && (
-        <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ top: HEADER_OFFSET }}
-        >
-          <p
-            className="text-xs opacity-40"
-            style={{ color: labelColor }}
-          >
-            Drop insights here
-          </p>
-        </div>
-      )}
 
       {/* Resize handles - visible on hover */}
       {isHovered && !isVotingActive && (
@@ -1009,7 +957,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
             onPointerDown={handleResizeStart}
             style={{ zIndex: 10 }}
           >
-            <div className="absolute right-1 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-primary rounded-full opacity-80" />
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 w-1 h-5 bg-foreground/40" />
           </div>
           
           {/* Bottom edge handle */}
@@ -1022,7 +970,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
               setIsResizing(true);
               
               const startY = e.clientY;
-              const startHeight = AUTO_HEIGHT;
+              const startHeight = FRAME_HEIGHT;
               
               const handlePointerMove = (moveEvent: PointerEvent) => {
                 const dy = moveEvent.clientY - startY;
@@ -1043,49 +991,7 @@ export const ClusterLabel = memo(function ClusterLabelComponent({
             }}
             style={{ zIndex: 10 }}
           >
-            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-6 h-1.5 bg-primary rounded-full opacity-80" />
-          </div>
-          
-          {/* Bottom-right corner handle */}
-          <div
-            className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize z-20"
-            onPointerDown={(e) => {
-              if (!canInteract) return;
-              e.stopPropagation();
-              e.preventDefault();
-              setIsResizing(true);
-              
-              const startX = e.clientX;
-              const startY = e.clientY;
-              const startWidth = CLUSTER_WIDTH;
-              const startHeight = AUTO_HEIGHT;
-              
-              const handlePointerMove = (moveEvent: PointerEvent) => {
-                const dx = moveEvent.clientX - startX;
-                const dy = moveEvent.clientY - startY;
-                const newWidth = Math.max(MIN_CLUSTER_WIDTH, startWidth + dx);
-                const newHeight = Math.max(MIN_CLUSTER_HEIGHT, startHeight + dy);
-                if (onWidthChange) {
-                  onWidthChange(cluster.id, newWidth);
-                }
-                if (onResize) {
-                  onResize(cluster.id, newHeight);
-                }
-              };
-              
-              const handlePointerUp = () => {
-                setIsResizing(false);
-                window.removeEventListener("pointermove", handlePointerMove);
-                window.removeEventListener("pointerup", handlePointerUp);
-              };
-              
-              window.addEventListener("pointermove", handlePointerMove);
-              window.addEventListener("pointerup", handlePointerUp);
-            }}
-          >
-            <svg className="w-3 h-3 absolute bottom-0 right-0 text-primary" viewBox="0 0 12 12" fill="none">
-              <path d="M10 2 L10 10 L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
+            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-5 h-1 bg-foreground/40" />
           </div>
         </>
       )}

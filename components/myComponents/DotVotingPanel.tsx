@@ -6,7 +6,7 @@ import { useState, useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@clerk/nextjs";
-import { Vote, Target, Award, Users, Plus, Trash2, Play, Eye, Timer, Grid, EyeOff, User2 } from "lucide-react";
+import { Vote, Target, Award, Users, Plus, Trash2, Play, Eye, Timer, Grid, EyeOff } from "lucide-react";
 import { AffinityGroup, Insight } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,7 @@ interface DotVotingPanelProps {
   mapId: string;
   groups: AffinityGroup[];
   insights: Insight[];
+  onCast?: () => void;
 }
 
 const USER_COLORS = [
@@ -27,7 +28,7 @@ const USER_COLORS = [
   "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16"
 ];
 
-export function DotVotingPanel({ projectId, mapId, groups, insights }: DotVotingPanelProps) {
+export function DotVotingPanel({ projectId, mapId, groups, insights, onCast }: DotVotingPanelProps) {
   const { userId } = useAuth();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"dots" | "list">("dots");
@@ -411,17 +412,14 @@ export function DotVotingPanel({ projectId, mapId, groups, insights }: DotVoting
               </div>
             )}
 
-            {/* BOUTON GÉNÉRER PERSONA */}
-            {stats && stats.groupResults && stats.groupResults.some(r => r.totalVotes > 0) && (
+            {onCast && stats && stats.groupResults && stats.groupResults.some(r => r.totalVotes > 0) && (
               <Button 
-                onClick={() => {
-                  toast.info("Open Persona panel from toolbar to generate");
-                }} 
-                className="w-full mt-4 bg-[#4CA771] hover:bg-[#3F9A68]"
+                onClick={() => onCast()} 
+                variant="outline"
+                className="w-full mt-4 font-mono text-[11px] uppercase tracking-widest"
                 size="sm"
               >
-                <User2 size={14} className="mr-2" />
-                Generate Persona from Top Clusters
+                Cast
               </Button>
             )}
           </div>

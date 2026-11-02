@@ -8,16 +8,25 @@ interface InterviewPageProps {
     projectId: string;
     interviewId: string;
   }>;
+  searchParams: Promise<{ ready?: string; t?: string }>;
 }
 
 export async function generateMetadata({ params }: InterviewPageProps): Promise<Metadata> {
   return {
-    title: "Interview Details",
-    description: "View and analyze interview transcription",
+    title: "Sitting",
+    description: "Transcript, pins, and wall for this interview",
   };
 }
 
-export default async function InterviewPage({ params }: InterviewPageProps) {
+export default async function InterviewPage({ params, searchParams }: InterviewPageProps) {
   const { projectId, interviewId } = await params;
-  return <InterviewContent projectId={projectId as Id<"projects">} interviewId={interviewId as Id<"interviews">} />;
+  const query = await searchParams;
+  return (
+    <InterviewContent
+      projectId={projectId as Id<"projects">}
+      interviewId={interviewId as Id<"interviews">}
+      tapeReady={query.ready === "1"}
+      seekTo={query.t != null && query.t !== "" ? Number(query.t) : null}
+    />
+  );
 }

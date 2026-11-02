@@ -155,3 +155,31 @@ Example of theme-aware styling:
 - Use feature branches for new features
 - Run `npm run lint` before committing
 - Don't commit secrets or environment variables
+
+## Learned User Preferences
+
+- Communicate in French unless the user writes in another language.
+- Prefer applying the recommended direction immediately rather than listing long alternatives.
+- Distinctive research-tool UX over generic SaaS or AI-slop aesthetics; often uses the bencium-innovative-ux-designer and emil-design-eng skills. App chrome (sessions, session dashboard, share) should match the landing field kit—kit surfaces, bordered tape lists, mono labels—not shadcn sidebar/breadcrumb or SaaS cards. Votes, sheets, dialogs, share/presentation, and dashboard invitations stay uniform field-kit; keep the wall dock short (icons over text labels; live chip + Workshop), no floating vote overlay over the tray.
+- Affinity cluster and vote chrome should match the Skripta mark: no FigJam-like per-type rainbow or orange that fights the logo; packets should not look stacked, and sort-tray slips must not all overlap. Prefer “cluster” (not “frame”) naming.
+- Workshop voting is Round → Stick → Flip (fun team sticker round, not FigJam menus): votes are dots; Spent is empty-pocket status only (re-click unsticks); Sit out leaves the local UI with Join to return; Flip reveals for everyone; Round dock handoff shows Stuck / Still (who spent) and who Flipped.
+- Personas are Casts: movable wall fiches with avatars (drag like clusters), reached from the affinity wall—not a standalone persona-generator; peek beside the Cast above the dock, spawn beside clusters not on them; dismiss via outside click or re-click; deleting a Cast from the wall must actually remove it (persist, not local-only).
+- Transcript interaction is a cassette model: no Pin vs Play mode; click seeks a line only while audio is playing; drag or text selection pins Quote / Pain / Follow-up.
+- Pin drag should feel physical (follow the pointer, bounce back, then show Quote / Pain / Follow-up). Avoid unlabeled "Mark" affordances and instructional empty-state copy.
+- Affinity/wall work stays on the wall: peek tape or cassette in place instead of navigating away to the transcript; wall comments can sit freestanding (not only on clusters).
+- Affinity clusters should feel like a field-kit packet/envelope (liasse)—more fun than FigJam, not by copying FigJam pastels, stickers, or Sparkles/AI-rename chrome.
+- Affinity wall undo/redo should be Figma-like (Ctrl+Z / Ctrl+Shift+Z, one gesture = one step, every map action not only cluster moves) and must never restore an empty map; workshop/vote should not disable pan, undo, grouping, or suggestions.
+- In-app Signal is for Skripta users/testers (nudge/reminder to leave feedback), distinct from stakeholder Signal on the public Issue page.
+
+## Learned Workspace Facts
+
+- Product is Skripta (skripta.app), a field kit for interview research, positioned as Dovetail-budget for one study (not Maze or research-ops tags/charts).
+- Core researcher flow: interview audio → transcript → pins → affinity map → Issue; in-study Find searches pins and sitting text, groups hits by sitting, and peeks the tape in place.
+- Pin kinds are Quote, Pain, and Follow-up (shortcuts Q / P / F); the interview transcript is the pin tool.
+- Sitting Prep is a cassette tab: light interview guide of 3–8 questions with checkboxes for during/after the sitting.
+- After saving a transcription, land on the interview transcript page, not the project dashboard.
+- Affinity wall state (clusters, slips, votes, Casts) persists; leaving the wall must not discard the map; Cast delete must remove the Cast from shared state.
+- Affinity wall is collaborative; teammates' clusters and the insight tray must stay visible without a page refresh.
+- Ungrouped pins live on a wall tray (plateau) and import automatically from project insights; tray import must not duplicate slips already on the board (`insightId`).
+- Locked affinity packets remain votable; lock blocks edit, drag, and rename only.
+- Issue is the share climax: stakeholder brief ordered Flip → packets → Cast, Print-ready (not a return to PowerPoint/FigJam-style slide decks); Export is `.md`; public Issue offers stakeholder Signal (Clear / Almost / Unclear) to the founder inbox; share must not dump raw first transcript segments under pins; no Cut / Walk / Pull jargon or endless interactive presentation scroll.

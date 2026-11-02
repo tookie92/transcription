@@ -4,7 +4,8 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { AffinityCluster, Insight } from "@/types";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { toast } from "sonner";
 
 export function useAffinityMapData(projectId: Id<"projects">) {
   // Validate that projectId is not an affinityMap ID
@@ -27,6 +28,9 @@ export function useAffinityMapData(projectId: Id<"projects">) {
 
   // Mutations
   const createAffinityMap = useMutation(api.affinityMaps.create);
+  const consolidateProjectMaps = useMutation(
+    api.affinityMaps.consolidateProjectMaps
+  );
   const addCluster = useMutation(api.affinityMaps.addCluster);
   const moveCluster = useMutation(api.affinityMaps.moveCluster);
   const resizeCluster = useMutation(api.affinityMaps.resizeCluster);
@@ -48,9 +52,11 @@ export function useAffinityMapData(projectId: Id<"projects">) {
   const broadcastClusterCreated = useMutation(api.notificationService.broadcastGroupCreated);
   const broadcastInsightMoved = useMutation(api.notificationService.broadcastInsightMoved);
 
-  // Auto-create map
+  // Auto-create map only after the query has finished (null = none yet).
+  // `undefined` means still loading — treating that as missing created a blank
+  // wall on every visit and hid the map that still had packets.
   useEffect(() => {
-    if (project && !affinityMap) {
+    if (project && affinityMap === null) {
       createAffinityMap({
         projectId: projectId as Id<"projects">,
         name: `${project.name} Affinity Map`,
@@ -58,6 +64,24 @@ export function useAffinityMapData(projectId: Id<"projects">) {
       }).catch(console.error);
     }
   }, [project, affinityMap, projectId, createAffinityMap]);
+
+  // One study → one wall (merge zombies so collab + Issue share the same map).
+  const didConsolidateRef = useRef(false);
+  useEffect(() => {
+    if (!project || !affinityMap || didConsolidateRef.current) return;
+    didConsolidateRef.current = true;
+    void consolidateProjectMaps({ projectId: projectId as Id<"projects"> })
+      .then((result) => {
+        if (result.removed > 0) {
+          toast.message(
+            result.removed === 1
+              ? "Wall synced to one map"
+              : `Wall synced — ${result.removed} spare maps cleared`
+          );
+        }
+      })
+      .catch(() => undefined);
+  }, [project, affinityMap?._id, projectId, consolidateProjectMaps]);
 
   // Mutations
   const updateStickyPositionsMutation = useMutation(api.affinityMaps.updateStickyPositions);

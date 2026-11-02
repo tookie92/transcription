@@ -1,4 +1,3 @@
-// components/InterviewContent.tsx
 "use client";
 
 import { useQuery, useMutation } from "convex/react";
@@ -8,8 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { 
+import {
   ArrowLeft,
   Download,
   Search,
@@ -17,146 +15,460 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  FileSpreadsheet,
-  Plus,
-  Trash,
-  Clock,
   Lightbulb,
-  Sparkles,
   AlertTriangle,
   Quote,
   ListChecks,
-  PenLine,
+  X,
 } from "lucide-react";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { ExportDialog } from "./ExportDialog";
 import { AudioPlayer, AudioPlayerHandle } from "./AudioPlayer";
-import { useState, useRef, useEffect } from "react";
+import { PinToolbar, type PinKind, type PinSelection } from "./transcript/PinToolbar";
+import { pinAnchor, selectedTextInLine } from "./transcript/selection";
+import { dampNudgeX, setTapeNudge, snapTapeNudge } from "./transcript/tapeNudge";
+import { SittingPrep } from "./SittingPrep";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { ExportInterview, Insight } from "@/types";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
 import Link from "next/link";
 
 interface InterviewContentProps {
   projectId: Id<"projects">;
   interviewId: Id<"interviews">;
+  tapeReady?: boolean;
+  seekTo?: number | null;
 }
 
-const insightTypeConfig: Record<Exclude<Insight['type'], undefined>, { icon: React.ComponentType<{ className?: string }>; color: string; bg: string; label: string }> = {
-  "pain-point": { icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50", label: "Pain Point" },
-  "quote": { icon: Quote, color: "text-[#4CA771]", bg: "bg-[#4CA771]/10", label: "Quote" },
-  "insight": { icon: Lightbulb, color: "text-amber-600", bg: "bg-amber-50", label: "Insight" },
-  "follow-up": { icon: ListChecks, color: "text-green-600", bg: "bg-green-50", label: "Follow-up" },
-  "custom": { icon: Sparkles, color: "text-violet-600", bg: "bg-violet-50", label: "Custom" },
+const insightTypeConfig: Record<
+  Exclude<Insight["type"], undefined>,
+  { icon: React.ComponentType<{ className?: string }>; label: string }
+> = {
+  "pain-point": { icon: AlertTriangle, label: "Pain" },
+  quote: { icon: Quote, label: "Quote" },
+  insight: { icon: Lightbulb, label: "Insight" },
+  "follow-up": { icon: ListChecks, label: "Follow-up" },
+  custom: { icon: Lightbulb, label: "Note" },
 };
 
-const speakerColors = [
-  "bg-blue-100 text-blue-800",
-  "bg-green-100 text-green-800",
-  "bg-purple-100 text-purple-800",
-  "bg-orange-100 text-orange-800",
-  "bg-pink-100 text-pink-800",
-  "bg-teal-100 text-teal-800",
-];
+function formatStamp(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${Math.round(seconds % 60)
+    .toString()
+    .padStart(2, "0")}`;
+}
 
-export function InterviewContent({ projectId, interviewId }: InterviewContentProps) {
+const MARK_DRAG_PX = 6;
+const PIN_HISTORY_LIMIT = 20;
+
+type PinRecord = {
+  id: Id<"insights">;
+  type: "pain-point" | "quote" | "insight" | "follow-up" | "custom";
+  text: string;
+  timestamp: number;
+};
+
+type PinHistoryEntry = {
+  action: "create" | "delete";
+  record: PinRecord;
+};
+
+export function InterviewContent({
+  projectId,
+  interviewId,
+  tapeReady = false,
+  seekTo = null,
+}: InterviewContentProps) {
   const router = useRouter();
   const { analyzeInterview, generateInterviewSummary } = useAnalysis();
   const deleteInsight = useMutation(api.insights.deleteInsight);
-  
+  const createInsight = useMutation(api.insights.createManualInsight);
+
   const [activeTab, setActiveTab] = useState<string>("transcription");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
-  
+  const [showReadyBanner, setShowReadyBanner] = useState(tapeReady);
+  const [pinSelection, setPinSelection] = useState<PinSelection | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
   const audioPlayerRef = useRef<AudioPlayerHandle>(null);
+  const pointerOriginRef = useRef<{
+    x: number;
+    y: number;
+    timestamp: number;
+    lineText: string;
+    lineEl: HTMLElement | null;
+    cardEl: HTMLElement | null;
+    nudgeX: number;
+    kind: "grab" | "text";
+  } | null>(null);
+  const isMarkingRef = useRef(false);
+  const undoStackRef = useRef<PinHistoryEntry[]>([]);
+  const redoStackRef = useRef<PinHistoryEntry[]>([]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (pinSelection) return;
       if (e.code === "Space") {
         e.preventDefault();
-        audioPlayerRef.current?.getCurrentTime() === 0 
-          ? audioPlayerRef.current?.play()
-          : audioPlayerRef.current?.pause();
+        if (isPlaying) {
+          audioPlayerRef.current?.pause();
+        } else {
+          audioPlayerRef.current?.play();
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [pinSelection, isPlaying]);
+
+  const openPinFromOrigin = useCallback(
+    (origin: {
+      x: number;
+      y: number;
+      timestamp: number;
+      lineText: string;
+      lineEl: HTMLElement | null;
+    }, preferFullLine: boolean) => {
+      const clipped = selectedTextInLine(origin.lineEl, origin.lineText);
+      const text = clipped || (preferFullLine ? origin.lineText.trim() : "");
+      if (text.length < 2) return false;
+      const anchor = pinAnchor(origin.lineEl, { x: origin.x, y: origin.y });
+      setPinSelection({
+        text,
+        timestamp: origin.timestamp,
+        x: anchor.x,
+        y: anchor.y,
+      });
+      return true;
+    },
+    []
+  );
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const origin = pointerOriginRef.current;
+      if (!origin) return;
+      const distance = Math.hypot(event.clientX - origin.x, event.clientY - origin.y);
+      const threshold = isPlaying ? 12 : MARK_DRAG_PX;
+      if (distance < threshold) return;
+      isMarkingRef.current = true;
+      if (origin.kind !== "grab" || !origin.cardEl) return;
+      document.body.style.cursor = "grabbing";
+      origin.cardEl.style.cursor = "grabbing";
+      const nudgeX = dampNudgeX(event.clientX - origin.x);
+      origin.nudgeX = nudgeX;
+      setTapeNudge(origin.cardEl, nudgeX);
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      const origin = pointerOriginRef.current;
+      const wasMarking = isMarkingRef.current;
+      pointerOriginRef.current = null;
+      isMarkingRef.current = false;
+      document.body.style.cursor = "";
+      if (!origin) return;
+      if (origin.cardEl) {
+        origin.cardEl.style.cursor = "";
+        snapTapeNudge(origin.cardEl, origin.nudgeX);
+      }
+
+      if (origin.kind === "grab") {
+        if (wasMarking) {
+          openPinFromOrigin(origin, true);
+          return;
+        }
+        if (isPlaying) {
+          audioPlayerRef.current?.setCurrentTime(origin.timestamp);
+        }
+        return;
+      }
+
+      if (wasMarking || event.detail >= 2) {
+        openPinFromOrigin(origin, false);
+        return;
+      }
+
+      if (isPlaying) {
+        audioPlayerRef.current?.setCurrentTime(origin.timestamp);
+      }
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    return () => {
+      document.body.style.cursor = "";
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [isPlaying, openPinFromOrigin]);
 
   const isValidProjectId = projectId && !projectId.includes("affinity");
   const project = useQuery(api.projects.getById, isValidProjectId ? { projectId } : "skip");
   const interview = useQuery(api.interviews.getById, { interviewId });
   const insights = useQuery(api.insights.getByInterview, { interviewId });
-  const projectInterviews = useQuery(api.interviews.getProjectInterviews, isValidProjectId ? { projectId } : "skip");
+  const didSeekRef = useRef<number | null>(null);
 
-  const currentIndex = projectInterviews?.findIndex(i => i._id === interviewId) || 0;
+  useEffect(() => {
+    if (seekTo == null || Number.isNaN(seekTo) || !interview?.audioUrl) return;
+    if (didSeekRef.current === seekTo) return;
+    const timer = window.setTimeout(() => {
+      audioPlayerRef.current?.setCurrentTime(seekTo);
+      audioPlayerRef.current?.play();
+      didSeekRef.current = seekTo;
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [seekTo, interview?.audioUrl]);
+  const projectInterviews = useQuery(
+    api.interviews.getProjectInterviews,
+    isValidProjectId ? { projectId } : "skip"
+  );
 
-  const filteredSegments = interview?.segments.filter(s => !searchQuery || s.text.toLowerCase().includes(searchQuery.toLowerCase())) || [];
-  const filteredInsights = insights?.filter(i => !searchQuery || i.text.toLowerCase().includes(searchQuery.toLowerCase())) || [];
+  const currentIndex = projectInterviews?.findIndex((i) => i._id === interviewId) || 0;
+  const filteredSegments =
+    interview?.segments.filter(
+      (s) => !searchQuery || s.text.toLowerCase().includes(searchQuery.toLowerCase())
+    ) || [];
+  const filteredInsights =
+    insights?.filter(
+      (i) => !searchQuery || i.text.toLowerCase().includes(searchQuery.toLowerCase())
+    ) || [];
+
+  const clearSelection = useCallback(() => {
+    setPinSelection(null);
+    window.getSelection()?.removeAllRanges();
+  }, []);
+
+  const pushUndo = useCallback((entry: PinHistoryEntry) => {
+    undoStackRef.current.push(entry);
+    if (undoStackRef.current.length > PIN_HISTORY_LIMIT) {
+      undoStackRef.current.shift();
+    }
+    redoStackRef.current = [];
+  }, []);
+
+  const undoPin = useCallback(async () => {
+    const entry = undoStackRef.current.pop();
+    if (!entry) return;
+    try {
+      if (entry.action === "create") {
+        await deleteInsight({ insightId: entry.record.id });
+        redoStackRef.current.push(entry);
+      } else {
+        const id = await createInsight({
+          interviewId,
+          projectId,
+          type: entry.record.type,
+          text: entry.record.text,
+          timestamp: entry.record.timestamp,
+        });
+        redoStackRef.current.push({
+          action: "delete",
+          record: { ...entry.record, id },
+        });
+      }
+    } catch {
+      undoStackRef.current.push(entry);
+      toast.error("Could not undo");
+    }
+  }, [createInsight, deleteInsight, interviewId, projectId]);
+
+  const redoPin = useCallback(async () => {
+    const entry = redoStackRef.current.pop();
+    if (!entry) return;
+    try {
+      if (entry.action === "create") {
+        const id = await createInsight({
+          interviewId,
+          projectId,
+          type: entry.record.type,
+          text: entry.record.text,
+          timestamp: entry.record.timestamp,
+        });
+        undoStackRef.current.push({
+          action: "create",
+          record: { ...entry.record, id },
+        });
+      } else {
+        await deleteInsight({ insightId: entry.record.id });
+        undoStackRef.current.push(entry);
+      }
+    } catch {
+      redoStackRef.current.push(entry);
+      toast.error("Could not redo");
+    }
+  }, [createInsight, deleteInsight, interviewId, projectId]);
+
+  const handlePin = useCallback(
+    async (kind: PinKind) => {
+      if (!pinSelection) return;
+      try {
+        const id = await createInsight({
+          interviewId,
+          projectId,
+          type: kind,
+          text: pinSelection.text,
+          timestamp: pinSelection.timestamp,
+        });
+        pushUndo({
+          action: "create",
+          record: {
+            id,
+            type: kind,
+            text: pinSelection.text,
+            timestamp: pinSelection.timestamp,
+          },
+        });
+        toast.success("Pinned — waiting on the wall", {
+          action: {
+            label: "Undo",
+            onClick: () => {
+              const last = undoStackRef.current[undoStackRef.current.length - 1];
+              if (last?.action === "create" && last.record.id === id) {
+                void undoPin();
+              }
+            },
+          },
+        });
+      } catch {
+        toast.error("Could not pin this line");
+      } finally {
+        clearSelection();
+      }
+    },
+    [pinSelection, createInsight, interviewId, projectId, clearSelection, pushUndo, undoPin]
+  );
+
+  const handleDeleteInsight = async (
+    insight: {
+      _id: Id<"insights">;
+      type: PinRecord["type"];
+      text: string;
+      timestamp: number;
+    }
+  ) => {
+    try {
+      await deleteInsight({ insightId: insight._id });
+      pushUndo({
+        action: "delete",
+        record: {
+          id: insight._id,
+          type: insight.type,
+          text: insight.text,
+          timestamp: insight.timestamp,
+        },
+      });
+    } catch {
+      toast.error("Failed to delete");
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      e.preventDefault();
+      if (pinSelection) {
+        clearSelection();
+        return;
+      }
+      if (e.shiftKey) {
+        void redoPin();
+      } else {
+        void undoPin();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [pinSelection, clearSelection, undoPin, redoPin]);
+
+  const handleTapePointerDown = (
+    timestamp: number,
+    lineText: string,
+    event: React.PointerEvent<HTMLDivElement>
+  ) => {
+    if (event.button !== 0) return;
+    const lineEl = event.currentTarget.querySelector<HTMLElement>("[data-tape-line]");
+    const fromText = Boolean((event.target as HTMLElement).closest("[data-tape-line]"));
+    event.currentTarget.getAnimations().forEach((animation) => animation.cancel());
+    pointerOriginRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      timestamp,
+      lineText,
+      lineEl,
+      cardEl: event.currentTarget,
+      nudgeX: 0,
+      kind: fromText ? "text" : "grab",
+    };
+    isMarkingRef.current = false;
+  };
+
+  const handleSuggestPins = async () => {
+    if (!interview) return;
+    setIsAnalyzing(true);
+    try {
+      await analyzeInterview(
+        interview._id,
+        projectId,
+        interview.transcription,
+        interview.topic,
+        interview.language,
+        interview.segments
+      );
+      toast.success("Suggested pins added to this sitting");
+    } catch {
+      toast.error("Could not suggest pins");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleGenerateSummary = async () => {
+    if (!interview) return;
+    setIsGeneratingSummary(true);
+    try {
+      await generateInterviewSummary(
+        interview._id,
+        projectId,
+        interview.transcription,
+        interview.topic,
+        interview.language,
+        insights?.map((i) => ({
+          id: i._id,
+          type: i.type,
+          text: i.text,
+          timestamp: i.timestamp,
+          source: i.source,
+          createdBy: i.createdBy,
+          createdByName: i.createdByName,
+          createdAt: new Date(i._creationTime).toISOString(),
+          projectId: i.projectId,
+          interviewId: i.interviewId,
+        })) || []
+      );
+      toast.success("Summary written");
+      setActiveTab("summary");
+    } catch {
+      toast.error("Could not write summary");
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
 
   if (!interview || !project) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-muted-foreground" />
-          <p className="text-muted-foreground text-sm">Loading...</p>
+          <p className="text-muted-foreground text-sm">Loading sitting...</p>
         </div>
       </div>
     );
   }
-
-  const handleAnalyzeAndSummary = async () => {
-    setIsAnalyzing(true);
-    setIsGeneratingSummary(true);
-    try {
-      // Step 1: Analyze to generate AI insights
-      await analyzeInterview(interview._id, projectId, interview.transcription, interview.topic, interview.language, interview.segments);
-      toast.success("Analysis complete");
-      setActiveTab("insights");
-      
-      // Step 2: Generate summary from all insights (manual + AI)
-      await generateInterviewSummary(
-        interview._id, projectId, interview.transcription, interview.topic, interview.language,
-        insights?.map(i => ({ id: i._id, type: i.type, text: i.text, timestamp: i.timestamp, source: i.source, createdBy: i.createdBy, createdByName: i.createdByName, createdAt: new Date(i._creationTime).toISOString(), projectId: i.projectId, interviewId: i.interviewId })) || []
-      );
-      toast.success("Summary generated");
-      setActiveTab("summary");
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to analyze or generate summary");
-    } finally {
-      setIsAnalyzing(false);
-      setIsGeneratingSummary(false);
-    }
-  };
-
-  const handleGenerateSummary = async () => {
-    setIsGeneratingSummary(true);
-    try {
-      await generateInterviewSummary(
-        interview._id, projectId, interview.transcription, interview.topic, interview.language,
-        insights?.map(i => ({ id: i._id, type: i.type, text: i.text, timestamp: i.timestamp, source: i.source, createdBy: i.createdBy, createdByName: i.createdByName, createdAt: new Date(i._creationTime).toISOString(), projectId: i.projectId, interviewId: i.interviewId })) || []
-      );
-      toast.success("Summary generated");
-    } catch {
-      toast.error("Generation failed");
-    } finally {
-      setIsGeneratingSummary(false);
-    }
-  };
-
-  const handleDeleteInsight = async (id: string) => {
-    try {
-      await deleteInsight({ insightId: id as Id<"insights"> });
-      toast.success("Deleted");
-    } catch {
-      toast.error("Failed to delete");
-    }
-  };
 
   const interviewForExport: ExportInterview = {
     id: interview._id,
@@ -165,167 +477,332 @@ export function InterviewContent({ projectId, interviewId }: InterviewContentPro
     transcription: interview.transcription,
     segments: interview.segments,
     duration: interview.duration,
-    insights: insights?.map(i => ({ id: i._id, type: i.type, text: i.text, timestamp: i.timestamp, segmentId: undefined, createdAt: new Date(i.createdAt).toISOString() })) || [],
+    insights:
+      insights?.map((i) => ({
+        id: i._id,
+        type: i.type,
+        text: i.text,
+        timestamp: i.timestamp,
+        segmentId: undefined,
+        createdAt: new Date(i.createdAt).toISOString(),
+      })) || [],
     createdAt: new Date(interview._creationTime).toISOString(),
   };
 
-  const getSpeakerClass = (speaker: string | undefined) => {
-    const num = parseInt(speaker?.replace(/\D/g, '') || "1");
-    return speakerColors[(num - 1) % speakerColors.length];
-  };
+  const pinCount = insights?.length ?? 0;
+  const prepGuide = interview.prepGuide ?? [];
+  const prepChecked = prepGuide.filter((q) => q.checked).length;
 
-if (activeTab !== "transcription") {
-    return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <header className="sticky top-0 z-40 bg-background border-b border-border">
-          <div className="max-w-4xl mx-auto px-6 py-3">
-            {/* Row 1: Back + Navigation + Export */}
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <Button variant="ghost" size="icon" asChild className="hover:bg-accent -ml-2">
-                  <Link href={`/project/${projectId}`}>
-                    <ArrowLeft className="w-5 h-5" />
-                  </Link>
+  return (
+    <div className="h-dvh flex flex-col bg-background overflow-hidden">
+      {showReadyBanner && (
+        <div className="shrink-0 border-b border-border bg-card px-5 py-2.5 flex items-center justify-between gap-3">
+          <p className="text-sm text-foreground">
+            Tape ready. Select a line to pin it — or suggest pins.
+          </p>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            aria-label="Dismiss"
+            onClick={() => setShowReadyBanner(false)}
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
+
+      <header className="shrink-0 border-b border-border">
+        <div className="px-5 lg:px-8 py-3 flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <Button variant="ghost" size="icon" asChild className="-ml-2">
+                <Link href={`/project/${projectId}`} aria-label="Back to project">
+                  <ArrowLeft className="w-5 h-5" />
+                </Link>
+              </Button>
+              <div className="flex items-center gap-1 bg-muted p-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  disabled={currentIndex === 0}
+                  aria-label="Previous sitting"
+                  onClick={() =>
+                    router.push(
+                      `/project/${projectId}/interview/${projectInterviews?.[currentIndex - 1]?._id}`
+                    )
+                  }
+                >
+                  <ChevronLeft className="w-3 h-3" />
                 </Button>
-                <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-                  <Button variant="ghost" size="icon" className="h-6 w-6" disabled={currentIndex === 0} onClick={() => router.push(`/project/${projectId}/interview/${projectInterviews?.[currentIndex - 1]?._id}`)}>
-                    <ChevronLeft className="w-3 h-3" />
-                  </Button>
-                  <span className="text-xs text-muted-foreground px-1 min-w-[30px] text-center">{currentIndex + 1}/{projectInterviews?.length}</span>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" disabled={currentIndex >= (projectInterviews?.length || 0) - 1} onClick={() => router.push(`/project/${projectId}/interview/${projectInterviews?.[currentIndex + 1]?._id}`)}>
-                    <ChevronRight className="w-3 h-3" />
-                  </Button>
-                </div>
+                <span className="font-mono text-[11px] text-muted-foreground px-1 min-w-[30px] text-center">
+                  {currentIndex + 1}/{projectInterviews?.length}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  disabled={currentIndex >= (projectInterviews?.length || 0) - 1}
+                  aria-label="Next sitting"
+                  onClick={() =>
+                    router.push(
+                      `/project/${projectId}/interview/${projectInterviews?.[currentIndex + 1]?._id}`
+                    )
+                  }
+                >
+                  <ChevronRight className="w-3 h-3" />
+                </Button>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => router.push(`/project/${projectId}/interview/${interviewId}/mode`)} className="h-8 text-xs border-border text-foreground hover:bg-accent">
-                  <PenLine className="w-3 h-3 mr-1" />
-                  Focus Mode
-                </Button>
-                <ExportDialog interview={interviewForExport} trigger={<Button variant="outline" size="sm" className="h-8 text-xs border-border text-foreground hover:bg-accent"><Download className="w-3 h-3 mr-1" />Export</Button>} />
+              <div className="min-w-0">
+                <h1 className="text-base font-semibold truncate">{interview.title}</h1>
+                <p className="font-mono text-[11px] text-muted-foreground">
+                  {formatStamp(interview.duration)} · {interview.segments.length} lines
+                </p>
               </div>
             </div>
-            
-            {/* Row 2: Title + Duration + Segments */}
-            <div className="mb-3">
-              <h1 className="text-xl font-bold text-foreground">{interview.title}</h1>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-<span className="flex items-center gap-1"><Clock className="w-3 h-3" />{Math.floor(interview.duration / 60)}:{Math.round(interview.duration % 60).toString().padStart(2, '0')}</span>
-                <span>•</span>
-                <span>{interview.segments.length} segments</span>
-              </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <ExportDialog
+                interview={interviewForExport}
+                trigger={
+                  <Button variant="outline" size="sm" className="h-8 font-mono text-[11px] uppercase tracking-widest">
+                    <Download className="w-3 h-3 mr-1" />
+                    Export
+                  </Button>
+                }
+              />
+              <Button
+                size="sm"
+                className="h-8 font-mono text-[11px] uppercase tracking-widest"
+                onClick={() =>
+                  router.push(`/project/${projectId}/affinity?sitting=${interviewId}`)
+                }
+              >
+                Wall · {pinCount} {pinCount === 1 ? "pin" : "pins"}
+              </Button>
             </div>
-            
-            {/* Audio Player Row - always visible if exists */}
-            {interview.audioUrl && (
-              <div className="mb-3 bg-card rounded-xl px-4 py-2.5 border border-border">
-                <AudioPlayer ref={audioPlayerRef} src={interview.audioUrl} onTimeUpdate={setCurrentTime} />
-              </div>
-            )}
-            
-            {/* Tabs Row */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full -ml-2">
-              <TabsList className="bg-transparent border-b-0 rounded-none h-9 p-0 gap-1">
-                <TabsTrigger value="transcription" className="rounded-md data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-all">
-                  <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />
-                  Transcription
-                </TabsTrigger>
-                <TabsTrigger value="insights" className="rounded-md data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-all">
-                  <Lightbulb className="w-3.5 h-3.5 mr-1.5" />
-                  Insights
-                  {insights && insights.length > 0 && <span className="ml-1.5 text-xs bg-white/20 px-1 rounded">{insights.length}</span>}
-                </TabsTrigger>
-                <TabsTrigger value="summary" className="rounded-md data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-all">
-                  <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                  Summary
-                  {interview.summary && <CheckCircle2 className="w-3 h-3 ml-1.5 text-green-400" />}
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
           </div>
-        </header>
-        <main className="flex-1 overflow-y-auto w-full">
-          <div className="max-w-4xl mx-auto px-6 py-6">
+
+          {interview.audioUrl && (
+            <div className="bg-card border border-border px-4 py-2.5">
+              <AudioPlayer
+                ref={audioPlayerRef}
+                src={interview.audioUrl}
+                onTimeUpdate={setCurrentTime}
+                onPlayStateChange={setIsPlaying}
+              />
+            </div>
+          )}
+
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="bg-transparent h-9 p-0 gap-1">
+              <TabsTrigger
+                value="transcription"
+                className="rounded-sm font-mono text-[11px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                Tape
+              </TabsTrigger>
+              <TabsTrigger
+                value="insights"
+                className="rounded-sm font-mono text-[11px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                Pins{pinCount > 0 ? ` · ${pinCount}` : ""}
+              </TabsTrigger>
+              <TabsTrigger
+                value="summary"
+                className="rounded-sm font-mono text-[11px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                Summary
+                {interview.summary && <CheckCircle2 className="w-3 h-3 ml-1.5" />}
+              </TabsTrigger>
+              <TabsTrigger
+                value="prep"
+                className="rounded-sm font-mono text-[11px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                Prep
+                {prepGuide.length > 0 ? ` · ${prepChecked}/${prepGuide.length}` : ""}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      </header>
+
+      <div className="flex flex-1 min-h-0">
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-3xl mx-auto px-5 lg:px-8 py-6">
+            {activeTab === "transcription" && (
+              <>
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search the sitting..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 h-10"
+                  />
+                </div>
+                <p className="font-mono text-[11px] tracking-widest uppercase text-muted-foreground mb-4">
+                  {isPlaying
+                    ? "Running · click the stamp to jump · select words to pin"
+                    : "Stopped · grab the stamp · select the words"}
+                </p>
+                <div className="space-y-2 selection:bg-primary/35 selection:text-foreground">
+                  {(searchQuery ? filteredSegments : interview.segments).map((segment) => {
+                    const isActive = currentTime >= segment.start && currentTime < segment.end;
+                    const segmentPins =
+                      insights?.filter(
+                        (i) => Math.abs(i.timestamp - segment.start) < 0.5
+                      ) ?? [];
+                    return (
+                      <div
+                        key={segment.id}
+                        className={`p-4 border select-none transition-[border-color,background-color] duration-150 ease-out ${
+                          isPlaying ? "cursor-pointer" : "cursor-grab"
+                        } ${
+                          isActive
+                            ? "border-primary bg-primary/10"
+                            : "border-transparent hover:border-border hover:bg-accent/40"
+                        }`}
+                        onPointerDown={(e) =>
+                          handleTapePointerDown(segment.start, segment.text, e)
+                        }
+                      >
+                        <div
+                          data-tape-chrome
+                          className="flex items-center gap-3 mb-2"
+                        >
+                          <span
+                            className={`font-mono text-xs px-2 py-1 ${
+                              isActive
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {formatStamp(segment.start)}
+                          </span>
+                          {segment.speaker && (
+                            <span className="font-mono text-[11px] text-muted-foreground">
+                              {segment.speaker}
+                            </span>
+                          )}
+                          {segmentPins.length > 0 && (
+                            <span className="ml-auto size-1.5 rounded-full bg-myGreen" aria-label="Pinned" />
+                          )}
+                        </div>
+                        <p
+                          data-tape-line
+                          className="text-sm leading-relaxed text-foreground cursor-text select-text"
+                        >
+                          {segment.text}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
             {activeTab === "insights" && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">{filteredInsights.length} insights</span>
-                  <Button 
-                    size="sm" 
-                    onClick={handleAnalyzeAndSummary} 
-                    disabled={isAnalyzing || isGeneratingSummary || !!interview.summary}
-                    className="bg-[#4CA771] hover:bg-[#3F9A68] disabled:opacity-50"
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-mono text-[11px] tracking-widest uppercase text-muted-foreground">
+                    {filteredInsights.length} on this sitting
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleSuggestPins}
+                    disabled={isAnalyzing}
+                    className="font-mono text-[11px] uppercase tracking-widest"
                   >
-                    {isAnalyzing || isGeneratingSummary ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />}
-                    {interview.summary ? 'Generated' : 'Analyze & Summary'}
+                    {isAnalyzing ? (
+                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    ) : null}
+                    Suggest pins
                   </Button>
                 </div>
-                {(!insights || insights.length === 0) && !interview.summary ? (
-                  <div className="text-center py-16 bg-muted rounded-2xl border-2 border-dashed border-border">
-                    <Lightbulb className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="font-semibold text-foreground mb-2">No insights yet</h3>
-                    <p className="text-sm text-muted-foreground mb-6">Extract insights automatically with AI</p>
-                    <Button onClick={handleAnalyzeAndSummary} disabled={isAnalyzing || isGeneratingSummary} className="bg-[#4CA771] hover:bg-[#3F9A68]">
-                      {isAnalyzing || isGeneratingSummary ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing...</> : <><Sparkles className="w-4 h-4 mr-2" />Analyze & Summary</>}
+                {filteredInsights.length === 0 ? (
+                  <div className="border border-dashed border-border px-6 py-16 text-center">
+                    <p className="font-medium mb-2">No pins yet</p>
+                    <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+                      Go to Tape and select a line. Suggest pins if you want a first pass.
+                    </p>
+                    <Button
+                      variant="outline"
+                      onClick={() => setActiveTab("transcription")}
+                      className="font-mono text-[11px] uppercase tracking-widest"
+                    >
+                      Open tape
                     </Button>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {filteredInsights.map((insight) => {
                       const config = insightTypeConfig[insight.type] || insightTypeConfig.insight;
                       const Icon = config.icon;
                       return (
-                        <motion.div key={insight._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="group flex items-start gap-4 p-5 bg-card rounded-xl border border-border hover:border-[#4CA771]/30 hover:shadow-sm transition-all">
-                          <div className={`w-10 h-10 rounded-xl ${config.bg} flex items-center justify-center flex-shrink-0`}>
-                            <Icon className={`w-5 h-5 ${config.color}`} />
-                          </div>
+                        <div
+                          key={insight._id}
+                          className="group flex items-start gap-3 p-4 border border-border bg-card"
+                        >
+                          <Icon className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className={`text-xs font-semibold ${config.color}`}>{config.label}</span>
-                              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                {insight.source === 'manual' && (
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-red-50" onClick={() => handleDeleteInsight(insight._id)}>
-                                    <Trash className="w-3.5 h-3.5 text-red-500" />
-                                  </Button>
-                                )}
-                                <span className="text-xs text-muted-foreground font-mono">{Math.floor(insight.timestamp / 60)}:{Math.round(insight.timestamp % 60).toString().padStart(2, '0')}</span>
-                              </div>
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <span className="font-mono text-[11px] tracking-widest uppercase text-muted-foreground">
+                                {config.label}
+                              </span>
+                              <span className="font-mono text-[11px] text-muted-foreground">
+                                {formatStamp(insight.timestamp)}
+                              </span>
                             </div>
-                            <p className="text-sm leading-relaxed text-foreground">{insight.text}</p>
+                            <p className="text-sm leading-relaxed line-clamp-6">{insight.text}</p>
                           </div>
-                        </motion.div>
+                          {insight.source === "manual" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-transform duration-150 ease-out active:scale-[0.97]"
+                              aria-label="Remove pin"
+                              onClick={() => handleDeleteInsight(insight)}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
                 )}
               </div>
             )}
+
             {activeTab === "summary" && (
               <div className="space-y-6">
                 {interview.summary ? (
-<>
-                    <div className="bg-card rounded-2xl border border-border p-6">
-                      <h3 className="font-semibold text-foreground mb-3">Executive Summary</h3>
-                      <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{interview.summary.executiveSummary}</p>
+                  <>
+                    <div className="border border-border bg-card p-6">
+                      <h3 className="font-semibold mb-3">Sitting notes</h3>
+                      <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                        {interview.summary.executiveSummary}
+                      </p>
                     </div>
-                    <div className="bg-card rounded-2xl border border-border p-6">
-                      <h3 className="font-semibold text-foreground mb-4">Key Points</h3>
+                    <div className="border border-border bg-card p-6">
+                      <h3 className="font-semibold mb-4">Key points</h3>
                       <ul className="space-y-2">
                         {interview.summary.keyPoints.map((point, i) => (
-                          <li key={i} className="flex items-start gap-3 text-sm text-foreground">
-                            <span className="w-2 h-2 bg-[#4CA771] rounded-full mt-1.5 flex-shrink-0" />
-                            {typeof point === 'string' ? point : point.point}
+                          <li key={i} className="flex items-start gap-3 text-sm">
+                            <span className="mt-1.5 size-1.5 bg-primary shrink-0" />
+                            {typeof point === "string" ? point : point.point}
                           </li>
                         ))}
                       </ul>
                     </div>
-                    <div className="bg-card rounded-2xl border border-border p-6">
-                      <h3 className="font-semibold text-foreground mb-4">Recommendations</h3>
+                    <div className="border border-border bg-card p-6">
+                      <h3 className="font-semibold mb-4">Recommendations</h3>
                       <ul className="space-y-2">
                         {interview.summary.recommendations.map((rec, i) => (
-                          <li key={i} className="flex items-start gap-3 text-sm text-foreground p-3 bg-green-50 dark:bg-green-950 rounded-lg">
-                            <span className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0" />
-                            {typeof rec === 'string' ? rec : rec.recommendation}
+                          <li key={i} className="text-sm p-3 bg-muted">
+                            {typeof rec === "string" ? rec : rec.recommendation}
                           </li>
                         ))}
                       </ul>
@@ -333,150 +810,127 @@ if (activeTab !== "transcription") {
                     <div className="flex flex-wrap gap-2">
                       {interview.summary.mainThemes.map((theme, i) => (
                         <Badge key={i} variant="secondary" className="px-3 py-1.5">
-                          {typeof theme === 'string' ? theme : theme.theme}
+                          {typeof theme === "string" ? theme : theme.theme}
                         </Badge>
                       ))}
                     </div>
                     {interview.summary.criticalIssues?.length > 0 && (
-                      <div className="bg-red-50 dark:bg-red-950 rounded-2xl border border-red-200 dark:border-red-800 p-6">
-                        <h3 className="font-semibold text-red-600 dark:text-red-400 flex items-center gap-2 mb-4">
+                      <div className="border border-destructive/40 p-6">
+                        <h3 className="font-semibold text-destructive flex items-center gap-2 mb-4">
                           <AlertTriangle className="w-5 h-5" />
-                          Critical Issues
+                          Critical issues
                         </h3>
                         <ul className="space-y-2">
-                          {interview.summary.criticalIssues.map((issue: any, i: number) => {
-                            const text = typeof issue === 'string' ? issue : issue.issue;
-                            return <li key={i} className="text-sm p-3 bg-card text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg">{text}</li>;
+                          {interview.summary.criticalIssues.map((issue: unknown, i: number) => {
+                            const text =
+                              typeof issue === "string"
+                                ? issue
+                                : (issue as { issue?: string }).issue;
+                            return (
+                              <li key={i} className="text-sm p-3 bg-card border border-border">
+                                {text}
+                              </li>
+                            );
                           })}
                         </ul>
                       </div>
                     )}
                   </>
                 ) : (
-                  <div className="text-center py-16 bg-muted rounded-2xl border-2 border-dashed border-border">
-                    <FileSpreadsheet className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="font-semibold text-foreground mb-2">No summary yet</h3>
-                    <p className="text-sm text-muted-foreground mb-6">Analyze interview and generate insights & summary in one click</p>
-                    {!(interview as any).summary?.executiveSummary && (
-                      <Button onClick={handleAnalyzeAndSummary} disabled={isAnalyzing || isGeneratingSummary} className="bg-[#4CA771] hover:bg-[#3F9A68]">
-                        {isAnalyzing || isGeneratingSummary ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing...</> : <><Sparkles className="w-4 h-4 mr-2" />Analyze & Summary</>}
-                      </Button>
-                    )}
+                  <div className="border border-dashed border-border px-6 py-16 text-center">
+                    <p className="font-medium mb-2">No summary yet</p>
+                    <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+                      Pin a few lines first. Then write the sitting up.
+                    </p>
+                    <Button
+                      onClick={handleGenerateSummary}
+                      disabled={isGeneratingSummary || pinCount === 0}
+                      className="font-mono text-[11px] uppercase tracking-widest"
+                    >
+                      {isGeneratingSummary ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : null}
+                      Write summary
+                    </Button>
                   </div>
                 )}
               </div>
             )}
+
+            {activeTab === "prep" && (
+              <SittingPrep interviewId={interviewId} items={prepGuide} />
+            )}
           </div>
         </main>
-      </div>
-    );
-  }
 
-  return (
-    <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
-      {/* Header fixe with light/dark mode */}
-      <header className="shrink-0 h-auto bg-background border-b border-border shadow-sm w-full">
-        <div className="max-w-4xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" asChild className="hover:bg-accent -ml-2">
-                <Link href={`/project/${projectId}`}>
-                  <ArrowLeft className="w-5 h-5" />
-                </Link>
-              </Button>
-              <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-                <Button variant="ghost" size="icon" className="h-6 w-6" disabled={currentIndex === 0} onClick={() => router.push(`/project/${projectId}/interview/${projectInterviews?.[currentIndex - 1]?._id}`)}>
-                  <ChevronLeft className="w-3 h-3" />
-                </Button>
-                <span className="text-xs text-muted-foreground px-1 min-w-[30px] text-center">{currentIndex + 1}/{projectInterviews?.length}</span>
-                <Button variant="ghost" size="icon" className="h-6 w-6" disabled={currentIndex >= (projectInterviews?.length || 0) - 1} onClick={() => router.push(`/project/${projectId}/interview/${projectInterviews?.[currentIndex + 1]?._id}`)}>
-                  <ChevronRight className="w-3 h-3" />
-                </Button>
-              </div>
+        {activeTab === "transcription" && (
+          <aside className="hidden lg:flex w-72 shrink-0 flex-col border-l border-border bg-card">
+            <div className="px-4 py-3 border-b border-border">
+              <p className="font-mono text-[11px] tracking-widest uppercase text-muted-foreground">
+                On the wall
+              </p>
+              <p className="text-sm mt-1">
+                {pinCount} {pinCount === 1 ? "pin" : "pins"} this sitting
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => router.push(`/project/${projectId}/interview/${interviewId}/mode`)} className="h-8 text-xs border-border text-foreground hover:bg-accent">
-                <PenLine className="w-3 h-3 mr-1" />
-                Focus Mode
-              </Button>
-              <ExportDialog interview={interviewForExport} trigger={<Button variant="outline" size="sm" className="h-8 text-xs border-border text-foreground hover:bg-accent"><Download className="w-3 h-3 mr-1" />Export</Button>} />
-            </div>
-          </div>
-          <div className="mb-4">
-            <h1 className="text-2xl font-bold text-foreground">{interview.title}</h1>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-              <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{Math.floor(interview.duration / 60)}:{String(interview.duration % 60).padStart(2, '0')}</span>
-              <span>•</span>
-              <span>{interview.segments.length} segments</span>
-            </div>
-          </div>
-          {interview.audioUrl && (
-            <div className="mb-4 bg-card rounded-xl px-4 py-3 border border-border shadow-sm">
-              <AudioPlayer ref={audioPlayerRef} src={interview.audioUrl} onTimeUpdate={setCurrentTime} />
-            </div>
-          )}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full -ml-2">
-            <TabsList className="bg-transparent border-b-0 rounded-none h-10 p-0 gap-2">
-              <TabsTrigger value="transcription" className="rounded-lg data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-all font-medium">
-                <FileSpreadsheet className="w-4 h-4 mr-2" />
-                Transcription
-              </TabsTrigger>
-              <TabsTrigger value="insights" className="rounded-lg data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-all font-medium">
-                <Lightbulb className="w-4 h-4 mr-2" />
-                Insights
-                {insights && insights.length > 0 && <span className="ml-2 text-xs bg-white/20 px-1.5 py-0.5 rounded-full">{insights.length}</span>}
-              </TabsTrigger>
-              <TabsTrigger value="summary" className="rounded-lg data-[state=active]:bg-[#4CA771] data-[state=active]:text-white px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-all font-medium">
-                <Sparkles className="w-4 h-4 mr-2" />
-                Summary
-                {interview.summary && <CheckCircle2 className="w-4 h-4 ml-2 text-green-400" />}
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-      </header>
-
-      {/* Transcription Tab - improved readability with theme-aware classes */}
-      {activeTab === "transcription" && (
-        <main className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto px-6 py-6">
-            <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search in transcript..." 
-                value={searchQuery} 
-                onChange={e => setSearchQuery(e.target.value)} 
-                className="pl-9 h-10 bg-background border-input shadow-sm" 
-              />
-            </div>
-            <div className="space-y-3">
-              {(searchQuery ? filteredSegments : interview.segments).map((segment) => {
-                const isActive = currentTime >= segment.start && currentTime < segment.end;
-                return (
-                  <motion.div 
-                    key={segment.id} 
-                    initial={{ opacity: 0, y: 5 }} 
-                    animate={{ opacity: 1, y: 0 }} 
-                    onClick={() => { audioPlayerRef.current?.setCurrentTime(segment.start); audioPlayerRef.current?.play(); }} 
-                    className={`p-4 rounded-2xl cursor-pointer transition-all border-2 ${isActive ? 'bg-[#4CA771]/10 border-[#4CA771]/30 shadow-md' : 'hover:bg-accent border-transparent hover:border-border hover:shadow-sm'}`}
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className={`text-xs font-mono font-semibold px-2.5 py-1 rounded-lg ${isActive ? 'bg-[#4CA771] text-white shadow-sm' : 'bg-muted text-muted-foreground'}`}>
-                        {Math.floor(segment.start / 60)}:{Math.round(segment.start % 60).toString().padStart(2, '0')}
-                      </span>
-                      {segment.speaker && (
-                        <span className={`text-xs px-2.5 py-1 rounded-lg font-medium ${getSpeakerClass(segment.speaker)}`}>
-                          {segment.speaker}
-                        </span>
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {pinCount === 0 ? (
+                <p className="text-sm text-muted-foreground px-1 py-4">
+                  Grab the stamp for the line. Select words for a phrase.
+                </p>
+              ) : (
+                insights?.map((insight) => (
+                  <div key={insight._id} className="group border border-border p-3 bg-background">
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground mb-1">
+                          {insightTypeConfig[insight.type]?.label ?? "Pin"} · {formatStamp(insight.timestamp)}
+                        </p>
+                        <p className="text-xs leading-relaxed line-clamp-4">{insight.text}</p>
+                      </div>
+                      {(insight.source === "manual" || insight.source === "ai") && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-transform duration-150 ease-out active:scale-[0.97]"
+                          aria-label="Remove pin"
+                          onClick={() => handleDeleteInsight(insight)}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
                       )}
                     </div>
-                    <p className="text-sm leading-relaxed text-foreground">{segment.text}</p>
-                  </motion.div>
-                );
-              })}
+                  </div>
+                ))
+              )}
             </div>
-          </div>
-        </main>
+            <div className="p-3 border-t border-border space-y-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full font-mono text-[11px] uppercase tracking-widest"
+                onClick={handleSuggestPins}
+                disabled={isAnalyzing}
+              >
+                {isAnalyzing ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                Suggest pins
+              </Button>
+              <Button
+                size="sm"
+                className="w-full font-mono text-[11px] uppercase tracking-widest"
+                onClick={() =>
+                  router.push(`/project/${projectId}/affinity?sitting=${interviewId}`)
+                }
+              >
+                Open wall
+              </Button>
+            </div>
+          </aside>
+        )}
+      </div>
+
+      {pinSelection && (
+        <PinToolbar selection={pinSelection} onPin={handlePin} onClose={clearSelection} />
       )}
     </div>
   );

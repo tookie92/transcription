@@ -6,17 +6,10 @@ import { Id } from "@/convex/_generated/dataModel";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ProjectContent } from "@/components/myComponents/ProjectContent";
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/ui/app-sidebar";
-import { Separator } from "@/components/ui/separator";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { UserButton } from "@clerk/nextjs";
+import { Button } from "@/components/ui/button";
+import Image from "next/image";
 
 interface ProjectPageProps {
   params: Promise<{
@@ -29,12 +22,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const projectIdPromise = params;
   const [projectId, setProjectId] = useState<string>("");
 
-  const project = useQuery(api.projects.getById, { 
-    projectId: projectId as Id<"projects">
+  const project = useQuery(api.projects.getById, {
+    projectId: projectId as Id<"projects">,
   });
 
   useEffect(() => {
-    projectIdPromise.then(({ projectId }) => setProjectId(projectId));
+    void projectIdPromise.then(({ projectId: id }) => setProjectId(id));
   }, [projectIdPromise]);
 
   useEffect(() => {
@@ -45,8 +38,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
   if (!projectId) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="flex min-h-dvh items-center justify-center bg-background kit-grain kit-mat">
+        <p className="font-mono text-[11px] tracking-widest uppercase text-muted-foreground">
+          Loading session…
+        </p>
       </div>
     );
   }
@@ -56,35 +51,47 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   }
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2">
-          <div className="flex items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-[orientation=vertical]:h-4"
+    <div className="min-h-dvh w-full bg-background text-foreground kit-grain kit-mat">
+      <header className="sticky top-0 z-50 border-b border-border bg-background px-5 lg:px-12">
+        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between gap-4 py-3">
+          <button
+            type="button"
+            onClick={() => router.push("/project")}
+            className="flex min-w-0 cursor-pointer items-center gap-5"
+          >
+            <Image
+              height={44}
+              width={132}
+              src="/logo.svg"
+              alt="Skripta"
+              className="h-9 w-auto"
+              priority
             />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/project">
-                    Projects
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Dashboard</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
+            <span className="hidden truncate font-mono text-[11px] tracking-[0.18em] uppercase text-muted-foreground sm:inline">
+              Field kit · session
+            </span>
+          </button>
+
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push("/project")}
+              className="font-mono text-xs uppercase tracking-widest"
+            >
+              Sessions
+            </Button>
+            <ThemeToggle />
+            <UserButton />
           </div>
-        </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+        </div>
+      </header>
+
+      <main className="px-5 py-10 lg:px-12 lg:py-14">
+        <div className="mx-auto w-full max-w-[1400px]">
           <ProjectContent projectId={projectId as Id<"projects">} />
         </div>
-      </SidebarInset>
-    </SidebarProvider>
+      </main>
+    </div>
   );
 }

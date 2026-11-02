@@ -84,20 +84,18 @@ export function Section({
     };
   }, [isDragging, dragStartPos, zoom, pan, data, containedStickies, onUpdate]);
 
-  const backgroundColor = data.backgroundColor || 'rgba(184, 180, 255, 0.1)';
-
   return (
     <div
       className={cn(
-        "absolute group border-2 rounded-xl",
-        isSelected ? "border-blue-500" : "border-dashed border-purple-300"
+        "absolute group border",
+        isSelected ? "border-foreground" : "border-dashed border-border"
       )}
       style={{
         left: data.position.x,
         top: data.position.y,
         width: data.size.width,
         height: data.size.height,
-        backgroundColor,
+        backgroundColor: data.backgroundColor || "color-mix(in oklab, var(--muted) 40%, transparent)",
         borderColor: data.borderColor || undefined,
         zIndex: data.zIndex,
         cursor: isDragging ? 'grabbing' : 'grab',

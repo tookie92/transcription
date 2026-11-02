@@ -1,5 +1,30 @@
 import { query, mutation } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { Id } from "./_generated/dataModel";
+import { pickBestMap } from "./lib/pickBestMap";
+
+type AffinityMapDoc = {
+  _id: Id<"affinityMaps">;
+  isCurrent: boolean;
+  updatedAt: number;
+  figJamElements?: unknown;
+};
+
+async function syncIsCurrentFlag(
+  ctx: MutationCtx,
+  maps: AffinityMapDoc[]
+): Promise<Id<"affinityMaps"> | null> {
+  const best = pickBestMap(maps);
+  if (!best) return null;
+  for (const map of maps) {
+    const shouldBeCurrent = map._id === best._id;
+    if (map.isCurrent !== shouldBeCurrent) {
+      await ctx.db.patch(map._id, { isCurrent: shouldBeCurrent });
+    }
+  }
+  return best._id;
+}
 
 export const getCurrent = query({
   args: {
@@ -11,11 +36,10 @@ export const getCurrent = query({
 
     const maps = await ctx.db
       .query("affinityMaps")
-      .filter(q => q.eq(q.field("projectId"), args.projectId))
-      .filter(q => q.eq(q.field("isCurrent"), true))
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
 
-    return maps[0] || null;
+    return pickBestMap(maps);
   },
 });
 
@@ -29,10 +53,200 @@ export const getByProject = query({
 
     return await ctx.db
       .query("affinityMaps")
-      .filter(q => q.eq(q.field("projectId"), args.projectId))
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
   },
 });
+
+/** Point isCurrent at the map that actually has wall packets. */
+export const reconcileCurrent = mutation({
+  args: {
+    projectId: v.id("projects"),
+  },
+  returns: v.union(v.id("affinityMaps"), v.null()),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new Error("Project not found");
+
+    const hasAccess =
+      project.members.some((member) => member.userId === identity.subject) ||
+      project.isPublic ||
+      project.ownerId === identity.subject;
+    if (!hasAccess) throw new Error("No access to project");
+
+    const result = await consolidateMapsForProject(ctx, args.projectId);
+    return result.keepId;
+  },
+});
+
+/**
+ * One study → one wall. Merge live figJam into the best map, rehome Casts /
+ * vote sessions, delete zombie maps so collab + Issue never split.
+ */
+export const consolidateProjectMaps = mutation({
+  args: {
+    projectId: v.id("projects"),
+  },
+  returns: v.object({
+    keepId: v.union(v.id("affinityMaps"), v.null()),
+    removed: v.number(),
+    merged: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new Error("Project not found");
+
+    const hasAccess =
+      project.members.some((member) => member.userId === identity.subject) ||
+      project.isPublic ||
+      project.ownerId === identity.subject;
+    if (!hasAccess) throw new Error("No access to project");
+
+    return await consolidateMapsForProject(ctx, args.projectId);
+  },
+});
+
+async function deleteByMapIndex(
+  ctx: MutationCtx,
+  table:
+    | "presence"
+    | "elementMovements"
+    | "elementLocks"
+    | "activityLog"
+    | "aiGroupingSuggestions"
+    | "silentSortingSessions"
+    | "groupConnections"
+    | "commentBubbles",
+  mapId: Id<"affinityMaps">
+): Promise<void> {
+  const rows = await ctx.db
+    .query(table)
+    .withIndex("by_map", (q) => q.eq("mapId", mapId))
+    .collect();
+  for (const row of rows) {
+    await ctx.db.delete(row._id);
+  }
+}
+
+async function deleteTypingForMap(
+  ctx: MutationCtx,
+  mapId: Id<"affinityMaps">
+): Promise<void> {
+  const all = await ctx.db.query("typingIndicators").collect();
+  for (const row of all) {
+    if (row.mapId === mapId) await ctx.db.delete(row._id);
+  }
+}
+
+function mergeStoredElements(
+  keep: Record<string, unknown>,
+  incoming: Record<string, unknown>
+): Record<string, unknown> {
+  const result = { ...keep };
+  for (const [id, el] of Object.entries(incoming)) {
+    if (!el || typeof el !== "object") continue;
+    if ((el as { deleted?: boolean }).deleted === true) continue;
+    const existing = result[id];
+    if (!existing || typeof existing !== "object") {
+      result[id] = el;
+      continue;
+    }
+    if ((existing as { deleted?: boolean }).deleted === true) {
+      result[id] = el;
+      continue;
+    }
+    const a = (existing as { updatedAt?: number }).updatedAt ?? 0;
+    const b = (el as { updatedAt?: number }).updatedAt ?? 0;
+    if (b >= a) result[id] = el;
+  }
+  return result;
+}
+
+async function consolidateMapsForProject(
+  ctx: MutationCtx,
+  projectId: Id<"projects">
+): Promise<{
+  keepId: Id<"affinityMaps"> | null;
+  removed: number;
+  merged: boolean;
+}> {
+  const maps = await ctx.db
+    .query("affinityMaps")
+    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .collect();
+
+  if (maps.length === 0) {
+    return { keepId: null, removed: 0, merged: false };
+  }
+
+  const keep = pickBestMap(maps);
+  if (!keep) {
+    return { keepId: null, removed: 0, merged: false };
+  }
+
+  let mergedElements =
+    keep.figJamElements && typeof keep.figJamElements === "object"
+      ? { ...(keep.figJamElements as Record<string, unknown>) }
+      : {};
+  let didMerge = false;
+  let removed = 0;
+
+  for (const map of maps) {
+    if (map._id === keep._id) continue;
+
+    const other =
+      map.figJamElements && typeof map.figJamElements === "object"
+        ? (map.figJamElements as Record<string, unknown>)
+        : {};
+    const before = Object.keys(mergedElements).length;
+    mergedElements = mergeStoredElements(mergedElements, other);
+    if (Object.keys(mergedElements).length > before) didMerge = true;
+
+    const personas = await ctx.db
+      .query("personas")
+      .withIndex("by_map", (q) => q.eq("mapId", map._id))
+      .collect();
+    for (const persona of personas) {
+      await ctx.db.patch(persona._id, { mapId: keep._id });
+    }
+
+    // Prefer keeping vote history on the surviving wall when cluster ids match.
+    const sessions = await ctx.db
+      .query("dotVotingSessions")
+      .withIndex("by_map", (q) => q.eq("mapId", map._id))
+      .collect();
+    for (const session of sessions) {
+      await ctx.db.patch(session._id, { mapId: keep._id });
+    }
+
+    await deleteByMapIndex(ctx, "presence", map._id);
+    await deleteByMapIndex(ctx, "elementMovements", map._id);
+    await deleteByMapIndex(ctx, "elementLocks", map._id);
+    await deleteByMapIndex(ctx, "activityLog", map._id);
+    await deleteByMapIndex(ctx, "aiGroupingSuggestions", map._id);
+    await deleteByMapIndex(ctx, "silentSortingSessions", map._id);
+    await deleteByMapIndex(ctx, "groupConnections", map._id);
+    await deleteByMapIndex(ctx, "commentBubbles", map._id);
+    await deleteTypingForMap(ctx, map._id);
+
+    await ctx.db.delete(map._id);
+    removed += 1;
+  }
+
+  await ctx.db.patch(keep._id, {
+    figJamElements: mergedElements,
+    isCurrent: true,
+    updatedAt: Date.now(),
+  });
+
+  return { keepId: keep._id, removed, merged: didMerge };
+}
 
 export const create = mutation({
   args: {
@@ -40,32 +254,30 @@ export const create = mutation({
     name: v.string(),
     description: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  returns: v.id("affinityMaps"),
+  handler: async (ctx, args): Promise<Id<"affinityMaps">> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
-    // Vérifier l'accès au projet
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
-    
-    const hasAccess = project.members.some(member => 
-      member.userId === identity.subject
-    ) || project.isPublic || project.ownerId === identity.subject;
+
+    const hasAccess =
+      project.members.some((member) => member.userId === identity.subject) ||
+      project.isPublic ||
+      project.ownerId === identity.subject;
 
     if (!hasAccess) throw new Error("No access to project");
 
-    // Marquer les autres maps comme non-current
     const existingMaps = await ctx.db
       .query("affinityMaps")
-      .filter(q => q.eq(q.field("projectId"), args.projectId))
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
 
-    for (const map of existingMaps) {
-      await ctx.db.patch(map._id, { isCurrent: false });
-    }
+    const keepId = await syncIsCurrentFlag(ctx, existingMaps);
+    if (keepId) return keepId;
 
-    // Créer la nouvelle map
-    const mapId = await ctx.db.insert("affinityMaps", {
+    return await ctx.db.insert("affinityMaps", {
       projectId: args.projectId,
       name: args.name,
       description: args.description,
@@ -76,8 +288,6 @@ export const create = mutation({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
-
-    return mapId;
   },
 });
 
@@ -533,19 +743,76 @@ export const replaceAllClusters = mutation({
  * Save FigJam board elements to Convex
  * Called when the board changes (debounced)
  */
+function storedUpdatedAt(value: unknown): number {
+  if (!value || typeof value !== "object") return 0;
+  const updatedAt = (value as { updatedAt?: unknown }).updatedAt;
+  return typeof updatedAt === "number" ? updatedAt : 0;
+}
+
+function mergeFigJamStored(
+  current: Record<string, unknown>,
+  incoming: Record<string, unknown>
+): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...current };
+  for (const [id, incomingEl] of Object.entries(incoming)) {
+    if (!incomingEl || typeof incomingEl !== "object") continue;
+    const existing = result[id];
+    if (!existing || storedUpdatedAt(incomingEl) >= storedUpdatedAt(existing)) {
+      result[id] = incomingEl;
+    }
+  }
+  return result;
+}
+
 export const saveFigJamElements = mutation({
   args: {
     mapId: v.id("affinityMaps"),
-    elements: v.any(), // Record<string, FigJamElement>
+    elements: v.any(),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
+    const map = await ctx.db.get(args.mapId);
+    if (!map) throw new Error("Map not found");
+
+    const project = await ctx.db.get(map.projectId);
+    if (!project) throw new Error("Project not found");
+
+    const hasAccess =
+      project.ownerId === identity.subject ||
+      project.members.some((member) => member.userId === identity.subject);
+    if (!hasAccess) throw new Error("No access to modify map");
+
+    const current =
+      map.figJamElements && typeof map.figJamElements === "object"
+        ? (map.figJamElements as Record<string, unknown>)
+        : {};
+    const incoming =
+      args.elements && typeof args.elements === "object"
+        ? (args.elements as Record<string, unknown>)
+        : {};
+
     await ctx.db.patch(args.mapId, {
-      figJamElements: args.elements,
+      figJamElements: mergeFigJamStored(current, incoming),
       updatedAt: Date.now(),
     });
+
+    // Keep isCurrent on the wall that actually has packets — dashboard/Issue
+    // still read the flag, and it drifts when duplicate maps exist.
+    const projectMaps = await ctx.db
+      .query("affinityMaps")
+      .withIndex("by_project", (q) => q.eq("projectId", map.projectId))
+      .collect();
+    const refreshed = await Promise.all(
+      projectMaps.map(async (m) =>
+        m._id === args.mapId ? (await ctx.db.get(m._id))! : m
+      )
+    );
+    await syncIsCurrentFlag(ctx, refreshed);
+
+    return null;
   },
 });
 
@@ -681,7 +948,7 @@ export const getFigJamElements = query({
   handler: async (ctx, args) => {
     const map = await ctx.db.get(args.mapId);
     if (!map) return null;
-    return map.figJamElements;
+    return map.figJamElements ?? {};
   },
 });
 

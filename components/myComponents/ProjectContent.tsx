@@ -4,282 +4,185 @@ import { useMutation, useQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { FileText, Plus, Users, ArrowLeft, CircuitBoard, Lightbulb, ArrowRight, CheckCircle2, Circle, Clock, Trash2, ChevronRight, MoreHorizontal, Share2, Mic, Sparkles, BarChart3, AlertTriangle } from "lucide-react";
-import Link from "next/link";
+import { Plus, Trash2, AlertTriangle } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { DialogTitle } from "@radix-ui/react-dialog";
-import { DialogHeader, DialogTrigger } from "@/components/ui/dialog";
-import { motion } from "framer-motion";
 import { ShareProjectModal } from "./ShareProjectModal";
 import { TeamDialog } from "./TeamDialog";
+import { FindStudyDialog } from "./FindStudyDialog";
+import { TapePeek, type TapePeekTarget } from "./affinity/TapePeek";
+import { cn } from "@/lib/utils";
+import { liveFigJamElements } from "@/lib/figjamMerge";
 
 interface ProjectContentProps {
   projectId: Id<"projects">;
 }
 
-function StatCard({ 
-  icon: Icon, 
-  label, 
-  value, 
-  subtext, 
-  color,
-  progress,
-  progressLabel,
-  delay,
-  actionIcon: ActionIcon,
-  onActionClick 
-}: { 
-  icon: React.ElementType; 
-  label: string; 
-  value: string | number;
-  subtext?: string;
-  color: string;
-  progress?: number;
-  progressLabel?: string;
-  delay?: number;
-  actionIcon?: React.ElementType;
-  onActionClick?: () => void;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay }}
-      className="group relative bg-card rounded-2xl border border-border p-5 hover:border-primary/30 transition-all duration-300"
-      whileHover={{ y: -2 }}
-    >
-      <div className="flex items-start justify-between mb-4">
-        <div 
-          className="w-11 h-11 rounded-xl flex items-center justify-center"
-          style={{ backgroundColor: `${color}15` }}
-        >
-          <Icon className="w-5 h-5" style={{ color }} />
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-3xl font-semibold" style={{ fontFamily: "var(--font-serif), Georgia, serif" }}>
-            {value}
-          </span>
-          {ActionIcon && onActionClick && (
-            <button 
-              onClick={onActionClick}
-              className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors cursor-pointer"
-            >
-              <ActionIcon className="w-4 h-4 text-muted-foreground hover:text-primary" />
-            </button>
-          )}
-        </div>
-      </div>
-      
-      <p className="font-medium text-sm mb-1">{label}</p>
-      {subtext && (
-        <p className="text-xs text-muted-foreground">{subtext}</p>
-      )}
-      
-      {progress !== undefined && (
-        <div className="mt-4">
-          <div className="flex items-center justify-between text-xs mb-1.5">
-            <span className="text-muted-foreground">{progressLabel}</span>
-            <span className="font-medium" style={{ color }}>{progress}%</span>
-          </div>
-          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-            <motion.div
-              className="h-full rounded-full"
-              style={{ backgroundColor: color }}
-              initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.8, delay: (delay || 0) + 0.2 }}
-            />
-          </div>
-        </div>
-      )}
-    </motion.div>
-  );
+type Sitting = {
+  _id: Id<"interviews">;
+  title: string;
+  topic?: string;
+  duration?: number;
+  status: string;
+  createdAt: number;
+  audioUrl?: string;
+};
+
+function formatDuration(seconds?: number): string {
+  if (!seconds) return "0:00";
+  return `${Math.floor(seconds / 60)}:${Math.round(seconds % 60)
+    .toString()
+    .padStart(2, "0")}`;
 }
 
-function InterviewCard({ 
-  interview, 
-  projectId, 
+function statusLabel(status: string): string {
+  switch (status) {
+    case "completed":
+      return "Ready";
+    case "analyzing":
+      return "Working";
+    case "transcribing":
+      return "Tape";
+    case "uploading":
+      return "Load";
+    case "ready":
+      return "Ready";
+    default:
+      return status;
+  }
+}
+
+function SittingRow({
+  interview,
+  projectId,
   onDelete,
-  index 
-}: { 
-  interview: any; 
+}: {
+  interview: Sitting;
   projectId: string;
   onDelete: (id: Id<"interviews">, title: string) => void;
-  index: number;
 }) {
   const router = useRouter();
-  const statusColors: Record<string, string> = {
-    completed: "bg-green-500",
-    analyzing: "bg-amber-500",
-    transcribing: "bg-blue-500",
-    uploading: "bg-purple-500",
-    ready: "bg-cyan-500",
-  };
-
-  const statusBg: Record<string, string> = {
-    completed: "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900",
-    analyzing: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900",
-    transcribing: "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900",
-    uploading: "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900",
-    ready: "bg-cyan-50 dark:bg-cyan-950/30 border-cyan-200 dark:border-cyan-900",
-  };
-
-  const duration = interview.duration ? `${Math.floor(interview.duration / 60)}:${Math.round(interview.duration % 60).toString().padStart(2, '0')}` : "0:00";
+  const busy =
+    interview.status === "transcribing" ||
+    interview.status === "analyzing" ||
+    interview.status === "uploading";
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.05 }}
-      className="group"
-    >
-      <div 
-        className="relative p-5 bg-card rounded-2xl border border-border hover:border-primary/40 transition-all duration-300 cursor-pointer"
-        onClick={() => router.push(`/project/${projectId}/interview/${interview._id}`)}
+    <li>
+      <button
+        type="button"
+        onClick={() =>
+          router.push(`/project/${projectId}/interview/${interview._id}`)
+        }
+        className={cn(
+          "group flex w-full cursor-pointer items-center gap-4 px-5 py-4 text-left",
+          "transition-colors duration-150 ease-out hover:bg-accent/60"
+        )}
       >
-        <div className="flex items-start gap-4">
-          {/* Icon */}
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">
-            <FileText className="w-5 h-5 text-primary" />
-          </div>
-          
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="font-semibold text-base mb-1 group-hover:text-primary transition-colors">
-                  {interview.title}
-                </h3>
-                <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    {duration}
-                  </span>
-                  {interview.topic && (
-                    <span className="text-muted-foreground/70">• {interview.topic}</span>
-                  )}
-                </div>
-              </div>
-              
-              {/* Status & Actions */}
-              <div className="flex items-center gap-2">
-                <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusBg[interview.status] || statusBg.ready}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${statusColors[interview.status] || statusColors.ready} mr-1.5 inline-block animate-pulse`} />
-                  {interview.status}
-                </span>
-                
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-500 hover:bg-red-50"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(interview._id, interview.title);
-                  }}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-            
-            {/* Date */}
-            <p className="text-xs text-muted-foreground mt-2">
-              {new Date(interview.createdAt).toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric', 
-                year: 'numeric' 
-              })}
-            </p>
-          </div>
+        <span
+          className={cn(
+            "size-1.5 shrink-0 rounded-full bg-primary",
+            busy && "animate-pulse"
+          )}
+          aria-hidden
+        />
+        <div className="min-w-0 flex-1">
+          <p
+            className="truncate text-base text-foreground"
+            style={{ fontFamily: "var(--font-display), sans-serif" }}
+          >
+            {interview.title}
+          </p>
+          <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+            {statusLabel(interview.status)}
+            {" · "}
+            {formatDuration(interview.duration)}
+            {interview.topic ? ` · ${interview.topic}` : ""}
+            {" · "}
+            {new Date(interview.createdAt).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            })}
+          </p>
         </div>
-      </div>
-    </motion.div>
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(interview._id, interview.title);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              onDelete(interview._id, interview.title);
+            }
+          }}
+          className="shrink-0 p-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:bg-destructive/10"
+          aria-label="Delete sitting"
+          title="Delete"
+        >
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </span>
+        <span className="shrink-0 font-mono text-[11px] tracking-widest uppercase text-muted-foreground group-hover:text-foreground">
+          Open →
+        </span>
+      </button>
+    </li>
   );
 }
 
-function EmptyState({ onCreateInterview }: { onCreateInterview: () => void }) {
+function EmptyRack({ onCreate }: { onCreate: () => void }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="text-center py-16 px-8"
-    >
-      {/* Illustration */}
-      <div className="relative w-32 h-32 mx-auto mb-8">
-        <div className="absolute inset-0 bg-primary/5 rounded-full" />
-        <motion.div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-card rounded-2xl border border-border shadow-sm flex items-center justify-center"
-          animate={{ y: [0, -8, 0] }}
-          transition={{ duration: 3, repeat: Infinity }}
-        >
-          <Mic className="w-8 h-8 text-primary" />
-        </motion.div>
-        {/* Decorative elements */}
-        <motion.div
-          className="absolute -top-2 -right-2 w-6 h-6 bg-[#FFF9C4] rounded-lg shadow-sm"
-          animate={{ rotate: [0, 10, 0] }}
-          transition={{ duration: 2, repeat: Infinity }}
-        />
-        <motion.div
-          className="absolute -bottom-1 -left-3 w-5 h-5 bg-[#C8E6C9] rounded-full shadow-sm"
-          animate={{ y: [0, -5, 0] }}
-          transition={{ duration: 2.5, repeat: Infinity, delay: 0.5 }}
-        />
-      </div>
-      
-      <h3 
-        className="text-2xl font-normal mb-3"
-        style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
-      >
-        No interviews yet
-      </h3>
-      <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-        Upload your first interview to start extracting insights with AI-powered analysis
-      </p>
-      
-      <Button 
-        onClick={onCreateInterview}
-        size="lg"
-        className="bg-primary hover:bg-primary/90 text-primary-foreground h-12 px-8"
-      >
-        <Plus className="w-5 h-5 mr-2" />
-        Upload Your First Interview
-      </Button>
-      
-      {/* How it works */}
-      <div className="mt-16 max-w-2xl mx-auto">
-        <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-6">
-          How it works
+    <div className="border border-border bg-card">
+      <div className="border-b border-border px-5 py-10 text-center sm:px-10">
+        <p className="mb-3 font-mono text-[11px] tracking-[0.22em] uppercase text-muted-foreground">
+          Empty rack
         </p>
-        <div className="grid sm:grid-cols-3 gap-4">
-          {[
-            { icon: Mic, step: "01", title: "Upload", desc: "Upload audio or video" },
-            { icon: Sparkles, step: "02", title: "AI Analysis", desc: "Get automatic insights" },
-            { icon: BarChart3, step: "03", title: "Organize", desc: "Map your findings" },
-          ].map((item, i) => (
-            <div key={i} className="relative p-5 bg-card rounded-xl border border-border">
-              <span 
-                className="text-4xl font-normal absolute top-3 right-4 opacity-[0.05]"
-                style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
-              >
-                {item.step}
-              </span>
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
-                <item.icon className="w-5 h-5 text-primary" />
-              </div>
-              <h4 className="font-medium text-sm mb-1">{item.title}</h4>
-              <p className="text-xs text-muted-foreground">{item.desc}</p>
-            </div>
-          ))}
-        </div>
+        <h3
+          className="mb-3 text-2xl font-semibold tracking-tight"
+          style={{ fontFamily: "var(--font-display), sans-serif" }}
+        >
+          No sittings yet
+        </h3>
+        <p className="mx-auto mb-8 max-w-md text-muted-foreground">
+          Load a tape, pin the lines that matter, put them on the wall.
+        </p>
+        <Button
+          size="lg"
+          onClick={onCreate}
+          className="h-12 px-6 font-mono text-xs uppercase tracking-widest"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Load a tape
+        </Button>
       </div>
-    </motion.div>
+      <ol className="grid divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        {[
+          { n: "01", t: "Record", d: "Drop audio or video" },
+          { n: "02", t: "Pin", d: "Select a line on the tape" },
+          { n: "03", t: "Map", d: "Cluster on the wall" },
+        ].map((step) => (
+          <li key={step.n} className="px-5 py-6">
+            <p className="mb-2 font-mono text-[11px] tracking-widest text-muted-foreground">
+              {step.n}
+            </p>
+            <h4
+              className="mb-1 text-lg font-semibold"
+              style={{ fontFamily: "var(--font-display), sans-serif" }}
+            >
+              {step.t}
+            </h4>
+            <p className="text-sm text-muted-foreground">{step.d}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
@@ -287,61 +190,116 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
   const router = useRouter();
   const { userId } = useAuth();
   const { user } = useUser();
-  
+
   const project = useQuery(api.projects.getProjectForInvite, { projectId });
-  const interviews = useQuery(api.interviews.getProjectInterviews, { projectId });
+  const interviews = useQuery(api.interviews.getProjectInterviews, {
+    projectId,
+  });
   const insights = useQuery(api.insights.getByProject, { projectId });
-  const affinityMaps = useQuery(api.affinityMaps.getByProject, { projectId });
+  const affinityMap = useQuery(api.affinityMaps.getCurrent, { projectId });
+  const consolidateProjectMaps = useMutation(
+    api.affinityMaps.consolidateProjectMaps
+  );
   const deleteInterview = useAction(api.interviews.deleteInterview);
   const deleteProject = useMutation(api.projects.deleteProject);
-  
+
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [interviewToDelete, setInterviewToDelete] = useState<{ id: Id<"interviews">; title: string } | null>(null);
+  const [interviewToDelete, setInterviewToDelete] = useState<{
+    id: Id<"interviews">;
+    title: string;
+  } | null>(null);
   const [deleteProjectDialogOpen, setDeleteProjectDialogOpen] = useState(false);
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
+  const [findOpen, setFindOpen] = useState(false);
+  const [tapePeek, setTapePeek] = useState<TapePeekTarget | null>(null);
 
-  const currentMap = affinityMaps?.find(m => m.isCurrent);
-  const mapId = currentMap?._id;
-  const figJamElements = useQuery(
+  const mapId = affinityMap?._id;
+  const figJamElementsRaw = useQuery(
     api.affinityMaps.getFigJamElements,
     mapId ? { mapId } : "skip"
   );
-  
-  // Calculate stats - use figJamElements when available, otherwise fallback to insights
-  const totalInsights = mapId && figJamElements
-    ? Object.values(figJamElements).filter((el: any) => el.type === "sticky").length
-    : (insights?.length || 0);
-  const analyzedInterviews = interviews?.filter(i => i.status === "completed").length || 0;
+  const figJamElements =
+    figJamElementsRaw && typeof figJamElementsRaw === "object"
+      ? liveFigJamElements(figJamElementsRaw as Record<string, unknown>)
+      : null;
+
+  useEffect(() => {
+    if (!affinityMap) return;
+    void consolidateProjectMaps({ projectId }).catch(() => undefined);
+  }, [affinityMap?._id, projectId, consolidateProjectMaps]);
+
+  const figJamStickies = (() => {
+    if (!mapId || !figJamElements) return [] as Array<{
+      clusterId?: string | null;
+      parentSectionId?: string | null;
+    }>;
+    return Object.values(figJamElements).flatMap((el) => {
+      if (!el || typeof el !== "object" || el.type !== "sticky") return [];
+      const sticky = el as {
+        type: "sticky";
+        clusterId?: string | null;
+        parentSectionId?: string | null;
+      };
+      return [sticky];
+    });
+  })();
+  const totalInsights =
+    mapId && figJamElements ? figJamStickies.length : insights?.length || 0;
   const totalInterviews = interviews?.length || 0;
-  const progressPercent = totalInterviews > 0 ? Math.round((analyzedInterviews / totalInterviews) * 100) : 0;
-  
-  const totalClusters = mapId && figJamElements 
-    ? Object.values(figJamElements).filter((el: any) => el.type === "label").length 
-    : 0;
-  const groupedInsights = mapId && figJamElements
-    ? Object.values(figJamElements).filter((el: any) => el.type === "sticky" && (el.clusterId || el.parentSectionId)).length
-    : 0;
-  const groupingProgress = totalInsights > 0 ? Math.round((groupedInsights / totalInsights) * 100) : 0;
+  const groupedInsights = figJamStickies.filter((el) =>
+    Boolean(el.clusterId || el.parentSectionId)
+  ).length;
 
   useEffect(() => {
     if (!project || !userId || !user?.emailAddresses?.[0]?.emailAddress) return;
-    
+
     const userEmail = user.emailAddresses[0].emailAddress;
     const isOwner = project.ownerId === userId;
-    const isMember = project.members.some((m: any) => m.userId === userId);
-    const isInvitedByEmail = project.members.some((m: any) => m.email === userEmail);
+    const isMember = project.members.some(
+      (m: { userId: string }) => m.userId === userId
+    );
+    const isInvitedByEmail = project.members.some(
+      (m: { email?: string }) => m.email === userEmail
+    );
 
-    // User was removed from project - redirect to projects page
     if (!isOwner && !isMember) {
       router.push("/project");
       return;
     }
 
-    // User was invited by email but hasn't accepted yet
     if (isInvitedByEmail && !isMember) {
-      router.push(`/invite/${projectId}?email=${encodeURIComponent(userEmail)}`);
+      router.push(
+        `/invite/${projectId}?email=${encodeURIComponent(userEmail)}`
+      );
     }
   }, [project, userId, user, projectId, router]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+      if (
+        event.key === "/" &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey
+      ) {
+        event.preventDefault();
+        setFindOpen(true);
+      }
+      if (event.key === "Escape") {
+        setTapePeek(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const handleDeleteInterview = (id: Id<"interviews">, title: string) => {
     setInterviewToDelete({ id, title });
@@ -350,274 +308,210 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
 
   const confirmDelete = async () => {
     if (!interviewToDelete) return;
-    
+
     try {
-      const interview = interviews?.find(i => i._id === interviewToDelete.id);
+      const interview = interviews?.find((i) => i._id === interviewToDelete.id);
       if (interview?.audioUrl) {
-        await fetch('/api/delete-audio', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        await fetch("/api/delete-audio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ fileUrl: interview.audioUrl }),
         });
       }
       await deleteInterview({ interviewId: interviewToDelete.id });
-      toast.success("Interview deleted");
+      toast.success("Sitting deleted");
       setDeleteDialogOpen(false);
-    } catch (error) {
-      toast.error("Failed to delete interview");
+    } catch {
+      toast.error("Could not delete sitting");
     }
   };
 
   const confirmDeleteProject = async () => {
     try {
       await deleteProject({ projectId });
-      toast.success("Project deleted");
+      toast.success("Session deleted");
       setDeleteProjectDialogOpen(false);
       router.push("/project");
-    } catch (error) {
-      toast.error("Failed to delete project");
+    } catch {
+      toast.error("Could not delete session");
     }
   };
 
   if (!project) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-            <Clock className="w-5 h-5 text-muted-foreground animate-pulse" />
-          </div>
-          <p className="text-muted-foreground">Loading project...</p>
-        </div>
+      <div className="border border-border bg-card px-5 py-16 text-center">
+        <p className="font-mono text-[11px] tracking-widest uppercase text-muted-foreground">
+          Loading session…
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="flex flex-col lg:flex-row lg:items-center justify-between gap-6"
-      >
-        <div className="flex-1">
-          {/* Breadcrumb */}
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
-            <Link href="/project" className="hover:text-foreground transition-colors">
-              Projects
-            </Link>
-            <ChevronRight className="w-4 h-4" />
-            <span className="text-foreground font-medium">{project.name}</span>
-          </div>
-          
-          {/* Title */}
-          <h1 
-            className="text-3xl lg:text-4xl font-normal tracking-tight mb-2"
-            style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
+    <div className="space-y-10">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <p className="mb-3 font-mono text-[11px] tracking-[0.22em] uppercase text-muted-foreground">
+            Unit · session
+          </p>
+          <h1
+            className="mb-2 text-3xl font-semibold tracking-tight lg:text-4xl"
+            style={{ fontFamily: "var(--font-display), sans-serif" }}
           >
             {project.name}
           </h1>
-          
-          {project.description && (
-            <p className="text-muted-foreground">{project.description}</p>
-          )}
-          
-          {/* Meta */}
-          <div className="flex items-center gap-4 mt-4 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <Clock className="w-4 h-4" />
-              Created {new Date(project.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Users className="w-4 h-4" />
-              {project.members.length} member{project.members.length !== 1 ? 's' : ''}
-            </span>
-          </div>
+          {project.description ? (
+            <p className="mb-3 max-w-xl text-muted-foreground">
+              {project.description}
+            </p>
+          ) : null}
+          <p className="font-mono text-[11px] text-muted-foreground">
+            Opened{" "}
+            {new Date(project.createdAt).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+            {" · "}
+            {project.members.length} crew
+          </p>
         </div>
-        
-        {/* Actions */}
-        <div className="flex items-center gap-3">
+
+        <div className="flex flex-wrap items-center gap-2">
           {project.ownerId === userId && (
             <Button
               variant="outline"
               size="icon"
               onClick={() => setDeleteProjectDialogOpen(true)}
               className="h-10 w-10 border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
-              title="Delete project"
+              title="Delete session"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="h-4 w-4" />
             </Button>
           )}
-          <ShareProjectModal projectId={projectId} projectName={project.name} />
+          <FindStudyDialog
+            projectId={projectId}
+            open={findOpen}
+            onOpenChange={setFindOpen}
+            onPick={setTapePeek}
+          />
+          <ShareProjectModal
+            projectId={projectId}
+            projectName={project.name}
+          />
           {project.ownerId === userId && (
             <Button
               variant="outline"
               onClick={() => setTeamDialogOpen(true)}
-              className="h-10"
+              className="h-10 font-mono text-xs uppercase tracking-widest"
             >
-              <Users className="w-4 h-4 mr-2" />
-              Manage Team
+              Crew
             </Button>
           )}
           <Button
             variant="outline"
             onClick={() => router.push(`/project/${projectId}/affinity/`)}
-            className="h-10"
+            className="h-10 font-mono text-xs uppercase tracking-widest"
           >
-            <CircuitBoard className="w-4 h-4 mr-2" />
-            Affinity Map
+            Wall · {totalInsights}
           </Button>
           <Button
             onClick={() => router.push(`/project/${projectId}/interview/`)}
-            className="bg-primary hover:bg-primary/90 h-10"
+            className="h-10 font-mono text-xs uppercase tracking-widest"
           >
-            <Plus className="w-4 h-4 mr-2" />
-            New Interview
+            <Plus className="mr-2 h-4 w-4" />
+            New sitting
           </Button>
         </div>
-      </motion.div>
-
-      {/* Quick Status Strip */}
-      {totalInterviews > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="bg-card rounded-2xl border border-border p-5"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium">Project Progress</span>
-            <span className="text-sm text-muted-foreground">{progressPercent}% analyzed</span>
-          </div>
-          <div className="h-2 bg-muted rounded-full overflow-hidden">
-            <motion.div
-              className="h-full bg-primary rounded-full"
-              initial={{ width: 0 }}
-              animate={{ width: `${progressPercent}%` }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-            />
-          </div>
-          <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
-            <span>{analyzedInterviews} of {totalInterviews} interviews analyzed</span>
-            <span>{groupingProgress}% of insights grouped</span>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard
-          icon={FileText}
-          label="Interviews"
-          value={totalInterviews}
-          subtext={`${analyzedInterviews} analyzed`}
-          color="#3B82F6"
-          progress={progressPercent}
-          progressLabel="Analyzed"
-          delay={0.1}
-        />
-        <StatCard
-          icon={Lightbulb}
-          label="Insights"
-          value={totalInsights}
-          subtext="extracted from interviews"
-          color="#A855F7"
-          delay={0.15}
-        />
-        <StatCard
-          icon={CircuitBoard}
-          label="Clusters"
-          value={totalClusters}
-          subtext={`${groupedInsights} insights grouped`}
-          color="#22C55E"
-          progress={groupingProgress}
-          progressLabel="Grouped"
-          delay={0.2}
-        />
       </div>
 
-      {/* Invite Dialog - empty trigger since we use our own button */}
-      <TeamDialog 
-        projectId={projectId} 
-        open={teamDialogOpen} 
+      {totalInterviews > 0 && (
+        <div className="flex flex-col gap-4 border border-border bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="font-mono text-sm tracking-wide">
+            {totalInterviews}{" "}
+            {totalInterviews === 1 ? "sitting" : "sittings"}
+            <span className="text-muted-foreground"> · </span>
+            {totalInsights} {totalInsights === 1 ? "pin" : "pins"}
+            <span className="text-muted-foreground"> · </span>
+            {Math.max(totalInsights - groupedInsights, 0)} still in the tray
+          </p>
+          <Button
+            size="sm"
+            onClick={() => router.push(`/project/${projectId}/affinity/`)}
+            className="self-start font-mono text-[11px] uppercase tracking-widest"
+          >
+            Open wall
+          </Button>
+        </div>
+      )}
+
+      <TeamDialog
+        projectId={projectId}
+        open={teamDialogOpen}
         onOpenChange={setTeamDialogOpen}
         trigger={null}
       />
 
-      {/* Interviews Section */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.3 }}
-      >
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h2 
-              className="text-xl font-semibold"
-              style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
-            >
-              Interviews
+      {tapePeek ? (
+        <TapePeek
+          projectId={projectId}
+          target={tapePeek}
+          placement="page"
+          onClose={() => setTapePeek(null)}
+        />
+      ) : null}
+
+      {totalInterviews > 0 ? (
+        <section className="border border-border bg-card">
+          <div className="flex items-baseline justify-between gap-4 border-b border-border px-5 py-3">
+            <h2 className="font-mono text-[11px] tracking-widest uppercase">
+              Sittings
             </h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {totalInterviews > 0 ? `${totalInterviews} interview${totalInterviews !== 1 ? 's' : ''} in this project` : 'Get started with your first interview'}
+            <p className="font-mono text-[11px] tabular-nums text-muted-foreground">
+              {totalInterviews}
             </p>
           </div>
-          {totalInterviews > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push(`/project/${projectId}/interview/`)}
-              className="text-muted-foreground"
-            >
-              View all
-              <ArrowRight className="w-4 h-4 ml-1" />
-            </Button>
-          )}
-        </div>
-        
-        {totalInterviews > 0 ? (
-          <div className="space-y-3">
-            {interviews?.slice(0, 5).map((interview, index) => (
-              <InterviewCard
+          <ul className="divide-y divide-border">
+            {interviews?.map((interview) => (
+              <SittingRow
                 key={interview._id}
-                interview={interview}
+                interview={interview as Sitting}
                 projectId={projectId}
                 onDelete={handleDeleteInterview}
-                index={index}
               />
             ))}
-            
-            {interviews && interviews.length > 5 && (
-              <Button
-                variant="outline"
-                className="w-full h-12"
-                onClick={() => router.push(`/project/${projectId}/interview/`)}
-              >
-                View all {interviews.length} interviews
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            )}
-          </div>
-        ) : (
-          <EmptyState onCreateInterview={() => router.push(`/project/${projectId}/interview/`)} />
-        )}
-      </motion.div>
+          </ul>
+        </section>
+      ) : (
+        <EmptyRack
+          onCreate={() => router.push(`/project/${projectId}/interview/`)}
+        />
+      )}
 
-      {/* Delete Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="max-w-md">
-          <DialogTitle className="text-lg font-semibold">Delete Interview</DialogTitle>
+          <DialogTitle
+            className="text-lg"
+            style={{ fontFamily: "var(--font-display), sans-serif" }}
+          >
+            Delete sitting
+          </DialogTitle>
           <p className="text-muted-foreground">
-            Are you sure you want to delete &quot;{interviewToDelete?.title}&quot;? This action cannot be undone.
+            Drop &quot;{interviewToDelete?.title}&quot;? Tape and pins go with
+            it.
           </p>
-          <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+          <div className="mt-4 flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              className="font-mono text-xs uppercase tracking-widest"
+            >
               Cancel
             </Button>
-            <Button 
-              variant="destructive" 
-              onClick={confirmDelete}
+            <Button
+              variant="destructive"
+              onClick={() => void confirmDelete()}
+              className="font-mono text-xs uppercase tracking-widest"
             >
               Delete
             </Button>
@@ -625,28 +519,41 @@ export function ProjectContent({ projectId }: ProjectContentProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Project Dialog */}
-      <Dialog open={deleteProjectDialogOpen} onOpenChange={setDeleteProjectDialogOpen}>
+      <Dialog
+        open={deleteProjectDialogOpen}
+        onOpenChange={setDeleteProjectDialogOpen}
+      >
         <DialogContent className="max-w-md">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5 text-destructive" />
+          <div className="mb-2 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center border border-destructive/30 bg-destructive/10">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
             </div>
-            <DialogTitle className="text-lg font-semibold">Delete Project</DialogTitle>
+            <DialogTitle
+              className="text-lg"
+              style={{ fontFamily: "var(--font-display), sans-serif" }}
+            >
+              Delete session
+            </DialogTitle>
           </div>
           <p className="text-muted-foreground">
-            Are you sure you want to delete &quot;{project.name}&quot;? This will permanently remove all interviews, insights, and affinity maps. This action cannot be undone.
+            Delete &quot;{project.name}&quot;? Sittings, pins, and the wall go
+            with it.
           </p>
-          <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setDeleteProjectDialogOpen(false)}>
+          <div className="mt-4 flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteProjectDialogOpen(false)}
+              className="font-mono text-xs uppercase tracking-widest"
+            >
               Cancel
             </Button>
-            <Button 
-              variant="destructive" 
-              onClick={confirmDeleteProject}
+            <Button
+              variant="destructive"
+              onClick={() => void confirmDeleteProject()}
+              className="font-mono text-xs uppercase tracking-widest"
             >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete Project
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
             </Button>
           </div>
         </DialogContent>

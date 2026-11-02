@@ -47,7 +47,7 @@ export default function InterviewHome() {
   const userEmail = user?.emailAddresses?.[0]?.emailAddress;
   const router = useRouter();
 
-  const [selectedSource, setSelectedSource] = useState<SourceType>(null);
+  const [selectedSource, setSelectedSource] = useState<SourceType>('upload');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isVideoFile, setIsVideoFile] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -90,6 +90,7 @@ export default function InterviewHome() {
   }, [audioUrl]);
 
   const handleSourceSelect = (source: SourceType) => {
+    if (source === selectedSource) return;
     setSelectedSource(source);
     setSelectedFile(null);
     setAudioUrl(null);
@@ -103,6 +104,10 @@ export default function InterviewHome() {
     setAudioUrl(url);
     const isVideo = videoConverter.isVideoFile(file) || videoConverter.isVideoExtension(file.name);
     setIsVideoFile(isVideo);
+    setTitle((current) => {
+      if (current.trim()) return current;
+      return file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim();
+    });
     if (isVideo) {
       toast.info(`Video detected (${(file.size / 1024 / 1024).toFixed(1)}MB). Will convert automatically.`);
     }
@@ -226,7 +231,7 @@ export default function InterviewHome() {
   const formatTime = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.round(seconds % 60).toString().padStart(2, '0')}`;
 
   const handleTranscribe = async () => {
-    if (!selectedFile || !title.trim() || !topic.trim()) return;
+    if (!selectedFile || !title.trim()) return;
     
     // Check file size before sending (max 25MB for Groq free tier)
     const maxSize = 25 * 1024 * 1024; // 25MB
@@ -280,8 +285,8 @@ export default function InterviewHome() {
         duration: pendingInterview.duration,
         audioUrl,
       });
-      toast.success('Saved!', { id: toastId });
-      router.push(`/project/${currentProjectId}`);
+      toast.success("Tape saved", { id: toastId });
+      router.push(`/project/${currentProjectId}/interview/${interviewId}?ready=1`);
     } catch (err) {
       toast.error(`Failed: ${err instanceof Error ? err.message : 'Unknown'}`, { id: toastId });
     } finally {
@@ -310,7 +315,7 @@ export default function InterviewHome() {
     setTopic('');
     setShowPreview(false);
     setPendingInterview(null);
-    setSelectedSource(null);
+    setSelectedSource('upload');
     setRecordingTime(0);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -343,40 +348,33 @@ export default function InterviewHome() {
           </Link>
 
           <div className="mb-10">
-            <h1 className="font-serif text-4xl md:text-5xl mb-3 tracking-tight text-foreground">Add New Interview</h1>
-            <p className="text-lg text-muted-foreground">Choose how you want to import your interview</p>
+            <h1 className="text-4xl md:text-5xl mb-3 tracking-tight text-foreground" style={{ fontFamily: "var(--font-display), sans-serif" }}>
+              Load the tape
+            </h1>
+            <p className="text-lg text-muted-foreground">Drop a file. Mic, system, or URL if you need them.</p>
           </div>
 
           {!showPreview ? (
             <>
-              <div className="grid md:grid-cols-4 gap-4 mb-8">
-                {[
-                  { id: 'upload', icon: CloudUpload, label: 'Upload File', desc: 'MP3, MP4, WAV, M4A' },
-                  { id: 'record', icon: Mic, label: 'Record Mic', desc: 'Record from microphone' },
-                  { id: 'recordSystem', icon: Monitor, label: 'Record System', desc: 'Record system audio' },
-                  { id: 'url', icon: Globe, label: 'From URL', desc: 'Paste a link to audio/video' },
-                ].map((source, i) => (
-                  <motion.button
+              <div className="flex flex-wrap gap-3 mb-6 font-mono text-[11px] tracking-widest uppercase">
+                {([
+                  { id: 'upload' as const, label: 'File' },
+                  { id: 'record' as const, label: 'Mic' },
+                  { id: 'recordSystem' as const, label: 'System' },
+                  { id: 'url' as const, label: 'URL' },
+                ]).map((source) => (
+                  <button
                     key={source.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.1 }}
-                    onClick={() => handleSourceSelect(source.id as SourceType)}
-                    className={`relative p-6 rounded-2xl border-2 transition-all duration-200 text-left ${
+                    type="button"
+                    onClick={() => handleSourceSelect(source.id)}
+                    className={`px-3 py-2 border text-left ${
                       selectedSource === source.id
-                        ? 'border-primary bg-primary/5 shadow-lg shadow-primary/10'
-                        : 'border-border bg-card hover:border-primary/50 hover:shadow-md'
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/40'
                     }`}
                   >
-                    <source.icon className={`w-8 h-8 mb-4 ${selectedSource === source.id ? 'text-primary' : 'text-muted-foreground'}`} />
-                    <h3 className="font-serif text-xl mb-1 text-foreground">{source.label}</h3>
-                    <p className="text-sm text-muted-foreground">{source.desc}</p>
-                    {selectedSource === source.id && (
-                      <motion.div layoutId="sourceIndicator" className="absolute top-4 right-4 w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-                        <Check className="w-4 h-4 text-white" />
-                      </motion.div>
-                    )}
-                  </motion.button>
+                    {source.label}
+                  </button>
                 ))}
               </div>
 
@@ -570,7 +568,7 @@ export default function InterviewHome() {
                           <div className="mt-6 space-y-4">
                             <div>
                               <label className="block text-sm font-medium mb-2">
-                                Interview Title <span className="text-red-500">*</span>
+                                Interview Title <span className="text-destructive">*</span>
                               </label>
                               <input
                                 type="text"
@@ -582,16 +580,16 @@ export default function InterviewHome() {
                             </div>
                             <div>
                               <label className="block text-sm font-medium mb-2">
-                                Interview Topic <span className="text-red-500">*</span>
+                                Topic <span className="text-muted-foreground font-normal">(optional)</span>
                               </label>
                               <input
                                 type="text"
                                 value={topic}
                                 onChange={(e) => setTopic(e.target.value)}
-                                placeholder="e.g., Mobile app onboarding experience"
-                                className="w-full px-4 py-3 rounded-xl border border-[var(--warm-border)] bg-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
+                                placeholder="e.g., Mobile app onboarding"
+                                className="w-full px-4 py-3 rounded-xl border border-border bg-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
                               />
-                              <p className="text-xs text-[var(--muted-foreground)] mt-2">Helps AI extract better insights</p>
+                              <p className="text-xs text-muted-foreground mt-2">Helps suggested pins. Skip if you just want the tape.</p>
                             </div>
                             <div>
                               <label className="block text-sm font-medium mb-2">
@@ -616,7 +614,7 @@ export default function InterviewHome() {
 
                           <button
                             onClick={handleTranscribe}
-                            disabled={isProcessing || !title.trim() || !topic.trim()}
+                            disabled={isProcessing || !title.trim()}
                             className="mt-6 w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
                           >
                             {isProcessing ? (

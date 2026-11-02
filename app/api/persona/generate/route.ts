@@ -1,6 +1,6 @@
-// app/api/persona/generate/route.ts - VERSION SIMPLIFIÉE
-import { NextRequest, NextResponse } from 'next/server';
-import Groq from 'groq-sdk';
+import { NextRequest, NextResponse } from "next/server";
+import Groq from "groq-sdk";
+import { GROQ_MODEL_FAST } from "@/lib/groq";
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
@@ -24,44 +24,22 @@ interface PersonaRequest {
   }>;
 }
 
-interface UserPersonaResponse {
+interface SlimPersona {
   name: string;
-  gender: 'male' | 'female';
-  age: number;
   occupation: string;
   background: string;
+  quote: string;
   goals: string[];
   frustrations: string[];
-  behaviors: string[];
-  quote: string;
-  demographics: {
-    education: string;
-    income: string;
-    location: string;
-    techProficiency: 'beginner' | 'intermediate' | 'expert';
-  };
-  psychographics: {
-    motivations: string[];
-    values: string[];
-    personality: string[];
-  };
 }
 
-// 🎯 CREATIVE NAMES BY GENDER
-const CREATIVE_NAMES = {
-  male: {
-    tech: ["Alex Techlover", "Max Connected", "Tom Geek", "Mark Algorithmic", "Chris Builder", "David Digital", "James App", "Ryan Software"],
-    creative: ["Lucas Creative", "Hugo Artistic", "Nathan Imaginative", "Theo Conceptual", "Jack Design", "Oliver Art", "Ethan Creative", "Mason Vision"],
-    business: ["Paul Strategist", "Pierre Proactive", "Anthony Visionary", "David Ambitious", "Michael Leader", "Charles Manager", "Thomas Strategy", "Daniel Enterprise"],
-    general: ["Thomas Observer", "Simon Methodical", "Kevin Optimistic", "Nicholas Analytical", "Peter Curious", "George Practical", "Andrew Reflective", "Brian Logical"]
-  },
-  female: {
-    tech: ["Sarah Coder", "Clara Digital", "Lea Innovator", "Julie 2.0", "Emma Tech", "Sophie Code", "Mia Digital", "Grace Builder"],
-    creative: ["Sophie Social", "Emma Inspiring", "Chloe Visionary", "Zoe Creative", "Lily Design", "Ava Artistic", "Isabella Art", "Mila Vision"],
-    business: ["Marie Manager", "Anna Entrepreneur", "Camille Leader", "Laura Organized", "Jessica Business", "Rachel Strategy", "Nicole Enterprise", "Victoria Pro"],
-    general: ["Julie Curious", "Alice Pragmatic", "Lea Persistent", "Manon Reflective", "Emma Observer", "Sophie Practical", "Chloe Logical", "Nina Analytical"]
-  }
-};
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -70,157 +48,101 @@ export async function POST(request: NextRequest) {
 
     if (!groups || groups.length === 0) {
       return NextResponse.json(
-        { error: 'No groups provided for persona generation' },
+        { error: "Pick at least one packet" },
         { status: 400 }
       );
     }
 
-    // 🎯 ANALYZE CONTEXT FOR CREATIVE NAME
-    const { gender, category } = determineGenderAndCategory(groups, projectContext);
-    const creativeName = getCreativeName(gender, category);
+    const pinLines = insights
+      .map((insight) => `- [${insight.type}] ${insight.text.trim()}`)
+      .filter((line) => line.length > 10)
+      .join("\n");
 
-    const insightsText = insights.map(insight => 
-      `- ${insight.type.toUpperCase()}: ${insight.text}`
-    ).join('\n');
+    const groupsText = groups
+      .map((group) => {
+        const votingInfo = dotVotingResults?.find((result) => result.title === group.title);
+        const voteCount = votingInfo?.voteCount ?? 0;
+        const priority = voteCount > 0 ? ` (${voteCount} votes)` : "";
+        return `- ${group.title}: ${group.insightIds.length} pins${priority}`;
+      })
+      .join("\n");
 
-    const groupsText = groups.map(group => {
-      const votingInfo = dotVotingResults?.find(r => r.title === group.title);
-      const voteCount = votingInfo?.voteCount || 0;
-      const priority = voteCount > 0 ? ` (${voteCount} votes - HIGH PRIORITY)` : '';
-      return `- ${group.title}: ${group.insightIds.length} insights${priority}`;
-    }).join('\n');
+    const prompt = `You extract one research fiche from affinity packets. Do not invent demographics, avatars, income, age, or gender.
 
-    // Build priority context
-    const priorityGroups = dotVotingResults
-      ?.filter(r => r.voteCount > 0)
-      .sort((a, b) => b.voteCount - a.voteCount)
-      .map(r => r.title) || [];
+PROJECT: ${projectContext || "Interview study"}
 
-    const priorityContext = priorityGroups.length > 0 
-      ? `\n\nPRIORITY CONTEXT: The following clusters received the most votes during dot voting and should be given extra emphasis:\n${priorityGroups.map((title, i) => `${i + 1}. ${title}`).join('\n')}`
-      : '';
-
-    const prompt = `You are a UX Research expert creating detailed user personas based on affinity mapping data.
-
-PROJECT CONTEXT: ${projectContext || 'General user research project'}
-
-AFFINITY GROUPS (patterns discovered):
+PACKETS:
 ${groupsText}
 
-KEY INSIGHTS FROM USER RESEARCH:
-${insightsText}
-${priorityContext}
+PINS (use these only):
+${pinLines || "- (no pin text)"}
 
-Based on these research insights, create a comprehensive user persona that represents the main user archetype.
-
-IMPORTANT: Use the name "${creativeName}" for this persona.
-
-Return a JSON object with this exact structure:
+Return JSON with this exact shape:
 {
-  "name": "${creativeName}",
-  "gender": "${gender}",
-  "age": number between 25-65,
-  "occupation": "Realistic job title that matches the research insights",
-  "background": "2-3 sentence background story based on the research",
-  "goals": ["3-4 specific goals derived from the insights"],
-  "frustrations": ["3-4 specific pain points from the research"],
-  "behaviors": ["3-4 key behavioral patterns observed"],
-  "quote": "Memorable quote that captures their perspective based on the insights",
-  "demographics": {
-    "education": "e.g., Bachelor's Degree, Master's, etc.",
-    "income": "e.g., $50k-75k, $75k-100k, etc.",
-    "location": "e.g., Urban, Suburban, Rural",
-    "techProficiency": "beginner/intermediate/expert"
-  },
-  "psychographics": {
-    "motivations": ["2-3 core motivations from the research"],
-    "values": ["2-3 key values observed"],
-    "personality": ["2-3 personality traits derived from behaviors"]
-  }
+  "name": "a plain given name plus family name that could belong to someone in this study",
+  "occupation": "job or role implied by the pins, not a gimmick",
+  "background": "one or two sentences grounded in the packets",
+  "quote": "MUST be copied verbatim from one PIN above. Do not invent or rewrite.",
+  "goals": ["2-4 goals implied by the pins"],
+  "frustrations": ["2-4 frustrations taken from pain pins when present"]
 }
 
-Make the persona realistic, specific, and directly based on the research insights provided. Give special attention to the priority clusters if any are listed above.`;
+If a pin is already a first-person line, use that as quote. Never use names like Techlover, Coder, or 2.0.`;
 
     const completion = await groq.chat.completions.create({
       messages: [
         {
-          role: 'system',
-          content: 'You are a senior UX researcher. Always respond with valid JSON only, no markdown.',
+          role: "system",
+          content: "You are a field researcher cutting a slim fiche from wall packets. JSON only.",
         },
-        {
-          role: 'user',
-          content: prompt,
-        },
+        { role: "user", content: prompt },
       ],
-      model: 'llama-3.1-8b-instant',
-      temperature: 0.7,
-      response_format: { type: 'json_object' },
+      model: GROQ_MODEL_FAST,
+      temperature: 0.4,
+      response_format: { type: "json_object" },
     });
 
-    const responseText = completion.choices[0]?.message?.content || '{}';
-    
-    let personaData: UserPersonaResponse;
+    const responseText = completion.choices[0]?.message?.content || "{}";
+    let parsed: Record<string, unknown>;
     try {
-      personaData = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error('Failed to parse persona:', parseError);
+      parsed = JSON.parse(responseText) as Record<string, unknown>;
+    } catch {
       return NextResponse.json(
-        { error: 'Failed to generate persona data' },
+        { error: "Cast model returned invalid JSON" },
         { status: 500 }
       );
     }
 
-    // 🎯 SIMPLE PROFILE IMAGE GENERATION
-    const profileImage = generateSimpleProfileImage(personaData);
+    const persona: SlimPersona = {
+      name: typeof parsed.name === "string" ? parsed.name.trim() : "",
+      occupation: typeof parsed.occupation === "string" ? parsed.occupation.trim() : "",
+      background: typeof parsed.background === "string" ? parsed.background.trim() : "",
+      quote: typeof parsed.quote === "string" ? parsed.quote.trim() : "",
+      goals: asStringArray(parsed.goals).slice(0, 4),
+      frustrations: asStringArray(parsed.frustrations).slice(0, 4),
+    };
+
+    if (!persona.name || !persona.occupation) {
+      return NextResponse.json(
+        { error: "Empty fiche — try again with more slips" },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
-      persona: personaData,
-      profileImage,
+      persona,
       basedOn: {
         groups: groups.length,
         insights: insights.length,
-        groupTitles: groups.map(g => g.title),
+        groupTitles: groups.map((group) => group.title),
       },
     });
-
   } catch (error) {
-    console.error('Persona generation error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Persona generation failed';
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    console.error("Cast cut error:", error);
+    const raw = error instanceof Error ? error.message : "";
+    const message = /api key|GROQ|401|Unauthorized/i.test(raw)
+      ? "Cast service unavailable — check GROQ_API_KEY"
+      : raw.trim() || "Cast service failed — try again";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-}
-
-// 🎯 DETERMINE GENDER AND CATEGORY
-function determineGenderAndCategory(groups: Array<{title: string}>, projectContext?: string): { gender: 'male' | 'female'; category: keyof typeof CREATIVE_NAMES.male } {
-  const allText = [...groups.map(g => g.title), projectContext || ''].join(' ').toLowerCase();
-  
-  // Randomly pick gender for variety
-  const gender: 'male' | 'female' = Math.random() > 0.5 ? 'male' : 'female';
-  
-  let category: keyof typeof CREATIVE_NAMES.male = 'general';
-  if (allText.includes('tech') || allText.includes('digital') || allText.includes('app') || allText.includes('software')) {
-    category = 'tech';
-  } else if (allText.includes('design') || allText.includes('creative') || allText.includes('art') || allText.includes('social')) {
-    category = 'creative';
-  } else if (allText.includes('business') || allText.includes('manager') || allText.includes('enterprise') || allText.includes('strategy')) {
-    category = 'business';
-  }
-  
-  return { gender, category };
-}
-
-// 🎯 GET CREATIVE NAME
-function getCreativeName(gender: 'male' | 'female', category: keyof typeof CREATIVE_NAMES.male): string {
-  const names = CREATIVE_NAMES[gender][category];
-  return names[Math.floor(Math.random() * names.length)];
-}
-
-// 🎯 SIMPLE PROFILE IMAGE GENERATION WITHOUT EXTERNAL APIS
-function generateSimpleProfileImage(persona: UserPersonaResponse): string {
-  const gender = persona.gender === 'female' ? 'women' : 'men';
-  const id = Math.floor(Math.random() * 50);
-  return `https://randomuser.me/api/portraits/med/${gender}/${id}.jpg`;
 }

@@ -73,6 +73,9 @@ export function AIPanel({
       if (!response.ok) throw new Error('Failed to generate');
 
       const data = await response.json();
+      if (typeof data.warning === "string" && data.warning) {
+        toast.message(data.warning);
+      }
       setGroupingSuggestions(data.suggestions || []);
       
       if (!data.suggestions?.length) {

@@ -1,15 +1,15 @@
 import { Toaster } from "@/components/ui/sonner";
 
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
-import { Outfit } from "next/font/google";
+import { JetBrains_Mono, Outfit, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import ConvexClientProvider from "@/components/ConvexClientProvider";
 import { ThemeProvider } from "next-themes";
-import { shadcn } from '@clerk/themes'
+import { shadcn } from "@clerk/themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
-
+import { SoftErrorBoundary } from "@/components/ConvexErrorBoundary";
+import { SignalWidget } from "@/components/myComponents/SignalWidget";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
@@ -24,14 +24,29 @@ const outfit = Outfit({
   display: "swap",
 });
 
+const jetbrains = JetBrains_Mono({
+  variable: "--font-jetbrains",
+  subsets: ["latin"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://skripta.app"),
   title: {
-    default: "Skripta - AI-Powered Interview Research Platform",
+    default: "Skripta — Field kit for interview research",
     template: "%s | Skripta",
   },
-  description: "Transform your interview research with AI-powered transcription, affinity mapping, and collaborative insights. Build affinity diagrams and discover themes in minutes.",
-  keywords: ["interview research", "transcription", "affinity mapping", "UX research", "user research", "AI insights", "qualitative analysis", "research tools"],
+  description:
+    "Record interviews, pin Quote / Pain / Follow-up, packet the wall, Round Stick Flip, publish the Issue. Field kit for one study.",
+  keywords: [
+    "interview research",
+    "transcription",
+    "affinity mapping",
+    "UX research",
+    "user research",
+    "qualitative analysis",
+    "workshop voting",
+  ],
   authors: [{ name: "Skripta" }],
   creator: "Skripta",
   openGraph: {
@@ -39,21 +54,23 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: "https://skripta.app",
     siteName: "Skripta",
-    title: "Skripta - AI-Powered Interview Research Platform",
-    description: "Transform your interview research with AI-powered transcription, affinity mapping, and collaborative insights.",
+    title: "Skripta — Field kit for interview research",
+    description:
+      "Tape → pins → packets → Round → Issue. Built for researchers who still sit with people.",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Skripta - Interview Research Platform",
+        alt: "Skripta — interview research field kit",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Skripta - AI-Powered Interview Research Platform",
-    description: "Transform your interview research with AI-powered transcription and affinity mapping.",
+    title: "Skripta — Field kit for interview research",
+    description:
+      "Tape → pins → packets → Round → Issue. Built for researchers who still sit with people.",
     images: ["/og-image.png"],
   },
   robots: {
@@ -68,9 +85,7 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: [
-      { url: "/logomark.svg", type: "image/svg+xml" },
-    ],
+    icon: [{ url: "/logomark.svg", type: "image/svg+xml" }],
     shortcut: "/logomark.svg",
     apple: "/logomark.svg",
   },
@@ -83,24 +98,30 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${jakarta.variable} ${outfit.variable} font-sans bg-background antialiased`}>
+      <body
+        className={`${jakarta.variable} ${outfit.variable} ${jetbrains.variable} font-sans bg-background antialiased`}
+      >
         <ThemeProvider
           attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
         >
-<ClerkProvider
+          <ClerkProvider
             appearance={{
               baseTheme: shadcn,
             }}
+            signInFallbackRedirectUrl="/project"
+            signUpFallbackRedirectUrl="/project?new=1"
+            afterSignOutUrl="/"
           >
             <TooltipProvider>
               <ConvexClientProvider>
-                  <main className="w-full min-h-dvh flex-1">
-                    {children}
-                  </main>
-                <Toaster/>
+                <main className="w-full min-h-dvh flex-1">{children}</main>
+                <SoftErrorBoundary>
+                  <SignalWidget />
+                </SoftErrorBoundary>
+                <Toaster />
               </ConvexClientProvider>
             </TooltipProvider>
           </ClerkProvider>

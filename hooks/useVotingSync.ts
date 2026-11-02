@@ -85,7 +85,15 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
 
   // ── Local State ─────────────────────────────────────────────────────────────
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
-  const [isLocallyVoting, setIsLocallyVoting] = useState(false);
+  /** Participant opted out of this round; session continues for others. */
+  const [isSittingOut, setIsSittingOut] = useState(false);
+
+  // Clear sit-out when the room session ends or a new round starts
+  useEffect(() => {
+    if (!activeSession || activeSession.votingPhase !== "voting") {
+      setIsSittingOut(false);
+    }
+  }, [activeSession?._id, activeSession?.votingPhase]);
 
   // Timer effect
   useEffect(() => {
@@ -133,6 +141,8 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
   const isSilentMode = activeSession?.isSilentMode ?? true;
   const isVotingPhase = activeSession?.votingPhase === "voting";
   const isRevealed = activeSession?.votingPhase === "revealed";
+  /** True only while this client is participating (not sitting out). */
+  const isVoting = isVotingPhase && !isSittingOut;
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -152,7 +162,7 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
         isSilentMode: true, // Always silent during voting
         durationMinutes: config.durationMinutes ?? undefined,
       });
-      setIsLocallyVoting(true);
+      setIsSittingOut(false);
     } catch (error) {
       console.error("Failed to start voting:", error);
     }
@@ -160,6 +170,7 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
 
   const toggleVote = useCallback(async (clusterId: string, position?: { x: number; y: number }) => {
     if (!activeSession || !currentUserId || currentUserId === "anonymous") return;
+    if (isSittingOut) return;
     
     // Only allow voting during voting phase
     if (activeSession.votingPhase !== "voting") {
@@ -188,22 +199,29 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
     } catch (error) {
       console.error("Failed to cast vote:", error);
     }
-  }, [activeSession, currentUserId, myVotes, myVotedClusters, castVoteMutation, userColor]);
+  }, [activeSession, currentUserId, myVotes, myVotedClusters, castVoteMutation, userColor, isSittingOut]);
 
   const stopVoting = useCallback(async () => {
     if (!activeSession) return;
     
     try {
       await stopVotingMutation({ sessionId: activeSession._id });
-      setIsLocallyVoting(false);
+      setIsSittingOut(false);
     } catch (error) {
       console.error("Failed to stop voting:", error);
     }
   }, [activeSession, stopVotingMutation]);
 
+  /** Sit out of this round locally; room session stays open for others. */
   const leaveVoting = useCallback(() => {
-    setIsLocallyVoting(false);
+    setIsSittingOut(true);
   }, []);
+
+  const joinVoting = useCallback(() => {
+    if (activeSession?.votingPhase === "voting") {
+      setIsSittingOut(false);
+    }
+  }, [activeSession?.votingPhase]);
 
   const completeVoting = useCallback(async () => {
     if (!activeSession) return;
@@ -220,6 +238,7 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
     
     try {
       await startNewRoundMutation({ sessionId: activeSession._id });
+      setIsSittingOut(false);
     } catch (error) {
       console.error("Failed to start new round:", error);
     }
@@ -262,18 +281,70 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
     return Math.max(0, activeSession.maxDotsPerUser - userVoteCount);
   }, [activeSession, myVotes]);
 
+  const maxDots = activeSession?.maxDotsPerUser ?? 0;
+  const myVotesCount = myVotes?.length || 0;
+  const isSpent = isVoting && maxDots > 0 && myVotesCount >= maxDots;
+
+  /** Team pocket status (counts + who — no packet spoiler during silent round). */
+  const roundStats = useMemo(() => {
+    if (!sessionVotes || !activeSession) {
+      return {
+        placing: 0,
+        spent: 0,
+        stickersPlaced: 0,
+        voterCount: 0,
+        placingUserIds: [] as string[],
+        spentUserIds: [] as string[],
+      };
+    }
+    const byUser = new Map<string, number>();
+    for (const vote of sessionVotes) {
+      byUser.set(vote.userId, (byUser.get(vote.userId) || 0) + 1);
+    }
+    const placingUserIds: string[] = [];
+    const spentUserIds: string[] = [];
+    for (const [userId, count] of byUser) {
+      if (count >= activeSession.maxDotsPerUser) spentUserIds.push(userId);
+      else placingUserIds.push(userId);
+    }
+    // Current user may not have cast yet — still "placing" while in the round
+    if (
+      isVoting &&
+      currentUserId !== "anonymous" &&
+      !byUser.has(currentUserId)
+    ) {
+      placingUserIds.push(currentUserId);
+    }
+    return {
+      placing: placingUserIds.length,
+      spent: spentUserIds.length,
+      stickersPlaced: sessionVotes.length,
+      voterCount: byUser.size,
+      placingUserIds,
+      spentUserIds,
+    };
+  }, [sessionVotes, activeSession, isVoting, currentUserId]);
+
+  const flipVoting = stopVoting;
+
   return {
     // Session state
     session: activeSession as VotingSessionData | null,
-    isVoting: isVotingPhase,
+    /** Participating in this round (session voting && not sitting out). */
+    isVoting,
+    /** Room session is in voting phase (even if this client sat out). */
+    isSessionVoting: isVotingPhase,
+    isSittingOut,
+    isSpent,
     isRevealed,
     isSilentMode,
     remainingTime,
     userColor,
+    roundStats,
     
     // User's votes
     myVotes: myVotedClusters,
-    myVotesCount: myVotes?.length || 0,
+    myVotesCount,
     
     // Raw votes with user IDs (for displaying voter names)
     sessionVotes,
@@ -281,7 +352,9 @@ export function useVotingSync(mapId: Id<"affinityMaps"> | undefined, projectId: 
     // Actions
     startVoting,
     stopVoting,
+    flipVoting,
     leaveVoting,
+    joinVoting,
     completeVoting,
     startNewRound,
     toggleVote,

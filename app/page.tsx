@@ -1,29 +1,88 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { ClerkLoaded, SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Mic, Sparkles, FileText, Check } from "lucide-react";
-import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 
-function SplitTextAnimation({ text, className }: { text: string; className?: string }) {
-  const words = text.split(" ");
+function SessionClock() {
+  const [stamp, setStamp] = useState("--:--:--Z");
+
+  useEffect(() => {
+    const tick = () => {
+      setStamp(`${new Date().toISOString().slice(11, 19)}Z`);
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
   return (
-    <span className={className}>
-      {words.map((word, i) => (
-        <motion.span
-          key={i}
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: i * 0.1, ease: [0.22, 1, 0.36, 1] }}
-          className="inline-block mr-[0.25em]"
-        >
-          {word}
-        </motion.span>
-      ))}
+    <time
+      dateTime={stamp}
+      className="font-mono text-xs tracking-widest text-muted-foreground tabular-nums"
+    >
+      {stamp}
+    </time>
+  );
+}
+
+function RecMark() {
+  return (
+    <span className="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.22em] uppercase text-foreground">
+      <span
+        className="kit-rec size-2 rounded-full bg-myGreen"
+        aria-hidden="true"
+      />
+      Rec
     </span>
+  );
+}
+
+function FieldDeck() {
+  return (
+    <aside
+      className="relative border border-border bg-card p-5 md:p-6"
+      aria-label="Sample interview deck"
+    >
+      <div className="mb-5 flex items-center justify-between gap-4 border-b border-border pb-4">
+        <RecMark />
+        <span className="font-mono text-[11px] tracking-widest text-muted-foreground uppercase">
+          Cassette · 00:47:12
+        </span>
+      </div>
+
+      <p className="font-mono text-[11px] tracking-widest text-muted-foreground uppercase mb-3">
+        P1 · 00:12:41
+      </p>
+      <p
+        className="text-xl md:text-2xl leading-snug text-foreground mb-8"
+        style={{ fontFamily: "var(--font-display), sans-serif" }}
+      >
+        I kept looking for the export and it just wasn&apos;t there. We lost a
+        week of notes in a folder nobody owned.
+      </p>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="border border-border bg-background p-3 rotate-[-1.5deg]">
+          <p className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground mb-2">
+            Slip · pain
+          </p>
+          <p className="text-sm leading-relaxed">Export path is missing</p>
+        </div>
+        <div className="border border-primary bg-primary/15 p-3 rotate-[1.2deg]">
+          <p className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground mb-2">
+            Slip · quote
+          </p>
+          <p className="text-sm leading-relaxed">A folder nobody owned</p>
+        </div>
+      </div>
+
+      <p className="mt-6 font-mono text-[10px] tracking-widest uppercase text-muted-foreground">
+        On the wall · 14 slips · 3 packets
+      </p>
+    </aside>
   );
 }
 
@@ -32,34 +91,55 @@ export default function Home() {
   const { isSignedIn } = useAuth();
 
   return (
-    <div className="min-h-screen bg-white overflow-hidden">
-      {/* Header */}
-      <motion.header
-        className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-sm"
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.2 }}
-      >
-        <div className="flex items-center justify-between px-6 py-4 lg:px-16 lg:py-4">
-          <Image height={80} width={80} src="/logo.svg" alt="Skripta" className="w-20 h-20" />
+    <div className="min-h-dvh bg-background text-foreground kit-grain kit-mat">
+      <header className="sticky top-0 z-50 border-b border-border bg-background px-5 lg:px-12">
+        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between gap-4 py-3">
+          <div className="flex items-center gap-5 min-w-0">
+            <Image
+              height={44}
+              width={132}
+              src="/logo.svg"
+              alt="Skripta"
+              className="h-9 w-auto"
+              priority
+            />
+            <span className="hidden sm:inline font-mono text-[11px] tracking-[0.18em] uppercase text-muted-foreground truncate">
+              Field kit · interview research
+            </span>
+          </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-5">
+            <SessionClock />
             <ClerkLoaded>
               {isSignedIn ? (
                 <>
-                  <Button variant="ghost" onClick={() => router.push("/project")} className="text-base font-medium text-gray-600 hover:text-gray-900">
-                    Dashboard
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push("/project")}
+                    className="font-mono text-xs tracking-widest uppercase"
+                  >
+                    Sessions
                   </Button>
                   <UserButton />
                 </>
               ) : (
                 <>
                   <SignInButton mode="redirect">
-                    <Button variant="ghost" size="sm" className="text-base font-medium text-gray-600">Sign In</Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="font-mono text-xs tracking-widest uppercase"
+                    >
+                      Sign in
+                    </Button>
                   </SignInButton>
-                  <SignUpButton mode="redirect">
-                    <Button size="sm" className="bg-[#4CA771] hover:bg-[#3F9A68] text-white text-base font-medium px-6">
-                      Get Started
+                  <SignUpButton mode="redirect" forceRedirectUrl="/project?new=1">
+                    <Button
+                      size="sm"
+                      className="font-mono text-xs tracking-widest uppercase h-9 px-4"
+                    >
+                      Open a session
                     </Button>
                   </SignUpButton>
                 </>
@@ -67,399 +147,336 @@ export default function Home() {
             </ClerkLoaded>
           </div>
         </div>
-      </motion.header>
+      </header>
 
-      {/* Hero */}
-      <section className="min-h-screen flex items-center pt-32 pb-24 px-6 lg:px-16">
-        <div className="max-w-5xl mx-auto w-full">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8 }}
-          >
-            <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold leading-[0.92] tracking-tight mb-10 text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>
-              <SplitTextAnimation text="Turn Talks" />
+      <section className="px-5 lg:px-12 pt-16 pb-20 lg:pt-24 lg:pb-28">
+        <div className="mx-auto grid w-full max-w-[1400px] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] gap-12 lg:gap-16 items-end">
+          <div>
+            <p className="font-mono text-[11px] tracking-[0.22em] uppercase text-muted-foreground mb-6">
+              Unit 01 · qualitative research · live
+            </p>
+            <h1
+              className="text-5xl sm:text-6xl lg:text-7xl xl:text-[5.25rem] font-semibold leading-[0.95] tracking-tight text-foreground mb-8"
+              style={{ fontFamily: "var(--font-display), sans-serif" }}
+            >
+              Record the sitting.
               <br />
-              <span className="block">
-                <span className="text-[#4CA771]">into </span>
-                <SplitTextAnimation text="Insights" className="text-[#4CA771]" />
-              </span>
+              Pin the line.
+              <br />
+              Map the wall.
             </h1>
-          </motion.div>
-
-          <motion.p
-            className="text-xl md:text-2xl text-gray-500 max-w-2xl mb-12 leading-relaxed"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
-          >
-            Transform hours of interviews into clear, actionable insights. 
-            No more manual note-taking—just intelligent analysis.
-          </motion.p>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.8 }}
-          >
+            <p className="text-lg md:text-xl leading-relaxed text-muted-foreground max-w-xl mb-10">
+              Tape in, slips out: Quote, Pain, Follow-up. Packet them on a shared
+              wall, run a Round, cast a face, publish the Issue — one study, not a
+              research-ops stack.
+            </p>
             <ClerkLoaded>
               {isSignedIn ? (
-                <Button size="lg" onClick={() => router.push("/project")} className="bg-[#4CA771] hover:bg-[#3F9A68] text-white h-14 px-8 text-lg font-medium">
-                  Go to Dashboard
-                  <ArrowRight className="ml-2 w-5 h-5" />
+                <Button
+                  size="lg"
+                  onClick={() => router.push("/project")}
+                  className="h-12 px-6 font-mono text-xs tracking-widest uppercase"
+                >
+                  Go to sessions
                 </Button>
               ) : (
-                <SignUpButton mode="redirect">
-                  <Button size="lg" className="bg-[#4CA771] hover:bg-[#3F9A68] text-white h-14 px-8 text-lg font-medium">
-                    Start Free Trial
-                    <ArrowRight className="ml-2 w-5 h-5" />
+                <SignUpButton mode="redirect" forceRedirectUrl="/project?new=1">
+                  <Button
+                    size="lg"
+                    className="h-12 px-6 font-mono text-xs tracking-widest uppercase"
+                  >
+                    Open a session
                   </Button>
                 </SignUpButton>
               )}
             </ClerkLoaded>
-          </motion.div>
-
-          {/* Stats */}
-          <motion.div
-            className="flex gap-16 mt-20 pt-20 border-t border-gray-200"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 1 }}
-          >
-            <div>
-              <div className="text-4xl md:text-5xl font-bold text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>2,400+</div>
-              <div className="text-gray-500 mt-2 text-lg">Researchers</div>
-            </div>
-            <div>
-              <div className="text-4xl md:text-5xl font-bold text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>50,000+</div>
-              <div className="text-gray-500 mt-2 text-lg">Interviews</div>
-            </div>
-            <div>
-              <div className="text-4xl md:text-5xl font-bold text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>98%</div>
-              <div className="text-gray-500 mt-2 text-lg">Satisfaction</div>
-            </div>
-          </motion.div>
+          </div>
+          <FieldDeck />
         </div>
       </section>
 
-      {/* Features - Orange background */}
-      <section className="py-40 px-6 lg:px-16 bg-[#4CA771]">
-        <div className="max-w-6xl mx-auto">
-          <motion.div
-            className="mb-24"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            <h2 className="text-5xl md:text-7xl font-bold text-white" style={{ fontFamily: "var(--font-display), sans-serif" }}>
-              What you get
-            </h2>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-20">
+      <section className="border-t border-border px-5 lg:px-12 py-16 lg:py-20">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <p className="font-mono text-[11px] tracking-[0.22em] uppercase text-muted-foreground mb-10">
+            In the kit
+          </p>
+          <ol className="grid sm:grid-cols-2 gap-x-12 gap-y-10">
             {[
               {
-                icon: Mic,
-                title: "Transcription",
-                description: "AI-powered with speaker identification. Upload audio or video, get accurate transcripts in minutes."
+                n: "01",
+                t: "Cassette",
+                d: "Upload a file or capture the room. Speakers land on the tape — click a line only while it plays.",
               },
               {
-                icon: Sparkles,
-                title: "AI Insights",
-                description: "Automatically extract key insights, pain points, and quotes from your interviews."
+                n: "02",
+                t: "Pins",
+                d: "Drag a line into Quote, Pain, or Follow-up (Q / P / F). The slip hits the tray, ready for the wall.",
               },
               {
-                icon: FileText,
-                title: "Affinity Mapping",
-                description: "Organize insights into themes with drag-and-drop. Collaborate with your team in real-time."
-              }
-            ].map((feature, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: index * 0.15, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center">
-                    <feature.icon className="w-7 h-7 text-white" />
-                  </div>
-                  <div className="w-12 h-[2px] bg-white/30" />
+                n: "03",
+                t: "Packets",
+                d: "Group slips into field-kit packets. Peek the cassette in place — the wall never sends you away.",
+              },
+              {
+                n: "04",
+                t: "Workshop",
+                d: "Call a Round, Stick, Flip. Drop a Cast. Publish the Issue as a frozen brief — Export is .md.",
+              },
+            ].map((item) => (
+              <li key={item.n} className="grid grid-cols-[4.5rem_1fr] gap-4">
+                <span className="font-mono text-sm tracking-widest text-muted-foreground pt-1">
+                  {item.n}
+                </span>
+                <div>
+                  <h2
+                    className="text-2xl font-semibold mb-2"
+                    style={{ fontFamily: "var(--font-display), sans-serif" }}
+                  >
+                    {item.t}
+                  </h2>
+                  <p className="text-muted-foreground leading-relaxed">{item.d}</p>
                 </div>
-                <h3 className="text-3xl font-bold mb-5 text-white" style={{ fontFamily: "var(--font-display), sans-serif" }}>
-                  {feature.title}
-                </h3>
-                <p className="text-white/80 leading-relaxed text-lg">{feature.description}</p>
-              </motion.div>
+              </li>
             ))}
-          </div>
+          </ol>
         </div>
       </section>
 
-      {/* How It Works - White */}
-      <section className="py-40 px-6 lg:px-16 bg-white">
-        <div className="max-w-6xl mx-auto">
-          <motion.div
-            className="mb-24"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            <h2 className="text-5xl md:text-7xl font-bold text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>
-              How it works
-            </h2>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-16 md:gap-32">
+      <section className="border-t border-border px-5 lg:px-12 py-16 lg:py-20">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <p className="font-mono text-[11px] tracking-[0.22em] uppercase text-muted-foreground mb-10">
+            Session log
+          </p>
+          <ol className="divide-y divide-border border-y border-border">
             {[
               {
-                step: "01",
-                title: "Upload",
-                description: "Drag and drop your audio or video file. We support MP4, MP3, WAV and more."
+                t: "T+00:00",
+                title: "Load the tape",
+                d: "Drop MP4, MP3, WAV — or record in the browser.",
               },
               {
-                step: "02",
-                title: "Analyze",
-                description: "Our AI transcribes, identifies speakers, and extracts key insights automatically."
+                t: "T+00:04",
+                title: "Pin the sitting",
+                d: "Transcript lands with speakers. Drag a line: Quote, Pain, Follow-up.",
               },
               {
-                step: "03",
-                title: "Organize",
-                description: "Group insights into themes with affinity mapping and export beautiful reports."
-              }
-            ].map((item, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: index * 0.15, ease: [0.22, 1, 0.36, 1] }}
+                t: "T+00:12",
+                title: "Packet the wall",
+                d: "Slips fill the tray. The crew builds packets together — Notes and Find stay on the dock.",
+              },
+              {
+                t: "T+00:25",
+                title: "Round · Stick · Flip",
+                d: "Stickers on packets. Flip reveals priorities. Cast if you need a face. Issue freezes the brief.",
+              },
+            ].map((row) => (
+              <li
+                key={row.t}
+                className="grid sm:grid-cols-[8rem_1fr] gap-3 sm:gap-8 py-6"
               >
-                <div className="flex items-center gap-4 mb-6">
-                  <span className="text-4xl font-bold text-[#4CA771]" style={{ fontFamily: "var(--font-display), sans-serif" }}>{item.step}</span>
-                  <div className="flex-1 h-[2px] bg-gradient-to-r from-[#4CA771] to-transparent" />
+                <span className="font-mono text-sm tracking-widest text-foreground inline-flex items-center gap-2">
+                  <span className="size-1.5 bg-primary shrink-0" aria-hidden="true" />
+                  {row.t}
+                </span>
+                <div>
+                  <h2
+                    className="text-xl font-semibold mb-1"
+                    style={{ fontFamily: "var(--font-display), sans-serif" }}
+                  >
+                    {row.title}
+                  </h2>
+                  <p className="text-muted-foreground">{row.d}</p>
                 </div>
-                <h3 className="text-4xl font-bold mb-6 text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>
-                  {item.title}
-                </h3>
-                <p className="text-gray-500 leading-relaxed text-lg">{item.description}</p>
-              </motion.div>
+              </li>
             ))}
-          </div>
+          </ol>
         </div>
       </section>
 
-      {/* Pricing - Orange accent */}
-      <section className="py-40 px-6 lg:px-16 bg-gray-50">
-        <div className="max-w-5xl mx-auto">
-          <motion.div
-            className="mb-24"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            <h2 className="text-5xl md:text-7xl font-bold text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>
-              Simple Pricing
-            </h2>
-            <p className="text-xl text-gray-500 mt-6">Pay only for what you use. No credit card required.</p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {/* Free */}
-            <motion.div
-              className="p-8 bg-white rounded-3xl border border-gray-200"
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
-            >
-              <h3 className="text-2xl font-bold mb-2 text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>Free</h3>
-              <p className="text-gray-500 mb-6 text-sm">For students & learning</p>
-              <div className="mb-6">
-                <span className="text-5xl font-bold text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>€0</span>
-                <span className="text-gray-500 text-lg ml-2">/month</span>
-              </div>
-              <ul className="space-y-3 mb-8">
-                {["150 credits/month", "3 projects", "AI clustering", "Basic personas", "Dot voting"].map((feature, index) => (
-                  <li key={index} className="flex items-center gap-3 text-gray-600">
-                    <Check className="w-4 h-4 text-[#4CA771]" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-              <ClerkLoaded>
-                {isSignedIn ? (
-                  <Button variant="outline" className="w-full h-12 border-2 border-gray-300 text-lg font-medium" disabled>Current Plan</Button>
-                ) : (
-                  <SignUpButton mode="modal">
-                    <Button variant="outline" className="w-full h-12 border-2 border-gray-300 text-gray-900 text-lg font-medium">Get Started</Button>
-                  </SignUpButton>
-                )}
-              </ClerkLoaded>
-            </motion.div>
-
-            {/* Starter */}
-            <motion.div
-              className="p-8 bg-white rounded-3xl border-2 border-[#4CA771] shadow-xl"
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-            >
-              <span className="inline-block bg-[#4CA771] text-white text-xs font-semibold px-3 py-1 rounded-full mb-4">Most Popular</span>
-              <h3 className="text-2xl font-bold mb-2 text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>Starter</h3>
-              <p className="text-gray-500 mb-6 text-sm">For individual researchers</p>
-              <div className="mb-6">
-                <span className="text-5xl font-bold text-gray-900" style={{ fontFamily: "var(--font-display), sans-serif" }}>€19</span>
-                <span className="text-gray-500 text-lg ml-2">/month</span>
-              </div>
-              <div className="mb-4">
-                <span className="text-sm text-[#4CA771] font-medium">€0.15 per additional credit</span>
-              </div>
-              <ul className="space-y-3 mb-8">
-                {["500 credits/month", "Unlimited projects", "Priority AI features", "Advanced personas", "Team collaboration", "Export PDF/CSV"].map((feature, index) => (
-                  <li key={index} className="flex items-center gap-3 text-gray-600">
-                    <Check className="w-4 h-4 text-[#4CA771]" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-              <ClerkLoaded>
-                {isSignedIn ? (
-                  <Button className="w-full h-12 bg-[#4CA771] text-white font-bold text-lg">
-                    Upgrade
-                    <ArrowRight className="ml-2 w-5 h-5" />
-                  </Button>
-                ) : (
-                  <SignUpButton mode="modal">
-                    <Button className="w-full h-12 bg-[#4CA771] text-white font-bold text-lg">
-                      Start Trial
-                      <ArrowRight className="ml-2 w-5 h-5" />
-                    </Button>
-                  </SignUpButton>
-                )}
-              </ClerkLoaded>
-            </motion.div>
-
-            {/* Pro */}
-            <motion.div
-              className="p-8 bg-gray-900 rounded-3xl text-white"
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-            >
-              <h3 className="text-2xl font-bold mb-2" style={{ fontFamily: "var(--font-display), sans-serif" }}>Pro</h3>
-              <p className="text-gray-400 mb-6 text-sm">For agencies & teams</p>
-              <div className="mb-6">
-                <span className="text-5xl font-bold" style={{ fontFamily: "var(--font-display), sans-serif" }}>€35</span>
-                <span className="text-gray-400 text-lg ml-2">/user/month</span>
-              </div>
-              <div className="mb-4">
-                <span className="text-sm text-gray-400">Everything in Starter +</span>
-              </div>
-              <ul className="space-y-3 mb-8">
-                {["Unlimited credits", "Unlimited projects", "API access", "Custom branding", "Priority support", "Dedicated account manager"].map((feature, index) => (
-                  <li key={index} className="flex items-center gap-3 text-gray-300">
-                    <Check className="w-4 h-4" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-              <ClerkLoaded>
-                {isSignedIn ? (
-                  <Button className="w-full h-12 bg-white text-gray-900 font-bold text-lg">
-                    Contact Sales
-                    <ArrowRight className="ml-2 w-5 h-5" />
-                  </Button>
-                ) : (
-                  <SignUpButton mode="modal">
-                    <Button className="w-full h-12 bg-white text-gray-900 font-bold text-lg">
-                      Start Trial
-                      <ArrowRight className="ml-2 w-5 h-5" />
-                    </Button>
-                  </SignUpButton>
-                )}
-              </ClerkLoaded>
-            </motion.div>
-          </div>
-
-          {/* Credits Info */}
-          <motion.div
-            className="mt-16 p-8 bg-white rounded-3xl border border-gray-200"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-          >
-            <h4 className="text-xl font-bold text-gray-900 mb-6">How credits work</h4>
-            <div className="grid md:grid-cols-3 gap-8">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-[#4CA771] mb-2">20</div>
-                <div className="text-gray-600">Transcription (per audio)</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-[#4CA771] mb-2">10</div>
-                <div className="text-gray-600">AI Grouping (per cluster)</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-[#4CA771] mb-2">5</div>
-                <div className="text-gray-600">AI Rename (per action)</div>
-              </div>
+      <section className="border-t border-border px-5 lg:px-12 py-16 lg:py-20">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="flex flex-wrap items-end justify-between gap-4 mb-10">
+            <div>
+              <p className="font-mono text-[11px] tracking-[0.22em] uppercase text-muted-foreground mb-3">
+                Tariff
+              </p>
+              <h2
+                className="text-4xl md:text-5xl font-semibold tracking-tight"
+                style={{ fontFamily: "var(--font-display), sans-serif" }}
+              >
+                Pay for the tape, not the theatre.
+              </h2>
             </div>
-          </motion.div>
+            <p className="text-muted-foreground max-w-sm">
+              Credits cover the tape, sort tray, and Cast. No card to open a
+              session.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto border border-border">
+            <table className="w-full min-w-[640px] text-left">
+              <caption className="sr-only">Skripta plans and included credits</caption>
+              <thead className="font-mono text-[11px] tracking-widest uppercase text-muted-foreground border-b border-border">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Unit</th>
+                  <th className="px-4 py-3 font-medium">Rate</th>
+                  <th className="px-4 py-3 font-medium">Credits / mo</th>
+                  <th className="px-4 py-3 font-medium">On the bench</th>
+                  <th className="px-4 py-3 font-medium">
+                    <span className="sr-only">Action</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                <tr>
+                  <td className="px-4 py-5 font-semibold">Student</td>
+                  <td className="px-4 py-5 font-mono">€0</td>
+                  <td className="px-4 py-5 font-mono">150</td>
+                  <td className="px-4 py-5 text-muted-foreground text-sm">
+                    3 sessions · packets · Round
+                  </td>
+                  <td className="px-4 py-5">
+                    <ClerkLoaded>
+                      {isSignedIn ? (
+                        <span className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
+                          Current
+                        </span>
+                      ) : (
+                        <SignUpButton mode="redirect" forceRedirectUrl="/project?new=1">
+                          <Button variant="outline" size="sm" className="font-mono text-xs uppercase tracking-widest">
+                            Load
+                          </Button>
+                        </SignUpButton>
+                      )}
+                    </ClerkLoaded>
+                  </td>
+                </tr>
+                <tr className="bg-primary/10">
+                  <td className="px-4 py-5 font-semibold">Field</td>
+                  <td className="px-4 py-5 font-mono">€19 / mo</td>
+                  <td className="px-4 py-5 font-mono">500</td>
+                  <td className="px-4 py-5 text-muted-foreground text-sm">
+                    Unlimited sessions · team · Issue export
+                  </td>
+                  <td className="px-4 py-5">
+                    <ClerkLoaded>
+                      {isSignedIn ? (
+                        <Button
+                          size="sm"
+                          className="font-mono text-xs uppercase tracking-widest"
+                        >
+                          Upgrade
+                        </Button>
+                      ) : (
+                        <SignUpButton mode="redirect" forceRedirectUrl="/project?new=1">
+                          <Button
+                            size="sm"
+                            className="font-mono text-xs uppercase tracking-widest"
+                          >
+                            Load
+                          </Button>
+                        </SignUpButton>
+                      )}
+                    </ClerkLoaded>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-5 font-semibold">Crew</td>
+                  <td className="px-4 py-5 font-mono">€35 / seat</td>
+                  <td className="px-4 py-5 font-mono">Open</td>
+                  <td className="px-4 py-5 text-muted-foreground text-sm">
+                    API · branding · named support
+                  </td>
+                  <td className="px-4 py-5">
+                    <ClerkLoaded>
+                      {isSignedIn ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="font-mono text-xs uppercase tracking-widest"
+                        >
+                          Sales
+                        </Button>
+                      ) : (
+                        <SignUpButton mode="redirect" forceRedirectUrl="/project?new=1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="font-mono text-xs uppercase tracking-widest"
+                          >
+                            Load
+                          </Button>
+                        </SignUpButton>
+                      )}
+                    </ClerkLoaded>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <dl className="mt-8 grid sm:grid-cols-3 gap-6 font-mono text-sm">
+            <div>
+              <dt className="text-muted-foreground tracking-widest uppercase text-[11px] mb-1">
+                Transcript
+              </dt>
+              <dd>20 credits / file</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground tracking-widest uppercase text-[11px] mb-1">
+                Sort tray
+              </dt>
+              <dd>10 credits / run</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground tracking-widest uppercase text-[11px] mb-1">
+                Cast
+              </dt>
+              <dd>15 credits / face</dd>
+            </div>
+          </dl>
         </div>
       </section>
 
-      {/* CTA - Orange */}
-      <section className="py-40 px-6 lg:px-16 bg-[#4CA771]">
-        <div className="max-w-3xl mx-auto text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
+      <section className="border-t border-border px-5 lg:px-12 py-20 lg:py-24">
+        <div className="mx-auto flex w-full max-w-[1400px] flex-col md:flex-row md:items-end md:justify-between gap-8">
+          <h2
+            className="text-4xl md:text-6xl font-semibold tracking-tight max-w-2xl"
+            style={{ fontFamily: "var(--font-display), sans-serif" }}
           >
-            <h2 className="text-5xl md:text-7xl font-bold mb-8 text-white" style={{ fontFamily: "var(--font-display), sans-serif" }}>
-              Ready to start?
-            </h2>
-            <p className="text-xl text-white/80 mb-12">Join thousands of researchers who save hours every week.</p>
-
-            <ClerkLoaded>
-              {isSignedIn ? (
-                <Button size="lg" onClick={() => router.push("/project")} className="bg-white text-[#4CA771] hover:bg-white/90 h-16 px-12 text-xl font-medium">
-                  Go to Dashboard
-                  <ArrowRight className="ml-3 w-6 h-6" />
+            Take the kit into the next sitting.
+          </h2>
+          <ClerkLoaded>
+            {isSignedIn ? (
+              <Button
+                size="lg"
+                onClick={() => router.push("/project")}
+                className="h-12 px-6 font-mono text-xs tracking-widest uppercase self-start"
+              >
+                Go to sessions
+              </Button>
+            ) : (
+              <SignUpButton mode="redirect" forceRedirectUrl="/project?new=1">
+                <Button
+                  size="lg"
+                  className="h-12 px-6 font-mono text-xs tracking-widest uppercase self-start"
+                >
+                  Open a session
                 </Button>
-              ) : (
-                <SignUpButton mode="modal">
-                  <Button size="lg" className="bg-white text-[#4CA771] hover:bg-white/90 h-16 px-12 text-xl font-medium">
-                    Start Free Trial
-                    <ArrowRight className="ml-3 w-6 h-6" />
-                  </Button>
-                </SignUpButton>
-              )}
-            </ClerkLoaded>
-          </motion.div>
+              </SignUpButton>
+            )}
+          </ClerkLoaded>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="py-16 px-6 lg:px-16 border-t border-gray-100 bg-white">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8">
-          <div className="flex items-center gap-4">
-            <Image height={32} width={32} src="/logo.svg" alt="Skripta" className="w-8 h-8" />
-            <span className="text-lg text-gray-500">© 2024 Skripta</span>
-          </div>
-          <div className="flex items-center gap-10 text-lg text-gray-400">
-            <a href="#" className="hover:text-gray-900 transition-colors">Privacy</a>
-            <a href="#" className="hover:text-gray-900 transition-colors">Terms</a>
-            <a href="#" className="hover:text-gray-900 transition-colors">Contact</a>
-          </div>
+      <footer className="border-t border-border px-5 lg:px-12 py-8">
+        <div className="mx-auto flex w-full max-w-[1400px] flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <p className="font-mono text-xs tracking-widest uppercase text-muted-foreground">
+            Skripta · {new Date().getFullYear()} · field unit
+          </p>
+          <p className="font-mono text-xs tracking-widest uppercase text-muted-foreground">
+            Pin · packet · Issue
+          </p>
         </div>
       </footer>
     </div>

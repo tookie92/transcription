@@ -63,7 +63,9 @@ export interface StickyNoteData extends BaseElement {
   author?: string;
   authorName?: string;
   source?: string;
-  insightId?: string; // ID of the original insight this sticky was imported from
+  insightId?: string;
+  interviewId?: string;
+  timestamp?: number;
   votes: number;
   votedBy: string[]; // user IDs who voted
 
@@ -165,7 +167,7 @@ export interface UseFigJamBoardReturn {
   updateElementNoHistory: (id: string, patch: Partial<FigJamElement>) => void;
   updateMany: (patches: { id: string; patch: Partial<FigJamElement> }[]) => void;
   deleteElement: (id: string) => void;
-  duplicateElement: (id: string) => void;
+  duplicateElement: (id: string) => string | null;
   // Selection
   selectElement: (id: string, multi?: boolean) => void;
   clearSelection: () => void;
@@ -190,8 +192,8 @@ export interface UseFigJamBoardReturn {
   // Persistence
   loadElements: (elements: Record<string, FigJamElement>) => void;
   // Undo/Redo
-  undo: () => void;
-  redo: () => void;
+  undo: () => Record<string, FigJamElement> | null;
+  redo: () => Record<string, FigJamElement> | null;
   canUndo: boolean;
   canRedo: boolean;
   /** Mark that initial loading is complete - starts tracking history for undo/redo */
@@ -203,6 +205,8 @@ export interface UseFigJamBoardReturn {
   // Multi-selection actions
   groupSelectedIntoSection: (title?: string) => string | null;
   autoArrange: (sectionId?: string) => void;
+  beginHistoryBatch: () => void;
+  endHistoryBatch: (record?: boolean) => void;
 }
 
 // ─── Refactored Types (Simplified) ──────────────────────────────────────────

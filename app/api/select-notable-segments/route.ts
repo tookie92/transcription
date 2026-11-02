@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Groq from "groq-sdk";
+import { GROQ_MODEL_FAST } from "@/lib/groq";
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
@@ -60,7 +61,7 @@ JSON Response:`;
             content: prompt,
           },
         ],
-        model: "llama-3.1-8b-instant",
+        model: GROQ_MODEL_FAST,
         temperature: 0.3,
         max_tokens: 100,
       });

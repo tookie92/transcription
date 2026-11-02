@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-   --color-myBackground: #EAF9E7;
+   --color-myBackground: #E6F9E7;
    --color-myGreen: #4CA771;
    --color-myGreen-500: #4CA771;
    --color-myGreen-light: #C0E6BA;
@@ -12,7 +12,7 @@
    --font-sans: var(--font-jakarta);
    --font-serif: var(--font-display);
    --font-display: var(--font-display);
-   --font-mono: var(--font-jakarta);
+   --font-mono: var(--font-jetbrains);
    --color-background: var(--background);
    --color-foreground: var(--foreground);
    --color-sidebar-ring: var(--sidebar-ring);
@@ -51,131 +51,130 @@
 }
 
 :root {
-  --radius: 0.5rem;
+  /* Field-kit: sharp instrument corners, not SaaS pills */
+  --radius: 0.2rem;
 
-  /* Skripta Palette - Fresh Green & Warm Orange */
+  /* Daylight kit — mint paper, forest ink (logo rgb(1,50,55) / rgb(230,249,231)) */
   --background: oklch(0.97 0.02 160);
-  --foreground: oklch(0.12 0.02 180);
+  --foreground: oklch(0.28 0.045 196);
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.12 0.02 180);
+  --card: oklch(0.99 0.01 160);
+  --card-foreground: oklch(0.28 0.045 196);
 
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.12 0.02 180);
+  --popover: oklch(0.99 0.01 160);
+  --popover-foreground: oklch(0.28 0.045 196);
 
-  /* Primary - Fresh Green */
-  --primary: oklch(0.55 0.15 160);
-  --primary-foreground: oklch(1 0 0);
+  --primary: oklch(0.28 0.045 196);
+  --primary-foreground: oklch(0.96 0.04 145);
 
-  /* Secondary - Warm Orange */
-  --secondary: oklch(0.7 0.12 45);
-  --secondary-foreground: oklch(0.1 0.02 40);
+  --secondary: oklch(0.92 0.03 160);
+  --secondary-foreground: oklch(0.28 0.045 196);
 
-  /* Muted - Soft Sage */
-  --muted: oklch(0.9 0.03 160);
-  --muted-foreground: oklch(0.45 0.04 160);
+  --muted: oklch(0.92 0.03 160);
+  --muted-foreground: oklch(0.38 0.03 180);
 
-  /* Accent - Light Green */
-  --accent: oklch(0.85 0.06 160);
-  --accent-foreground: oklch(0.2 0.04 160);
+  --accent: oklch(0.9 0.04 160);
+  --accent-foreground: oklch(0.28 0.045 196);
 
-  /* Destructive */
-  --destructive: oklch(0.55 0.15 25);
-  --destructive-foreground: oklch(1 0 0);
+  --destructive: oklch(0.55 0.18 25);
+  --destructive-foreground: oklch(0.99 0 0);
 
-  /* Border */
-  --border: oklch(0.85 0.04 160);
-  --input: oklch(0.92 0.02 160);
-  --ring: oklch(0.55 0.15 160);
+  --border: oklch(0.82 0.04 160);
+  --input: oklch(0.9 0.02 160);
+  --ring: oklch(0.28 0.045 196);
 
   /* Charts */
-  --chart-1: oklch(0.55 0.15 160);
-  --chart-2: oklch(0.7 0.12 45);
-  --chart-3: oklch(0.65 0.1 180);
-  --chart-4: oklch(0.5 0.08 280);
-  --chart-5: oklch(0.6 0.08 40);
+  --chart-1: oklch(0.45 0.08 196);
+  --chart-2: oklch(0.55 0.1 160);
+  --chart-3: oklch(0.65 0.08 180);
+  --chart-4: oklch(0.5 0.06 200);
+  --chart-5: oklch(0.38 0.05 196);
 
   /* Sidebar */
-  --sidebar: oklch(0.96 0.02 160);
-  --sidebar-foreground: oklch(0.12 0.02 180);
-  --sidebar-primary: oklch(0.55 0.15 160);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.85 0.06 160);
-  --sidebar-accent-foreground: oklch(0.2 0.04 160);
-  --sidebar-border: oklch(0.85 0.04 160);
-  --sidebar-ring: oklch(0.55 0.15 160);
+  --sidebar: oklch(0.95 0.02 160);
+  --sidebar-foreground: oklch(0.28 0.045 196);
+  --sidebar-primary: oklch(0.28 0.045 196);
+  --sidebar-primary-foreground: oklch(0.96 0.04 145);
+  --sidebar-accent: oklch(0.9 0.04 160);
+  --sidebar-accent-foreground: oklch(0.28 0.045 196);
+  --sidebar-border: oklch(0.82 0.04 160);
+  --sidebar-ring: oklch(0.28 0.045 196);
 
   /* Custom colors */
-  --myBackground: #F4FBF7;
-  --fresh-mint: oklch(0.97 0.02 160);
+  --myBackground: #E6F9E7;
+  --fresh-mint: oklch(0.96 0.04 145);
   --light-sage: oklch(0.9 0.04 160);
   --soft-sage: oklch(0.85 0.06 160);
-  --vibrant-green: oklch(0.65 0.12 160);
-  --deep-forest: oklch(0.55 0.15 160);
-  --warm-terracotta: oklch(0.7 0.12 45);
-  --sunset-orange: oklch(0.65 0.14 45);
+  --vibrant-green: oklch(0.45 0.08 160);
+  --deep-forest: oklch(0.28 0.045 196);
+  --warm-terracotta: oklch(0.28 0.045 196);
+  --sunset-orange: oklch(0.45 0.08 160);
 }
 
-/* Dark Theme */
+/* Field-kit night — forest chassis, mint ink */
 .dark {
-  --background: oklch(0.08 0.02 180);
-  --foreground: oklch(0.92 0.02 160);
+  --background: oklch(0.22 0.04 196);
+  --foreground: oklch(0.96 0.04 145);
 
-  --card: oklch(0.12 0.02 180);
-  --card-foreground: oklch(0.92 0.02 160);
+  --card: oklch(0.26 0.035 196);
+  --card-foreground: oklch(0.96 0.04 145);
 
-  --popover: oklch(0.15 0.02 180);
-  --popover-foreground: oklch(0.92 0.02 160);
+  --popover: oklch(0.26 0.035 196);
+  --popover-foreground: oklch(0.96 0.04 145);
 
-  /* Primary - Brighter green for dark mode */
-  --primary: oklch(0.7 0.18 160);
-  --primary-foreground: oklch(0.1 0.02 180);
+  --primary: oklch(0.92 0.04 145);
+  --primary-foreground: oklch(0.28 0.045 196);
 
-  /* Secondary - Warmer orange for dark mode */
-  --secondary: oklch(0.6 0.14 45);
-  --secondary-foreground: oklch(0.95 0.02 40);
+  --secondary: oklch(0.3 0.035 196);
+  --secondary-foreground: oklch(0.96 0.04 145);
 
-  --muted: oklch(0.2 0.03 180);
-  --muted-foreground: oklch(0.6 0.04 160);
+  --muted: oklch(0.28 0.03 196);
+  --muted-foreground: oklch(0.78 0.03 160);
 
-  --accent: oklch(0.25 0.05 160);
-  --accent-foreground: oklch(0.95 0.02 160);
+  --accent: oklch(0.32 0.04 196);
+  --accent-foreground: oklch(0.96 0.04 145);
 
-  --destructive: oklch(0.55 0.15 25);
-  --destructive-foreground: oklch(0.95 0 0);
+  --destructive: oklch(0.62 0.18 25);
+  --destructive-foreground: oklch(0.99 0 0);
 
-  --border: oklch(0.25 0.02 180);
-  --input: oklch(0.2 0.02 180);
-  --ring: oklch(0.7 0.18 160);
+  --border: oklch(0.36 0.03 196);
+  --input: oklch(0.3 0.03 196);
+  --ring: oklch(0.92 0.04 145);
 
-  --chart-1: oklch(0.7 0.18 160);
-  --chart-2: oklch(0.6 0.14 45);
-  --chart-3: oklch(0.65 0.1 180);
-  --chart-4: oklch(0.5 0.08 280);
-  --chart-5: oklch(0.6 0.08 40);
+  --chart-1: oklch(0.75 0.08 160);
+  --chart-2: oklch(0.7 0.06 196);
+  --chart-3: oklch(0.65 0.08 180);
+  --chart-4: oklch(0.55 0.05 200);
+  --chart-5: oklch(0.8 0.04 145);
 
-  --sidebar: oklch(0.08 0.02 180);
-  --sidebar-foreground: oklch(0.92 0.02 160);
-  --sidebar-primary: oklch(0.7 0.18 160);
-  --sidebar-primary-foreground: oklch(0.1 0.02 180);
-  --sidebar-accent: oklch(0.25 0.05 160);
-  --sidebar-accent-foreground: oklch(0.95 0.02 160);
-  --sidebar-border: oklch(0.25 0.02 180);
-  --sidebar-ring: oklch(0.7 0.18 160);
+  --sidebar: oklch(0.2 0.04 196);
+  --sidebar-foreground: oklch(0.96 0.04 145);
+  --sidebar-primary: oklch(0.92 0.04 145);
+  --sidebar-primary-foreground: oklch(0.28 0.045 196);
+  --sidebar-accent: oklch(0.3 0.04 196);
+  --sidebar-accent-foreground: oklch(0.96 0.04 145);
+  --sidebar-border: oklch(0.36 0.03 196);
+  --sidebar-ring: oklch(0.92 0.04 145);
 
-  --myBackground: #0F2E2F;
-  --fresh-mint: oklch(0.12 0.02 180);
-  --light-sage: oklch(0.2 0.03 160);
-  --soft-sage: oklch(0.25 0.04 160);
-  --vibrant-green: oklch(0.45 0.1 160);
-  --deep-forest: oklch(0.7 0.18 160);
-  --warm-terracotta: oklch(0.6 0.14 45);
-  --sunset-orange: oklch(0.65 0.14 45);
+  --myBackground: #013237;
+  --fresh-mint: oklch(0.18 0.03 196);
+  --light-sage: oklch(0.26 0.03 160);
+  --soft-sage: oklch(0.32 0.04 160);
+  --vibrant-green: oklch(0.55 0.08 160);
+  --deep-forest: oklch(0.75 0.06 196);
+  --warm-terracotta: oklch(0.85 0.04 145);
+  --sunset-orange: oklch(0.7 0.06 160);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: dark;
+  }
+  html:not(.dark) {
+    color-scheme: light;
   }
   body {
     @apply bg-background text-foreground;
@@ -194,110 +193,62 @@
   --group-orange: oklch(65% 0.15 35);
 }
 
-/* ============================================
-   🎬 ANIMATION PLACEHOLDERS - Skripta Landing
-   À implémenter avec Framer Motion
-   ============================================ */
-
-/* Hero Section Animations */
-.hero-title-enter {
-  /* TODO: Spring animation avec overshoot
-   * Type: text pop-in avec bounce
-   * Duration: ~0.6s
-   * Easing: spring avec high stiffness
-   */
+/* Field-kit surfaces */
+.kit-grain {
+  position: relative;
 }
 
-.hero-sticky-note-bounce {
-  /* TODO: Post-it bounce animation
-   * Type: scale + rotation + translateY
-   * Chaque note arrive avec un delay différent
-   * Physics: deceleration type="spring"
-   */
+.kit-grain::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
 }
 
-.hero-floating-dots {
-  /* TODO: Enhanced floating dots
-   * Plus de mouvement, directions varied
-   * Ajouter subtle rotation aux dots
-   */
+.kit-grain > * {
+  position: relative;
+  z-index: 2;
 }
 
-/* Features Section */
-.feature-card-tilt {
-  /* TODO: 3D tilt effect au hover
-   * Type: rotateX + rotateY sur mouse move
-   * Scale: 1.02-1.05
-   * Duration: 0.3s
-   */
+.kit-mat {
+  background-image:
+    linear-gradient(to right, color-mix(in oklch, var(--foreground) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklch, var(--foreground) 6%, transparent) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
-.feature-card-press {
-  /* TODO: Press animation
-   * Type: scale down (0.98) au click
-   * + shadow reduction pour effet tactile
-   */
+@keyframes kit-rec {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
 }
 
-/* Pricing Cards */
-.pricing-card-pressable {
-  /* TODO: Tactile press effect
-   * Type: scale down (0.97) + shadow reduction
-   * Duration: 0.15s
-   * Simule bouton physique
-   */
+@keyframes signal-nudge-in {
+  from {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
-.pricing-badge-pop {
-  /* TODO: Badge pop-in
-   * Type: scale from 0 avec spring
-   * Rotation: subtle spin
-   */
+.kit-rec {
+  animation: kit-rec 1.6s ease-in-out infinite;
 }
 
-/* Testimonials */
-.testimonial-slide-whip {
-  /* TODO: Slide-in avec whip effect
-   * Type: translateX avec overshoot
-   * Easing: cubic-bezier avec overshoot
-   */
-}
-
-/* FAQ Accordion */
-.faq-answer-spring {
-  /* TODO: Accordion answer pop
-   * Type: spring animation
-   * Height transition avec bounce
-   */
-}
-
-/* Scroll Indicator */
-.scroll-indicator-bounce {
-  /* TODO: Plus marqués bounce
-   * Type: translateY avec + amplitude
-   * Duration: 1.5s (plus visible)
-   */
-}
-
-/* Buttons CTA */
-.cta-button-pulse {
-  /* TODO: Subtle pulse + scale sur hover
-   * Type: scale (1.02) + glow effect
-   * Duration: 0.2s
-   */
-}
-
-/* Micro-interactions (optionnel) */
-.micro-cursor-trail {
-  /* TODO: Cursor trail ou sparkle effects
-   * Sur les éléments interactifs
-   */
-}
-
-.link-hover-wiggle {
-  /* TODO: Subtle wiggle sur hover
-   * Pour les liens de navigation
-   */
+@media (prefers-reduced-motion: reduce) {
+  .kit-rec {
+    animation: none;
+  }
+  @keyframes signal-nudge-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
 }
 
 /* Dot pattern for canvas background */
@@ -309,4 +260,79 @@
 
 .dark .bg-dot-pattern {
   background-image: radial-gradient(circle, oklch(var(--border) / 0.3) 1px, transparent 1px);
+}
+
+.pin-toolbar {
+  transform: translate(-50%, calc(-100% - 8px));
+  transform-origin: 50% 100%;
+  opacity: 1;
+  transition:
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.pin-toolbar {
+  @starting-style {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 8px)) scale(0.95);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pin-toolbar {
+    transition: opacity 160ms ease;
+  }
+
+  .pin-toolbar {
+    @starting-style {
+      opacity: 0;
+      transform: translate(-50%, calc(-100% - 8px));
+    }
+  }
+}
+
+@media print {
+  header,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  .kit-grain,
+  .kit-mat {
+    background: white !important;
+  }
+
+  .kit-grain::before,
+  .kit-grain::after,
+  .kit-mat::before,
+  .kit-mat::after {
+    display: none !important;
+  }
+
+  a[href]::after {
+    content: none !important;
+  }
+
+  /* Issue brief: clean stakeholder pages */
+  main section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  main h1,
+  main h2 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
 }

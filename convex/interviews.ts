@@ -75,7 +75,7 @@ export const getProjectInterviews = query({
     console.log("✅ User has access, fetching interviews...");
     const interviews = await ctx.db
       .query("interviews")
-      .filter(q => q.eq(q.field("projectId"), args.projectId))
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
 
     return interviews;
@@ -282,5 +282,60 @@ export const updateSegmentsWithSpeakers = mutation({
     });
 
     return { success: true };
+  },
+});
+
+const prepItemValidator = v.object({
+  id: v.string(),
+  text: v.string(),
+  checked: v.boolean(),
+});
+
+const PREP_MAX = 8;
+
+/** Replace the sitting prep guide (3–8 questions). */
+export const updatePrepGuide = mutation({
+  args: {
+    interviewId: v.id("interviews"),
+    prepGuide: v.array(prepItemValidator),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    if (args.prepGuide.length > PREP_MAX) {
+      throw new Error(`Prep guide is limited to ${PREP_MAX} questions`);
+    }
+
+    for (const item of args.prepGuide) {
+      if (item.text.trim().length === 0) {
+        throw new Error("Prep questions cannot be empty");
+      }
+      if (item.text.length > 280) {
+        throw new Error("Prep question is too long");
+      }
+    }
+
+    const interview = await ctx.db.get(args.interviewId);
+    if (!interview) throw new Error("Interview not found");
+
+    const project = await ctx.db.get(interview.projectId);
+    if (!project) throw new Error("Project not found");
+
+    const hasAccess =
+      project.ownerId === identity.subject ||
+      project.members.some((member) => member.userId === identity.subject);
+    if (!hasAccess) throw new Error("No access to project");
+
+    await ctx.db.patch(args.interviewId, {
+      prepGuide: args.prepGuide.map((item) => ({
+        id: item.id,
+        text: item.text.trim(),
+        checked: item.checked,
+      })),
+    });
+
+    return null;
   },
 });

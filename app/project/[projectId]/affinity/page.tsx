@@ -5,23 +5,28 @@ import { NotificationToastProvider } from "@/components/myComponents/Notificatio
 
 interface PageProps {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ sitting?: string }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   await params; // params awaiten, auch wenn wir es hier nicht verwenden
   
   return {
-    title: "Affinity Map",
-    description: "Collaborative affinity diagram",
+    title: "Wall",
+    description: "The table where interview lines become packets",
   };
 }
 
-export default async function AffinityPage({ params }: PageProps) {
+export default async function AffinityPage({ params, searchParams }: PageProps) {
   const { projectId } = await params;
+  const query = await searchParams;
   
   return (
     <>
-      <AffinityMapWorkspace projectId={projectId as Id<"projects">} />
+      <AffinityMapWorkspace
+        projectId={projectId as Id<"projects">}
+        sittingId={query.sitting}
+      />
       <NotificationToastProvider/>
     </>
   );

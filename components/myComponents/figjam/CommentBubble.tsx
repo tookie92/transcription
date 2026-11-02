@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, Check, Trash2, X, Send, ChevronLeft } from "lucide-react";
+import { Check, Trash2, Send } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { useAuth, useUser } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
 import type { Position } from "@/types/figjam";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface CommentBubbleData {
   id: string;
@@ -16,6 +18,8 @@ interface CommentBubbleData {
   targetId?: string;
   targetType?: "sticky" | "label" | "canvas";
   resolved: boolean;
+  createdBy?: string;
+  createdByName?: string;
 }
 
 interface CommentBubbleProps {
@@ -33,6 +37,12 @@ interface CommentBubbleProps {
   mapId?: string;
 }
 
+function pastilleInitial(bubble: CommentBubbleData): string {
+  const name = bubble.createdByName?.trim();
+  if (name) return name.charAt(0).toUpperCase();
+  return "?";
+}
+
 export function CommentBubble({
   bubble,
   zoom,
@@ -40,14 +50,9 @@ export function CommentBubble({
   isSelected,
   isFiltered = false,
   isBouncing = false,
-  onClick,
-  onResolve,
-  onDelete,
   onDragEnd,
   onOpenThread,
-  mapId,
 }: CommentBubbleProps) {
-  const { userId } = useAuth();
   const [isDragging, setIsDragging] = useState(false);
   const [localPos, setLocalPos] = useState<Position | null>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -73,7 +78,6 @@ export function CommentBubble({
     const dx = (e.clientX - dragStartRef.current.x) / zoom;
     const dy = (e.clientY - dragStartRef.current.y) / zoom;
 
-    // Check if there was actual movement (more than 3 pixels threshold)
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
       hasMovedRef.current = true;
     }
@@ -91,7 +95,6 @@ export function CommentBubble({
 
     const finalPos = localPos ?? bubble.position;
 
-    // Only save position if there was actual movement
     if (hasMovedRef.current) {
       onDragEnd(finalPos);
     }
@@ -103,108 +106,65 @@ export function CommentBubble({
 
   return (
     <motion.div
-      initial={{ scale: 0, opacity: 0 }}
-      animate={{ 
-        scale: isDragging ? 1.1 : 1,
+      initial={{ scale: 0.92, opacity: 0 }}
+      animate={{
+        scale: isDragging ? 1.06 : 1,
         opacity: 1,
       }}
-      transition={{ 
-        duration: 0.15,
-        ease: "easeOut",
-      }}
-      exit={{ scale: 0, opacity: 0 }}
-      className={`
-        absolute
-        ${isSelected ? "z-50" : "z-40"}
-        ${isDragging ? "cursor-grabbing" : "cursor-grab"}
-        ${isFiltered ? "pointer-events-none" : ""}
-        ${isBouncing ? "cursor-pointer" : ""}
-      `}
+      transition={{ duration: 0.12, ease: "easeOut" }}
+      exit={{ scale: 0.92, opacity: 0 }}
+      className={cn(
+        "absolute",
+        isSelected ? "z-50" : "z-40",
+        isDragging ? "cursor-grabbing" : "cursor-grab",
+        isFiltered && "pointer-events-none"
+      )}
       style={{
         left: screenPos.x,
         top: screenPos.y,
         transform: "translate(-50%, -50%)",
         opacity: isFiltered ? 0.25 : 1,
       }}
+      data-note-pastille
       onPointerDown={isFiltered ? undefined : handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onClick={(e) => {
-        // Only open thread if there was no movement (just a click, not a drag)
         if (!hasMovedRef.current) {
           e.stopPropagation();
           onOpenThread();
         }
-        // Reset the moved flag after click
         hasMovedRef.current = false;
       }}
     >
-      {/* Ping ring animation - expands outward like radar */}
       {isBouncing && (
-        <>
-          <motion.div
-            className="absolute w-10 h-10 rounded-full bg-primary/30"
-            style={{ transform: "translate(-50%, -50%)" }}
-            initial={{ scale: 1, opacity: 0.8 }}
-            animate={{
-              scale: [1, 2],
-              opacity: [0.6, 0],
-            }}
-            transition={{
-              duration: 1.5,
-              repeat: Infinity,
-              ease: "easeOut",
-            }}
-          />
-          <motion.div
-            className="absolute w-10 h-10 rounded-full bg-primary/20"
-            style={{ transform: "translate(-50%, -50%)" }}
-            initial={{ scale: 1, opacity: 0.5 }}
-            animate={{
-              scale: [1, 2.5],
-              opacity: [0.5, 0],
-            }}
-            transition={{
-              duration: 1.5,
-              delay: 0.5,
-              repeat: Infinity,
-              ease: "easeOut",
-            }}
-          />
-        </>
+        <motion.div
+          className="absolute inset-0 border border-foreground/40"
+          initial={{ scale: 1, opacity: 0.5 }}
+          animate={{ scale: [1, 1.55], opacity: [0.45, 0] }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: "easeOut" }}
+        />
       )}
 
-      {/* Main bubble */}
-      <motion.div
-        whileHover={{ scale: isBouncing ? 1.15 : 1.1 }}
-        whileTap={{ scale: 0.95 }}
-        animate={isBouncing ? {
-          scale: [1, 1.08, 1, 1.08, 1],
-        } : {}}
-        transition={{ 
-          duration: 2,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-        className={`
-          relative w-10 h-10 rounded-full flex items-center justify-center shadow-lg
-          ${bubble.resolved 
-            ? "bg-green-500 text-white" 
-            : "bg-primary text-primary-foreground"
-          }
-          ${isSelected ? "ring-2 ring-offset-2 ring-primary" : ""}
-          ${isBouncing ? "ring-2 ring-primary/60" : ""}
-        `}
+      <div
+        className={cn(
+          "relative flex h-7 w-7 items-center justify-center border bg-card shadow-sm",
+          "transition-transform duration-150 ease-out",
+          bubble.resolved
+            ? "border-muted-foreground/50 text-muted-foreground"
+            : "border-foreground text-foreground",
+          isSelected && "ring-1 ring-offset-1 ring-offset-background ring-foreground",
+          isBouncing && "scale-105"
+        )}
       >
-        <MessageSquare className="w-5 h-5" />
-        
-        {/* Resolved checkmark */}
-        {bubble.resolved && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-white text-green-500 rounded-full flex items-center justify-center shadow-sm">
-            <Check className="w-3 h-3" />
+        {bubble.resolved ? (
+          <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+        ) : (
+          <span className="font-mono text-[11px] font-medium uppercase leading-none">
+            {pastilleInitial(bubble)}
           </span>
         )}
-      </motion.div>
+      </div>
     </motion.div>
   );
 }
@@ -222,6 +182,36 @@ interface CommentThreadProps {
   currentUserId?: string;
   currentUserName?: string;
   presenceUsers?: { id: string; name: string }[];
+  onBecameNonEmpty?: () => void;
+}
+
+const PEEK_WIDTH = 300;
+const GAP = 12;
+const DOCK_CLEARANCE = 88;
+const EDGE = 12;
+
+function placeBeside(
+  screenX: number,
+  screenY: number,
+  peekHeight: number
+): { left: number; top: number } {
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  const maxBottom = vh - DOCK_CLEARANCE;
+
+  let left = screenX + 20 + GAP;
+  if (left + PEEK_WIDTH > vw - EDGE) {
+    left = screenX - PEEK_WIDTH - GAP - 20;
+  }
+  left = Math.max(EDGE, Math.min(left, vw - PEEK_WIDTH - EDGE));
+
+  let top = screenY - 24;
+  if (top + peekHeight > maxBottom) {
+    top = maxBottom - peekHeight;
+  }
+  top = Math.max(EDGE, top);
+
+  return { left, top };
 }
 
 export function CommentThread({
@@ -237,25 +227,66 @@ export function CommentThread({
   currentUserId,
   currentUserName,
   presenceUsers = [],
+  onBecameNonEmpty,
 }: CommentThreadProps) {
   const { userId } = useAuth();
   const [text, setText] = useState("");
-  const [showMentions, setShowMentions] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ left: number; top: number } | null>(null);
 
   const comments = useQuery(api.comments.getCommentsByGroup, {
     groupId: bubble.id,
     mapId: (mapId || "") as Id<"affinityMaps">,
   });
 
+  useEffect(() => {
+    if (comments && comments.length > 0) {
+      onBecameNonEmpty?.();
+    }
+  }, [comments, onBecameNonEmpty]);
+
   const addComment = useMutation(api.comments.addComment);
   const createMentionNotification = useMutation(api.notifications.createMentionNotification);
 
-  const parseMentions = (text: string): string[] => {
+  const screenPos = {
+    x: anchorPosition.x * zoom + pan.x,
+    y: anchorPosition.y * zoom + pan.y,
+  };
+
+  useLayoutEffect(() => {
+    const height = panelRef.current?.offsetHeight ?? 280;
+    setCoords(placeBeside(screenPos.x, screenPos.y, height));
+  }, [screenPos.x, screenPos.y, comments?.length, bubble.id]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => textareaRef.current?.focus(), 40);
+    return () => window.clearTimeout(t);
+  }, [bubble.id]);
+
+  useEffect(() => {
+    const handlePointerDown = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (panelRef.current?.contains(target)) return;
+      const el = target instanceof Element ? target : null;
+      if (el?.closest?.("[data-note-pastille]")) return;
+      onClose();
+    };
+    const timer = window.setTimeout(() => {
+      window.addEventListener("pointerdown", handlePointerDown, true);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("pointerdown", handlePointerDown, true);
+    };
+  }, [onClose, bubble.id]);
+
+  const parseMentions = (value: string): string[] => {
     const mentionRegex = /@(\w+)/g;
     const mentions: string[] = [];
     let match;
-    while ((match = mentionRegex.exec(text)) !== null) {
+    while ((match = mentionRegex.exec(value)) !== null) {
       mentions.push(match[1]);
     }
     return mentions;
@@ -263,7 +294,7 @@ export function CommentThread({
 
   const handleSubmit = async () => {
     if (!text.trim() || !mapId || !userId) return;
-    
+
     try {
       await addComment({
         groupId: bubble.id,
@@ -271,15 +302,13 @@ export function CommentThread({
         text: text.trim(),
         userName: currentUserName || "Anonymous",
       });
-      
-      // Handle @mentions - create notifications
+
       const mentions = parseMentions(text);
       for (const mentionedName of mentions) {
-        // Find user ID from presenceUsers
-        const mentionedUser = presenceUsers.find(u => 
+        const mentionedUser = presenceUsers.find((u) =>
           u.name.toLowerCase().startsWith(mentionedName.toLowerCase())
         );
-        
+
         if (mentionedUser && projectId) {
           try {
             await createMentionNotification({
@@ -287,7 +316,7 @@ export function CommentThread({
               mentionedByUserId: userId,
               mentionedByUserName: currentUserName || "Someone",
               groupId: bubble.id,
-              groupTitle: "Comment",
+              groupTitle: "Note",
               projectId: projectId,
             });
           } catch (e) {
@@ -295,15 +324,18 @@ export function CommentThread({
           }
         }
       }
-      
+
       setText("");
-      toast.success("Comment added");
-    } catch (err) {
-      toast.error("Failed to add comment");
+      onBecameNonEmpty?.();
+    } catch {
+      toast.error("Could not add note");
     }
   };
 
-  const getAuthorDisplayName = (comment: any): string => {
+  const getAuthorDisplayName = (comment: {
+    userId?: string;
+    userName?: string;
+  }): string => {
     if (comment.userId === userId) return "You";
     return comment.userName || "Anonymous";
   };
@@ -312,21 +344,57 @@ export function CommentThread({
   const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
 
-  // Get @mention suggestions - smart filtering
-  const mentionSuggestions = presenceUsers.filter((u: { id: string; name: string }) => {
-    if (u.id === userId) return false;
-    if (!mentionSearch) return true;
-    const search = mentionSearch.toLowerCase();
-    // Match any word starting with the search
-    const words = u.name.toLowerCase().split(" ");
-    return words.some(word => word.startsWith(search));
-  }).slice(0, 5);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (showMentionSuggestions) {
+        setShowMentionSuggestions(false);
+        return;
+      }
+      const stillLoading = comments === undefined;
+      const empty = Array.isArray(comments) && comments.length === 0;
+      const mine =
+        !bubble.createdBy ||
+        bubble.createdBy === currentUserId ||
+        bubble.createdBy === userId;
+      if (!stillLoading && empty && mine) {
+        onDelete();
+        return;
+      }
+      onClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [
+    comments,
+    showMentionSuggestions,
+    bubble.createdBy,
+    currentUserId,
+    userId,
+    onClose,
+    onDelete,
+  ]);
+
+  const mentionSuggestions = presenceUsers
+    .filter((u: { id: string; name: string }) => {
+      if (u.id === userId) return false;
+      if (!mentionSearch) return true;
+      const search = mentionSearch.toLowerCase();
+      const words = u.name.toLowerCase().split(" ");
+      return words.some((word) => word.startsWith(search));
+    })
+    .slice(0, 5);
 
   const insertMention = (name: string) => {
     const mentionText = `@${name.split(" ")[0]} `;
     const lastAtIndex = text.lastIndexOf("@");
     if (lastAtIndex !== -1) {
-      const newText = text.substring(0, lastAtIndex) + mentionText + text.substring(lastAtIndex + mentionSearch.length + 1);
+      const newText =
+        text.substring(0, lastAtIndex) +
+        mentionText +
+        text.substring(lastAtIndex + mentionSearch.length + 1);
       setText(newText);
     } else {
       setText(text + mentionText);
@@ -339,11 +407,9 @@ export function CommentThread({
 
   const handleTextChange = (newText: string) => {
     setText(newText);
-    
-    // Find @mention pattern - look for @ followed by characters until space
     const atPattern = /@(\w*)$/;
     const match = newText.match(atPattern);
-    
+
     if (match) {
       setMentionSearch(match[1]);
       setShowMentionSuggestions(true);
@@ -354,211 +420,208 @@ export function CommentThread({
     }
   };
 
-  const screenPos = {
-    x: anchorPosition.x * zoom + pan.x,
-    y: anchorPosition.y * zoom + pan.y,
-  };
-
-  // Position thread to the right of bubble
-  const threadX = Math.min(screenPos.x + 60, window.innerWidth - 380);
-  const threadY = Math.max(screenPos.y - 150, 80);
+  const targetHint =
+    bubble.targetType === "sticky"
+      ? "On slip"
+      : bubble.targetType === "label"
+        ? "On packet"
+        : "On wall";
 
   return (
-    <>
-      {/* Backdrop */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[95]"
-        onClick={onClose}
-      />
-      
-      {/* Thread panel */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, x: 20 }}
-        animate={{ opacity: 1, scale: 1, x: 0 }}
-        exit={{ opacity: 0, scale: 0.95, x: 20 }}
-        className="fixed z-[100] w-80 bg-card rounded-xl shadow-2xl border border-border overflow-hidden"
-        style={{
-          left: threadX,
-          top: threadY,
-        }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium">Comment</span>
-            {bubble.resolved && (
-              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                Resolved
-              </span>
+    <motion.div
+      ref={panelRef}
+      initial={{ opacity: 0, scale: 0.97, y: 4 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.97, y: 4 }}
+      transition={{ duration: 0.14, ease: "easeOut" }}
+      className="fixed z-[100] w-[min(18.75rem,calc(100%-1.5rem))] border border-border bg-card shadow-lg"
+      style={
+        coords
+          ? { left: coords.left, top: coords.top }
+          : { left: EDGE, top: EDGE }
+      }
+      role="dialog"
+      aria-label="Note"
+      data-note-peek
+    >
+      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            Note
+          </p>
+          <span className="truncate font-mono text-[10px] text-muted-foreground/80">
+            {targetHint}
+          </span>
+          {bubble.resolved ? (
+            <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              Done
+            </span>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-7 px-2 font-mono text-[10px] uppercase tracking-widest",
+              bubble.resolved && "text-muted-foreground"
             )}
-          </div>
-          <div className="flex items-center gap-1">
-            {/* Resolve button */}
-            <button
-              onClick={onResolve}
-              className={`p-1.5 rounded-lg transition-colors ${
-                bubble.resolved
-                  ? "bg-green-100 text-green-600 hover:bg-green-200"
-                  : "hover:bg-accent text-muted-foreground hover:text-foreground"
-              }`}
-              title={bubble.resolved ? "Reopen" : "Resolve"}
-            >
-              <Check className="w-4 h-4" />
-            </button>
-            {/* Delete button */}
-            <button
-              onClick={onDelete}
-              className="p-1.5 rounded-lg hover:bg-red-100 text-muted-foreground hover:text-red-600 transition-colors"
-              title="Supprimer"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-            {/* Close button */}
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+            onClick={onResolve}
+          >
+            {bubble.resolved ? "Reopen" : "Resolve"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+            onClick={onDelete}
+            aria-label="Delete note"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
+      </div>
 
-        {/* Comments list */}
-        <div className="max-h-64 overflow-y-auto p-3 space-y-3">
-          {(!comments || comments.length === 0) ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              Pas encore de commentaire. Soyez le premier !
-            </p>
-          ) : (
-            comments.map((comment: any) => {
-              const isCurrentUser = comment.userId === userId;
-              return (
-                <div key={comment._id} className={`space-y-1 ${isCurrentUser ? "bg-primary/5 -mx-2 px-2 py-1 rounded-lg" : ""}`}>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                      isCurrentUser ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
-                    }`}>
-                      {getAuthorDisplayName(comment).charAt(0).toUpperCase()}
-                    </div>
-                    <span className={`text-xs font-medium ${isCurrentUser ? "text-primary" : ""}`}>
-                      {getAuthorDisplayName(comment)}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {new Date(comment._creationTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                  <p className="text-sm pl-8">
-                    {comment.text.split(/(@\w+)/).map((part: string, i: number) => 
-                      part.startsWith("@") ? (
-                        <span key={i} className="text-primary font-medium bg-primary/10 px-1 rounded">{part}</span>
-                      ) : part
+      <div className="max-h-52 overflow-y-auto px-3 py-2.5 space-y-3">
+        {!comments || comments.length === 0 ? (
+          <p
+            className="text-[13px] text-muted-foreground py-2"
+            style={{ fontFamily: "var(--font-display), serif", fontStyle: "italic" }}
+          >
+            Write it down…
+          </p>
+        ) : (
+          comments.map((comment: {
+            _id: string;
+            userId?: string;
+            userName?: string;
+            text: string;
+            _creationTime: number;
+          }) => {
+            const isCurrentUser = comment.userId === userId;
+            return (
+              <div key={comment._id} className="space-y-0.5">
+                <div className="flex items-baseline gap-2">
+                  <span
+                    className={cn(
+                      "font-mono text-[10px] tracking-wide uppercase",
+                      isCurrentUser ? "text-foreground" : "text-muted-foreground"
                     )}
-                  </p>
+                  >
+                    {getAuthorDisplayName(comment)}
+                  </span>
+                  <span className="font-mono text-[10px] tabular-nums text-muted-foreground/70">
+                    {new Date(comment._creationTime).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
                 </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* Input */}
-        <div className="p-3 border-t border-border bg-muted/20">
-          <div className="flex gap-2">
-            <div className="flex-1 relative">
-              <textarea
-                ref={textareaRef}
-                value={text}
-                onChange={(e) => handleTextChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (showMentionSuggestions && mentionSuggestions.length > 0) {
-                    if (e.key === "ArrowDown") {
-                      e.preventDefault();
-                      setSelectedMentionIndex(i => Math.min(i + 1, mentionSuggestions.length - 1));
-                      return;
-                    }
-                    if (e.key === "ArrowUp") {
-                      e.preventDefault();
-                      setSelectedMentionIndex(i => Math.max(i - 1, 0));
-                      return;
-                    }
-                    if (e.key === "Enter" || e.key === "Tab") {
-                      e.preventDefault();
-                      insertMention(mentionSuggestions[selectedMentionIndex].name);
-                      return;
-                    }
-                  }
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSubmit();
-                  }
-                  if (e.key === "Escape" && showMentionSuggestions) {
-                    setShowMentionSuggestions(false);
-                  }
-                }}
-                placeholder="Ajouter un commentaire... (@ pour mentionner)"
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
-                rows={2}
-              />
-              
-              {/* @mention suggestions dropdown */}
-              {showMentionSuggestions && (
-                <div className="absolute bottom-full left-0 right-0 mb-1 bg-card border border-border rounded-lg shadow-lg overflow-hidden z-10">
-                  {mentionSuggestions.length > 0 ? (
-                    <>
-                      <div className="px-2 py-1 text-[10px] text-muted-foreground bg-muted/50 border-b border-border">
-                        {mentionSearch ? `Résultats pour "${mentionSearch}"` : "Tous les utilisateurs"}
-                      </div>
-                      {mentionSuggestions.map((user: { id: string; name: string }, index: number) => (
-                        <button
-                          key={user.id}
-                          onClick={() => insertMention(user.name)}
-                          className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors ${
-                            index === selectedMentionIndex ? "bg-primary/10" : ""
-                          }`}
-                        >
-                          <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
-                            {user.name.charAt(0).toUpperCase()}
-                          </div>
-                          <span>{user.name}</span>
-                        </button>
-                      ))}
-                    </>
-                  ) : (
-                    <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-                      <div className="flex flex-col items-center gap-1">
-                        <span className="text-base">👤</span>
-                        <span>
-                          {mentionSearch 
-                            ? `Aucun utilisateur pour "${mentionSearch}"` 
-                            : "Aucun autre utilisateur en ligne"}
-                        </span>
-                      </div>
-                    </div>
+                <p
+                  className="text-[13px] leading-snug text-foreground"
+                  style={{ fontFamily: "var(--font-display), serif" }}
+                >
+                  {comment.text.split(/(@\w+)/).map((part: string, i: number) =>
+                    part.startsWith("@") ? (
+                      <span
+                        key={i}
+                        className="font-mono text-[12px] text-primary bg-primary/10 px-0.5"
+                      >
+                        {part}
+                      </span>
+                    ) : (
+                      part
+                    )
                   )}
-                  <div className="px-2 py-1 text-[10px] text-muted-foreground bg-muted/50 border-t border-border flex justify-center gap-2">
-                    <span>↑↓ naviguer</span>
-                    <span>•</span>
-                    <span>Entrée sélectionner</span>
-                    <span>•</span>
-                    <span>Esc fermer</span>
-                  </div>
+                </p>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="border-t border-border p-2">
+        <div className="relative flex gap-1.5">
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={(e) => handleTextChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (showMentionSuggestions && mentionSuggestions.length > 0) {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setSelectedMentionIndex((i) =>
+                    Math.min(i + 1, mentionSuggestions.length - 1)
+                  );
+                  return;
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setSelectedMentionIndex((i) => Math.max(i - 1, 0));
+                  return;
+                }
+                if (e.key === "Enter" || e.key === "Tab") {
+                  e.preventDefault();
+                  insertMention(mentionSuggestions[selectedMentionIndex].name);
+                  return;
+                }
+              }
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void handleSubmit();
+              }
+              if (e.key === "Escape" && showMentionSuggestions) {
+                setShowMentionSuggestions(false);
+              }
+            }}
+            placeholder="Note… (@ to mention)"
+            className="min-h-[2.5rem] flex-1 resize-none border border-border bg-background px-2.5 py-1.5 text-[13px] focus:outline-none focus:ring-1 focus:ring-foreground/30"
+            rows={2}
+            style={{ fontFamily: "var(--font-display), serif" }}
+          />
+          <button
+            type="button"
+            onClick={() => void handleSubmit()}
+            disabled={!text.trim()}
+            className="self-end flex h-9 w-9 items-center justify-center border border-border bg-foreground text-background transition-transform duration-150 ease-out active:scale-[0.97] disabled:opacity-40"
+            aria-label="Send"
+          >
+            <Send className="h-3.5 w-3.5" />
+          </button>
+
+          {showMentionSuggestions && (
+            <div className="absolute bottom-full left-0 right-10 mb-1 border border-border bg-card shadow-md overflow-hidden z-10">
+              {mentionSuggestions.length > 0 ? (
+                mentionSuggestions.map(
+                  (user: { id: string; name: string }, index: number) => (
+                    <button
+                      key={user.id}
+                      type="button"
+                      onClick={() => insertMention(user.name)}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent",
+                        index === selectedMentionIndex && "bg-accent"
+                      )}
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center border border-border font-mono text-[10px] uppercase">
+                        {user.name.charAt(0)}
+                      </span>
+                      <span className="truncate">{user.name}</span>
+                    </button>
+                  )
+                )
+              ) : (
+                <div className="px-3 py-3 text-sm text-muted-foreground text-center">
+                  No one online
                 </div>
               )}
             </div>
-            <button
-              onClick={handleSubmit}
-              disabled={!text.trim()}
-              className="px-3 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-end"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </div>
+          )}
         </div>
-      </motion.div>
-    </>
+      </div>
+    </motion.div>
   );
 }
 
@@ -577,6 +640,7 @@ interface CommentBubblesLayerProps {
   currentUserId?: string;
   currentUserName?: string;
   bouncingBubbleId?: string | null;
+  onThreadBecameNonEmpty?: () => void;
 }
 
 export function CommentBubblesLayer({
@@ -594,18 +658,19 @@ export function CommentBubblesLayer({
   currentUserName,
   presenceUsers = [],
   bouncingBubbleId = null,
+  onThreadBecameNonEmpty,
 }: CommentBubblesLayerProps) {
   const { userId } = useAuth();
   const resolveBubbleMutation = useMutation(api.commentBubbles.resolveBubble);
 
   const handleResolve = async (bubbleId: string, currentResolved: boolean) => {
     try {
-      await resolveBubbleMutation({ 
+      await resolveBubbleMutation({
         bubbleId: bubbleId as Id<"commentBubbles">,
-        resolved: !currentResolved 
+        resolved: !currentResolved,
       });
-      toast.success(currentResolved ? "Comment reopened" : "Comment resolved");
-    } catch (err) {
+      toast.success(currentResolved ? "Note reopened" : "Note resolved");
+    } catch {
       toast.error("Failed to resolve");
     }
   };
@@ -617,7 +682,7 @@ export function CommentBubblesLayer({
     return false;
   };
 
-  const selectedBubble = bubbles.find(b => b.id === selectedBubbleId);
+  const selectedBubble = bubbles.find((b) => b.id === selectedBubbleId);
 
   return (
     <>
@@ -639,7 +704,6 @@ export function CommentBubblesLayer({
         />
       ))}
 
-      {/* Comment Thread */}
       <AnimatePresence>
         {selectedBubble && (
           <CommentThread
@@ -648,7 +712,9 @@ export function CommentBubblesLayer({
             zoom={zoom}
             pan={pan}
             onClose={() => onBubbleClick(selectedBubble.id)}
-            onResolve={() => handleResolve(selectedBubble.id, selectedBubble.resolved)}
+            onResolve={() =>
+              handleResolve(selectedBubble.id, selectedBubble.resolved)
+            }
             onDelete={() => {
               onBubbleDelete(selectedBubble.id);
               onBubbleClick(selectedBubble.id);
@@ -658,6 +724,7 @@ export function CommentBubblesLayer({
             currentUserId={userId ?? undefined}
             currentUserName={currentUserName}
             presenceUsers={presenceUsers}
+            onBecameNonEmpty={onThreadBecameNonEmpty}
           />
         )}
       </AnimatePresence>

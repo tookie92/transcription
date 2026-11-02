@@ -1,28 +1,33 @@
 import { useRef, useCallback, useEffect } from "react";
 
 export function useThrottle<T extends (...args: never[]) => void>(func: T, delay: number): T {
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCallRef = useRef<number>(0);
   const funcRef = useRef(func);
-  
-  // Keep func ref up to date
+  const pendingArgsRef = useRef<Parameters<T> | null>(null);
+
   funcRef.current = func;
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
+      if (pendingArgsRef.current) {
+        funcRef.current(...pendingArgsRef.current);
+        pendingArgsRef.current = null;
+      }
     };
   }, []);
 
   return useCallback((...args: Parameters<T>) => {
+    pendingArgsRef.current = args;
     const now = Date.now();
     const remaining = delay - (now - lastCallRef.current);
-    
+
     if (remaining <= 0) {
       lastCallRef.current = now;
+      pendingArgsRef.current = null;
       funcRef.current(...args);
     } else {
       if (timeoutRef.current) {
@@ -30,7 +35,11 @@ export function useThrottle<T extends (...args: never[]) => void>(func: T, delay
       }
       timeoutRef.current = setTimeout(() => {
         lastCallRef.current = Date.now();
-        funcRef.current(...args);
+        const pending = pendingArgsRef.current;
+        pendingArgsRef.current = null;
+        if (pending) {
+          funcRef.current(...pending);
+        }
       }, remaining);
     }
   }, [delay]) as T;

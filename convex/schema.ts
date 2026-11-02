@@ -8,6 +8,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     ownerId: v.string(), // Clerk user ID
     isPublic: v.boolean(),
+    isDemo: v.optional(v.boolean()),
     members: v.array(v.object({
       userId: v.string(),
       role: v.union(v.literal("owner"), v.literal("editor"), v.literal("viewer")),
@@ -30,16 +31,49 @@ export default defineSchema({
     createdAt: v.number(),
     // Configuration
     config: v.object({
-      interviewIds: v.array(v.id("interviews")), // interviews to include
+      interviewIds: v.array(v.id("interviews")), // legacy sittings share
       includeCrossThemes: v.boolean(),
       interviewConfig: v.record(v.id("interviews"), v.object({
         showSummary: v.boolean(),
         showInsights: v.boolean(),
         showTranscriptExcerpts: v.boolean(),
-        maxExcerpts: v.number(), // max transcript excerpts per interview
+        maxExcerpts: v.number(),
       })),
       personaIds: v.optional(v.array(v.id("personas"))),
       includeAffinityMap: v.boolean(),
+      /** Frozen wall brief at Issue time (clusters → slips + votes). */
+      wallSnapshot: v.optional(v.object({
+        capturedAt: v.number(),
+        clusters: v.array(v.object({
+          id: v.string(),
+          title: v.string(),
+          voteCount: v.number(),
+          slips: v.array(v.object({
+            id: v.string(),
+            text: v.string(),
+            kind: v.optional(v.string()),
+          })),
+        })),
+        traySlips: v.optional(v.array(v.object({
+          id: v.string(),
+          text: v.string(),
+          kind: v.optional(v.string()),
+        }))),
+        cast: v.optional(v.array(v.object({
+          name: v.string(),
+          occupation: v.optional(v.string()),
+          quote: v.optional(v.string()),
+          background: v.optional(v.string()),
+          goals: v.optional(v.array(v.string())),
+          frustrations: v.optional(v.array(v.string())),
+        }))),
+        /** Stakeholder framing frozen at Publish (Groq or fallback). */
+        brief: v.optional(v.object({
+          thesis: v.string(),
+          framing: v.string(),
+          priorityLead: v.string(),
+        })),
+      })),
     }),
     // Template info (if saved as template)
     isTemplate: v.boolean(),
@@ -97,6 +131,16 @@ export default defineSchema({
     isPublic: v.optional(v.boolean()),
     sharePassword: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
+    /** Light interview guide: 3–8 questions, checked during/after the sitting. */
+    prepGuide: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          text: v.string(),
+          checked: v.boolean(),
+        })
+      )
+    ),
     createdAt: v.number(),
   })
     .index("by_project", ["projectId"]),
@@ -115,7 +159,7 @@ export default defineSchema({
     ),
     text: v.string(),
     timestamp: v.number(),
-    source: v.union(v.literal("ai"), v.literal("manual")),
+    source: v.union(v.literal("ai"), v.literal("manual"), v.literal("demo")),
     createdBy: v.string(),
     createdByName: v.string(),
     tags: v.optional(v.array(v.string())),
@@ -440,30 +484,36 @@ personas: defineTable({
   mapId: v.id("affinityMaps"),
   name: v.string(),
   gender: v.optional(v.union(v.literal("male"), v.literal("female"))),
-  age: v.number(),
+  age: v.optional(v.number()),
   occupation: v.string(),
   background: v.string(),
   goals: v.array(v.string()),
   frustrations: v.array(v.string()),
-  behaviors: v.array(v.string()),
+  behaviors: v.optional(v.array(v.string())),
   quote: v.string(),
-  profileImage: v.string(),
-  demographics: v.object({
+  profileImage: v.optional(v.string()),
+  demographics: v.optional(v.object({
     education: v.string(),
     income: v.string(),
     location: v.string(),
     techProficiency: v.union(v.literal("beginner"), v.literal("intermediate"), v.literal("expert")),
-  }),
-  psychographics: v.object({
+  })),
+  psychographics: v.optional(v.object({
     motivations: v.array(v.string()),
     values: v.array(v.string()),
     personality: v.array(v.string()),
-  }),
+  })),
   basedOn: v.object({
     groups: v.number(),
     insights: v.number(),
     groupTitles: v.array(v.string()),
+    packetIds: v.optional(v.array(v.string())),
   }),
+  /** Free position on the affinity wall (canvas coords). */
+  wallPosition: v.optional(v.object({
+    x: v.number(),
+    y: v.number(),
+  })),
   createdAt: v.number(),
 })
 .index("by_project", ["projectId"])
@@ -556,6 +606,28 @@ silentSortingSessions: defineTable({
     updatedAt: v.number(),
   })
   .index("by_clerk", ["clerkId"]),
+
+  // Tester / beta field signals (in-app + Issue stakeholder feedback)
+  signals: defineTable({
+    userId: v.string(),
+    userName: v.optional(v.string()),
+    userEmail: v.optional(v.string()),
+    sentiment: v.union(
+      v.literal("up"),
+      v.literal("meh"),
+      v.literal("down")
+    ),
+    message: v.string(),
+    path: v.string(),
+    projectId: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+    /** Set when feedback comes from a public Issue share link. */
+    shareToken: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_user_created", ["userId", "createdAt"])
+    .index("by_created", ["createdAt"])
+    .index("by_share_created", ["shareToken", "createdAt"]),
 
 });
 

@@ -94,7 +94,7 @@ export const getByProject = query({
 
     return await ctx.db
       .query("insights")
-      .filter(q => q.eq(q.field("projectId"), args.projectId))
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
   },
 });
@@ -107,7 +107,7 @@ export const getByInterview = query({
   handler: async (ctx, args) => {
     const insights = await ctx.db
       .query("insights")
-      .filter(q => q.eq(q.field("interviewId"), args.interviewId))
+      .withIndex("by_interview", (q) => q.eq("interviewId", args.interviewId))
       .order("asc")
       .collect();
 

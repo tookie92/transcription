@@ -3,7 +3,6 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from "react";
 
 import { useFigJamBoard } from "@/hooks/useFigJamBoard";
-import { StickyNote } from "./StickyNote";
 import { ClusterLabel } from "./ClusterLabel";
 import { FigJamToolbar } from "./FigJamToolbar";
 import { MiniMap } from "./MiniMap";
@@ -13,9 +12,36 @@ import { ClusterAIRename } from "./ClusterAIRename";
 import { CommentBubblesLayer } from "./CommentBubble";
 import { PresentationMode } from "./PresentationMode";
 import { InsightsSidebar } from "./InsightsSidebar";
+import { TapePeek, type TapePeekTarget } from "@/components/myComponents/affinity/TapePeek";
+import { FindStudyDialog } from "@/components/myComponents/FindStudyDialog";
+import { ShareProjectModal } from "@/components/myComponents/ShareProjectModal";
+import { CastDialog } from "../CastDialog";
+import { CastPeek, type CastPeekAnchor, type CastPeekPersona } from "../CastPeek";
+import { WallCast } from "./WallCast";
 import { GDPRConsent } from "../GDPRConsent";
 import type { FigJamElement, Position, Size, StickyColor, StickyNoteData, DotData, ClusterLabelData, SectionData, TextData } from "@/types/figjam";
 import type { Insight } from "@/types";
+import {
+  PACKET_EMPTY,
+  PACKET_MAX_COLS,
+  SLIP_MIN_HEIGHT,
+  SLIP_MIN_WIDTH,
+  packetColumns,
+  packetHeight,
+  packetHugWidth,
+  packetSlipPosition,
+  findPacketSlot,
+  type PacketRect,
+} from "@/lib/packetLayout";
+import { slipKindOf } from "@/components/myComponents/affinity/SlipFace";
+import {
+  applyRemoteFigJam,
+  buildFigJamSavePayload,
+  isFigJamTombstone,
+  liveFigJamElements,
+  preferRicherFigJam,
+} from "@/lib/figjamMerge";
+import { castAvatarUrl, resolveCastAvatar } from "@/lib/castAvatar";
 
 interface CommentBubbleData {
   id: string;
@@ -23,6 +49,8 @@ interface CommentBubbleData {
   targetId?: string;
   targetType?: "sticky" | "label" | "canvas";
   resolved: boolean;
+  createdBy?: string;
+  createdByName?: string;
 }
 import { useAuth, useUser } from "@clerk/nextjs";
 import { usePresence } from "@/hooks/usePresence";
@@ -34,7 +62,7 @@ import { useThrottle } from "@/hooks/useThrottle";
 import { useVotingSync } from "@/hooks/useVotingSync";
 import { MentionToastProvider } from "@/hooks/useMentionToasts";
 import { toast } from "sonner";
-import { MessageSquare, MonitorSmartphone } from "lucide-react";
+import { MonitorSmartphone } from "lucide-react";
 import { useConfirmationToast } from "@/hooks/useConfirmationToast";
 
 interface PresenceUser {
@@ -99,6 +127,7 @@ interface FigJamBoardProps {
   onImportInsights?: (insights: Insight[]) => void;
   // Callback to get current insight IDs on canvas
   onCanvasInsightIdsChange?: (insightIds: string[]) => void;
+  sittingId?: string;
   // Presence users for displaying voter names
   presenceUsers?: Array<{ userId: string; user?: { id: string; name: string; avatar?: string } }>;
   // Current user for displaying own vote name
@@ -119,7 +148,7 @@ interface FigJamBoardProps {
   canUndo?: boolean;
   canRedo?: boolean;
   // Callback to expose board controls (undo/redo) to parent
-  onBoardControlsReady?: (controls: { undo: () => void; redo: () => void }) => void;
+  onBoardControlsReady?: (controls: { undo: () => void; redo: () => void; openFind: () => void }) => void;
 }
 
 export function FigJamBoard({
@@ -136,9 +165,10 @@ export function FigJamBoard({
   onBack,
   onOpenComment,
   projectInsights = [],
-  existingInsightIds = [],
+  existingInsightIds: _existingInsightIds = [],
   onImportInsights,
   onCanvasInsightIdsChange,
+  sittingId,
   presenceUsers = [],
   currentUser,
   onOpenPersona,
@@ -194,15 +224,7 @@ export function FigJamBoard({
     }
   };
 
-  // Expose undo/redo controls to parent
-  useEffect(() => {
-    if (onBoardControlsReady) {
-      onBoardControlsReady({
-        undo: () => board.undo(),
-        redo: () => board.redo(),
-      });
-    }
-  }, [onBoardControlsReady]);
+  // Expose undo/redo after persist helpers are defined
 
   const hasMapId = !!mapId && !!projectId;
   
@@ -219,6 +241,11 @@ export function FigJamBoard({
   
   // Track last saved elements to prevent save loops
   const lastSavedElementsRef = useRef<string>("");
+  const knownLiveIdsRef = useRef<Set<string>>(new Set());
+  const pendingDeletesRef = useRef<Map<string, number>>(new Map());
+  const suppressRemoteUntilRef = useRef(0);
+  const forceSaveAfterUpdateRef = useRef(false);
+  const lastEmptyBubbleIdRef = useRef<string | null>(null);
   // Track last processed movement timestamp to avoid duplicates
   const lastProcessedTimestampRef = useRef<number>(0);
 
@@ -231,6 +258,12 @@ export function FigJamBoard({
   }, []);
 
   const [draggingStickyId, setDraggingStickyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const clearDrag = () => setDraggingStickyId(null);
+    window.addEventListener("dragend", clearDrag);
+    return () => window.removeEventListener("dragend", clearDrag);
+  }, []);
   const draggingPositionRef = useRef<{ pos: Position; size: Size } | null>(null);
 
   const [lassoStart, setLassoStart] = useState<Position | null>(null);
@@ -244,18 +277,18 @@ export function FigJamBoard({
   const [showAIGroupingPanel, setShowAIGroupingPanel] = useState(false);
   const [showGDPRConsent, setShowGDPRConsent] = useState(false);
   const [showInsightsSidebar, setShowInsightsSidebar] = useState(true);
+  const [tapePeek, setTapePeek] = useState<TapePeekTarget | null>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  const [castOpen, setCastOpen] = useState(false);
+  const [issueOpen, setIssueOpen] = useState(false);
+  const [castSeedPacketId, setCastSeedPacketId] = useState<string | null>(null);
+  const [castPeek, setCastPeek] = useState<CastPeekPersona | null>(null);
+  const [castPeekAnchor, setCastPeekAnchor] = useState<CastPeekAnchor | null>(null);
+  const [castPositionOverrides, setCastPositionOverrides] = useState<
+    Record<string, { x: number; y: number }>
+  >({});
   const [votingConfigTrigger, setVotingConfigTrigger] = useState(0);
 
-  // Close sidebar when voting starts (avoid distraction)
-  useEffect(() => {
-    if (voting.isVoting) {
-      setShowInsightsSidebar(false);
-    }
-  }, [voting.isVoting]);
-
-  // Smart auto-fit state - track which clusters have auto-fit enabled
-  const [autoFitEnabledClusters, setAutoFitEnabledClusters] = useState<Set<string>>(new Set());
-  
   // Guard to prevent duplicate cluster creation on single click
   const clusterCreationGuardRef = useRef<{ timestamp: number; position: { x: number; y: number } } | null>(null);
   // Guard to prevent duplicate sticky creation on single click
@@ -278,6 +311,15 @@ export function FigJamBoard({
     mapId ? api.commentBubbles.getBubblesByMap : "skip" as any,
     mapId ? { mapId: mapId as Id<"affinityMaps"> } : {}
   );
+  const savedCasts = useQuery(
+    api.personas.getPersonasByMap,
+    mapId ? { mapId: mapId as Id<"affinityMaps"> } : "skip"
+  );
+  const openCast = useCallback((packetId?: string) => {
+    setCastSeedPacketId(packetId ?? null);
+    setCastOpen(true);
+    onOpenPersona?.();
+  }, [onOpenPersona]);
   
   const commentBubbles: CommentBubbleData[] = (convexBubbles ?? []).map((b: any) => ({
     id: b._id,
@@ -285,15 +327,46 @@ export function FigJamBoard({
     targetId: b.targetId,
     targetType: b.targetType,
     resolved: b.resolved,
+    createdBy: b.createdBy,
+    createdByName: b.createdByName,
   }));
 
   const createBubbleMutation = useMutation(api.commentBubbles.createBubble);
   const deleteBubbleMutation = useMutation(api.commentBubbles.deleteBubble);
   const updateBubblePositionMutation = useMutation(api.commentBubbles.updateBubblePosition);
   const resolveBubbleMutation = useMutation(api.commentBubbles.resolveBubble);
+  const deletePersonaMutation = useMutation(api.personas.deletePersona);
+  const updatePersonaWallPosition = useMutation(api.personas.updatePersonaWallPosition);
+  const updatePersonaMutation = useMutation(api.personas.updatePersona);
+
+  // Backfill missing profileImage for older casts (derive randomuser from name).
+  const avatarBackfillRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!savedCasts) return;
+    for (const persona of savedCasts) {
+      const stored = persona.profileImage?.trim();
+      if (
+        stored &&
+        !stored.includes("dicebear.com") &&
+        !stored.includes("ui-avatars.com")
+      ) {
+        continue;
+      }
+      if (avatarBackfillRef.current.has(persona._id)) continue;
+      avatarBackfillRef.current.add(persona._id);
+      const url = castAvatarUrl(persona.name, persona.gender);
+      void updatePersonaMutation({
+        personaId: persona._id,
+        profileImage: url,
+      }).catch(() => {
+        avatarBackfillRef.current.delete(persona._id);
+      });
+    }
+  }, [savedCasts, updatePersonaMutation]);
 
   const [selectedBubbleId, setSelectedBubbleId] = useState<string | null>(null);
   const [isCommentToolActive, setIsCommentToolActive] = useState(false);
+  const commentToolArmedRef = useRef(false);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
   const [isOverCluster, setIsOverCluster] = useState(false);
   const [newBubbleCount, setNewBubbleCount] = useState(0);
@@ -308,8 +381,8 @@ export function FigJamBoard({
     for (const label of clusterLabels) {
       const clusterX = label.position.x;
       const clusterY = label.position.y;
-      const clusterWidth = label.width ?? 500;
-      const clusterHeight = label.height ?? 350;
+      const clusterWidth = label.width ?? PACKET_EMPTY.width;
+      const clusterHeight = label.height ?? PACKET_EMPTY.height;
       
       if (
         centerX >= clusterX &&
@@ -326,36 +399,16 @@ export function FigJamBoard({
   // Helper to calculate sticky position in grid within cluster
   function calculateStickyPositionInCluster(
     cluster: ClusterLabelData,
-    stickiesInCluster: StickyNoteData[],
-    CARD_WIDTH: number,
-    CARD_GAP: number,
-    HEADER_OFFSET: number,
-    CLUSTER_PADDING: number,
-    MAX_COLS: number
+    stickiesInCluster: StickyNoteData[]
   ): Position {
-    const clusterWidth = cluster.width ?? 500;
-    const cols = Math.min(MAX_COLS, Math.max(1, Math.floor((clusterWidth - CLUSTER_PADDING * 2) / (CARD_WIDTH + CARD_GAP))));
-    
-    const index = stickiesInCluster.length;
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    
-    const startX = CLUSTER_PADDING;
-    const startY = HEADER_OFFSET;
-    const spacingX = CARD_WIDTH + CARD_GAP;
-    const spacingY = 230; // CARD_HEIGHT_WITH_PADDING + CARD_GAP
-    
-    return {
-      x: cluster.position.x + startX + col * spacingX,
-      y: cluster.position.y + startY + row * spacingY,
-    };
+    const width = cluster.width ?? PACKET_EMPTY.width;
+    const cols = packetColumns(width, stickiesInCluster.length + 1);
+    return packetSlipPosition(
+      { x: cluster.position.x, y: cluster.position.y, width },
+      stickiesInCluster.length,
+      cols
+    );
   }
-
-  // Compute new insights that can be imported
-  const existingIdsSet = useMemo(() => new Set(existingInsightIds), [existingInsightIds]);
-  const newInsightsCount = useMemo(() => {
-    return projectInsights.filter(insight => !existingIdsSet.has(insight.id)).length;
-  }, [projectInsights, existingIdsSet]);
 
   // Track which insights are currently on canvas (use ref to avoid infinite loop)
   const onCanvasInsightIdsChangeRef = useRef(onCanvasInsightIdsChange);
@@ -373,90 +426,105 @@ export function FigJamBoard({
     onCanvasInsightIdsChangeRef.current(canvasInsightIds);
   }, [state.elements]);
 
-  // Import insights to canvas
-  const handleImportInsights = useCallback(() => {
-    const newInsights = projectInsights.filter(insight => !existingIdsSet.has(insight.id));
-    if (newInsights.length === 0) return;
+  const TRAY_PARK = { x: -2400, y: -2400 };
+  const trayHydratedRef = useRef(false);
+  const pendingImportIdsRef = useRef<Set<string>>(new Set());
+  const dedupeRanRef = useRef(false);
 
-    // Position the stickies in a grid
-    const startX = 100;
-    const startY = 100;
-    const spacingX = 220;
-    const spacingY = 220;
-    const cols = Math.min(newInsights.length, 5);
+  const importInsightsToTray = useCallback((incoming: Insight[], silent = false) => {
+    if (incoming.length === 0) return;
 
-    newInsights.forEach((insight, index) => {
-      const col = index % cols;
-      const row = Math.floor(index / cols);
-      let position: Position;
-      let clusterId: string | null = null;
-      const size = { width: 200, height: 200 };
-      
-      // Determine color based on insight type
+    const alreadyOnBoard = new Set(
+      Object.values(board.state.elements)
+        .filter((el): el is StickyNoteData => el.type === "sticky" && Boolean(el.insightId))
+        .map((el) => el.insightId as string)
+    );
+
+    const unique = incoming.filter((insight) => {
+      if (alreadyOnBoard.has(insight.id)) return false;
+      if (pendingImportIdsRef.current.has(insight.id)) return false;
+      return true;
+    });
+    if (unique.length === 0) return;
+
+    unique.forEach((insight) => pendingImportIdsRef.current.add(insight.id));
+
+    const size = { width: SLIP_MIN_WIDTH, height: SLIP_MIN_HEIGHT };
+
+    board.beginHistoryBatch();
+    unique.forEach((insight) => {
       let stickyColor: StickyColor = "insight";
       if (insight.type === "quote") stickyColor = "quote";
       else if (insight.type === "pain-point") stickyColor = "pain-point";
-      
-      // Check if this position is inside a cluster
-      const testPos = {
-        x: startX + col * spacingX,
-        y: startY + row * spacingY,
-      };
-      clusterId = findClusterAtPositionHelper(testPos.x, testPos.y, size.width, size.height, labels);
-      
-      if (clusterId) {
-        // Calculate position within cluster grid
-        const cluster = state.elements[clusterId] as ClusterLabelData;
-        const stickiesInCluster = stickies.filter(s => 
-          s.clusterId === clusterId || s.parentSectionId === clusterId
-        );
-        position = calculateStickyPositionInCluster(
-          cluster,
-          stickiesInCluster,
-          280,  // CARD_WIDTH
-          20,   // CARD_GAP
-          40,   // HEADER_OFFSET
-          16,   // CLUSTER_PADDING
-          4     // MAX_COLS
-        );
-      } else {
-        // Use default grid position for ungrouped stickies
-        position = {
-          x: startX + col * spacingX,
-          y: startY + row * spacingY,
-        };
-      }
-      
-      const stickyId = board.addStickyNote(position, stickyColor, size, insight.createdByName || "Imported");
-      
-      // Update content with the insight text, store the insight ID, and assign to cluster if found
-      board.updateElement(stickyId, { 
+      else if (insight.type === "follow-up") stickyColor = "follow-up";
+
+      const stickyId = board.addStickyNote(
+        TRAY_PARK,
+        stickyColor,
+        size,
+        insight.createdByName || "Imported"
+      );
+
+      board.updateElement(stickyId, {
         content: insight.text,
         insightId: insight.id,
-        ...(clusterId && { clusterId, parentSectionId: clusterId }),
+        interviewId: insight.interviewId,
+        timestamp: insight.timestamp,
+        clusterId: null,
+        parentSectionId: null,
+        source: insight.type,
       });
     });
+    board.endHistoryBatch(false);
 
-    toast.success(`${newInsights.length} insight${newInsights.length > 1 ? "s" : ""} imported`, {
-      action: {
-        label: "Annuler",
-        onClick: () => {
-          // Remove the imported stickies
-          newInsights.forEach(insight => {
-            const stickyId = Object.keys(state.elements).find(
-              id => state.elements[id].type === "sticky" && (state.elements[id] as any).insightId === insight.id
-            );
-            if (stickyId) {
-              board.deleteElement(stickyId);
-            }
-          });
-          // Reset the imported state so button re-activates
-          onImportInsights?.([]);
-        },
-      },
-    });
-    onImportInsights?.(newInsights);
-  }, [projectInsights, existingIdsSet, board, onImportInsights]);
+    setShowInsightsSidebar(true);
+    if (!silent) {
+      toast.success(
+        unique.length === 1 ? "1 slip in the tray" : `${unique.length} slips in the tray`
+      );
+    }
+    onImportInsights?.(unique);
+  }, [board, onImportInsights]);
+
+  /** Keep one sticky per insightId (prefer clustered / richer content). */
+  const dedupeStickiesByInsightId = useCallback(() => {
+    const byInsight = new Map<string, StickyNoteData[]>();
+    for (const el of Object.values(board.state.elements)) {
+      if (el.type !== "sticky") continue;
+      const sticky = el as StickyNoteData;
+      if (!sticky.insightId) continue;
+      const list = byInsight.get(sticky.insightId) ?? [];
+      list.push(sticky);
+      byInsight.set(sticky.insightId, list);
+    }
+
+    const toDelete: string[] = [];
+    for (const [, copies] of byInsight) {
+      if (copies.length < 2) continue;
+      const ranked = [...copies].sort((a, b) => {
+        const aCluster = a.clusterId || a.parentSectionId ? 1 : 0;
+        const bCluster = b.clusterId || b.parentSectionId ? 1 : 0;
+        if (bCluster !== aCluster) return bCluster - aCluster;
+        const aLen = (a.content ?? "").trim().length;
+        const bLen = (b.content ?? "").trim().length;
+        if (bLen !== aLen) return bLen - aLen;
+        return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+      });
+      for (let i = 1; i < ranked.length; i++) {
+        toDelete.push(ranked[i]!.id);
+      }
+    }
+
+    if (toDelete.length === 0) return 0;
+    const deletedAt = Date.now();
+    board.beginHistoryBatch();
+    for (const id of toDelete) {
+      pendingDeletesRef.current.set(id, deletedAt);
+      board.deleteElement(id);
+    }
+    board.endHistoryBatch(false);
+    return toDelete.length;
+  }, [board]);
 
   // Track element positions to update bubbles that follow targets
   const elementPositionsRef = useRef<Record<string, Position>>({});
@@ -490,43 +558,17 @@ export function FigJamBoard({
     });
   }, [state.elements, commentBubbles]);
   
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName)) return;
-      const active = document.activeElement;
-      if (active?.tagName === "INPUT" || active?.tagName === "TEXTAREA" || (active as HTMLElement)?.isContentEditable) return;
-
-      const key = e.key.toLowerCase();
-      
-      // Tool shortcuts - deactivate comment tool when using other tools
-      if (key === "s") {
-        setTool("select");
-        setIsCommentToolActive(false);
-      } else if (key === "h") {
-        setTool("hand");
-        setIsCommentToolActive(false);
-      } else if (key === "c") {
-        setTool("cluster");
-        setIsCommentToolActive(false);
-      } else if (key === "v") {
-        // Toggle voting mode
-        onToggleVoting?.();
-      } else if (key === "f") {
-        setTool("section");
-        setIsCommentToolActive(false);
-      } else if (key === "m") {
-        setIsCommentToolActive(prev => !prev);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [setTool, setIsCommentToolActive, onToggleVoting]);
-
   // ── Presence (cursors) ───────────────────────────────────────────────────
   const { userId } = useAuth();
   const { user } = useUser();
   const currentUserName = user?.fullName || user?.firstName || "Anonymous";
+
+  const votePanOriginRef = useRef<Position>({ x: 0, y: 0 });
+  const lastVoteRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    if (!voting.isVoting) lastVoteRef.current = [];
+  }, [voting.isVoting]);
 
   // ── Confirmation Toasts ─────────────────────────────────────────────────
   const { confirmDelete, confirmMerge, showUndoToast } = useConfirmationToast();
@@ -621,25 +663,48 @@ export function FigJamBoard({
   const logActivity = useMutation(api.activityLog.logActivity);
   
   // Immediate save - for critical operations like lock/unlock
-  const immediateSave = useCallback((elements: Record<string, FigJamElement>) => {
-    if (hasMapId) {
-      lastSavedElementsRef.current = JSON.stringify(elements);
-      saveToConvex({
-        mapId: mapId as Id<"affinityMaps">,
-        elements,
-      });
-      debugLog("[IMMEDIATE_SAVE] Saved", Object.keys(elements).length, "elements");
+  const persistToConvex = useCallback((live: Record<string, FigJamElement>) => {
+    if (!hasMapId) return Promise.resolve();
+    if (Object.keys(live).length === 0 && knownLiveIdsRef.current.size > 0) {
+      return Promise.resolve();
     }
+    // Only tombstone IDs explicitly deleted this session — never infer from knownLiveIds.
+    const payload = buildFigJamSavePayload(live, pendingDeletesRef.current);
+    for (const id of Object.keys(live)) {
+      knownLiveIdsRef.current.add(id);
+      pendingDeletesRef.current.delete(id);
+    }
+    return saveToConvex({
+      mapId: mapId as Id<"affinityMaps">,
+      elements: payload,
+    }).then(() => {
+      lastSavedElementsRef.current = JSON.stringify(live);
+      for (const [id, stored] of Object.entries(payload)) {
+        if (isFigJamTombstone(stored)) {
+          knownLiveIdsRef.current.delete(id);
+          pendingDeletesRef.current.delete(id);
+        }
+      }
+    });
   }, [hasMapId, mapId, saveToConvex]);
+
+  const immediateSave = useCallback((elements: Record<string, FigJamElement>) => {
+    if (!hasMapId) return;
+    suppressRemoteUntilRef.current = Date.now() + 2500;
+    void persistToConvex(elements);
+    debugLog("[IMMEDIATE_SAVE] Saved", Object.keys(elements).length, "elements");
+  }, [hasMapId, persistToConvex]);
+
+  const deleteAndTrack = useCallback(
+    (id: string) => {
+      pendingDeletesRef.current.set(id, Date.now());
+      board.deleteElement(id);
+    },
+    [board]
+  );
   
-  // Throttled save - saves every 500ms to keep Convex in sync
   const throttledSave = useThrottle((elements: Record<string, FigJamElement>) => {
-    if (hasMapId) {
-      saveToConvex({
-        mapId: mapId as Id<"affinityMaps">,
-        elements,
-      });
-    }
+    void persistToConvex(elements);
   }, 500);
   
   // Throttled broadcast - sends movement updates every 100ms for real-time sync
@@ -743,6 +808,16 @@ export function FigJamBoard({
   // LOAD: Priority Convex > initialElements > localStorage
   // ============================================
   const hasLoadedInitialRef = useRef(false);
+  const lastMapIdRef = useRef(mapId);
+
+  useEffect(() => {
+    if (lastMapIdRef.current === mapId) return;
+    lastMapIdRef.current = mapId;
+    hasLoadedInitialRef.current = false;
+    knownLiveIdsRef.current = new Set();
+    lastSavedElementsRef.current = "";
+    setIsLoaded(false);
+  }, [mapId]);
   const savedElementsRef = useRef(savedElements);
   
   // Update ref when savedElements changes
@@ -750,13 +825,6 @@ export function FigJamBoard({
     savedElementsRef.current = savedElements;
   }, [savedElements]);
   
-  // Effect to mark board as loaded AFTER state has been updated
-  useEffect(() => {
-    if (!isLoaded) return;
-    
-    board.markLoaded();
-  }, [isLoaded, board]);
-
   useEffect(() => {
     // Only run on mount (when savedElements first loads)
     if (hasLoadedInitialRef.current) return;
@@ -765,28 +833,58 @@ export function FigJamBoard({
     if (savedElementsRef.current === undefined) return;
     
     hasLoadedInitialRef.current = true;
-    
-    // Priority 1: Convex (shared state from other users)
-    if (savedElements && Object.keys(savedElements).length > 0) {
-      board.loadElements(savedElements);
+
+    if (savedElements && typeof savedElements === "object") {
+      let live = liveFigJamElements(savedElements as Record<string, unknown>);
+      // Heal: localStorage may still hold packets tombstoned by a raced save.
+      if (storageKey) {
+        try {
+          const raw = localStorage.getItem(storageKey);
+          if (raw) {
+            const parsed = JSON.parse(raw) as Record<string, unknown>;
+            const localLive = liveFigJamElements(parsed);
+            const richer = preferRicherFigJam(live, localLive);
+            if (richer !== live) {
+              const healedAt = Date.now();
+              live = Object.fromEntries(
+                Object.entries(richer).map(([id, el]) => [
+                  id,
+                  { ...el, updatedAt: Math.max(el.updatedAt ?? 0, healedAt) },
+                ])
+              ) as Record<string, FigJamElement>;
+              // Push healed wall back so Issue / dashboard catch up.
+              suppressRemoteUntilRef.current = Date.now() + 4000;
+              void persistToConvex(live);
+            }
+          }
+        } catch {
+          /* ignore corrupt backup */
+        }
+      }
+      board.loadElements(live);
+      lastSavedElementsRef.current = JSON.stringify(live);
+      knownLiveIdsRef.current = new Set(Object.keys(live));
       setIsLoaded(true);
       return;
     }
 
-    // Priority 2: Initial elements prop
     if (initialElements && Object.keys(initialElements).length > 0) {
       board.loadElements(initialElements);
+      lastSavedElementsRef.current = JSON.stringify(initialElements);
+      knownLiveIdsRef.current = new Set(Object.keys(initialElements));
       setIsLoaded(true);
       return;
     }
 
-    // Priority 3: localStorage (fallback for offline) - only if storageKey is defined
     if (storageKey) {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         try {
-          const parsed = JSON.parse(saved) as Record<string, FigJamElement>;
-          board.loadElements(parsed);
+          const parsed = JSON.parse(saved) as Record<string, unknown>;
+          const live = liveFigJamElements(parsed);
+          board.loadElements(live);
+          lastSavedElementsRef.current = JSON.stringify(live);
+          knownLiveIdsRef.current = new Set(Object.keys(live));
           setIsLoaded(true);
           return;
         } catch (e) {
@@ -795,90 +893,251 @@ export function FigJamBoard({
       }
     }
     
-    // Mark as loaded even if nothing was loaded
     setIsLoaded(true);
-  }, [savedElements, initialElements, storageKey]);
+  }, [savedElements, initialElements, storageKey, board, persistToConvex]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    // Wait for Convex map payload before importing — avoids twining saved slips.
+    if (hasMapId && savedElements === undefined) return;
+
+    const stickiesOnBoard = Object.values(state.elements).filter(
+      (el): el is StickyNoteData => el.type === "sticky"
+    );
+    const presentInsightIds = new Set(
+      stickiesOnBoard
+        .filter((el) => Boolean(el.insightId))
+        .map((el) => el.insightId as string)
+    );
+
+    // One-shot cleanup of historical duplicates (same insightId, many stickies).
+    if (!dedupeRanRef.current && stickiesOnBoard.length > 0) {
+      dedupeRanRef.current = true;
+      const removed = dedupeStickiesByInsightId();
+      if (removed > 0) {
+        toast.message(
+          removed === 1
+            ? "Removed 1 duplicate slip"
+            : `Removed ${removed} duplicate slips`
+        );
+        return;
+      }
+    }
+
+    for (const id of presentInsightIds) {
+      pendingImportIdsRef.current.delete(id);
+    }
+
+    const missing = projectInsights.filter((insight) => {
+      if (presentInsightIds.has(insight.id)) return false;
+      if (pendingImportIdsRef.current.has(insight.id)) return false;
+      return true;
+    });
+    if (missing.length === 0) {
+      trayHydratedRef.current = true;
+      board.markLoaded();
+      return;
+    }
+
+    const silent = trayHydratedRef.current;
+    trayHydratedRef.current = true;
+    importInsightsToTray(missing, silent);
+    board.markLoaded();
+  }, [
+    isLoaded,
+    hasMapId,
+    savedElements,
+    projectInsights,
+    importInsightsToTray,
+    dedupeStickiesByInsightId,
+    state.elements,
+    board,
+  ]);
 
   // ============================================
   // REAL-TIME SYNC: Sync with Convex when data changes from other users
   // ============================================
   const lastSyncedElementsRef = useRef<string>("");
-  // Track initial element IDs to avoid importing ghost elements from Convex
-  const initialElementIdsRef = useRef<Set<string> | null>(null);
-  // Skip first sync run since initial load is handled separately
-  const hasSyncedOnceRef = useRef(false);
+  const didPushRicherRef = useRef(false);
+
+  // If this tab still has packets Convex lost (tombstone race), push them back once.
+  useEffect(() => {
+    if (!isLoaded || !hasMapId || savedElements === undefined) return;
+    if (didPushRicherRef.current) return;
+    if (Date.now() < suppressRemoteUntilRef.current) return;
+
+    const remoteLive = liveFigJamElements(savedElements as Record<string, unknown>);
+    const localLive = state.elements;
+    const preferred = preferRicherFigJam(remoteLive, localLive);
+    if (preferred !== localLive) return;
+
+    const localLabels = Object.values(localLive).filter((el) => el.type === "label").length;
+    const remoteLabels = Object.values(remoteLive).filter((el) => el.type === "label").length;
+    const localGrouped = Object.values(localLive).filter(
+      (el) => el.type === "sticky" && (el.clusterId || el.parentSectionId)
+    ).length;
+    const remoteGrouped = Object.values(remoteLive).filter(
+      (el) => el.type === "sticky" && (el.clusterId || el.parentSectionId)
+    ).length;
+    if (localLabels <= remoteLabels && localGrouped <= remoteGrouped) return;
+
+    didPushRicherRef.current = true;
+    const healedAt = Date.now();
+    const bumped = Object.fromEntries(
+      Object.entries(localLive).map(([id, el]) => [
+        id,
+        { ...el, updatedAt: Math.max(el.updatedAt ?? 0, healedAt) },
+      ])
+    ) as Record<string, FigJamElement>;
+    suppressRemoteUntilRef.current = Date.now() + 4000;
+    void persistToConvex(bumped);
+  }, [isLoaded, hasMapId, savedElements, state.elements, persistToConvex]);
 
   useEffect(() => {
-    if (!isLoaded || !savedElements) return;
-
-    // Skip if this is the initial load (handled above)
+    if (!isLoaded || savedElements === undefined) return;
     if (!hasLoadedInitialRef.current) return;
+    if (Date.now() < suppressRemoteUntilRef.current) return;
 
-    // Skip first sync run to avoid race conditions with initial load
-    if (!hasSyncedOnceRef.current) {
-      hasSyncedOnceRef.current = true;
-      initialElementIdsRef.current = new Set(Object.keys(state.elements));
-      lastSyncedElementsRef.current = JSON.stringify(savedElements);
-      return;
+    const savedStr = JSON.stringify(savedElements ?? {});
+    if (savedStr === lastSyncedElementsRef.current) return;
+
+    const remoteStored = (savedElements ?? {}) as Record<string, unknown>;
+    const merged = applyRemoteFigJam(
+      board.state.elements,
+      remoteStored,
+      pendingDeletesRef.current
+    );
+    const mergedStr = JSON.stringify(merged);
+    if (mergedStr !== JSON.stringify(board.state.elements)) {
+      board.loadElements(merged);
     }
-    
-    // Compare element counts and keys for change detection
-    const currentIds = new Set(Object.keys(state.elements));
-    const savedIds = new Set(Object.keys(savedElements));
-
-    // Check if there are ANY new elements (clusters, stickies, etc.)
-    const newIds = Array.from(savedIds).filter(id => !currentIds.has(id));
-    const removedIds = Array.from(currentIds).filter(id => !savedIds.has(id));
-
-    // Also check for count changes
-    const countChanged = currentIds.size !== savedIds.size;
-
-    // Check for content changes (important for undo/redo)
-    const savedStr = JSON.stringify(savedElements);
-    const contentChanged = savedStr !== lastSyncedElementsRef.current;
-
-    // Only do full reload if:
-    // 1. Elements were added or removed (newIds or removedIds)
-    // 2. Content changed (text, etc.) - NOT just position changes
-    // Skip if ONLY positions changed - that means another user just moved something
-    const onlyPositionsChanged = newIds.length === 0 && removedIds.length === 0 && !countChanged && contentChanged;
-    
-    if (!onlyPositionsChanged && (newIds.length > 0 || removedIds.length > 0 || contentChanged)) {
-      debugLog("[SYNC] Full reload from Convex - new:", newIds, "removed:", removedIds, "content changed:", contentChanged, "only positions:", onlyPositionsChanged);
-      board.loadElements(savedElements);
-      lastSyncedElementsRef.current = savedStr;
-    }
-  }, [savedElements, isLoaded, state.elements, board]);
+    lastSyncedElementsRef.current = savedStr;
+    lastSavedElementsRef.current = mergedStr;
+    knownLiveIdsRef.current = new Set(Object.keys(merged));
+  }, [savedElements, isLoaded, board]);
 
   // ============================================
   // Save: On every change → Convex + localStorage
   // ============================================
+  const pendingSaveRef = useRef<Record<string, FigJamElement> | null>(null);
+
+  const flushSave = useCallback((elements?: Record<string, FigJamElement>, force = false) => {
+    const payload = elements ?? pendingSaveRef.current;
+    if (!payload || !hasMapId) return;
+
+    const remoteStored = savedElementsRef.current;
+    if (!force && remoteStored && typeof remoteStored === "object") {
+      const remoteLive = liveFigJamElements(remoteStored as Record<string, unknown>);
+      const localMax = Object.values(payload).reduce(
+        (max, el) => Math.max(max, el.updatedAt ?? 0),
+        0
+      );
+      const remoteMax = Object.values(remoteLive).reduce(
+        (max, el) => Math.max(max, el.updatedAt ?? 0),
+        0
+      );
+      const localIds = Object.keys(payload);
+      const missingLocalIds = [...knownLiveIdsRef.current].some((id) => !(id in payload));
+      const extraLocalIds = localIds.some((id) => !(id in remoteLive));
+      if (localMax < remoteMax && !missingLocalIds && !extraLocalIds) {
+        pendingSaveRef.current = null;
+        return;
+      }
+    }
+
+    void persistToConvex(payload);
+    pendingSaveRef.current = null;
+  }, [hasMapId, persistToConvex]);
+
+  const persistUndo = useCallback(() => {
+    const restored = board.undo();
+    onUndo?.();
+    if (!restored) return restored;
+    suppressRemoteUntilRef.current = Date.now() + 2500;
+    lastSavedElementsRef.current = JSON.stringify(restored);
+    flushSave(restored, true);
+    return restored;
+  }, [board.undo, onUndo, flushSave]);
+
+  const persistRedo = useCallback(() => {
+    const restored = board.redo();
+    onRedo?.();
+    if (!restored) return restored;
+    suppressRemoteUntilRef.current = Date.now() + 2500;
+    lastSavedElementsRef.current = JSON.stringify(restored);
+    flushSave(restored, true);
+    return restored;
+  }, [board.redo, onRedo, flushSave]);
+
+  const persistUndoRef = useRef(persistUndo);
+  const persistRedoRef = useRef(persistRedo);
+  persistUndoRef.current = persistUndo;
+  persistRedoRef.current = persistRedo;
+
+  const handleFitFrame = useCallback((clusterId: string, size: { width?: number; height?: number }) => {
+    board.updateElementNoHistory(clusterId, size);
+  }, [board.updateElementNoHistory]);
+
+  const openTapePeek = useCallback((stickyId: string) => {
+    const sticky = stickies.find((item) => item.id === stickyId);
+    if (!sticky) return;
+    const insight = projectInsights.find((item) => item.id === sticky.insightId);
+    const interviewId = sticky.interviewId || insight?.interviewId;
+    const timestamp = sticky.timestamp ?? insight?.timestamp ?? 0;
+    if (!interviewId) {
+      toast.error("This slip has no tape origin");
+      return;
+    }
+    setTapePeek({
+      interviewId,
+      timestamp,
+      quote: sticky.content || insight?.text || "",
+    });
+  }, [stickies, projectInsights]);
+
+  useEffect(() => {
+    onBoardControlsReady?.({
+      undo: () => persistUndoRef.current(),
+      redo: () => persistRedoRef.current(),
+      openFind: () => setFindOpen(true),
+    });
+  }, [onBoardControlsReady]);
+
   useEffect(() => {
     if (!isLoaded) return;
-    
-    // Serialize current elements to compare
+
     const currentElementsStr = JSON.stringify(state.elements);
-    
-    // Skip if elements haven't changed since last save
     if (currentElementsStr === lastSavedElementsRef.current) {
       return;
     }
-    
-    // Save to localStorage (instant) - only if storageKey is defined
+
     if (storageKey) {
-      localStorage.setItem(storageKey, JSON.stringify(state.elements));
+      localStorage.setItem(storageKey, currentElementsStr);
     }
 
-    // Save to Convex (throttled) - only if there are elements
-    if (Object.keys(state.elements).length > 0) {
-      lastSavedElementsRef.current = currentElementsStr;
-      debugLog("[SAVE] Saving", Object.keys(state.elements).length, "elements to Convex");
+    pendingSaveRef.current = state.elements;
+    if (forceSaveAfterUpdateRef.current) {
+      forceSaveAfterUpdateRef.current = false;
+      suppressRemoteUntilRef.current = Date.now() + 2500;
+      immediateSave(state.elements);
+    } else {
       throttledSave(state.elements);
     }
-    
-    // Notify parent component
     onChange?.(state.elements);
-  }, [state.elements, storageKey, isLoaded, throttledSave]);
+  }, [state.elements, storageKey, isLoaded, throttledSave, immediateSave, onChange]);
+
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === "hidden") flushSave();
+    };
+    window.addEventListener("beforeunload", onHide);
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      flushSave();
+      window.removeEventListener("beforeunload", onHide);
+      document.removeEventListener("visibilitychange", onHide);
+    };
+  }, [flushSave]);
 
   // ============================================
   // PHASE 3: Real-time movements from other users
@@ -1021,6 +1280,16 @@ export function FigJamBoard({
     };
   }, []);
 
+  useEffect(() => {
+    const releaseDrag = () => board.endDrag();
+    window.addEventListener("pointerup", releaseDrag);
+    window.addEventListener("pointercancel", releaseDrag);
+    return () => {
+      window.removeEventListener("pointerup", releaseDrag);
+      window.removeEventListener("pointercancel", releaseDrag);
+    };
+  }, [board.endDrag]);
+
   // ── Canvas pan / zoom ────────────────────────────────────────────────────
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -1073,6 +1342,7 @@ export function FigJamBoard({
       const isMiddle   = e.button === 1;
       const isHandTool = state.activeTool === "hand";
       const isSpacePan = isSpacePressed;
+      const isVotePan  = voting.isVoting && e.button === 0 && !isHandTool && !isSpacePan;
 
       if (isMiddle || isHandTool || isSpacePan) {
         isPanning.current = true;
@@ -1089,6 +1359,14 @@ export function FigJamBoard({
       const target = e.target as HTMLElement;
       const isCanvasClick = target === canvasRef.current || target.closest(".lasso-area");
       if (!isCanvasClick) return;
+
+      if (isVotePan) {
+        isPanning.current = true;
+        panStart.current = { x: e.clientX, y: e.clientY };
+        panOrigin.current = { ...state.pan };
+        e.currentTarget.setPointerCapture(e.pointerId);
+        return;
+      }
 
       // Cluster tool - create ONE cluster
       if (state.activeTool === "cluster") {
@@ -1110,20 +1388,12 @@ export function FigJamBoard({
 
         debugLog("Calling addClusterLabel...");
         const clusterId = board.addClusterLabel(
-          { x: pos.x - 250, y: pos.y - 120 },
-          { width: 500, height: 300 }
+          { x: pos.x - PACKET_EMPTY.width / 2, y: pos.y - PACKET_EMPTY.height / 2 },
+          PACKET_EMPTY
         );
         debugLog("Created cluster:", clusterId);
-        board.updateElement(clusterId, { text: "New Cluster" });
-        safeLogActivity("section_created", clusterId, "New Cluster");
+        safeLogActivity("section_created", clusterId, "Untitled");
         board.setTool("select");
-
-        if (hasMapId) {
-          saveToConvex({
-            mapId: mapId as Id<"affinityMaps">,
-            elements: state.elements,
-          });
-        }
         debugLog("Cluster creation complete");
         return;
       }
@@ -1137,18 +1407,60 @@ export function FigJamBoard({
         return;
       }
 
-      // Comment tool - create bubble on click
+      // Note tool — pin on wall, slip, or packet
       if (isCommentToolActive) {
+        if (!commentToolArmedRef.current) return;
         const pos = screenToCanvas(e.clientX, e.clientY);
+        commentToolArmedRef.current = false;
+
+        let targetId: string | undefined;
+        let targetType: "sticky" | "label" | "canvas" = "canvas";
+        let placeAt = pos;
+
+        // Prefer slip under cursor, then packet
+        for (const sticky of stickies) {
+          const w = sticky.size?.width ?? 200;
+          const h = sticky.size?.height ?? 200;
+          if (
+            pos.x >= sticky.position.x &&
+            pos.x <= sticky.position.x + w &&
+            pos.y >= sticky.position.y &&
+            pos.y <= sticky.position.y + h
+          ) {
+            targetId = sticky.id;
+            targetType = "sticky";
+            placeAt = { x: sticky.position.x + w / 2, y: sticky.position.y - 14 };
+            break;
+          }
+        }
+        if (!targetId) {
+          for (const label of allClusters) {
+            const w = label.width ?? PACKET_EMPTY.width;
+            const h = label.height ?? PACKET_EMPTY.height;
+            if (
+              pos.x >= label.position.x &&
+              pos.x <= label.position.x + w &&
+              pos.y >= label.position.y &&
+              pos.y <= label.position.y + h
+            ) {
+              targetId = label.id;
+              targetType = "label";
+              placeAt = { x: label.position.x + w / 2, y: label.position.y - 14 };
+              break;
+            }
+          }
+        }
+
         createBubbleMutation({
           mapId: mapId as Id<"affinityMaps">,
-          position: pos,
-          targetId: undefined,
-          targetType: "canvas",
+          position: placeAt,
+          targetId,
+          targetType,
           createdBy: userId || "",
           createdByName: currentUserName,
-        }).then(() => {
-          // Return to select tool after creating bubble
+        }).then((id) => {
+          lastEmptyBubbleIdRef.current = id;
+          setSelectedBubbleId(id);
           board.setTool("select");
           setIsCommentToolActive(false);
         }).catch(console.error);
@@ -1185,28 +1497,6 @@ export function FigJamBoard({
         }
         
         if (hasMapId && mapId) {
-          const newElement: FigJamElement = {
-            id: stickyId,
-            type: "sticky",
-            position: stickyPos,
-            color: stickyColor,
-            content: "",
-            author: userId || "local-user",
-            authorName: currentUserName,
-            source: stickyColor,
-            votes: 0,
-            votedBy: [],
-            parentSectionId: null,
-            size,
-            zIndex: 1,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            clusterId,
-          };
-          saveToConvex({
-            mapId: mapId as Id<"affinityMaps">,
-            elements: { ...state.elements, [stickyId]: newElement },
-          });
           throttledBroadcast(stickyId, "sticky", "update", stickyPos, size, { 
             clusterId,
             color: stickyColor,
@@ -1225,37 +1515,35 @@ export function FigJamBoard({
         board.clearSelection();
       }
     },
-    [state.activeTool, state.pan, board, screenToCanvas, isSpacePressed, currentUserName, hasMapId, mapId, userId, isCommentToolActive, createBubbleMutation]
+    [state.activeTool, state.pan, board, screenToCanvas, isSpacePressed, currentUserName, hasMapId, mapId, userId, isCommentToolActive, createBubbleMutation, voting.isVoting, stickies, allClusters]
   );
 
   const handleCanvasPointerMove = useCallback(
     (e: React.PointerEvent) => {
       if (isCommentToolActive || voting.isVoting) {
         setCursorPos({ x: e.clientX, y: e.clientY });
-        return;
       }
-      
+
       if (isLassoing) {
         const pos = screenToCanvas(e.clientX, e.clientY);
         setLassoEnd(pos);
         return;
       }
-      
+
       if (!isPanning.current) {
-        // Update presence cursor with current position
-        if (hasMapId && updatePresence) {
+        if (hasMapId && updatePresence && !voting.isVoting) {
           const pos = screenToCanvas(e.clientX, e.clientY);
           updatePresence(pos.x, pos.y, state.selectedIds);
         }
         return;
       }
-      
+
       board.setPan({
         x: panOrigin.current.x + (e.clientX - panStart.current.x),
         y: panOrigin.current.y + (e.clientY - panStart.current.y),
       });
     },
-    [board, isLassoing, isCommentToolActive, screenToCanvas, hasMapId, updatePresence, state.selectedIds]
+    [board, isLassoing, isCommentToolActive, screenToCanvas, hasMapId, updatePresence, state.selectedIds, voting.isVoting]
   );
 
   const handleCanvasPointerUp = useCallback(
@@ -1297,67 +1585,112 @@ export function FigJamBoard({
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-
-      // Undo/Redo - LOCAL ONLY (does not broadcast to other users for collaborative editing)
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        // Get restored elements from undo
-        const restoredElements = board.undo();
-        // Trigger parent callback
-        onUndo?.();
-        // Force immediate save after undo with restored elements
-        if (hasMapId && restoredElements) {
-          lastSavedElementsRef.current = JSON.stringify(restoredElements);
-          saveToConvex({
-            mapId: mapId as Id<"affinityMaps">,
-            elements: restoredElements,
-          });
-          debugLog("[UNDO] Saved", Object.keys(restoredElements).length, "elements after undo");
-        }
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
-        e.preventDefault();
-        // Get restored elements from redo
-        const restoredElements = board.redo();
-        // Trigger parent callback
-        onRedo?.();
-        // Force immediate save after redo with restored elements
-        if (hasMapId && restoredElements) {
-          lastSavedElementsRef.current = JSON.stringify(restoredElements);
-          saveToConvex({
-            mapId: mapId as Id<"affinityMaps">,
-            elements: restoredElements,
-          });
-          debugLog("[REDO] Saved", Object.keys(restoredElements).length, "elements after redo");
-        }
+      const target = e.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable
+      ) {
         return;
       }
 
-      // Group selected (Ctrl+G)
-      if ((e.ctrlKey || e.metaKey) && e.key === "g") {
+      const cmd = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+
+      if (e.key === "Escape" && tapePeek) {
+        e.preventDefault();
+        setTapePeek(null);
+        return;
+      }
+
+      if (e.key === "Escape" && castPeek) {
+        e.preventDefault();
+        setCastPeek(null);
+        setCastPeekAnchor(null);
+        return;
+      }
+
+      if (!cmd && !e.altKey && e.key === "/") {
+        if (isPresentationModeActive) return;
+        e.preventDefault();
+        setFindOpen(true);
+        return;
+      }
+
+      if (cmd && e.key === "s") {
+        e.preventDefault();
+        flushSave(state.elements);
+        toast.success("Wall saved");
+        return;
+      }
+
+      if (cmd && key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (voting.isVoting && lastVoteRef.current.length > 0) {
+          const lastClusterId = lastVoteRef.current.pop();
+          if (lastClusterId) {
+            void voting.toggleVote(lastClusterId, { x: 0, y: 0 });
+          }
+          return;
+        }
+        if (lastEmptyBubbleIdRef.current) {
+          const emptyId = lastEmptyBubbleIdRef.current;
+          lastEmptyBubbleIdRef.current = null;
+          deleteBubbleMutation({ bubbleId: emptyId as Id<"commentBubbles"> });
+          if (selectedBubbleId === emptyId) setSelectedBubbleId(null);
+          return;
+        }
+        persistUndo();
+        return;
+      }
+      if (cmd && (key === "y" || (key === "z" && e.shiftKey))) {
+        e.preventDefault();
+        e.stopPropagation();
+        persistRedo();
+        return;
+      }
+
+      if (cmd && key === "d") {
+        e.preventDefault();
+        board.beginHistoryBatch();
+        state.selectedIds.forEach((id) => board.duplicateElement(id));
+        board.endHistoryBatch();
+        return;
+      }
+
+      if (cmd && e.key === "g") {
         e.preventDefault();
         board.groupSelectedIntoSection();
         return;
       }
 
-      // Select all - Ctrl+A selects clusters, Ctrl+Shift+A selects stickies
-      if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+      if (cmd && e.key === "a") {
         e.preventDefault();
         if (e.shiftKey) {
-          // Ctrl+Shift+A: select all stickies
-          const allStickyIds = allStickies.map((s) => s.id);
-          allStickyIds.forEach((id, i) => board.selectElement(id, i > 0));
+          allStickies.forEach((sticky, i) => board.selectElement(sticky.id, i > 0));
         } else {
-          // Ctrl+A: select all clusters
-          const allClusterIds = allClusters.map((c) => c.id);
-          allClusterIds.forEach((id, i) => board.selectElement(id, i > 0));
+          allClusters.forEach((cluster, i) => board.selectElement(cluster.id, i > 0));
         }
         return;
       }
 
-      // Arrow keys for moving selected elements (stickies AND clusters)
+      if (cmd && (e.key === "+" || e.key === "=")) {
+        e.preventDefault();
+        board.setZoom(Math.min(4, state.zoom * 1.15));
+        return;
+      }
+      if (cmd && e.key === "-") {
+        e.preventDefault();
+        board.setZoom(Math.max(0.1, state.zoom / 1.15));
+        return;
+      }
+      if (cmd && e.key === "0") {
+        e.preventDefault();
+        board.setZoom(1);
+        return;
+      }
+
       const arrowKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
       if (arrowKeys.includes(e.key) && state.selectedIds.length > 0) {
         e.preventDefault();
@@ -1369,13 +1702,11 @@ export function FigJamBoard({
           case "ArrowLeft": dx = -step; break;
           case "ArrowRight": dx = step; break;
         }
-        
-        // Get all selected elements (stickies and labels/clusters)
+
         const selectedElements = state.selectedIds
           .map((id) => state.elements[id])
           .filter((el) => el && (el.type === "sticky" || el.type === "label"));
-        
-        // Move all selected elements
+
         const patches: { id: string; patch: ElementPatch }[] = selectedElements.map((el) => ({
           id: el.id,
           patch: {
@@ -1385,11 +1716,9 @@ export function FigJamBoard({
             },
           },
         }));
-        
+
         if (patches.length > 0) {
           board.updateMany(patches);
-          
-          // Broadcast movements for all moved elements
           if (hasMapId) {
             patches.forEach(({ id, patch }) => {
               const element = state.elements[id];
@@ -1401,34 +1730,70 @@ export function FigJamBoard({
             });
           }
         }
-
         return;
       }
 
+      if (!cmd && !e.altKey) {
+        switch (e.key.toLowerCase()) {
+          case "l":
+            board.setTool("select");
+            commentToolArmedRef.current = false;
+            setIsCommentToolActive(false);
+            return;
+          case "h":
+            board.setTool("hand");
+            commentToolArmedRef.current = false;
+            setIsCommentToolActive(false);
+            return;
+          case "c":
+          case "f":
+            board.setTool("cluster");
+            commentToolArmedRef.current = false;
+            setIsCommentToolActive(false);
+            return;
+          case "n":
+            board.setTool("select");
+            setIsCommentToolActive((v) => {
+              const next = !v;
+              commentToolArmedRef.current = next;
+              return next;
+            });
+            return;
+          case "v":
+            setVotingConfigTrigger((prev) => prev + 1);
+            return;
+        }
+      }
+
       switch (e.key) {
-        case "s": case "S": board.setTool("select"); break;
-        case "h": case "H": board.setTool("hand");   break;
-        case "t": case "T": board.setTool("text");   break;
-        case "f": case "F": board.setTool("section"); break;
-        case "c": case "C": board.setTool("cluster"); break;
-        case "v": case "V": setVotingConfigTrigger(prev => prev + 1); break;
         case "F2":
           if (state.selectedIds.length === 1) {
             const selectedEl = state.elements[state.selectedIds[0]];
-            if (selectedEl?.type === "section") {
+            if (selectedEl?.type === "section" || selectedEl?.type === "label") {
               e.preventDefault();
               setRenameSectionId(state.selectedIds[0]);
             }
           }
           break;
         case "Escape":
+          if (selectedBubbleId) {
+            break;
+          }
+          if (isCommentToolActive) {
+            commentToolArmedRef.current = false;
+            setIsCommentToolActive(false);
+            board.setTool("select");
+            break;
+          }
           board.setTool("select");
           board.clearSelection();
           setShowStickyPicker(false);
           setShowAIGroupingPanel(false);
+          setTapePeek(null);
           break;
         case "Backspace":
         case "Delete":
+          board.beginHistoryBatch();
           state.selectedIds.forEach((id) => {
             const element = state.elements[id];
             if (element) {
@@ -1467,10 +1832,9 @@ export function FigJamBoard({
                   votedBy: [],
                 });
               } else if (element.type === "label") {
-                // When deleting a cluster, release all stickies back to ungrouped area
-                // Also clear votes to remove blue dots
                 const clusterId = id;
                 const stickiesInCluster = allStickies.filter(s => s.clusterId === clusterId || s.parentSectionId === clusterId);
+                board.beginHistoryBatch();
                 stickiesInCluster.forEach(sticky => {
                   const ungroupedY = 50 + Math.random() * 200;
                   board.updateElement(sticky.id, { 
@@ -1481,21 +1845,42 @@ export function FigJamBoard({
                     votedBy: [],
                   });
                 });
-                board.deleteElement(id);
+                deleteAndTrack(id);
+                board.endHistoryBatch();
               }
             }
           });
+          board.endHistoryBatch();
           break;
         case "+": board.setZoom(state.zoom * 1.15); break;
         case "-": board.setZoom(state.zoom / 1.15); break;
         case "0": board.setZoom(1); board.setPan({ x: 0, y: 0 }); break;
       }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [board, state.selectedIds, state.zoom, state.elements, allStickies, allClusters, onUndo, onRedo, setShowAIGroupingPanel]);
-
-  useEffect(() => { onChange?.(state.elements); }, [state.elements, onChange]);
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [
+    board,
+    state.selectedIds,
+    state.zoom,
+    state.elements,
+    allStickies,
+    allClusters,
+    persistUndo,
+    persistRedo,
+    flushSave,
+    tapePeek,
+    isPresentationModeActive,
+    hasMapId,
+    throttledBroadcast,
+    setShowAIGroupingPanel,
+    voting.isVoting,
+    voting.toggleVote,
+    isCommentToolActive,
+    selectedBubbleId,
+    deleteBubbleMutation,
+    deleteAndTrack,
+  ]);
 
   // ── Sort elements for rendering ──────────────────────────────────────────
 
@@ -1543,8 +1928,8 @@ export function FigJamBoard({
     for (const label of labels) {
       const clusterX = label.position.x;
       const clusterY = label.position.y;
-      const clusterWidth = label.width ?? 500;
-      const clusterHeight = label.height ?? 350;
+      const clusterWidth = label.width ?? PACKET_EMPTY.width;
+      const clusterHeight = label.height ?? PACKET_EMPTY.height;
 
       if (
         canvasX >= clusterX &&
@@ -1573,81 +1958,131 @@ export function FigJamBoard({
     });
   }, [stickies, getStickyCluster]);
 
+  const sittingInsightIds = useMemo(() => {
+    if (!sittingId) return null;
+    return new Set(
+      projectInsights
+        .filter((insight) => insight.interviewId === sittingId)
+        .map((insight) => insight.id)
+    );
+  }, [sittingId, projectInsights]);
+
+  const trayStickies = useMemo(() => {
+    if (!sittingInsightIds) return ungroupedStickies;
+    return ungroupedStickies.filter(
+      (sticky) => sticky.insightId && sittingInsightIds.has(sticky.insightId)
+    );
+  }, [ungroupedStickies, sittingInsightIds]);
+
   // ── Is sticky filtered function ──────────────────────────────────────
   const isStickyFiltered = useCallback((_sticky: StickyNoteData): boolean => {
     return false;
   }, []);
 
   // Handle creating a cluster from AI grouping suggestions
+  const sortPlacedRectsRef = useRef<PacketRect[]>([]);
+
+  useEffect(() => {
+    if (showAIGroupingPanel) sortPlacedRectsRef.current = [];
+  }, [showAIGroupingPanel]);
+
   const handleCreateClusterFromAI = useCallback((
     stickyIds: string[],
-    title: string,
-    position: Position
+    title: string
   ) => {
-    // Calculate optimal layout - ROW-FIRST (2 columns max, more rows)
-    const COLUMNS = 2;
-    const STICKY_WIDTH = 180;
-    const STICKY_HEIGHT = 140;
-    const STICKY_SPACING_X = 20;
-    const STICKY_SPACING_Y = 20;
-    const CLUSTER_PADDING = 25;
-    const HEADER_HEIGHT = 60;
+    const cols = Math.min(PACKET_MAX_COLS, Math.max(1, stickyIds.length));
+    const clusterWidth = packetHugWidth(stickyIds.length);
+    const clusterHeight = packetHeight(stickyIds.length, cols);
+    const occupied: PacketRect[] = [
+      ...labels.map((label) => ({
+        x: label.position.x,
+        y: label.position.y,
+        width: label.width ?? PACKET_EMPTY.width,
+        height: label.height ?? PACKET_EMPTY.height,
+      })),
+      ...sortPlacedRectsRef.current,
+    ];
+    const origin = {
+      x: -state.pan.x + 48 / state.zoom,
+      y: -state.pan.y + 96 / state.zoom,
+    };
+    const position = findPacketSlot(
+      occupied,
+      { width: clusterWidth, height: clusterHeight },
+      origin,
+      2
+    );
+    sortPlacedRectsRef.current = [
+      ...sortPlacedRectsRef.current,
+      { ...position, width: clusterWidth, height: clusterHeight },
+    ];
 
-    const rows = Math.ceil(stickyIds.length / COLUMNS);
-    const clusterWidth = CLUSTER_PADDING * 2 + COLUMNS * STICKY_WIDTH + (COLUMNS - 1) * STICKY_SPACING_X;
-    const clusterHeight = HEADER_HEIGHT + CLUSTER_PADDING + rows * STICKY_HEIGHT + (rows - 1) * STICKY_SPACING_Y + CLUSTER_PADDING;
-
-    // Create cluster with calculated size
+    board.beginHistoryBatch();
     const clusterId = board.addClusterLabel(position, { width: clusterWidth, height: clusterHeight });
 
-    debugLog(`[AI GROUPING] Creating cluster ${clusterId} with ${stickyIds.length} stickies (${COLUMNS}x${rows})`);
-
     stickyIds.forEach((stickyId, index) => {
-      // ROW-FIRST: fill row left-to-right, then next row
-      const col = index % COLUMNS;
-      const row = Math.floor(index / COLUMNS);
-
-      const stickyPosition = {
-        x: position.x + CLUSTER_PADDING + col * (STICKY_WIDTH + STICKY_SPACING_X),
-        y: position.y + HEADER_HEIGHT + CLUSTER_PADDING + row * (STICKY_HEIGHT + STICKY_SPACING_Y),
-      };
-
+      const stickyPosition = packetSlipPosition(
+        { x: position.x, y: position.y, width: clusterWidth },
+        index,
+        cols
+      );
       const sticky = state.elements[stickyId];
       const size = (sticky && sticky.type === "sticky")
         ? (sticky as StickyNoteData).size
-        : { width: STICKY_WIDTH, height: STICKY_HEIGHT };
+        : { width: SLIP_MIN_WIDTH, height: SLIP_MIN_HEIGHT };
 
-      // Update sticky position AND assign to cluster
       board.updateElement(stickyId, {
         position: stickyPosition,
         size,
-        clusterId: clusterId
+        clusterId,
+        parentSectionId: clusterId,
       });
     });
 
-    // Update cluster title AFTER all stickies are positioned
     board.updateElement(clusterId, { text: title });
+    board.endHistoryBatch();
     safeLogActivity("ai_cluster_created", clusterId, title);
+    forceSaveAfterUpdateRef.current = true;
+    suppressRemoteUntilRef.current = Date.now() + 2500;
+  }, [
+    board,
+    labels,
+    state.elements,
+    state.pan.x,
+    state.pan.y,
+    state.zoom,
+  ]);
 
-    debugLog(`[AI GROUPING] Cluster ${clusterId} created and positioned (${clusterWidth}x${clusterHeight})`);
+  const handleAddToClusterFromAI = useCallback((
+    stickyIds: string[],
+    clusterId: string
+  ) => {
+    const cluster = state.elements[clusterId] as ClusterLabelData | undefined;
+    if (!cluster || cluster.type !== "label") return;
 
-    toast.success(`Created cluster "${title}" with ${stickyIds.length} stickies`);
-  }, [board, state.elements]);
+    const alreadyIn = stickies.filter(
+      (s) => s.clusterId === clusterId || s.parentSectionId === clusterId
+    );
+    const width = cluster.width ?? PACKET_EMPTY.width;
+    const cols = packetColumns(width, alreadyIn.length + stickyIds.length);
 
-  // Toggle auto-fit for a cluster
-  const handleToggleAutoFit = useCallback((clusterId: string, enabled: boolean) => {
-    setAutoFitEnabledClusters(prev => {
-      const next = new Set(prev);
-      if (enabled) {
-        next.add(clusterId);
-        toast.success("Auto-fit enabled for this cluster");
-      } else {
-        next.delete(clusterId);
-        toast.info("Auto-fit disabled - you can resize manually");
-      }
-      return next;
+    board.beginHistoryBatch();
+    stickyIds.forEach((stickyId, index) => {
+      const position = packetSlipPosition(
+        { x: cluster.position.x, y: cluster.position.y, width },
+        alreadyIn.length + index,
+        cols
+      );
+      board.updateElement(stickyId, {
+        position,
+        clusterId,
+        parentSectionId: clusterId,
+      });
     });
-  }, []);
+    board.endHistoryBatch();
+    forceSaveAfterUpdateRef.current = true;
+    suppressRemoteUntilRef.current = Date.now() + 2500;
+  }, [board, state.elements, stickies]);
 
   // Vote results for ranking display (using voting hook)
   const voteResults = useMemo(() => {
@@ -1666,8 +2101,179 @@ export function FigJamBoard({
       .sort((a, b) => b.voteCount - a.voteCount);
   }, [labels, voting.session, voting]);
 
-  const cursorStyle = voting.isVoting
-    ? "cursor-none"
+  const castPackets = useMemo(
+    () =>
+      labels.map((label) => ({
+        id: label.id,
+        title: label.text || "",
+        slips: stickies
+          .filter((sticky) => sticky.clusterId === label.id || sticky.parentSectionId === label.id)
+          .map((sticky) => ({
+            id: sticky.id,
+            text: sticky.content || "",
+            type: slipKindOf(sticky.color, sticky.source),
+          })),
+      })),
+    [labels, stickies]
+  );
+
+  const selectedPacketIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const id of state.selectedIds) {
+      const element = state.elements[id];
+      if (!element) continue;
+      if (element.type === "label") ids.add(element.id);
+      if (element.type === "sticky") {
+        const sticky = element as StickyNoteData;
+        if (sticky.clusterId) ids.add(sticky.clusterId);
+        else if (sticky.parentSectionId) ids.add(sticky.parentSectionId);
+      }
+    }
+    return Array.from(ids);
+  }, [state.selectedIds, state.elements]);
+
+  const CAST_CARD_W = 200;
+  const CAST_CARD_H = 72;
+  const CAST_GAP = 20;
+
+  const castSpawnPosition = useMemo(() => {
+    const seedIds = new Set<string>();
+    if (castSeedPacketId) seedIds.add(castSeedPacketId);
+    for (const id of selectedPacketIds) seedIds.add(id);
+
+    const related =
+      seedIds.size > 0
+        ? labels.filter((label) => seedIds.has(label.id))
+        : labels;
+
+    if (related.length === 0) {
+      return {
+        x: -state.pan.x + 280,
+        y: -state.pan.y + 200,
+      };
+    }
+
+    let maxRight = -Infinity;
+    let minTop = Infinity;
+    let maxBottom = -Infinity;
+    for (const label of related) {
+      const w = label.width ?? 280;
+      const h = label.height ?? 200;
+      maxRight = Math.max(maxRight, label.position.x + w);
+      minTop = Math.min(minTop, label.position.y);
+      maxBottom = Math.max(maxBottom, label.position.y + h);
+    }
+
+    // Cast lane to the right of the packet liasse — not on top of clusters.
+    let x = maxRight + CAST_GAP + 16;
+    let y = minTop;
+
+    const occupied = (savedCasts ?? [])
+      .map((persona) => {
+        const override = castPositionOverrides[persona._id];
+        return override ?? persona.wallPosition ?? null;
+      })
+      .filter((p): p is { x: number; y: number } => p !== null);
+
+    const overlaps = (px: number, py: number) =>
+      occupied.some(
+        (o) =>
+          Math.abs(o.x - px) < CAST_CARD_W + 8 &&
+          Math.abs(o.y - py) < CAST_CARD_H + 8
+      );
+
+    let guard = 0;
+    while (overlaps(x, y) && guard < 24) {
+      y += CAST_CARD_H + CAST_GAP;
+      if (y > maxBottom + 40) {
+        x += CAST_CARD_W + CAST_GAP;
+        y = minTop;
+      }
+      guard += 1;
+    }
+
+    return { x, y };
+  }, [
+    castSeedPacketId,
+    labels,
+    selectedPacketIds,
+    state.pan.x,
+    state.pan.y,
+    savedCasts,
+    castPositionOverrides,
+  ]);
+
+  const canvasToScreenRect = useCallback(
+    (canvasPos: { x: number; y: number }, w = CAST_CARD_W, h = CAST_CARD_H): CastPeekAnchor => {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      const left = (rect?.left ?? 0) + state.pan.x + canvasPos.x * state.zoom;
+      const top = (rect?.top ?? 0) + state.pan.y + canvasPos.y * state.zoom;
+      return {
+        left,
+        top,
+        width: w * state.zoom,
+        height: h * state.zoom,
+      };
+    },
+    [state.pan.x, state.pan.y, state.zoom]
+  );
+
+  const wallCasts = useMemo(() => {
+    return (savedCasts ?? []).map((persona, index) => {
+      const override = castPositionOverrides[persona._id];
+      let position = override ?? persona.wallPosition ?? null;
+      if (!position) {
+        const packetIds = persona.basedOn?.packetIds ?? [];
+        const linked = labels.filter(
+          (label) =>
+            packetIds.includes(label.id) ||
+            (persona.basedOn?.groupTitles ?? []).some(
+              (title) =>
+                title.trim().toLowerCase() === (label.text ?? "").trim().toLowerCase()
+            )
+        );
+        if (linked.length > 0) {
+          let maxRight = -Infinity;
+          let minTop = Infinity;
+          for (const label of linked) {
+            maxRight = Math.max(maxRight, label.position.x + (label.width ?? 280));
+            minTop = Math.min(minTop, label.position.y);
+          }
+          position = {
+            x: maxRight + CAST_GAP + 16,
+            y: minTop + index * (CAST_CARD_H + CAST_GAP),
+          };
+        } else {
+          position = {
+            x: 200 + (index % 4) * (CAST_CARD_W + CAST_GAP),
+            y: 160 + Math.floor(index / 4) * (CAST_CARD_H + CAST_GAP),
+          };
+        }
+      }
+      return {
+        id: persona._id,
+        name: persona.name,
+        occupation: persona.occupation,
+        profileImage: resolveCastAvatar(
+          persona.name,
+          persona.profileImage,
+          persona.gender
+        ),
+        position,
+      };
+    });
+  }, [savedCasts, labels, castPositionOverrides]);
+
+  const voteWinnerIds = useMemo(
+    () => voteResults.slice(0, 3).map((result) => result.sectionId),
+    [voteResults]
+  );
+
+  const cursorStyle =
+    (voting.isVoting && (isSpacePressed || state.activeTool === "hand"))
+      ? "cursor-grab"
+      : voting.isVoting
+        ? "cursor-none"
     : state.activeTool === "hand"    ? "cursor-grab"
     : state.activeTool === "sticky"  ? "cursor-crosshair"
     : state.activeTool === "section" ? "cursor-crosshair"
@@ -1679,12 +2285,12 @@ export function FigJamBoard({
   return (
     <div
       className="relative w-full h-full overflow-hidden select-none flex bg-dot-pattern"
-      style={{ fontFamily: "'DM Sans', system-ui, sans-serif", ...style }}
+      style={{ fontFamily: "inherit", ...style }}
     >
       {/* ── Insights Sidebar ── */}
-      {showInsightsSidebar && (
+      {showInsightsSidebar && !isPresentationModeActive && (
         <InsightsSidebar
-          ungroupedStickies={ungroupedStickies}
+          ungroupedStickies={trayStickies}
           onCreateSticky={(content, color) => {
             const size = { width: 160, height: 120 };
             const position = { x: 100, y: 100 };
@@ -1696,16 +2302,19 @@ export function FigJamBoard({
           onDragStart={(sticky) => {
             setDraggingStickyId(sticky.id);
           }}
+          onDragEnd={() => setDraggingStickyId(null)}
+          sittingFilter={Boolean(sittingId)}
           draggingStickyId={draggingStickyId}
           currentUserId={userId || undefined}
           currentUserName={currentUserName}
+          onSlipClick={openTapePeek}
           onDeleteSticky={(stickyId) => {
-            board.deleteElement(stickyId);
+            deleteAndTrack(stickyId);
             safeLogActivity("sticky_deleted", stickyId);
           }}
           onCleanDrafts={(stickyIds) => {
-            stickyIds.forEach(id => {
-              board.deleteElement(id);
+            stickyIds.forEach((id) => {
+              deleteAndTrack(id);
             });
             safeLogActivity("sticky_deleted", stickyIds.join(","));
           }}
@@ -1713,10 +2322,12 @@ export function FigJamBoard({
       )}
 
       {/* Sidebar Toggle Button */}
+      {!isPresentationModeActive && (
       <button
         onClick={() => setShowInsightsSidebar(!showInsightsSidebar)}
-        className="fixed top-1/2 z-50 w-8 h-16 rounded-r-xl bg-card border border-l-0 border-[#e8e8e8] dark:border-border shadow-lg flex items-center justify-center hover:bg-accent transition-all -translate-y-1/2"
-        style={{ left: showInsightsSidebar ? "272px" : "0px" }}
+        className="absolute top-1/2 z-30 w-6 h-14 bg-card border border-l-0 border-border flex items-center justify-center hover:bg-accent transition-transform duration-150 ease-out active:scale-[0.97] -translate-y-1/2"
+        style={{ left: showInsightsSidebar ? "18rem" : "0px" }}
+        aria-label={showInsightsSidebar ? "Hide tray" : "Show tray"}
       >
         <svg 
           className={`w-4 h-4 text-muted-foreground transition-transform ${showInsightsSidebar ? "" : "rotate-180"}`} 
@@ -1727,6 +2338,7 @@ export function FigJamBoard({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
       </button>
+      )}
 
       {/* ── AI Grouping Panel ── */}
       <AIGroupingPanel
@@ -1736,9 +2348,8 @@ export function FigJamBoard({
         existingClusters={labels}
         projectContext={projectName ? `PROJECT NAME: ${projectName}` : undefined}
         onCreateCluster={handleCreateClusterFromAI}
+        onAddToCluster={handleAddToClusterFromAI}
         onNeedConsent={() => setShowGDPRConsent(true)}
-        mapId={mapId || ""}
-        userId={userId || ""}
       />
 
       {/* ── Canvas ── */}
@@ -1774,8 +2385,8 @@ export function FigJamBoard({
               for (const label of labels) {
                 const clusterX = label.position.x;
                 const clusterY = label.position.y;
-                const clusterWidth = label.width ?? 500;
-                const clusterHeight = label.height ?? 350;
+                const clusterWidth = label.width ?? PACKET_EMPTY.width;
+                const clusterHeight = label.height ?? PACKET_EMPTY.height;
 
                 if (
                   pos.x >= clusterX &&
@@ -1813,7 +2424,9 @@ export function FigJamBoard({
         <CanvasGrid zoom={state.zoom} pan={state.pan} />
 
         <div
-          className="absolute origin-top-left lasso-area"
+          className={`absolute origin-top-left lasso-area${
+            isCommentToolActive ? " *:pointer-events-none" : ""
+          }`}
           style={{ transform: `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.zoom})` }}
         >
           {/* ── Remote cursors (inside transformed layer) ── */}
@@ -1871,8 +2484,8 @@ export function FigJamBoard({
           {labels.map((el) => {
             const isClusterDragging = draggingClusterRef.current === el.id;
             
-            const clusterWidth = el.width ?? 500;
-            const clusterHeight = el.height ?? 350;
+            const clusterWidth = el.width ?? PACKET_EMPTY.width;
+            const clusterHeight = el.height ?? PACKET_EMPTY.height;
             
             const stickiesInThisCluster = stickies.filter(s => 
               s.clusterId === el.id || s.parentSectionId === el.id
@@ -1919,11 +2532,39 @@ export function FigJamBoard({
                 currentUserColor={voting.userColor}
                 currentUserName={currentUser?.name || "You"}
                 hasUserVoted={hasUserVotedForCluster}
-                autoFitEnabled={autoFitEnabledClusters.has(el.id)}
-                onToggleAutoFit={handleToggleAutoFit}
+                dotsRemaining={voting.getUserVotesRemaining()}
+                onVotePanStart={() => {
+                  votePanOriginRef.current = { ...state.pan };
+                }}
+                onVotePanDelta={(dx, dy) => {
+                  board.setPan({
+                    x: votePanOriginRef.current.x + dx,
+                    y: votePanOriginRef.current.y + dy,
+                  });
+                }}
+                onAlsoFile={(stickyId) => {
+                  const origin = stickies.find((s) => s.id === stickyId);
+                  if (!origin) return;
+                  const newId = board.duplicateElement(stickyId);
+                  if (!newId) return;
+                  board.updateElementNoHistory(newId, {
+                    clusterId: null,
+                    parentSectionId: null,
+                    position: {
+                      x: el.position.x + (el.width ?? PACKET_EMPTY.width) + 16,
+                      y: el.position.y + PACKET_EMPTY.height / 4,
+                    },
+                  });
+                  toast.success("Copy parked beside the packet");
+                }}
                 onClusterClick={(clusterId) => {
-                  // Simplified vote - just pass cluster ID
-                  voting.toggleVote(clusterId, { x: 0, y: 0 });
+                  const already = voting.hasUserVotedFor(clusterId);
+                  if (!already && voting.getUserVotesRemaining() <= 0) {
+                    toast.error("Spent — no dots left");
+                    return;
+                  }
+                  lastVoteRef.current.push(clusterId);
+                  void voting.toggleVote(clusterId, { x: 0, y: 0 });
                 }}
                 onDragStart={() => {
                   draggingClusterRef.current = el.id;
@@ -1994,9 +2635,7 @@ export function FigJamBoard({
                     });
                   }
                 }}
-                onStickyClick={(stickyId) => {
-                  // Stickies ne sont pas sélectionnables - uniquement les clusters
-                }}
+                onStickyClick={openTapePeek}
                 onStickyUpdate={(stickyId, patch) => {
                   // Clear the lock when saving - use NO_HISTORY since this is meta
                   const lockClearPatch = {
@@ -2034,15 +2673,7 @@ export function FigJamBoard({
                   const stickiesInCluster = stickies.filter(s => 
                     s.clusterId === el.id || s.parentSectionId === el.id
                   );
-                  const position = calculateStickyPositionInCluster(
-                    el,
-                    stickiesInCluster,
-                    280,  // CARD_WIDTH
-                    20,   // CARD_GAP
-                    40,   // HEADER_OFFSET
-                    16,   // CLUSTER_PADDING
-                    4     // MAX_COLS
-                  );
+                  const position = calculateStickyPositionInCluster(el, stickiesInCluster);
                   board.updateElement(stickyId, { 
                     clusterId: el.id, 
                     parentSectionId: el.id,
@@ -2051,6 +2682,8 @@ export function FigJamBoard({
                   safeLogActivity("sticky_moved", stickyId, `Moved to ${el.text || "cluster"}`);
                   if (hasMapId) {
                     throttledBroadcast(stickyId, "sticky", "update", undefined, undefined, { clusterId: el.id, parentSectionId: el.id });
+                    forceSaveAfterUpdateRef.current = true;
+                    suppressRemoteUntilRef.current = Date.now() + 2500;
                   }
                   board.clearSelection();
                   setDraggingStickyId(null);
@@ -2063,7 +2696,7 @@ export function FigJamBoard({
                   if (hasMapId) {
                     const clusterEl = state.elements[clusterId] as ClusterLabelData;
                     throttledBroadcast(clusterId, "label", "resize", undefined, {
-                      width: clusterEl?.width ?? 500,
+                      width: clusterEl?.width ?? PACKET_EMPTY.width,
                       height: newHeight
                     });
                   }
@@ -2074,10 +2707,11 @@ export function FigJamBoard({
                     const clusterEl = state.elements[clusterId] as ClusterLabelData;
                     throttledBroadcast(clusterId, "label", "resize", undefined, { 
                       width: newWidth, 
-                      height: clusterEl?.height ?? 350 
+                      height: clusterEl?.height ?? PACKET_EMPTY.height 
                     });
                   }
                 }}
+                onFitFrame={handleFitFrame}
                 onOpenAIRename={(clusterId) => {
                   setSelectedClusterForRename(clusterId);
                   setShowAIRenameDialog(true);
@@ -2087,6 +2721,56 @@ export function FigJamBoard({
               />
             );
           })}
+
+          {wallCasts.map((cast) => (
+            <WallCast
+              key={cast.id}
+              cast={cast}
+              zoom={state.zoom}
+              canInteract={!voting.isVoting && !isPresentationModeActive}
+              onOpen={(personaId, screenRect) => {
+                if (castPeek?._id === personaId) {
+                  setCastPeek(null);
+                  setCastPeekAnchor(null);
+                  return;
+                }
+                const persona = (savedCasts ?? []).find(
+                  (entry) => entry._id === personaId
+                );
+                if (!persona) return;
+                setCastPeekAnchor({
+                  left: screenRect.left,
+                  top: screenRect.top,
+                  width: screenRect.width,
+                  height: screenRect.height,
+                });
+                setCastPeek({
+                  _id: persona._id,
+                  name: persona.name,
+                  occupation: persona.occupation,
+                  quote: persona.quote,
+                  goals: persona.goals,
+                  frustrations: persona.frustrations,
+                  profileImage: resolveCastAvatar(
+                    persona.name,
+                    persona.profileImage,
+                    persona.gender
+                  ),
+                  basedOn: persona.basedOn,
+                });
+              }}
+              onDragEnd={(personaId, position) => {
+                setCastPositionOverrides((prev) => ({
+                  ...prev,
+                  [personaId]: position,
+                }));
+                void updatePersonaWallPosition({
+                  personaId: personaId as Id<"personas">,
+                  wallPosition: position,
+                }).catch(() => toast.error("Could not move cast"));
+              }}
+            />
+          ))}
         </div>
       </div>
 
@@ -2100,10 +2784,59 @@ export function FigJamBoard({
             position={clusterContextMenu.position}
             clusterId={clusterContextMenu.clusterId}
             clusterTitle={cluster?.text || "Untitled Cluster"}
-            stickyTexts={[]}
+            stickyTexts={stickies
+              .filter(
+                (s) =>
+                  s.clusterId === clusterContextMenu.clusterId ||
+                  s.parentSectionId === clusterContextMenu.clusterId
+              )
+              .map((s) => s.content || "")}
+            onSuggestName={() => {
+              setSelectedClusterForRename(clusterContextMenu.clusterId);
+              setShowAIRenameDialog(true);
+              setClusterContextMenu(null);
+            }}
+            onCopyQuotes={() => {
+              const members = stickies.filter(
+                (s) =>
+                  s.clusterId === clusterContextMenu.clusterId ||
+                  s.parentSectionId === clusterContextMenu.clusterId
+              );
+              const quotes = members
+                .filter((s) => slipKindOf(s.color, s.source) === "quote")
+                .map((s) => s.content.trim())
+                .filter(Boolean);
+              const text = (quotes.length ? quotes : members.map((s) => s.content.trim()).filter(Boolean))
+                .join("\n\n");
+              if (!text) {
+                toast.error("No quotes in this packet");
+                return;
+              }
+              void navigator.clipboard.writeText(text);
+              toast.success("Quotes copied");
+            }}
+            onCopyFollowUps={() => {
+              const followUps = stickies
+                .filter(
+                  (s) =>
+                    (s.clusterId === clusterContextMenu.clusterId ||
+                      s.parentSectionId === clusterContextMenu.clusterId) &&
+                    slipKindOf(s.color, s.source) === "follow-up"
+                )
+                .map((s) => s.content.trim())
+                .filter(Boolean);
+              if (followUps.length === 0) {
+                toast.error("No follow-ups in this packet");
+                return;
+              }
+              void navigator.clipboard.writeText(followUps.map((line) => `• ${line}`).join("\n"));
+              toast.success("Follow-ups copied");
+            }}
+            onCast={() => {
+              openCast(clusterContextMenu.clusterId);
+              setClusterContextMenu(null);
+            }}
             onClose={() => setClusterContextMenu(null)}
-            autoFitEnabled={autoFitEnabledClusters.has(clusterContextMenu.clusterId)}
-            onToggleAutoFit={handleToggleAutoFit}
             onRename={(newName) => {
               board.updateElement(clusterContextMenu.clusterId, { text: newName });
               toast.success(`Renamed to "${newName}"`);
@@ -2111,10 +2844,9 @@ export function FigJamBoard({
             }}
             onDelete={() => {
               const clusterId = clusterContextMenu.clusterId;
-              
+              board.beginHistoryBatch();
               stickies.forEach(sticky => {
                 if (sticky.clusterId === clusterId || sticky.parentSectionId === clusterId) {
-                  // Move stickies to ungrouped area instead of deleting
                   const ungroupedY = 50 + Math.random() * 200;
                   board.updateElement(sticky.id, { 
                     clusterId: null, 
@@ -2130,7 +2862,8 @@ export function FigJamBoard({
                 }
               });
               
-              board.deleteElement(clusterId);
+              deleteAndTrack(clusterId);
+              board.endHistoryBatch();
               setClusterContextMenu(null);
             }}
           />
@@ -2164,6 +2897,91 @@ export function FigJamBoard({
         );
       })()}
 
+      {tapePeek && projectId && (
+        <TapePeek
+          projectId={projectId}
+          target={tapePeek}
+          onClose={() => setTapePeek(null)}
+        />
+      )}
+
+      {projectId ? (
+        <FindStudyDialog
+          projectId={projectId as Id<"projects">}
+          open={findOpen}
+          onOpenChange={setFindOpen}
+          trigger={null}
+          onPick={(target) => {
+            setTapePeek(target);
+            setFindOpen(false);
+          }}
+        />
+      ) : null}
+
+      {projectId ? (
+        <ShareProjectModal
+          projectId={projectId as Id<"projects">}
+          projectName={projectName}
+          open={issueOpen}
+          onOpenChange={setIssueOpen}
+          hideTrigger
+        />
+      ) : null}
+
+      {projectId && mapId ? (
+        <CastDialog
+          open={castOpen}
+          onOpenChange={setCastOpen}
+          projectId={projectId}
+          mapId={mapId}
+          packets={castPackets}
+          selectedPacketIds={selectedPacketIds}
+          voteWinnerIds={voteWinnerIds}
+          seedPacketId={castSeedPacketId}
+          spawnPosition={castSpawnPosition}
+          projectContext={projectName ? `PROJECT: ${projectName}` : undefined}
+          onNeedConsent={() => setShowGDPRConsent(true)}
+          onCastCreated={(persona) => {
+            setCastPeekAnchor(canvasToScreenRect(castSpawnPosition));
+            setCastPeek({
+              ...persona,
+              profileImage: persona.profileImage,
+            });
+            setCastOpen(false);
+          }}
+        />
+      ) : null}
+
+      {castPeek ? (
+        <CastPeek
+          persona={castPeek}
+          anchor={castPeekAnchor}
+          trayOpen={showInsightsSidebar && !isPresentationModeActive}
+          onClose={() => {
+            setCastPeek(null);
+            setCastPeekAnchor(null);
+          }}
+          onDelete={() => {
+            const personaId = castPeek._id;
+            setCastPeek(null);
+            setCastPeekAnchor(null);
+            setCastPositionOverrides((prev) => {
+              if (!(personaId in prev)) return prev;
+              const next = { ...prev };
+              delete next[personaId];
+              return next;
+            });
+            void deletePersonaMutation({
+              personaId: personaId as Id<"personas">,
+            })
+              .then(() => {
+                toast.success("Cast deleted");
+              })
+              .catch(() => toast.error("Could not delete"));
+          }}
+        />
+      ) : null}
+
       {/* ── Toolbar ── */}
       {!isMobile && (
         <FigJamToolbar
@@ -2173,33 +2991,51 @@ export function FigJamBoard({
         onZoomIn={() => board.setZoom(state.zoom * 1.2)}
         onZoomOut={() => board.setZoom(state.zoom / 1.2)}
         onZoomReset={() => { board.setZoom(1); board.setPan({ x: 0, y: 0 }); }}
+        onUndo={() => persistUndoRef.current()}
+        onRedo={() => persistRedoRef.current()}
+        canUndo={board.canUndo}
+        canRedo={board.canRedo}
         onBack={onBack}
         ungroupedCount={ungroupedStickies.length}
         onToggleAIGroupingPanel={() => setShowAIGroupingPanel((v) => !v)}
         isCommentToolActive={isCommentToolActive}
-        onToggleCommentTool={() => setIsCommentToolActive((v) => !v)}
+        onToggleCommentTool={() => setIsCommentToolActive((v) => {
+          const next = !v;
+          commentToolArmedRef.current = next;
+          return next;
+        })}
         bubbleCount={commentBubbles.length + newBubbleCount}
         isPresentationModeActive={isPresentationModeActive}
         onTogglePresentationMode={() => setIsPresentationModeActive((v) => !v)}
+        onOpenFind={() => setFindOpen(true)}
+        onOpenCast={() => openCast()}
+        onOpenIssue={() => setIssueOpen(true)}
+        castCount={savedCasts?.length ?? (hasPersonas ? 1 : 0)}
         selectedCount={state.selectedIds.length}
         canvasRef={canvasRef}
         projectName={projectName}
-        newInsightsCount={newInsightsCount}
-        onImportInsights={handleImportInsights}
         isVotingActive={voting.isVoting}
         onCloseSidebar={() => setShowInsightsSidebar(false)}
+        presenceUsers={(otherUsers ?? []).map((u) => ({
+          userId: u.userId,
+          name: u.user?.name || "Teammate",
+          avatar: u.user?.avatar,
+        }))}
         voting={{
           ...voting,
           myVotesCount: voting.myVotesCount,
           maxDotsPerUser: voting.session?.maxDotsPerUser ?? 5,
           userColor: voting.userColor,
           remainingTime: voting.remainingTime,
+          isSpent: voting.isSpent,
+          roundStats: voting.roundStats,
+          flipVoting: voting.flipVoting,
         }}
         voteResults={voteResults.map(r => ({
           clusterId: r.sectionId,
           title: r.title,
           voteCount: r.voteCount,
-          color: r.colors[0] as string || "#3b82f6",
+          colors: r.colors,
         }))}
         totalVotes={voteResults.reduce((sum, r) => sum + r.voteCount, 0)}
         onCreateCluster={(title) => {
@@ -2207,20 +3043,10 @@ export function FigJamBoard({
             x: -state.pan.x + 400 + Math.random() * 100,
             y: -state.pan.y + 300 + Math.random() * 100,
           };
-          const clusterId = board.addClusterLabel(position, { width: 500, height: 350 });
+          const clusterId = board.addClusterLabel(position, PACKET_EMPTY);
           board.updateElement(clusterId, { text: title });
           safeLogActivity("section_created", clusterId, title);
-          
-          // Save to Convex
-          if (hasMapId) {
-            saveToConvex({
-              mapId: mapId as Id<"affinityMaps">,
-              elements: state.elements,
-            });
-          }
         }}
-        onOpenPersona={onOpenPersona}
-        hasPersonas={hasPersonas}
         votingConfigTrigger={votingConfigTrigger}
       />
       )}
@@ -2242,20 +3068,6 @@ export function FigJamBoard({
         }}
       />
 
-      {Object.keys(state.elements).length === 0 && (
-        <div className="absolute inset-0 top-12 flex items-center justify-center pointer-events-none">
-          <div className="text-center">
-            <p className="text-gray-500 text-4xl mb-3">✦</p>
-            <p className="text-gray-500 text-sm font-medium">Appuyez sur S ou cliquez sur l&apos;outil sticky pour commencer</p>
-            {newInsightsCount > 0 && (
-              <p className="text-gray-500 text-xs mt-2">
-                {newInsightsCount} insight{newInsightsCount > 1 ? "s" : ""} available to import
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* ── Comment Bubbles Layer ── */}
       <CommentBubblesLayer
         bubbles={commentBubbles}
@@ -2270,6 +3082,9 @@ export function FigJamBoard({
           }
         }}
         onBubbleDelete={(id) => {
+          if (lastEmptyBubbleIdRef.current === id) {
+            lastEmptyBubbleIdRef.current = null;
+          }
           deleteBubbleMutation({ bubbleId: id as Id<"commentBubbles"> });
           if (selectedBubbleId === id) {
             setSelectedBubbleId(null);
@@ -2290,29 +3105,30 @@ export function FigJamBoard({
         currentUserId={userId ?? undefined}
         currentUserName={currentUserName}
         bouncingBubbleId={bouncingBubbleId}
+        onThreadBecameNonEmpty={() => {
+          lastEmptyBubbleIdRef.current = null;
+        }}
       />
 
       {/* ── Presentation Mode ── */}
       <PresentationMode
         isActive={isPresentationModeActive}
         onClose={() => setIsPresentationModeActive(false)}
-        groups={labels.map(l => ({
-          id: l.id,
-          title: l.text || "Untitled Cluster",
-          position: l.position,
+        groups={labels.map((label) => ({
+          id: label.id,
+          title: label.text || "Untitled packet",
+          position: label.position,
         }))}
-        stickies={stickies}
-        labels={labels}
         zoom={state.zoom}
         pan={state.pan}
-        onZoomChange={(zoom) => board.setZoom(zoom)}
-        onPanChange={(pan) => board.setPan(pan)}
+        onZoomChange={board.setZoom}
+        onPanChange={board.setPan}
       />
 
-      {/* ── Comment Tool Cursor ── */}
+      {/* ── Note tool cursor (field-kit pastille) ── */}
       {isCommentToolActive && cursorPos && (
         <div
-          className="fixed pointer-events-none z-[60] transition-all duration-75"
+          className="fixed pointer-events-none z-[60]"
           style={{
             left: cursorPos.x,
             top: cursorPos.y,
@@ -2320,11 +3136,14 @@ export function FigJamBoard({
           }}
         >
           <motion.div
-            initial={{ scale: 0.5, opacity: 0 }}
+            initial={{ scale: 0.92, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="w-10 h-10 rounded-full bg-primary flex items-center justify-center shadow-lg ring-2 ring-primary/30"
+            transition={{ duration: 0.12, ease: "easeOut" }}
+            className="flex h-7 w-7 items-center justify-center border border-foreground bg-card shadow-sm"
           >
-            <MessageSquare className="w-5 h-5 text-primary-foreground" />
+            <span className="font-mono text-[11px] font-medium uppercase leading-none">
+              {(currentUserName || "?").charAt(0)}
+            </span>
           </motion.div>
         </div>
       )}
@@ -2340,19 +3159,23 @@ export function FigJamBoard({
           }}
         >
           <motion.div
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ 
-              scale: isOverCluster ? 1.3 : 1, 
-              opacity: 1 
+            initial={{ scale: 0.92, opacity: 0 }}
+            animate={{
+              scale: isOverCluster && voting.getUserVotesRemaining() > 0 ? 1.15 : 1,
+              opacity: 1,
             }}
-            transition={{ type: "spring", stiffness: 400, damping: 25 }}
-            className="w-6 h-6 rounded-full shadow-lg ring-2 ring-white flex items-center justify-center"
-            style={{ backgroundColor: voting.userColor }}
-          >
-            <div 
-              className="w-2 h-2 rounded-full bg-white/40"
-            />
-          </motion.div>
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className="flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-background"
+            style={{
+              backgroundColor:
+                voting.getUserVotesRemaining() > 0 ? voting.userColor : "transparent",
+              border:
+                voting.getUserVotesRemaining() > 0
+                  ? "1px solid color-mix(in oklab, var(--foreground) 35%, transparent)"
+                  : "2px solid var(--foreground)",
+              opacity: voting.getUserVotesRemaining() > 0 ? 1 : 0.45,
+            }}
+          />
         </div>
       )}
 
@@ -2373,7 +3196,7 @@ export function FigJamBoard({
             `${count} item${count > 1 ? "s" : ""}`,
             count,
             async () => {
-              ids.forEach(id => board.deleteElement(id));
+              ids.forEach((id) => deleteAndTrack(id));
             }
           );
           setContextMenu(null);
@@ -2408,6 +3231,9 @@ export function FigJamBoard({
               targetType,
               createdBy: userId || "",
               createdByName: currentUserName,
+            }).then((id) => {
+              lastEmptyBubbleIdRef.current = id;
+              setSelectedBubbleId(id);
             }).catch(console.error);
           }
           setContextMenu(null);

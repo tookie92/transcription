@@ -1,14 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useState } from "react";
+import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -17,517 +14,321 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Share2,
-  Copy,
-  Check,
-  ExternalLink,
-  Lock,
-  Globe,
-  X,
-  Loader2,
-  ChevronDown,
-  ChevronRight,
-  Settings2,
-  FileText,
-  Lightbulb,
-  Sparkles,
-  BookmarkPlus,
-  Users,
-} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { openSkriptaSignal } from "@/lib/openSignal";
+import {
+  buildWallIssueMarkdown,
+  downloadIssueMarkdown,
+} from "@/lib/issueCut";
+import {
+  buildIssueBriefFallback,
+  type IssueBrief,
+} from "@/lib/issueBrief";
 
 interface ShareProjectModalProps {
   projectId: Id<"projects">;
+  projectName?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Hide the default trigger when controlled from the wall toolbar. */
+  hideTrigger?: boolean;
+}
+
+async function fetchIssueBrief(payload: {
   projectName: string;
+  description?: string;
+  sittingCount: number;
+  clusters: Array<{
+    title: string;
+    voteCount: number;
+    slips: Array<{ text: string; kind?: string }>;
+  }>;
+  castNames: string[];
+}): Promise<{ brief: IssueBrief; warning?: string }> {
+  try {
+    const response = await fetch("/api/issue/brief", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      return { brief: buildIssueBriefFallback(payload), warning: "AI brief unavailable" };
+    }
+    const data = (await response.json()) as {
+      brief?: IssueBrief;
+      source?: string;
+      warning?: string;
+    };
+    if (
+      data.brief?.thesis &&
+      data.brief.framing != null &&
+      data.brief.priorityLead != null
+    ) {
+      return {
+        brief: data.brief,
+        warning:
+          data.source === "fallback"
+            ? data.warning ?? "Using field fallback brief"
+            : undefined,
+      };
+    }
+  } catch {
+    /* fall through */
+  }
+  return { brief: buildIssueBriefFallback(payload), warning: "AI brief unavailable" };
 }
 
-interface InterviewConfig {
-  showSummary: boolean;
-  showInsights: boolean;
-  showTranscriptExcerpts: boolean;
-  maxExcerpts: number;
-}
+export function ShareProjectModal({
+  projectId,
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
+}: ShareProjectModalProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isOpen = controlledOpen ?? uncontrolledOpen;
+  const setIsOpen = onOpenChange ?? setUncontrolledOpen;
 
-export function ShareProjectModal({ projectId, projectName }: ShareProjectModalProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [password, setPassword] = useState("");
-  const [usePassword, setUsePassword] = useState(false);
-  const [includeCrossThemes, setIncludeCrossThemes] = useState(true);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
-  const [templateName, setTemplateName] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
-  // Interview selection
-  const [selectedInterviews, setSelectedInterviews] = useState<Set<Id<"interviews">>>(new Set());
-  const [interviewConfigs, setInterviewConfigs] = useState<Record<string, InterviewConfig>>({});
-
-  // Content selection
-  const [selectedPersonas, setSelectedPersonas] = useState<Set<string>>(new Set());
-
-  const interviews = useQuery(api.interviews.getProjectInterviews, { projectId });
-  const shareStatus = useQuery(api.projectSharing.getProjectShareStatus, { projectId });
-  const templates = useQuery(api.projectSharing.getShareTemplates, { projectId });
-  const personas = useQuery(api.personas.getPersonasByProject, { projectId });
-  const createLink = useMutation(api.projectSharing.createProjectShareLink);
+  const shareStatus = useQuery(api.projectSharing.getProjectShareStatus, {
+    projectId,
+  });
+  const createIssue = useMutation(api.projectSharing.createIssueFromWall);
   const revokeLink = useMutation(api.projectSharing.revokeProjectShareLink);
+  const convex = useConvex();
 
-  // Auto-select all completed interviews
-  useMemo(() => {
-    if (interviews && selectedInterviews.size === 0) {
-      const completedIds = interviews
-        .filter((i) => i.status === "ready" || i.status === "completed")
-        .map((i) => i._id);
-      setSelectedInterviews(new Set(completedIds));
+  const liveLinks = (shareStatus ?? []).filter((link) => !link.isTemplate);
 
-      // Set default configs
-      const configs: Record<string, InterviewConfig> = {};
-      completedIds.forEach((id) => {
-        configs[id] = {
-          showSummary: true,
-          showInsights: true,
-          showTranscriptExcerpts: true,
-          maxExcerpts: 5,
-        };
-      });
-      setInterviewConfigs(configs);
-    }
-  }, [interviews]);
-
-  const handleCreateLink = async () => {
-    if (selectedInterviews.size === 0 && selectedPersonas.size === 0) {
-      toast.error("Select at least one content to share");
-      return;
-    }
-
-    setIsCreating(true);
+  const handlePublish = async () => {
+    setIsPublishing(true);
     try {
-      const result = await createLink({
+      const wallBrief = await convex.query(api.projectSharing.getWallBrief, {
         projectId,
-        interviewIds: Array.from(selectedInterviews),
-        includeCrossThemes,
-        interviewConfig: interviewConfigs,
-        password: usePassword ? password : undefined,
-        saveAsTemplate: saveAsTemplate && templateName ? true : undefined,
-        templateName: templateName || undefined,
-        personaIds: selectedPersonas.size > 0 ? Array.from(selectedPersonas) as any : undefined,
       });
-      toast.success("Shareable link created!");
-      setIsOpen(false);
+      if (!wallBrief) {
+        throw new Error("No wall yet — open the affinity map first");
+      }
+
+      const { brief, warning } = await fetchIssueBrief({
+        projectName: wallBrief.projectName,
+        description: wallBrief.description,
+        sittingCount: wallBrief.sittingCount,
+        clusters: wallBrief.wall.clusters.map((cluster) => ({
+          title: cluster.title,
+          voteCount: cluster.voteCount,
+          slips: cluster.slips.map((slip) => ({
+            text: slip.text,
+            kind: slip.kind,
+          })),
+        })),
+        castNames: (wallBrief.wall.cast ?? []).map((persona) => persona.name),
+      });
+
+      const result = await createIssue({
+        projectId,
+        password: code.trim() ? code.trim() : undefined,
+        brief,
+      });
+      toast.success("Issue published");
+      if (warning) toast.message(warning);
+      setCode("");
+      await navigator.clipboard.writeText(
+        `${window.location.origin}${result.shareUrl}`
+      );
+      setCopiedToken(result.shareToken);
+      window.setTimeout(() => setCopiedToken(null), 1600);
+      // Soft ask for tester Signal (not stakeholder Issue Signal)
+      window.setTimeout(() => openSkriptaSignal("issue"), 900);
     } catch (error) {
-      toast.error("Failed to create link");
+      toast.error(
+        error instanceof Error ? error.message : "Could not publish Issue"
+      );
     } finally {
-      setIsCreating(false);
+      setIsPublishing(false);
     }
   };
 
-  const handleRevokeLink = async (shareToken: string) => {
+  const handleRevoke = async (shareToken: string) => {
     try {
       await revokeLink({ shareToken });
-      toast.success("Link revoked");
-    } catch (error) {
-      toast.error("Failed to revoke link");
+      toast.success("Issue revoked");
+    } catch {
+      toast.error("Could not revoke");
     }
   };
 
-  const handleCopyLink = (shareUrl: string) => {
-    navigator.clipboard.writeText(window.location.origin + shareUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyLink = async (shareUrl: string, token: string) => {
+    await navigator.clipboard.writeText(`${window.location.origin}${shareUrl}`);
+    setCopiedToken(token);
+    window.setTimeout(() => setCopiedToken(null), 1600);
   };
 
-  const toggleInterview = (interviewId: Id<"interviews">) => {
-    setSelectedInterviews((prev) => {
-      const next = new Set(prev);
-      if (next.has(interviewId)) {
-        next.delete(interviewId);
-      } else {
-        next.add(interviewId);
-        // Add default config if new
-        if (!interviewConfigs[interviewId]) {
-          setInterviewConfigs((configs) => ({
-            ...configs,
-            [interviewId]: {
-              showSummary: true,
-              showInsights: true,
-              showTranscriptExcerpts: true,
-              maxExcerpts: 5,
-            },
-          }));
-        }
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const wallBrief = await convex.query(api.projectSharing.getWallBrief, {
+        projectId,
+      });
+      if (!wallBrief) {
+        toast.error("No wall yet");
+        return;
       }
-      return next;
-    });
-  };
-
-  const updateInterviewConfig = (interviewId: string, config: Partial<InterviewConfig>) => {
-    setInterviewConfigs((prev) => ({
-      ...prev,
-      [interviewId]: {
-        ...prev[interviewId],
-        ...config,
-      },
-    }));
-  };
-
-  const selectAll = () => {
-    if (interviews) {
-      setSelectedInterviews(new Set(interviews.map((i) => i._id)));
+      const { brief, warning } = await fetchIssueBrief({
+        projectName: wallBrief.projectName,
+        description: wallBrief.description,
+        sittingCount: wallBrief.sittingCount,
+        clusters: wallBrief.wall.clusters.map((cluster) => ({
+          title: cluster.title,
+          voteCount: cluster.voteCount,
+          slips: cluster.slips.map((slip) => ({
+            text: slip.text,
+            kind: slip.kind,
+          })),
+        })),
+        castNames: (wallBrief.wall.cast ?? []).map((persona) => persona.name),
+      });
+      downloadIssueMarkdown(
+        wallBrief.projectName,
+        buildWallIssueMarkdown({
+          projectName: wallBrief.projectName,
+          description: wallBrief.description,
+          clusters: wallBrief.wall.clusters,
+          traySlips: wallBrief.wall.traySlips,
+          cast: wallBrief.wall.cast,
+          brief,
+        })
+      );
+      if (warning) toast.message(warning);
+      else toast.success("Issue exported");
+    } catch {
+      toast.error("Could not export");
+    } finally {
+      setIsExporting(false);
     }
-  };
-
-  const selectNone = () => {
-    setSelectedInterviews(new Set());
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Share2 className="w-4 h-4" />
-          Share Project
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Share2 className="w-5 h-5" />
-            Share {projectName}
+      {!hideTrigger ? (
+        <DialogTrigger asChild>
+          <Button
+            variant="outline"
+            className="h-10 font-mono text-xs uppercase tracking-widest"
+          >
+            Issue
+          </Button>
+        </DialogTrigger>
+      ) : null}
+      <DialogContent className="max-w-md gap-0 p-0">
+        <DialogHeader className="border-b border-border px-5 py-4">
+          <DialogTitle
+            style={{ fontFamily: "var(--font-display), sans-serif" }}
+          >
+            Issue
           </DialogTitle>
           <DialogDescription>
-            Create a shareable dashboard for stakeholders with selected interviews and insights
+            Freeze the wall for people who were not in the room — thesis,
+            priorities, slips, and cast.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto space-y-4 py-4">
-          {/* Existing Links */}
-          {shareStatus && shareStatus.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <Globe className="w-4 h-4 text-green-500" />
-                    Active Links
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowTemplates(!showTemplates)}
-                    className="text-xs"
-                  >
-                    <BookmarkPlus className="w-3 h-3 mr-1" />
-                    Templates
-                  </Button>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {shareStatus.map((link) => (
-                  <div
-                    key={link.shareToken}
-                    className="flex items-center justify-between p-2 rounded-lg bg-muted/50"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm truncate">{link.shareUrl}</span>
-                        {link.hasPassword && <Lock className="w-3 h-3 text-amber-500" />}
-                        <Badge variant="secondary" className="text-xs">
-                          {link.interviewCount} interviews
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Created {new Date(link.createdAt).toLocaleDateString()}
-                        {link.expiresAt && ` • Expires ${new Date(link.expiresAt).toLocaleDateString()}`}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleCopyLink(link.shareUrl)}
-                      >
-                        {copied ? (
-                          <Check className="w-4 h-4 text-green-500" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => window.open(link.shareUrl, "_blank")}
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive"
-                        onClick={() => handleRevokeLink(link.shareToken)}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Templates Section */}
-          {showTemplates && templates && templates.length > 0 && (
-            <Card className="border-dashed">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">
-                  <BookmarkPlus className="w-4 h-4 inline mr-2" />
-                  Saved Templates
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {templates.map((template) => (
-                  <div
-                    key={template.id}
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 cursor-pointer"
-                  >
-                    <span className="text-sm">{template.name}</span>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs">
-                        {template.interviewCount} interviews
-                      </Badge>
-                      {template.includeCrossThemes && (
-                        <Badge variant="outline" className="text-xs">
-                          Cross-themes
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Interview Selection */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Select Interviews
-                  <Badge variant="secondary">{selectedInterviews.size} selected</Badge>
-                </CardTitle>
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={selectAll} className="text-xs">
-                    Select All
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={selectNone} className="text-xs">
-                    Clear
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2 max-h-[200px] overflow-y-auto">
-              {interviews?.map((interview) => (
-                <div
-                  key={interview._id}
-                  className={cn(
-                    "flex items-center gap-3 p-2 rounded-lg transition-colors",
-                    selectedInterviews.has(interview._id)
-                      ? "bg-primary/10 border border-primary/20"
-                      : "hover:bg-muted/50"
-                  )}
-                >
-                  <Checkbox
-                    checked={selectedInterviews.has(interview._id)}
-                    onCheckedChange={() => toggleInterview(interview._id)}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{interview.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {interview.status === "ready" || interview.status === "completed"
-                        ? "Ready to share"
-                        : interview.status}
-                    </p>
-                  </div>
-                  {selectedInterviews.has(interview._id) && (
+        <div className="max-h-[60vh] overflow-y-auto">
+          {liveLinks.length > 0 ? (
+            <ul className="divide-y divide-border">
+              {liveLinks.map((link) => (
+                <li key={link.shareToken} className="px-5 py-3">
+                  <p className="truncate font-mono text-[11px] text-muted-foreground">
+                    {link.shareUrl}
+                    {link.hasPassword ? " · locked" : ""}
+                  </p>
+                  <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+                    {new Date(link.createdAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                    {link.isWallIssue
+                      ? ` · ${link.clusterCount} clusters`
+                      : ` · ${link.interviewCount} sittings`}
+                  </p>
+                  <div className="mt-2 flex gap-1">
                     <Button
                       variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowAdvanced(true);
-                      }}
+                      size="sm"
+                      className="h-7 px-2 font-mono text-[10px] uppercase tracking-widest"
+                      onClick={() =>
+                        void handleCopyLink(link.shareUrl, link.shareToken)
+                      }
                     >
-                      <Settings2 className="w-3 h-3" />
+                      {copiedToken === link.shareToken ? "Copied" : "Copy"}
                     </Button>
-                  )}
-                </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 font-mono text-[10px] uppercase tracking-widest"
+                      onClick={() => window.open(link.shareUrl, "_blank")}
+                    >
+                      Open
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-destructive"
+                      onClick={() => void handleRevoke(link.shareToken)}
+                    >
+                      Revoke
+                    </Button>
+                  </div>
+                </li>
               ))}
-            </CardContent>
-          </Card>
-
-          {/* Options */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Options</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  id="crossThemes"
-                  checked={includeCrossThemes}
-                  onCheckedChange={(checked) => setIncludeCrossThemes(checked as boolean)}
-                />
-                <div className="flex-1">
-                  <label htmlFor="crossThemes" className="text-sm font-medium cursor-pointer">
-                    Include cross-interview themes
-                  </label>
-                  <p className="text-xs text-muted-foreground">
-                    AI-generated themes that appear across multiple interviews
-                  </p>
-                </div>
-                <Sparkles className="w-4 h-4 text-primary" />
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  id="password"
-                  checked={usePassword}
-                  onCheckedChange={(checked) => setUsePassword(checked as boolean)}
-                />
-                <div className="flex-1">
-                  <label htmlFor="password" className="text-sm font-medium cursor-pointer">
-                    Password protection
-                  </label>
-                </div>
-                <Lock className="w-4 h-4 text-amber-500" />
-              </div>
-
-              {usePassword && (
-                <Input
-                  type="password"
-                  placeholder="Enter password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="ml-8"
-                />
-              )}
-
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  id="template"
-                  checked={saveAsTemplate}
-                  onCheckedChange={(checked) => setSaveAsTemplate(checked as boolean)}
-                />
-                <div className="flex-1">
-                  <label htmlFor="template" className="text-sm font-medium cursor-pointer">
-                    Save as template
-                  </label>
-                  <p className="text-xs text-muted-foreground">
-                    Reuse this configuration for future shares
-                  </p>
-                </div>
-                <BookmarkPlus className="w-4 h-4 text-blue-500" />
-              </div>
-
-              {saveAsTemplate && (
-                <Input
-                  placeholder="Template name"
-                  value={templateName}
-                  onChange={(e) => setTemplateName(e.target.value)}
-                  className="ml-8"
-                />
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Personas Selection */}
-          {personas && personas.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Users className="w-4 h-4" />
-                    Personas
-                    <Badge variant="secondary">{selectedPersonas.size} selected</Badge>
-                  </CardTitle>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedPersonas(new Set(personas.map(p => p._id)))} className="text-xs">
-                      Select All
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedPersonas(new Set())} className="text-xs">
-                      Clear
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2 max-h-[150px] overflow-y-auto">
-                {personas.map((persona) => (
-                  <div
-                    key={persona._id}
-                    className={cn(
-                      "flex items-center gap-3 p-2 rounded-lg transition-colors",
-                      selectedPersonas.has(persona._id)
-                        ? "bg-primary/10 border border-primary/20"
-                        : "hover:bg-muted/50"
-                    )}
-                  >
-                    <Checkbox
-                      checked={selectedPersonas.has(persona._id)}
-                      onCheckedChange={() => {
-                        setSelectedPersonas(prev => {
-                          const next = new Set(prev);
-                          if (next.has(persona._id)) {
-                            next.delete(persona._id);
-                          } else {
-                            next.add(persona._id);
-                          }
-                          return next;
-                        });
-                      }}
-                    />
-                    <img
-                      src={persona.profileImage}
-                      alt={persona.name}
-                      className="w-8 h-8 rounded-full object-cover"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{persona.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{persona.occupation}</p>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+            </ul>
+          ) : (
+            <p className="px-5 py-6 text-sm text-muted-foreground">
+              No Issue published yet.
+            </p>
           )}
-        </div>
 
-        <div className="flex justify-end gap-2 pt-4 border-t">
-          <Button variant="outline" onClick={() => setIsOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleCreateLink}
-            disabled={(selectedInterviews.size === 0 && selectedPersonas.size === 0) || isCreating}
-            className="gap-2"
-          >
-            {isCreating ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              <>
-                <Share2 className="w-4 h-4" />
-                Create Share Link
-              </>
+          <form
+            className={cn(
+              "border-t border-border px-5 py-4",
+              liveLinks.length === 0 && "border-t-0"
             )}
-          </Button>
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handlePublish();
+            }}
+          >
+            <p className="mb-2 font-mono text-[11px] tracking-widest uppercase text-muted-foreground">
+              Code
+            </p>
+            <Input
+              type="text"
+              autoComplete="off"
+              placeholder="optional"
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              className="mb-3 rounded-none"
+            />
+            <Button
+              type="submit"
+              disabled={isPublishing}
+              className="w-full font-mono text-[11px] uppercase tracking-widest"
+            >
+              {isPublishing ? "Publishing…" : "Publish"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isExporting}
+              onClick={() => void handleExport()}
+              className="mt-2 w-full font-mono text-[11px] uppercase tracking-widest"
+            >
+              {isExporting ? "Exporting…" : "Export"}
+            </Button>
+          </form>
         </div>
       </DialogContent>
     </Dialog>
